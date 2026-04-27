@@ -67,6 +67,9 @@ class TestClassifyHardware:
 
 
 class TestResolvePreset:
+    def test_amd_dgpu_resolves_radeon(self) -> None:
+        assert _resolve_preset("amd-x86_64", "dGPU") == "radeon"
+
     def test_amd_igpu_falls_back_to_cpu(self) -> None:
         assert _resolve_preset("amd-x86_64", "iGPU") == "cpu"
 
@@ -123,18 +126,33 @@ class TestRecommendModels:
             (_hw(), "CPU+RAM"),
             (_hw(os_kind="macos", arch="arm64"), "iGPU"),
             (_hw(discrete_gpus=[{"vendor": "nvidia", "model": "RTX", "vram_gb": 8}]), "dGPU"),
+            (
+                _hw(
+                    cpu_vendor="amd",
+                    discrete_gpus=[{"vendor": "amd", "model": "RX 7900 XTX", "vram_gb": 24}],
+                ),
+                "dGPU",
+            ),
         ]:
             result = recommend_models(hw_fn, host)
             opt = result["options"][0]
             assert opt["embed_model"] == "qwen3-embedding:0.6b"
-            assert opt["embed_runner"] == "ollama"
+
+    def test_radeon_uses_lm_studio_runner(self) -> None:
+        hw = _hw(
+            cpu_vendor="amd",
+            discrete_gpus=[{"vendor": "amd", "model": "RX 7900 XTX", "vram_gb": 24}],
+        )
+        result = recommend_models(hw, "dGPU")
+        assert result["preset"] == "radeon"
+        assert result["options"][0]["embed_runner"] == "lm-studio"
 
     def test_apple_silicon_preset(self) -> None:
         hw = _hw(os_kind="macos", arch="arm64")
         result = recommend_models(hw, "iGPU")
         assert result["preset"] == "apple-silicon"
 
-    def test_amd_hardware_resolves_to_cpu_preset(self) -> None:
+    def test_amd_cpu_only_resolves_to_cpu_preset(self) -> None:
         hw = _hw(cpu_vendor="amd")
         result = recommend_models(hw, "CPU+RAM")
         assert result["preset"] == "cpu"

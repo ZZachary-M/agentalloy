@@ -7,6 +7,7 @@ Given hardware + chosen host target, return valid
 Preset resolution table (from contracts.md):
   (apple-silicon, iGPU)    → apple-silicon
   (nvidia, dGPU)           → nvidia
+  (amd-x86_64, dGPU)       → radeon
   (any, CPU+RAM)           → cpu
 """
 
@@ -28,6 +29,7 @@ _PRESET_TABLE: list[tuple[str, str, str]] = [
     # (hardware_class, host_target, preset)
     ("apple-silicon", "iGPU", "apple-silicon"),
     ("nvidia", "dGPU", "nvidia"),
+    ("amd-x86_64", "dGPU", "radeon"),
 ]
 _DEFAULT_PRESET = "cpu"
 
@@ -35,6 +37,7 @@ _DEFAULT_PRESET = "cpu"
 PRESET_RESOLUTION_TABLE: dict[str, str] = {
     "(apple-silicon, iGPU)": "apple-silicon",
     "(nvidia, dGPU)": "nvidia",
+    "(amd-x86_64, dGPU)": "radeon",
     "(any, CPU+RAM)": "cpu",
 }
 
@@ -64,6 +67,17 @@ def _options_nvidia() -> list[dict[str, Any]]:
     ]
 
 
+def _options_radeon() -> list[dict[str, Any]]:
+    return [
+        {
+            "default": True,
+            "embed_model": "qwen3-embedding:0.6b",
+            "embed_runner": "lm-studio",
+            "embed_runner_install_hint": "LM Studio with Vulkan backend; load qwen3-embedding:0.6b (Q8 recommended)",
+        },
+    ]
+
+
 def _options_cpu() -> list[dict[str, Any]]:
     return [
         {
@@ -78,6 +92,7 @@ def _options_cpu() -> list[dict[str, Any]]:
 _PRESET_OPTIONS: dict[str, Any] = {
     "apple-silicon-iGPU": _options_apple_silicon,
     "nvidia-dGPU": _options_nvidia,
+    "radeon-dGPU": _options_radeon,
     "cpu-CPU+RAM": _options_cpu,
 }
 
@@ -102,7 +117,7 @@ def _classify_hardware(hw: dict[str, Any]) -> str:
     if any((d.get("vendor") or "").lower() == "nvidia" for d in discrete):
         return "nvidia"
 
-    # AMD x86_64 — no dedicated preset, falls back to cpu
+    # AMD x86_64 — resolves to radeon (dGPU) or cpu (iGPU/CPU+RAM)
     if vendor == "amd" and "x86" in arch:
         return "amd-x86_64"
 

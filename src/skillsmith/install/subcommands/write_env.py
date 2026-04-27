@@ -23,7 +23,7 @@ from skillsmith.install import state as install_state
 SCHEMA_VERSION = 1
 DEFAULT_PORT = 8000
 
-VALID_PRESETS = frozenset({"cpu", "apple-silicon", "nvidia"})
+VALID_PRESETS = frozenset({"cpu", "apple-silicon", "nvidia", "radeon"})
 
 # Keys the user is allowed to override via --overrides.
 _KNOWN_KEYS = frozenset(
