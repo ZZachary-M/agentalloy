@@ -244,7 +244,33 @@ If any check fails:
 
 ---
 
-## Step 11: Start the service + first-run demo
+## Step 11: Enable persistent service
+
+> ASK
+> "Do you want Skillsmith to start automatically in the background, or will you start it manually each session?
+>  1. Persistent — native service (systemd on Linux / launchd on macOS, starts at login)
+>  2. Persistent — container (podman or docker compose, starts on demand)
+>  3. Manual — I'll run `skillsmith serve` myself"
+
+Then based on the answer:
+
+> RUN
+> ```bash
+> # For native:
+> python -m skillsmith.install enable-service --mode native
+>
+> # For container:
+> python -m skillsmith.install enable-service --mode container
+>
+> # For manual:
+> python -m skillsmith.install enable-service --mode manual
+> ```
+
+The subcommand detects the available service manager (systemd/launchd) or container runtime (podman preferred, docker fallback), writes the appropriate unit/plist/compose invocation, starts the service, and polls `/health` for up to 30s to confirm startup. Radeon preset uses `compose.radeon.yaml` (skillsmith-only; LM Studio runs on the host). On success, the mode is recorded in `install-state.json`.
+
+---
+
+## Step 12: Start the service + first-run demo
 
 Start the service in foreground (recommended — same idiom as `ollama serve`):
 
@@ -277,7 +303,8 @@ Show the user the response. The `output` field contains concatenated raw skill f
 ## You're done
 
 State summary:
-- Service running at `http://localhost:<port>` (default 8000) via `skillsmith serve`
+- Service running at `http://localhost:<port>` (default 8000)
+- Service mode recorded: `native` (systemd/launchd), `container` (podman/docker), or `manual` (`skillsmith serve`)
 - Skill corpus seeded into `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/`
 - Models pulled and on disk
 - `.env` written to `${XDG_CONFIG_HOME:-~/.config}/skillsmith/.env`

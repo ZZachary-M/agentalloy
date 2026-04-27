@@ -404,6 +404,52 @@ defaults:
 
 ---
 
+## `enable-service`
+
+**Input:** `--mode {native,container,manual}`, `--runtime {podman,docker}` (container mode only), `--port N` (default: from state, fallback 8000).
+
+**Output:**
+
+```json
+{
+  "schema_version": 1,
+  "mode": "native",
+  "runtime": null,
+  "unit_path": "/home/user/.config/systemd/user/skillsmith.service",
+  "compose_file": null,
+  "ollama_unit_written": false,
+  "service_started": true
+}
+```
+
+**Field semantics:**
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | int | Always `1` |
+| `mode` | string | `"native"`, `"container"`, or `"manual"` |
+| `runtime` | string \| null | `"podman"` or `"docker"` (container mode); null otherwise |
+| `unit_path` | string \| null | Absolute path to the written systemd unit or launchd plist (native mode); null otherwise |
+| `compose_file` | string \| null | Absolute path to the compose file used (container mode); null otherwise |
+| `ollama_unit_written` | bool | True if a systemd user unit for ollama was written (Linux native, non-radeon, ollama not already registered) |
+| `service_started` | bool | True if the service was started and `/health` returned ok or degraded within the timeout |
+
+**State recorded (`install-state.json`):**
+
+```json
+{
+  "service_mode": "native",
+  "service_runtime": null,
+  "service_unit_path": "/home/user/.config/systemd/user/skillsmith.service"
+}
+```
+
+**Exit codes:**
+- `0` — success
+- `1` — precondition not met (no runtime found, compose file missing, Windows native mode, unknown mode)
+
+---
+
 ## `verify`
 
 **Input:** none. Reads `install-state.json` to know URLs, ports, expected skill count.

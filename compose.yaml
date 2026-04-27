@@ -1,9 +1,11 @@
-# Compose stack for the Skillsmith.
+# Compose stack for Skillsmith (cpu / apple-silicon / nvidia presets).
 # Works with both `podman compose up` (project preference) and `docker compose up`.
+#
+# For AMD Radeon dGPU (LM Studio Vulkan backend), use compose.radeon.yaml instead.
 #
 # What this gives you:
 #   - skillsmith service on http://localhost:8000 with the pre-seeded corpus
-#   - Ollama running embeddinggemma on http://localhost:11434
+#   - Ollama running qwen3-embedding:0.6b on http://localhost:11434
 #   - The model is auto-pulled on first start by the `ollama-pull` init service
 #   - Persistent volumes for the corpus (./data on host) and Ollama models
 #
@@ -40,7 +42,7 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: "ollama:11434"
-    entrypoint: ["sh", "-c", "ollama pull embeddinggemma"]
+    entrypoint: ["sh", "-c", "ollama pull qwen3-embedding:0.6b"]
     restart: "no"
 
   skillsmith:
@@ -54,7 +56,7 @@ services:
         condition: service_completed_successfully
     environment:
       RUNTIME_EMBED_BASE_URL: "http://ollama:11434"
-      RUNTIME_EMBEDDING_MODEL: "embeddinggemma"
+      RUNTIME_EMBEDDING_MODEL: "qwen3-embedding:0.6b"
       LADYBUG_DB_PATH: "/app/data/ladybug"
       DUCKDB_PATH: "/app/data/skills.duck"
       LOG_LEVEL: "INFO"

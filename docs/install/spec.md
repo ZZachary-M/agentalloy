@@ -64,6 +64,7 @@ Subcommands are tagged by tier:
 | runbook | `pull-models --runtime-embed X` | Idempotent model pulls (Ollama, LM Studio, etc.) | progress + final state |
 | runbook | `write-env --preset <name> [--overrides ...] [--port <n>]` | Validate + write `.env` from the preset template. Templates values from Q&A answers, doesn't just copy the file. | path to written file |
 | runbook | `verify` | Install-time smoke test (embed → retrieve → 1024-dim out, harness config readable) | JSON: pass/fail per check |
+| runbook | `enable-service [--mode native\|container\|manual] [--runtime podman\|docker] [--port N]` | Register Skillsmith as a persistent background service (systemd user unit / launchd LaunchAgent / compose up). Radeon preset uses `compose.radeon.yaml`. Records mode in `install-state.json`. | JSON: `{schema_version, mode, runtime, unit_path, compose_file, ollama_unit_written, service_started}` |
 | runbook | `wire-harness --harness <name> [--mcp-fallback]` | Emit harness-specific integration with sentinel markers for clean removal later | path(s) to written files |
 | operator | `doctor` | Runtime health check across all components, reads `install-state.json` to diagnose partial installs. Also auto-invoked by the runbook on `verify` failure. | JSON: per-component status + remediation hints |
 | operator | `update` | Pull latest, run schema migrations in-place on existing corpus, re-pull model variants if defaults changed | summary of changes |

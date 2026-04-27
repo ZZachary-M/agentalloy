@@ -1,0 +1,42 @@
+# Skillsmith container stack for AMD Radeon dGPU (LM Studio Vulkan backend).
+#
+# LM Studio runs on the HOST — it cannot run inside a container because it
+# requires direct Vulkan GPU access. Skillsmith reaches it via the
+# host.containers.internal alias that podman/docker inject automatically.
+#
+# Prerequisites:
+#   1. LM Studio installed on the host with qwen3-embedding:0.6b loaded (Q8)
+#   2. LM Studio local server running: lms server start
+#      (or enable "Start on Login" in LM Studio → Settings)
+#
+# Usage:
+#   podman compose -f compose.radeon.yaml up -d    # start
+#   podman compose -f compose.radeon.yaml down     # stop
+#   podman compose -f compose.radeon.yaml logs -f skillsmith
+
+services:
+  skillsmith:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: skillsmith:local
+    container_name: skillsmith
+    environment:
+      RUNTIME_EMBED_BASE_URL: "http://host.containers.internal:1234"
+      RUNTIME_EMBEDDING_MODEL: "qwen3-embedding:0.6b"
+      LADYBUG_DB_PATH: "/app/data/ladybug"
+      DUCKDB_PATH: "/app/data/skills.duck"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped

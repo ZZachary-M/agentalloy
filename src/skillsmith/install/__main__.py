@@ -21,6 +21,7 @@ import sys
 from skillsmith.install.subcommands import (
     detect,
     doctor,
+    enable_service,
     install_pack,
     pull_models,
     recommend_host_targets,
@@ -51,6 +52,7 @@ _SUBCOMMANDS = [
     wire,
     unwire,
     serve,
+    enable_service,
     status,
     # Underlying step subcommands (still available for power-users + the
     # runbook LLM that drives them individually).
