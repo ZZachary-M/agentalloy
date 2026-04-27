@@ -2,7 +2,7 @@
 
 Companion to [`spec.md`](./spec.md), [`contracts.md`](./contracts.md), [`harness-catalog.md`](./harness-catalog.md). Authoritative for acceptance criteria.
 
-The install path is genuinely cross-platform and integrates with multiple external tools (Ollama, FastFlowLM, harness configs). Test coverage has three layers:
+The install path is genuinely cross-platform and integrates with multiple external tools (Ollama, LM Studio, harness configs). Test coverage has three layers:
 
 1. **Unit tests** — pure-Python, no external services. Schema validation, idempotency logic, state file handling, preset templating.
 2. **Integration tests (containerized)** — Linux container with Ollama mocked or real, exercising end-to-end install minus harness wiring.
@@ -103,7 +103,7 @@ Tests in this layer hit a real Ollama instance.
 
 | Test | Asserts |
 |---|---|
-| `test_ollama_returns_768_dim` | `verify` check `embedding_endpoint_returns_768_dim` passes against real Ollama with `embeddinggemma` pulled |
+| `test_ollama_returns_1024_dim` | `verify` check `embedding_endpoint_returns_1024_dim` passes against real Ollama with `qwen3-embedding:0.6b` pulled |
 | `test_wrong_embedding_model_caught` | `verify` fails clearly when the configured model returns a different dim |
 
 ### Seed corpus integrity (`tests/install/integration/test_seed.py`)
@@ -130,10 +130,10 @@ Per-platform checklist, run by a human. One walk-through per OS × harness combi
 |---|---|---|---|
 | Linux x86_64 | Intel CPU only | CPU+RAM | required |
 | Linux x86_64 | NVIDIA GPU | dGPU | required |
-| Linux x86_64 | AMD Strix (NPU + iGPU) | NPU | required (your dev workstation) |
+| Linux x86_64 | AMD Radeon dGPU | dGPU (radeon preset) | required (your dev workstation) |
 | macOS | Apple Silicon M-series | iGPU | required |
 | Windows 11 | NVIDIA GPU | dGPU | nice-to-have v1, required v1.1 |
-| Windows 11 | AMD Strix | NPU | nice-to-have v1, required v1.1 |
+| Windows 11 | AMD Radeon dGPU | dGPU | nice-to-have v1, required v1.1 |
 
 ### Harness matrix
 

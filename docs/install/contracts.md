@@ -53,10 +53,8 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
       "completed_at": "2026-04-26T14:22:45Z",
       "selected": {
         "preset": "apple-silicon",
-        "embed_model": "embeddinggemma",
-        "embed_runner": "ollama",
-        "ingest_model": "qwen3.5:0.8b",
-        "ingest_runner": "ollama"
+        "embed_model": "qwen3-embedding:0.6b",
+        "embed_runner": "ollama"
       }
     },
     {
@@ -68,7 +66,7 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
     {
       "step": "pull-models",
       "completed_at": "2026-04-26T14:24:00Z",
-      "models_pulled": ["ollama:embeddinggemma", "ollama:qwen3.5:0.8b"]
+      "models_pulled": ["ollama:qwen3-embedding:0.6b"]
     },
     {
       "step": "write-env",
@@ -104,7 +102,7 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
       "content_sha256": "sha256:..."
     }
   ],
-  "models_pulled": ["ollama:embeddinggemma", "ollama:qwen3.5:0.8b"],
+  "models_pulled": ["ollama:qwen3-embedding:0.6b"],
   "env_path": "/home/user/.config/skillsmith/.env",
   "port": 8000,
   "last_verify_passed_at": "2026-04-26T14:25:00Z"
@@ -115,7 +113,7 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
 - `completed_steps` is append-only within an install run. `reset-step <name>` removes the named entry (and any later entries that depend on it).
 - `output_path` is set for steps with large outputs (>4KB JSON); inline `output` for small ones. Implementer's choice for cutoff but document it.
 - `harness_files_written` is the only thing `uninstall` / `unwire` consult to remove injections. Each entry carries its own `harness` and `repo_root` so the same state file can describe multiple wired projects. The cwd-derived repo root (NOT the entry's `repo_root`) is the trusted bound for containment checks; entries belonging to other repos are skipped at the current invocation. The basename / suffix of `path` must match a known harness target (`CLAUDE.md`, `GEMINI.md`, `.cursor/rules/skillsmith.mdc`, etc.) — anything else is rejected as tampered state.
-- `models_pulled` entries are `<runner>:<model>` strings (e.g. `"ollama:embeddinggemma"`).
+- `models_pulled` entries are `<runner>:<model>` strings (e.g. `"ollama:qwen3-embedding:0.6b"`).
 - `port` is validated as an int in `[1, 65535]`. Non-int / out-of-range values cause SystemExit(2).
 
 **Schema migrations of the state file:**
@@ -220,20 +218,6 @@ If a detection command isn't available (`nvidia-smi` not installed), the field i
   "schema_version": 1,
   "targets": [
     {
-      "target": "NPU",
-      "available": true,
-      "recommended": true,
-      "reason": "AMD XDNA NPU detected; lowest power, no GPU contention",
-      "notes": "Only embed-gemma:300m via FastFlowLM is supported on this target. Generation/ingest still uses iGPU."
-    },
-    {
-      "target": "iGPU",
-      "available": true,
-      "recommended": false,
-      "reason": "Radeon 890M with 8 GB shared VRAM",
-      "notes": "Works for both embedding and chat. Shared with display compositor — may lag on heavy GPU load."
-    },
-    {
       "target": "dGPU",
       "available": false,
       "recommended": false,
@@ -241,19 +225,26 @@ If a detection command isn't available (`nvidia-smi` not installed), the field i
       "notes": null
     },
     {
+      "target": "iGPU",
+      "available": true,
+      "recommended": true,
+      "reason": "Radeon 890M with 8 GB shared VRAM",
+      "notes": "Works for embedding. Shared with display compositor — may lag on heavy GPU load."
+    },
+    {
       "target": "CPU+RAM",
       "available": true,
       "recommended": false,
       "reason": "Always available; 64 GB RAM provides headroom",
-      "notes": "Slower than GPU; acceptable for runtime path (<200ms embed). Authoring will be noticeably slower."
+      "notes": "Slower than GPU; acceptable for runtime path (<200ms embed)."
     }
   ]
 }
 ```
 
-**Recommendation order** (NPU > dGPU > iGPU > CPU+RAM): `recommended: true` is set on the first available target in that order. Exactly one target has `recommended: true`.
+**Recommendation order** (dGPU > iGPU > CPU+RAM): `recommended: true` is set on the first available target in that order. Exactly one target has `recommended: true`.
 
-**`target` values:** `NPU` | `dGPU` | `iGPU` | `CPU+RAM`.
+**`target` values:** `dGPU` | `iGPU` | `CPU+RAM`.
 
 ---
 
@@ -271,17 +262,13 @@ If a detection command isn't available (`nvidia-smi` not installed), the field i
   "options": [
     {
       "default": true,
-      "embed_model": "embeddinggemma",
+      "embed_model": "qwen3-embedding:0.6b",
       "embed_runner": "ollama",
-      "embed_runner_install_hint": "ollama is installed; will run `ollama pull embeddinggemma`",
-      "ingest_model": "qwen3.5:0.8b",
-      "ingest_runner": "ollama",
-      "ingest_runner_install_hint": "ollama is installed; will run `ollama pull qwen3.5:0.8b`"
+      "embed_runner_install_hint": "ollama is installed; will run `ollama pull qwen3-embedding:0.6b`"
     }
   ],
   "preset_resolution_table": {
-    "(amd-x86_64, NPU)": "strix-point",
-    "(amd-x86_64, iGPU)": "strix-point",
+    "(amd-x86_64, dGPU)": "radeon",
     "(apple-silicon, iGPU)": "apple-silicon",
     "(nvidia, dGPU)": "nvidia",
     "(any, CPU+RAM)": "cpu"
@@ -289,9 +276,9 @@ If a detection command isn't available (`nvidia-smi` not installed), the field i
 }
 ```
 
-**`preset` is the resolved preset name** for `(hardware, host_target)`. Values: `cpu` | `apple-silicon` | `nvidia` | `strix-point`.
+**`preset` is the resolved preset name** for `(hardware, host_target)`. Values: `cpu` | `apple-silicon` | `nvidia` | `radeon`.
 
-**`embed_runner` / `ingest_runner` values:** `ollama` | `lmstudio` | `fastflowlm` | `vllm` | `mlx`.
+**`embed_runner` values:** `ollama` | `lm-studio` | `vllm` | `mlx`.
 
 The `*_install_hint` field is human-readable text the runbook surfaces if the runner isn't installed.
 
@@ -303,9 +290,8 @@ Authoritative for `pull-models`. Each runner has its own pull command, install U
 
 | Runner | Install URL | Pull command | Cross-platform | Auto-pull supported | Host targets |
 |---|---|---|---|---|---|
-| `ollama` | https://ollama.com | `ollama pull <model>` | Linux, macOS, Windows | yes | CPU+RAM, iGPU (Apple Metal, AMD ROCm), dGPU (NVIDIA CUDA, AMD ROCm) |
-| `fastflowlm` | https://fastflowlm.ai | `flm pull <model>` | Windows (Strix), Linux (Strix) | yes | NPU (AMD XDNA only) |
-| `lmstudio` | https://lmstudio.ai | (no CLI pull — GUI only) | Linux, macOS, Windows | **no — manual user step** | iGPU (Metal, ROCm), dGPU (CUDA) |
+| `ollama` | https://ollama.com | `ollama pull <model>` | Linux, macOS, Windows | yes | CPU+RAM, iGPU (Apple Metal), dGPU (NVIDIA CUDA) |
+| `lm-studio` | https://lmstudio.ai | (no CLI pull — GUI only) | Linux, macOS, Windows | **no — manual user step** | iGPU (Metal, Vulkan), dGPU (CUDA, Vulkan) |
 | `vllm` | `pip install vllm` | (loads on `vllm serve`) | Linux primarily | partial — runtime download | dGPU (NVIDIA only) |
 | `mlx` | `pip install mlx-lm` | `mlx_lm.convert` (manual) | macOS only | partial | iGPU (Apple Metal) |
 
@@ -317,7 +303,7 @@ Authoritative for `pull-models`. Each runner has its own pull command, install U
 {
   "schema_version": 1,
   "auto_pulled": [
-    {"runner": "ollama", "model": "embeddinggemma", "size_mb": 622, "duration_ms": 14200}
+    {"runner": "ollama", "model": "qwen3-embedding:0.6b", "size_mb": 622, "duration_ms": 14200}
   ],
   "manual_steps_required": [
     {
@@ -346,8 +332,8 @@ Authoritative for `pull-models`. Each runner has its own pull command, install U
   "corpus_schema_version": 3,
   "skill_count": 153,
   "fragment_count": 1655,
-  "embedding_model": "embeddinggemma",
-  "embedding_dim": 768,
+  "embedding_model": "qwen3-embedding:0.6b",
+  "embedding_dim": 1024,
   "duration_ms": 80
 }
 ```
@@ -387,12 +373,7 @@ Embeddings are pre-computed in the shipped DuckDB; **no `reembed` is needed afte
   "port": 8000,
   "values_written": {
     "RUNTIME_EMBED_BASE_URL": "http://localhost:11434",
-    "RUNTIME_EMBEDDING_MODEL": "embeddinggemma",
-    "LM_STUDIO_BASE_URL": "http://localhost:11434",
-    "AUTHORING_EMBED_BASE_URL": "http://localhost:11434",
-    "AUTHORING_MODEL": "qwen3.5:0.8b",
-    "CRITIC_MODEL": "qwen3.5:0.8b",
-    "AUTHORING_EMBEDDING_MODEL": "embeddinggemma",
+    "RUNTIME_EMBEDDING_MODEL": "qwen3-embedding:0.6b",
     "DEDUP_HARD_THRESHOLD": "0.92",
     "DEDUP_SOFT_THRESHOLD": "0.80",
     "BOUNCE_BUDGET": "3",
@@ -410,19 +391,14 @@ preset: apple-silicon
 description: "Apple Silicon (M1/M2/M3/M4) with Metal acceleration via Ollama"
 defaults:
   RUNTIME_EMBED_BASE_URL: "http://localhost:11434"
-  RUNTIME_EMBEDDING_MODEL: "embeddinggemma"
-  LM_STUDIO_BASE_URL: "http://localhost:1234"
-  AUTHORING_EMBED_BASE_URL: "http://localhost:1234"
-  AUTHORING_MODEL: "qwen3.5:0.8b"
-  CRITIC_MODEL: "qwen3.5:0.8b"
-  AUTHORING_EMBEDDING_MODEL: "embeddinggemma"
+  RUNTIME_EMBEDDING_MODEL: "qwen3-embedding:0.6b"
   DEDUP_HARD_THRESHOLD: "0.92"
   DEDUP_SOFT_THRESHOLD: "0.80"
   BOUNCE_BUDGET: "3"
   LOG_LEVEL: "INFO"
 ```
 
-**Port handling.** Preset URLs reference fixed *runner* ports (Ollama 11434, LM Studio 1234, FastFlowLM 52625). The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 8000). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
+**Port handling.** Preset URLs reference fixed *runner* ports (Ollama 11434, LM Studio 1234). The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 8000). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
 
 **Validation:** `write-env` rejects unknown keys in `--overrides` (typo guard). It also refuses to write if `.env` exists and was not produced by a previous `write-env` run (no overwriting hand-edited files without `--force`).
 
@@ -440,7 +416,7 @@ defaults:
   "all_checks_passed": true,
   "checks": [
     {"name": "embedding_endpoint_reachable", "passed": true, "duration_ms": 23, "detail": "GET http://localhost:11434/v1/models returned 200"},
-    {"name": "embedding_endpoint_returns_768_dim", "passed": true, "duration_ms": 312, "detail": "POST /v1/embeddings with model=embeddinggemma returned 768-dim vector"},
+    {"name": "embedding_endpoint_returns_1024_dim", "passed": true, "duration_ms": 312, "detail": "POST /v1/embeddings with model=qwen3-embedding:0.6b returned 1024-dim vector"},
     {"name": "duckdb_present", "passed": true, "duration_ms": 5, "detail": "/home/user/.local/share/skillsmith/corpus/skills.duck has 1655 fragments"},
     {"name": "ladybug_present", "passed": true, "duration_ms": 4, "detail": "/home/user/.local/share/skillsmith/corpus/ladybug has 153 skills"},
     {"name": "skill_count_meets_minimum", "passed": true, "duration_ms": 3, "detail": "153 >= 50 (MIN_SKILL_COUNT)"},
@@ -454,7 +430,7 @@ defaults:
 **Enumerated checks** (the implementer must implement all of these):
 
 1. `embedding_endpoint_reachable` — HTTP GET to `RUNTIME_EMBED_BASE_URL/v1/models`, expect 200.
-2. `embedding_endpoint_returns_768_dim` — POST to `/v1/embeddings` with `RUNTIME_EMBEDDING_MODEL` and the test string `"hello world"`, expect a 768-element float array.
+2. `embedding_endpoint_returns_1024_dim` — POST to `/v1/embeddings` with `RUNTIME_EMBEDDING_MODEL` and the test string `"hello world"`, expect a 1024-element float array.
 3. `duckdb_present` — file at `DUCKDB_PATH` exists, `fragments` table has rows.
 4. `ladybug_present` — directory at `LADYBUG_DB_PATH` exists, has at least one Skill node.
 5. `skill_count_meets_minimum` — Skill node count ≥ `MIN_SKILL_COUNT` (constant, default 50).
@@ -477,7 +453,7 @@ defaults:
 9. `skillsmith_service_reachable` — HTTP GET to `http://localhost:<port>/health`, expect 200 with `status: ok`.
 10. `compose_endpoint_works` — POST a minimal request to `/compose`, expect non-empty fragment array.
 11. `state_file_consistent` — `install-state.json` exists, harness files in `harness_files_written` still contain matching sentinel blocks (sha256 match logged but mismatch is a warning not failure).
-12. `runner_processes_present` — for the configured `embed_runner`/`ingest_runner`, the expected process is running (e.g., `ollama serve`, `flm` daemon).
+12. `runner_processes_present` — for the configured `embed_runner`, the expected process is running (e.g., `ollama serve` for Ollama presets, LM Studio for the radeon preset).
 
 `doctor` is the diagnostic command. Failures include cross-references to entries in `error-catalog.md` (TBD if we add one) for common-failure remediation.
 

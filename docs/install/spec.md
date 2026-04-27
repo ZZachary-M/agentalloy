@@ -58,12 +58,12 @@ Subcommands are tagged by tier:
 | Tier | Subcommand | Purpose | Output |
 |---|---|---|---|
 | runbook | `detect` | Run platform-appropriate hardware detection | JSON: CPU, GPU, NPU, OS, RAM, disk |
-| runbook | `recommend-host-targets --hardware <json>` | Given confirmed hardware, return valid host targets (NPU/dGPU/iGPU/CPU+RAM) with tradeoff notes and a single `recommended: true` flagged target | JSON: `[{target, available, recommended, reason, notes}]` |
-| runbook | `recommend-models --hardware <json> --host <target>` | Given hardware + chosen host target, return valid `{embedding, ingesting}` model pairs and the resolved preset name | JSON: `[{embed_model, embed_runner, ingest_model, ingest_runner, preset, default}]` |
+| runbook | `recommend-host-targets --hardware <json>` | Given confirmed hardware, return valid host targets (dGPU/iGPU/CPU+RAM) with tradeoff notes and a single `recommended: true` flagged target | JSON: `[{target, available, recommended, reason, notes}]` |
+| runbook | `recommend-models --hardware <json> --host <target>` | Given hardware + chosen host target, return valid embedding model options and the resolved preset name | JSON: `[{embed_model, embed_runner, preset, default}]` |
 | runbook | `seed-corpus [--manifest <url>]` | Download + unpack pre-seeded corpus snapshot **including pre-computed embeddings**. Idempotent: skips if ladybug has ≥N skills at correct schema version. Default manifest URL: `<TBD: corpus release URL — fill in when repo path is finalized>` | JSON: skills loaded, schema version, manifest hash |
-| runbook | `pull-models --runtime-embed X --ingest-model Y` | Idempotent model pulls (Ollama, FastFlowLM, etc.) | progress + final state |
+| runbook | `pull-models --runtime-embed X` | Idempotent model pulls (Ollama, LM Studio, etc.) | progress + final state |
 | runbook | `write-env --preset <name> [--overrides ...] [--port <n>]` | Validate + write `.env` from the preset template. Templates values from Q&A answers, doesn't just copy the file. | path to written file |
-| runbook | `verify` | Install-time smoke test (embed → retrieve → 768-dim out, harness config readable) | JSON: pass/fail per check |
+| runbook | `verify` | Install-time smoke test (embed → retrieve → 1024-dim out, harness config readable) | JSON: pass/fail per check |
 | runbook | `wire-harness --harness <name> [--mcp-fallback]` | Emit harness-specific integration with sentinel markers for clean removal later | path(s) to written files |
 | operator | `doctor` | Runtime health check across all components, reads `install-state.json` to diagnose partial installs. Also auto-invoked by the runbook on `verify` failure. | JSON: per-component status + remediation hints |
 | operator | `update` | Pull latest, run schema migrations in-place on existing corpus, re-pull model variants if defaults changed | summary of changes |
@@ -94,7 +94,7 @@ LLM clones repo, runs `uv sync`. Verifies `uv` is present.
 
 ### 3. Host target selection
 
-- Runbook: `skillsmith install recommend-host-targets --hardware <json>` returns valid host targets for this hardware with tradeoff notes and one entry flagged `recommended: true` based on a fixed preference order (NPU > dGPU > iGPU > CPU+RAM).
+- Runbook: `skillsmith install recommend-host-targets --hardware <json>` returns valid host targets for this hardware with tradeoff notes and one entry flagged `recommended: true` based on a fixed preference order (dGPU > iGPU > CPU+RAM).
 - LLM presents options to user, leading with the recommended target and surfacing the others as alternatives.
 - User picks one (defaults to recommended on enter). Choice is the input to step 4.
 
@@ -102,8 +102,8 @@ This step now has CLI backing (previously the LLM was eyeballing hardware JSON t
 
 ### 4. Model variant selection
 
-- Runbook: `skillsmith install recommend-models --hardware <json> --host <target>` returns valid `{embed_model, ingest_model, runner}` triples for the chosen host target.
-- The two locked-in model **families** are `qwen3.5` (chat / ingesting) and `embeddinggemma` / `embed-gemma:300m` (embedding). The variant picker selects which *runner* / *quantization* of these for the user's host target. Note: `embeddinggemma` is the Ollama / MLX / vLLM tag; `embed-gemma:300m` is the FastFlowLM name for the same model — they're the same weights, different runners.
+- Runbook: `skillsmith install recommend-models --hardware <json> --host <target>` returns valid `{embed_model, embed_runner}` options for the chosen host target.
+- The locked-in embedding model is `qwen3-embedding:0.6b` (1024-dim). The variant picker selects which *runner* for the user's host target: Ollama for cpu/apple-silicon/nvidia presets, LM Studio (Vulkan) for the radeon preset.
 - User picks (defaults are typically fine).
 
 ### 5. Handoff harness selection
@@ -133,11 +133,10 @@ The preset name is **resolved from `(hardware, host_target)`** by `recommend-mod
 
 | `(hardware_arch, host_target)` | Preset |
 |---|---|
-| AMD x86_64 + NPU | `strix-point` |
-| AMD x86_64 + iGPU | `strix-point` (LM Studio variant) |
+| AMD x86_64 + dGPU | `radeon` |
 | Apple Silicon + iGPU (Metal) | `apple-silicon` |
 | NVIDIA + dGPU | `nvidia` |
-| any + CPU+RAM | `cpu` |
+| any + CPU+RAM or iGPU | `cpu` |
 
 `recommend-models` returns the resolved preset in its output, and the runbook passes that preset name straight to `write-env`. The user never types a preset name.
 
@@ -161,7 +160,7 @@ The integration vector depends on the harness branch chosen in step 5:
 
 ### 10. Verify
 
-`skillsmith install verify`. Embeds a sample string, retrieves, returns 768-dim → green/red. Each check is one line; failures include remediation hints. Fail-fast: if verify fails, the runbook stops and `doctor` is invoked.
+`skillsmith install verify`. Embeds a sample string, retrieves, returns 1024-dim → green/red. Each check is one line; failures include remediation hints. Fail-fast: if verify fails, the runbook stops and `doctor` is invoked.
 
 ### 11. First-run demo
 
@@ -181,7 +180,7 @@ Adoption psychology: visible value within 60 seconds of install completing.
 
 **The pre-seeded corpus ships in the repo** at:
 
-- `data/skills.duck` (~9 MB) — DuckDB with 768-dim embeddings
+- `data/skills.duck` (~9 MB) — DuckDB with 1024-dim embeddings
 - `data/ladybug` (~38 MB) — Kuzu skill graph
 
 A fresh `git clone` produces a working corpus immediately. **No download, no manifest, no release artifact required for first install.** The corpus version is implicit — it's whatever the cloned commit shipped.
@@ -217,7 +216,7 @@ Every subcommand writes its completion + outputs to `<repo-root>/.skillsmith/ins
   "harness_files_written": [
     {"path": "/home/user/CLAUDE.md", "sentinel": "skillsmith install"}
   ],
-  "models_pulled": ["embeddinggemma", "qwen3.5:0.8b"],
+  "models_pulled": ["qwen3-embedding:0.6b"],
   "env_path": "/home/user/dev/skillsmith/.env",
   "last_verify_passed_at": "2026-04-26T14:25:30Z"
 }
@@ -227,7 +226,7 @@ Re-running install reads this file and skips completed steps. `doctor` reads it 
 
 ### `write-env` mechanism
 
-`write-env` **templates** values into `.env` from a preset template, it does not copy the preset file blindly. The CLI knows about a fixed set of preset names (`cpu`, `apple-silicon`, `nvidia`, `strix-point`) and a fixed set of overridable values (URLs, model names, port). User-supplied overrides come from `--overrides key=value` or are inferred from the Q&A answers stored in `install-state.json`.
+`write-env` **templates** values into `.env` from a preset template, it does not copy the preset file blindly. The CLI knows about a fixed set of preset names (`cpu`, `apple-silicon`, `nvidia`, `radeon`) and a fixed set of overridable values (URLs, model names, port). User-supplied overrides come from `--overrides key=value` or are inferred from the Q&A answers stored in `install-state.json`.
 
 This means existing `.env.cpu`, `.env.apple-silicon`, etc. files in the repo become **template references** for documentation, not the literal source of `.env` — the CLI owns the schema.
 
@@ -239,7 +238,7 @@ This means existing `.env.cpu`, `.env.apple-silicon`, etc. files in the repo bec
 
 1. **Pre-seeded corpus.** Now backed by `seed-corpus` subcommand and the corpus-versioning decision above. `data/` stays gitignored; install pulls the matching release artifact.
 
-2. **`skillsmith doctor`.** Runtime health check (distinct from `verify`). Reads `install-state.json` to know what should exist; checks: embedding endpoint reachable + returns 768-dim, DuckDB exists with expected skill count, harness config file present and contains the sentinel block, runtime cache loaded, configured port reachable. Cuts support cost dramatically.
+2. **`skillsmith doctor`.** Runtime health check (distinct from `verify`). Reads `install-state.json` to know what should exist; checks: embedding endpoint reachable + returns 1024-dim, DuckDB exists with expected skill count, harness config file present and contains the sentinel block, runtime cache loaded, configured port reachable. Cuts support cost dramatically.
 
 3. **First-run demo / verification step.** Step 11 of Q&A above. Sends a real `/compose` request, shows fragments, gives the user a one-liner to test in their harness.
 
@@ -332,7 +331,7 @@ Rationale: re-downloading the seed corpus on reinstall is slow (8+ seconds plus 
 2. Implement `detect`, `recommend-host-targets`, `recommend-models`, `write-env`, `verify` (the deterministic core).
 3. Build the seeded-corpus release artifact pipeline + implement `seed-corpus`.
 4. Author `INSTALL.md` runbook against the implemented CLI. Manual walk-through with Claude Code on the dev workstation.
-5. Implement `pull-models` (idempotent Ollama / FastFlowLM pulls).
+5. Implement `pull-models` (idempotent Ollama pulls; LM Studio requires manual GUI download).
 6. Implement `wire-harness` for closed harnesses (markdown-injection variant with sentinels).
 7. Implement `wire-harness` for open harness (sysprompt snippet variant).
 8. Implement `doctor`, `uninstall`.

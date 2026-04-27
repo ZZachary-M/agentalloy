@@ -10,7 +10,7 @@ See `memory/` for per-issue contracts. See the Linear project **Skillsmith v1.0*
 
 - Python 3.12
 - [mise](https://mise.jdx.dev/) (runtime manager)
-- An OpenAI-compatible embedding service producing 768-dim vectors (see [Platform Setup](#platform-setup))
+- An OpenAI-compatible embedding service (see [Platform Setup](#platform-setup))
 - For the **authoring pipeline only**: an OpenAI-compatible chat completion service
 
 ## Platform Setup
@@ -19,20 +19,18 @@ The runtime requires only an embedding service. Pick the preset that matches you
 
 | Preset | Hardware | Embedding backend | RAM / VRAM minimum |
 |--------|----------|-------------------|--------------------|
-| `.env.cpu` | Any x86_64 / ARM64 | Ollama on CPU | 8 GB RAM |
-| `.env.apple-silicon` | Apple M1/M2/M3/M4 | Ollama (Metal) | 8 GB unified |
-| `.env.nvidia` | NVIDIA GPU (CUDA) | Ollama or vLLM | 4 GB VRAM |
-| `.env.strix-point` | AMD Strix Point NPU+iGPU | FastFlowLM (NPU) + LM Studio (iGPU) | 16 GB RAM |
+| `cpu` | Any x86_64 / ARM64 | Ollama on CPU | 8 GB RAM |
+| `apple-silicon` | Apple M1/M2/M3/M4 | Ollama (Metal) | 8 GB unified |
+| `nvidia` | NVIDIA GPU (CUDA) | Ollama (CUDA) | 4 GB VRAM |
+| `radeon` | AMD Radeon dGPU | LM Studio (Vulkan) | 4 GB VRAM |
 
 ```bash
 # Example: CPU-only setup
-cp .env.cpu .env
-ollama pull embeddinggemma
-ollama pull qwen3.5:0.8b
-ollama serve
+skillsmith install setup --preset cpu
+ollama pull qwen3-embedding:0.6b
 ```
 
-All presets use `embeddinggemma` (EmbeddingGemma 300M, 768-dim) for embeddings — the same model family as the Strix Point variant's `embed-gemma:300m`. The `OpenAICompatClient` is backend-agnostic — any server exposing `/v1/embeddings` works.
+All presets use `qwen3-embedding:0.6b` (1024-dim) for embeddings. `cpu`, `apple-silicon`, and `nvidia` use Ollama at `localhost:11434`; `radeon` uses LM Studio's Vulkan backend at `localhost:1234`. The `OpenAICompatClient` is backend-agnostic — any server exposing `/v1/embeddings` works.
 
 For authoring (generating new skills via the LLM pipeline), you also need a chat model. See the preset comments for recommended models per platform. Authoring is optional — you can run the service with pre-ingested skills and no generation model.
 
@@ -62,7 +60,7 @@ curl http://localhost:8000/health
 This brings up two services:
 
 - `skillsmith` — the FastAPI service on port 8000, built from `Containerfile` with the pre-seeded corpus baked in
-- `ollama` — Ollama on port 11434 with `embeddinggemma` auto-pulled on first start
+- `ollama` — Ollama on port 11434 with `qwen3-embedding:0.6b` auto-pulled on first start
 
 Persistent state:
 - The host's `./data` directory is bind-mounted into the skillsmith container, so any skills you ingest at runtime persist on the host
@@ -82,7 +80,7 @@ ruff check .
 ruff format --check .
 pyright
 pytest                    # unit tests only
-pytest -m integration     # integration tests (requires FastFlowLM running)
+pytest -m integration     # integration tests (requires Ollama with qwen3-embedding:0.6b)
 ```
 
 ## Configuration
@@ -91,8 +89,8 @@ Environment variables:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `RUNTIME_EMBED_BASE_URL` | `http://127.0.0.1:52625` | FastFlowLM endpoint (NPU embeddings) |
-| `RUNTIME_EMBEDDING_MODEL` | `embed-gemma:300m` | Embedding model for retrieve / compose |
+| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | Embedding endpoint (Ollama; `http://localhost:1234` for radeon preset) |
+| `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model for retrieve / compose |
 | `LADYBUG_DB_PATH` | `./data/ladybug` | LadybugDB directory |
 | `DUCKDB_PATH` | `./data/skills.duck` | DuckDB vector + telemetry store |
 | `AUTHORING_MODEL` | `qwen/qwen3.6-35b-a3b` | Model for skill generation (authoring only) |
@@ -105,8 +103,8 @@ Environment variables:
 
 ## Architecture
 
-- **Embedding service** (configurable) runs the embedding model (`embeddinggemma` or equivalent 768-dim). Backend-agnostic — Ollama, LM Studio, FastFlowLM, vLLM all work via the OpenAI-compatible API.
-- **DuckDB** holds 768-dim L2-normalized fragment vectors and composition traces.
+- **Embedding service** (configurable) runs `qwen3-embedding:0.6b` (1024-dim). Backend-agnostic — Ollama, LM Studio, vLLM all work via the OpenAI-compatible API.
+- **DuckDB** holds 1024-dim L2-normalized fragment vectors, BM25 FTS index, and composition traces.
 - **LadybugDB (Kùzu)** holds the skill graph (Skill → SkillVersion → Fragment).
 - **Compose flow**: agent → POST /compose → embed task → DuckDB cosine search → hydrate fragments → return raw concatenated text. Agent assembles in its own prompt context.
 - **No generative LLM in the runtime path.** The agent that calls the API does its own generation.
@@ -117,4 +115,4 @@ See `docs/experiments/poc-composed-vs-flat.md` §13 for the first-round POC find
 
 > **60% smaller prompts. 25% faster runs. Same model — and answers improve, not degrade.**
 
-Reproduce: `AGENT_MODEL=qwen/qwen3.6-35b-a3b uv run python -m eval.run_poc --n 3` (requires running skillsmith + FastFlowLM + LM Studio with the agent model loaded).
+Reproduce: `AGENT_MODEL=qwen/qwen3.6-35b-a3b uv run python -m eval.run_poc --n 3` (requires running skillsmith + LM Studio with the agent model loaded).
