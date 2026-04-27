@@ -24,6 +24,8 @@ from skillsmith.install import state as install_state
 
 SCHEMA_VERSION = 1
 
+_INTERACTIVE = sys.stdin.isatty()
+
 _SETUP_STEPS = (
     ("detect", "skillsmith.install.subcommands.detect"),
     ("recommend-host-targets", "skillsmith.install.subcommands.recommend_host_targets"),
@@ -190,6 +192,13 @@ def _argv_for_step(step_name: str, parent_args: argparse.Namespace) -> list[str]
             # surfaces clearly rather than us guessing wrong.
             return [step_name]
         return [step_name, "--preset", preset]
+    if step_name == "enable-service":
+        # enable-service has interactive prompts. In a non-TTY environment
+        # (CI, piped invocation) default to manual so setup doesn't hang
+        # waiting for input that will never come.
+        if not _INTERACTIVE:
+            return [step_name, "--mode", "manual"]
+        return [step_name]
     return [step_name]
 
 
