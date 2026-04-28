@@ -1,3 +1,4 @@
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownVariableType=false
 """``install-packs`` subcommand — interactive pack picker + bulk local install.
 
 Runs after ``seed-corpus`` in the setup composer. Discovers in-tree packs

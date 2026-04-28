@@ -1,3 +1,4 @@
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownLambdaType=false
 """Unit tests for the local-pack install path (`install_local_pack`).
 
 Covers the manifest validator, fragment-count drift detection,
