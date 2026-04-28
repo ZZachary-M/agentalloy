@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import PlainTextResponse
 
 from skillsmith.api.compose_models import (
     ComposedResult,
@@ -38,3 +39,17 @@ async def compose(
     orchestrator: ComposeOrchestrator = Depends(get_orchestrator),
 ) -> ComposedResult | EmptyResult:
     return await orchestrator.compose(req)
+
+
+@router.post(
+    "/compose/text",
+    response_class=PlainTextResponse,
+    summary="Compose task-specific guidance as plain text",
+    description="Returns only the assembled skill text — no JSON wrapper. Intended for agent curl calls.",
+)
+async def compose_text(
+    req: ComposeRequest,
+    orchestrator: ComposeOrchestrator = Depends(get_orchestrator),
+) -> PlainTextResponse:
+    result = await orchestrator.compose(req)
+    return PlainTextResponse(content=result.output)

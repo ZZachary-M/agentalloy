@@ -1,20 +1,22 @@
 ---
-description: Use when you need procedural guidance on a coding task (testing, error handling, deployment, observability)
+description: Fetch skill context before starting any coding task
 globs: ["**/*"]
 ---
 
-# Skillsmith access
+# Skillsmith — skill context
 
-A local skillsmith service is running at `http://localhost:{port}` exposing a curated corpus of engineering skills.
+A local skillsmith service runs at `http://localhost:{port}` with a curated corpus of engineering skills.
 
-When you need procedural guidance:
+**Before starting any task** (spec, design, build, test, debug):
 
 ```bash
-curl -s -X POST http://localhost:{port}/compose \
+curl -s -X POST http://localhost:{port}/compose/text \
   -H 'Content-Type: application/json' \
-  -d '{"task": "<task description>", "phase": "build"}'
+  -d '{"task": "<one sentence describing what you are about to do>", "phase": "build"}'
 ```
+
+The response is plain text skill context. Read it and apply it before generating code or a plan.
 
 Phases: `spec`, `design`, `build`, `qa`, `ops`.
 
-Health check: `curl -s http://localhost:{port}/health` returns `{"status":"ok"}`. If not, run `python -m skillsmith.install doctor` from the skillsmith repo.
+Health check: `curl -s http://localhost:{port}/health` → `{"status":"ok"}`. If unreachable, run `skillsmith doctor` from the skillsmith repo.

@@ -239,9 +239,10 @@ def _wire_continue(
             "name": "skill",
             "description": "Query the local skillsmith for guidance on a coding task",
             "prompt": (
-                f"Run: curl -s -X POST http://localhost:{port}/compose "
+                f"Run: curl -s -X POST http://localhost:{port}/compose/text "
                 f"-H 'Content-Type: application/json' "
-                '-d \'{"task":"{input}","phase":"build"}\''
+                '-d \'{"task":"{input}","phase":"build"}\' '
+                "and read the plain text response as your skill context."
             ),
         }
     )
@@ -252,9 +253,9 @@ def _wire_continue(
         sys_msg = config.get("systemMessage", "")
         injection = (
             f"A local skillsmith service runs at http://localhost:{port}. "
-            "When the user asks for procedural guidance on testing, error handling, "
-            "deployment, or similar topics, you may invoke the `/skill` custom command "
-            "to fetch relevant skill fragments before answering."
+            "Before starting any task (spec, design, build, test, debug), invoke the `/skill` "
+            "custom command with a one-sentence task description to fetch plain text skill context. "
+            "Read the response before generating code or a plan."
         )
         sentinel_block = f"<!-- skillsmith:begin -->\n{injection}\n<!-- skillsmith:end -->"
 

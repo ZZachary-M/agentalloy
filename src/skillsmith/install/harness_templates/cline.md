@@ -1,3 +1,3 @@
-# Skill API access
+# Skillsmith — skill context
 
-A local skillsmith service runs at http://localhost:{port}. For procedural guidance on coding tasks (testing, error handling, deployment, observability), POST to /compose with `{"task":"...", "phase":"build|spec|design|qa|ops"}`. Read the `output` field.
+A local skillsmith service runs at http://localhost:{port}. **Before starting any task** (spec, design, build, test, debug), POST to /compose/text with `{"task":"...", "phase":"build|spec|design|qa|ops"}`. The response is plain text — read it before generating code or a plan.

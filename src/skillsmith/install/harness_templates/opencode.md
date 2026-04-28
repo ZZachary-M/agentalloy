@@ -1,1 +1,1 @@
-For procedural guidance, POST to http://localhost:{port}/compose with `{"task": "...", "phase": "build|spec|design|qa|ops"}`. Read the `output` field.
+Before starting any task, POST to http://localhost:{port}/compose/text with `{"task": "...", "phase": "build|spec|design|qa|ops"}`. The response is plain text skill context — read it before generating code or a plan.
