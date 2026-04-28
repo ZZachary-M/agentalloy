@@ -50,9 +50,7 @@ class TestMissingFiles:
     subsequent `install-packs` step can populate them. The old
     `missing_files` action is gone for the fully-missing case."""
 
-    def test_missing_both_initializes_empty(
-        self, repo_root: Path, no_bundled_corpus: None
-    ) -> None:
+    def test_missing_both_initializes_empty(self, repo_root: Path, no_bundled_corpus: None) -> None:
         """Fresh install: neither file exists → init empty stores."""
         result = check_corpus(repo_root)
         assert result["action"] == "initialized_empty"

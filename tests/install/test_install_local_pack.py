@@ -4,6 +4,7 @@ Covers the manifest validator, fragment-count drift detection,
 embedding-dim hard-block, duplicate-skill outcome classification, and
 the dependency picker's missing-dep warning.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,6 +20,7 @@ from skillsmith.install.subcommands import install_packs as ips
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write_skill_yaml(
     pack_dir: Path,
@@ -88,6 +90,7 @@ def _write_pack_manifest(
 # _read_pack_manifest — schema + drift detection
 # ---------------------------------------------------------------------------
 
+
 class TestPackManifestValidation:
     def test_missing_pack_yaml(self, tmp_path: Path) -> None:
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
@@ -96,47 +99,67 @@ class TestPackManifestValidation:
 
     def test_missing_required_field(self, tmp_path: Path) -> None:
         # Manifest lacks `embed_model`
-        (tmp_path / "pack.yaml").write_text(yaml.safe_dump({
-            "name": "x",
-            "version": "1.0.0",
-            "embedding_dim": 1024,
-            "skills": [],
-        }))
+        (tmp_path / "pack.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "name": "x",
+                    "version": "1.0.0",
+                    "embedding_dim": 1024,
+                    "skills": [],
+                }
+            )
+        )
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
         assert manifest is not None
         assert any("missing required field: embed_model" in e for e in errors)
 
     def test_skill_file_not_on_disk(self, tmp_path: Path) -> None:
-        _write_pack_manifest(tmp_path, "x", [
-            {"skill_id": "ghost", "file": "ghost.yaml", "fragment_count": 1},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "ghost", "file": "ghost.yaml", "fragment_count": 1},
+            ],
+        )
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
         assert manifest is not None
         assert any("file not found on disk" in e for e in errors)
 
     def test_fragment_count_drift_caught(self, tmp_path: Path) -> None:
         _write_skill_yaml(tmp_path, "real-skill", fragments=3)
-        _write_pack_manifest(tmp_path, "x", [
-            {"skill_id": "real-skill", "file": "real-skill.yaml", "fragment_count": 99},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "real-skill", "file": "real-skill.yaml", "fragment_count": 99},
+            ],
+        )
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
         assert manifest is not None
         assert any("fragment_count drift" in e for e in errors)
 
     def test_skill_id_drift_caught(self, tmp_path: Path) -> None:
         _write_skill_yaml(tmp_path, "real-skill", fragments=2)
-        _write_pack_manifest(tmp_path, "x", [
-            {"skill_id": "wrong-id", "file": "real-skill.yaml", "fragment_count": 2},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "wrong-id", "file": "real-skill.yaml", "fragment_count": 2},
+            ],
+        )
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
         assert manifest is not None
         assert any("skill_id drift" in e for e in errors)
 
     def test_valid_manifest_parses_clean(self, tmp_path: Path) -> None:
         _write_skill_yaml(tmp_path, "good", fragments=2)
-        _write_pack_manifest(tmp_path, "x", [
-            {"skill_id": "good", "file": "good.yaml", "fragment_count": 2},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "good", "file": "good.yaml", "fragment_count": 2},
+            ],
+        )
         manifest, errors = ip._read_pack_manifest(tmp_path)  # pyright: ignore[reportPrivateUsage]
         assert manifest is not None
         assert errors == []
@@ -146,24 +169,34 @@ class TestPackManifestValidation:
 # install_local_pack — top-level outcomes
 # ---------------------------------------------------------------------------
 
+
 class TestInstallLocalPack:
     def test_manifest_invalid_returns_early(self, tmp_path: Path) -> None:
-        _write_pack_manifest(tmp_path, "bad", [
-            {"skill_id": "ghost", "file": "ghost.yaml", "fragment_count": 1},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "bad",
+            [
+                {"skill_id": "ghost", "file": "ghost.yaml", "fragment_count": 1},
+            ],
+        )
         result = ip.install_local_pack(tmp_path, root=tmp_path)
         assert result["action"] == "manifest_invalid"
         assert any("file not found on disk" in e for e in result["errors"])
 
     def test_embedding_dim_mismatch_blocks(self, tmp_path: Path) -> None:
         _write_skill_yaml(tmp_path, "good", fragments=2)
-        _write_pack_manifest(tmp_path, "x",
+        _write_pack_manifest(
+            tmp_path,
+            "x",
             [{"skill_id": "good", "file": "good.yaml", "fragment_count": 2}],
             embedding_dim=768,
         )
         # Fake a corpus that reports 1024-dim
-        with patch.object(ip, "_check_embedding_dim",
-                          return_value="embedding dimension mismatch: pack expects 768-dim but corpus is 1024-dim."):
+        with patch.object(
+            ip,
+            "_check_embedding_dim",
+            return_value="embedding dimension mismatch: pack expects 768-dim but corpus is 1024-dim.",
+        ):
             result = ip.install_local_pack(tmp_path, root=tmp_path)
         assert result["action"] == "embedding_dim_mismatch"
         assert "768-dim" in result["error"]
@@ -172,20 +205,39 @@ class TestInstallLocalPack:
         """`outcome` field in ingest_results distinguishes ingested / duplicate / failed."""
         # Three fake ingest results, one of each
         fake_results = [
-            {"yaml": "a.yaml", "exit_code": 0, "outcome": "ingested",
-             "stdout_tail": "ok: loaded a", "stderr_tail": ""},
-            {"yaml": "b.yaml", "exit_code": 4, "outcome": "duplicate",
-             "stdout_tail": "", "stderr_tail": "skip: skill_id 'b' already exists"},
-            {"yaml": "c.yaml", "exit_code": 2, "outcome": "failed",
-             "stdout_tail": "", "stderr_tail": "validation error"},
+            {
+                "yaml": "a.yaml",
+                "exit_code": 0,
+                "outcome": "ingested",
+                "stdout_tail": "ok: loaded a",
+                "stderr_tail": "",
+            },
+            {
+                "yaml": "b.yaml",
+                "exit_code": 4,
+                "outcome": "duplicate",
+                "stdout_tail": "",
+                "stderr_tail": "skip: skill_id 'b' already exists",
+            },
+            {
+                "yaml": "c.yaml",
+                "exit_code": 2,
+                "outcome": "failed",
+                "stdout_tail": "",
+                "stderr_tail": "validation error",
+            },
         ]
         for sid in ("a", "b", "c"):
             _write_skill_yaml(tmp_path, sid, fragments=2)
-        _write_pack_manifest(tmp_path, "x", [
-            {"skill_id": "a", "file": "a.yaml", "fragment_count": 2},
-            {"skill_id": "b", "file": "b.yaml", "fragment_count": 2},
-            {"skill_id": "c", "file": "c.yaml", "fragment_count": 2},
-        ])
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "a", "file": "a.yaml", "fragment_count": 2},
+                {"skill_id": "b", "file": "b.yaml", "fragment_count": 2},
+                {"skill_id": "c", "file": "c.yaml", "fragment_count": 2},
+            ],
+        )
         # Stub embedding-dim check (no corpus to compare against in tmp)
         with (
             patch.object(ip, "_check_embedding_dim", return_value=None),
@@ -217,8 +269,10 @@ class TestInstallLocalPack:
 
         with (
             patch("skillsmith.config.get_settings", return_value=fake_settings),
-            patch("skillsmith.storage.vector_store.open_or_create",
-                  return_value=MagicMock(__enter__=lambda s: fake_vs, __exit__=lambda *a: None)),
+            patch(
+                "skillsmith.storage.vector_store.open_or_create",
+                return_value=MagicMock(__enter__=lambda s: fake_vs, __exit__=lambda *a: None),
+            ),
         ):
             capsys.readouterr()  # clear any pre-existing capture
             result = _ip._check_embedding_dim(manifest, tmp_path)  # pyright: ignore[reportPrivateUsage]
@@ -232,14 +286,22 @@ class TestInstallLocalPack:
     def test_action_already_installed_when_all_duplicates(self, tmp_path: Path) -> None:
         """If every skill in the pack is already present, action is 'already_installed'."""
         _write_skill_yaml(tmp_path, "a", fragments=2)
-        _write_pack_manifest(tmp_path, "x",
-            [{"skill_id": "a", "file": "a.yaml", "fragment_count": 2}])
+        _write_pack_manifest(
+            tmp_path, "x", [{"skill_id": "a", "file": "a.yaml", "fragment_count": 2}]
+        )
         with (
             patch.object(ip, "_check_embedding_dim", return_value=None),
-            patch.object(ip, "_ingest_yaml", return_value={
-                "yaml": "a.yaml", "exit_code": 4, "outcome": "duplicate",
-                "stdout_tail": "", "stderr_tail": "skip",
-            }),
+            patch.object(
+                ip,
+                "_ingest_yaml",
+                return_value={
+                    "yaml": "a.yaml",
+                    "exit_code": 4,
+                    "outcome": "duplicate",
+                    "stdout_tail": "",
+                    "stderr_tail": "skip",
+                },
+            ),
             patch.object(ip.install_state, "load_state", return_value={}),
             patch.object(ip.install_state, "save_state"),
             patch.object(ip.install_state, "record_step"),
@@ -253,13 +315,16 @@ class TestInstallLocalPack:
 # install_pack(name_or_path) — auto-routes path → local-pack
 # ---------------------------------------------------------------------------
 
+
 class TestInstallPackAutoRoute:
     def test_directory_with_pack_yaml_routes_to_local(self, tmp_path: Path) -> None:
         _write_skill_yaml(tmp_path, "good", fragments=2)
-        _write_pack_manifest(tmp_path, "x",
-            [{"skill_id": "good", "file": "good.yaml", "fragment_count": 2}])
-        with patch.object(ip, "install_local_pack",
-                          return_value={"action": "ingested", "pack": "x"}) as m:
+        _write_pack_manifest(
+            tmp_path, "x", [{"skill_id": "good", "file": "good.yaml", "fragment_count": 2}]
+        )
+        with patch.object(
+            ip, "install_local_pack", return_value={"action": "ingested", "pack": "x"}
+        ) as m:
             result = ip.install_pack(str(tmp_path), root=tmp_path)
         assert result["action"] == "ingested"
         m.assert_called_once()
@@ -268,6 +333,7 @@ class TestInstallPackAutoRoute:
 # ---------------------------------------------------------------------------
 # install_packs picker — _ordered_with_deps warns on missing deps
 # ---------------------------------------------------------------------------
+
 
 class TestPickerDepWarning:
     def test_missing_dep_warns(self, capsys: pytest.CaptureFixture[str]) -> None:
@@ -305,6 +371,7 @@ class TestPickerDepWarning:
 # ---------------------------------------------------------------------------
 # install_packs._select_packs — flag handling
 # ---------------------------------------------------------------------------
+
 
 class TestPackSelector:
     def test_explicit_packs_flag_includes_always_on(self) -> None:

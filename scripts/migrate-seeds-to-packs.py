@@ -10,6 +10,7 @@ Usage:
   python scripts/migrate-seeds-to-packs.py --dry-run
   python scripts/migrate-seeds-to-packs.py --apply
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,17 +35,18 @@ PACK_RULES: list[tuple[str, str]] = [
     # ── Frameworks (specific identifiers — match before language catch-alls) ──
     (r"^vue-.*", "vue"),
     (r"^next-.*|^nextjs-.*|^deploy-to-vercel$|^vercel-cli-with-tokens$", "nextjs"),
-    (r"^vercel-react-(?!native).*|^vercel-composition-patterns$|^react-modernization$|^react-state-management$", "react"),
+    (
+        r"^vercel-react-(?!native).*|^vercel-composition-patterns$|^react-modernization$|^react-state-management$",
+        "react",
+    ),
     (r"^fastify-.*", "fastify"),
     (r"^fastapi-.*", "fastapi"),
     (r"^nestjs-.*", "nestjs"),
     (r"^temporal-.*", "temporal"),
-
     # ── Service integrations ──
     (r"^redis-.*", "redis"),
     (r"^s3-.*", "s3"),
     (r"^(postgresql|sql-optimization-patterns|database-migration)$", "postgres"),
-
     # ── Cross-cutting domains ──
     (r"^auth-.*|^msal-.*|^oauth-.*", "auth"),
     (
@@ -89,7 +91,6 @@ PACK_RULES: list[tuple[str, str]] = [
         r"frontend-ui-engineering)$",
         "ui-design",
     ),
-
     # ── Specialized ──
     (
         r"^(airflow-dag-patterns|dbt-transformation-patterns|spark-optimization|"
@@ -100,14 +101,12 @@ PACK_RULES: list[tuple[str, str]] = [
         r"^(bazel-build-optimization|monorepo-management|nx-workspace-patterns|turborepo-caching)$",
         "monorepo",
     ),
-
     # ── Languages (after framework + domain rules) ──
     (r"^node-.*|^nodejs-.*", "nodejs"),
     (r"^typescript-.*", "typescript"),
     (r"^python-.*|^uv-package-manager$|^async-python-patterns$", "python"),
     (r"^rust-.*", "rust"),
     (r"^go-.*", "go"),
-
     # ── Engineering: generic patterns (architecture, API, error, perf) ──
     (
         r"^(api-and-interface-design|api-design-principles|openapi-spec-generation|"
@@ -118,7 +117,6 @@ PACK_RULES: list[tuple[str, str]] = [
         r"cost-optimization)$",
         "engineering",
     ),
-
     # ── Everything else → core (process, governance, generic) ──
     (r".*", "core"),
 ]
@@ -299,7 +297,9 @@ def git_mv(src: Path, dst: Path, *, use_git: bool) -> None:
         try:
             subprocess.run(
                 ["git", "mv", "-f", str(src), str(dst)],
-                cwd=REPO_ROOT, check=True, capture_output=True,
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
             )
             return
         except subprocess.CalledProcessError:
@@ -370,11 +370,13 @@ def main(argv: list[str] | None = None) -> int:
                 dst = pack_dir / f"{src.parent.name}__{src.name}"
             git_mv(src, dst, use_git=not args.no_git)
             frag_count = len(data.get("fragments") or [])
-            manifest_skills.append({
-                "skill_id": data["skill_id"],
-                "file": dst.name,
-                "fragment_count": frag_count,
-            })
+            manifest_skills.append(
+                {
+                    "skill_id": data["skill_id"],
+                    "file": dst.name,
+                    "fragment_count": frag_count,
+                }
+            )
 
         manifest_skills.sort(key=lambda s: s["skill_id"])
         write_pack_manifest(pack, manifest_skills)

@@ -151,8 +151,7 @@ def check_corpus(root: Path | None = None) -> dict[str, Any]:  # noqa: ARG001 â€
             "skill_count": 0,
             "fragment_count": 0,
             "remediation": (
-                "Empty corpus initialized. Run `skillsmith install-packs` "
-                "to opt into skill packs."
+                "Empty corpus initialized. Run `skillsmith install-packs` to opt into skill packs."
             ),
             "duration_ms": duration_ms,
         }

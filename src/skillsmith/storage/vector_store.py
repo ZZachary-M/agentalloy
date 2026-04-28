@@ -372,8 +372,7 @@ class VectorStore:
         so the corpus's "dim" is whatever was first written.
         """
         row = self._conn.execute(
-            "SELECT len(embedding) FROM fragment_embeddings "
-            "WHERE embedding IS NOT NULL LIMIT 1"
+            "SELECT len(embedding) FROM fragment_embeddings WHERE embedding IS NOT NULL LIMIT 1"
         ).fetchone()
         return int(row[0]) if row else None
 

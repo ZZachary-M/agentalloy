@@ -10,6 +10,7 @@ Skips skills whose source YAML already exists anywhere under seeds/.
 Usage:
   python scripts/export-corpus-to-yaml.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -65,8 +66,18 @@ def main() -> int:
                 skipped += 1
                 continue
             (
-                _sid, name, cat, klass, tags, always, phase, catscope,
-                vid, author, summary, raw_prose,
+                _sid,
+                name,
+                cat,
+                klass,
+                tags,
+                always,
+                phase,
+                catscope,
+                vid,
+                author,
+                summary,
+                raw_prose,
             ) = r
 
             # Fetch fragments
@@ -80,11 +91,13 @@ def main() -> int:
             )
             fragments = []
             for fr in frag_rows:
-                fragments.append({
-                    "sequence": int(fr[1]),
-                    "fragment_type": str(fr[2]),
-                    "content": str(fr[3]),
-                })
+                fragments.append(
+                    {
+                        "sequence": int(fr[1]),
+                        "fragment_type": str(fr[2]),
+                        "content": str(fr[3]),
+                    }
+                )
 
             doc = {
                 "skill_type": "system" if str(klass) == "system" else "domain",

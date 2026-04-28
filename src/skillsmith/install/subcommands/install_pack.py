@@ -151,11 +151,7 @@ def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
     return {
         "yaml": yaml_path.name,
         "exit_code": rc,
-        "outcome": (
-            "ingested" if rc == 0
-            else "duplicate" if rc == 4
-            else "failed"
-        ),
+        "outcome": ("ingested" if rc == 0 else "duplicate" if rc == 4 else "failed"),
         "stdout_tail": result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "",
         "stderr_tail": result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "",
     }

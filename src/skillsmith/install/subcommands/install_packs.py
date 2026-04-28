@@ -5,6 +5,7 @@ under ``seeds/packs/*/pack.yaml``, prompts the user (TTY) or applies a
 sensible default (non-TTY), installs each selected pack locally, and
 triggers one bulk reembed at the end.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,11 +51,13 @@ def _packs_dir() -> Path:
     Python at the repo's `src/skillsmith/` directly).
     """
     import skillsmith
+
     return Path(skillsmith.__file__).resolve().parent / "_packs"
 
 
 def _run(args: argparse.Namespace) -> int:
     from skillsmith.install.state import _repo_root  # pyright: ignore[reportPrivateUsage]
+
     root = _repo_root()
     packs_root = _packs_dir()
 
@@ -105,8 +108,7 @@ def _run(args: argparse.Namespace) -> int:
         "selected": selected,
         "failed_packs": failed,
         "install_results": [
-            {k: v for k, v in r.items() if k != "ingest_results"}
-            for r in install_results
+            {k: v for k, v in r.items() if k != "ingest_results"} for r in install_results
         ],
         "reembed_exit_code": reembed_rc,
         "duration_ms": duration_ms,
@@ -286,6 +288,7 @@ def _bulk_reembed() -> int:
     """Run the reembed CLI in-process. Returns its exit code."""
     try:
         from skillsmith.reembed.cli import main as reembed_main
+
         return reembed_main([])
     except Exception as exc:  # noqa: BLE001 — surface but don't crash setup
         print(f"install-packs: reembed raised: {exc}", file=sys.stderr)
