@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import yaml as _yaml
+
 from skillsmith.install import state as install_state
 
 SCHEMA_VERSION = 1
@@ -146,15 +148,182 @@ def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
     }
 
 
+_REQUIRED_MANIFEST_FIELDS = ("name", "version", "embed_model", "embedding_dim", "skills")
+
+
+def _read_pack_manifest(pack_dir: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    """Load and validate a local pack.yaml. Returns (manifest, errors)."""
+    manifest_path = pack_dir / "pack.yaml"
+    if not manifest_path.is_file():
+        return None, [f"missing pack.yaml in {pack_dir}"]
+    try:
+        manifest = _yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    except _yaml.YAMLError as exc:
+        return None, [f"pack.yaml parse error: {exc}"]
+
+    errors: list[str] = []
+    for f in _REQUIRED_MANIFEST_FIELDS:
+        if f not in manifest:
+            errors.append(f"pack.yaml missing required field: {f}")
+
+    skills = manifest.get("skills") or []
+    if not isinstance(skills, list):
+        errors.append("pack.yaml 'skills' must be a list")
+        skills = []
+
+    for i, entry in enumerate(skills):
+        if not isinstance(entry, dict):
+            errors.append(f"skills[{i}] must be a mapping")
+            continue
+        for f in ("skill_id", "file"):
+            if f not in entry:
+                errors.append(f"skills[{i}] missing required field: {f}")
+        fname = entry.get("file")
+        if fname and not (pack_dir / fname).is_file():
+            errors.append(f"skills[{i}] file not found on disk: {fname}")
+
+    return manifest, errors
+
+
+def _check_embedding_dim(manifest: dict[str, Any], root: Path) -> str | None:
+    """Hard-block on dim mismatch with the running corpus. Returns error str or None."""
+    pack_dim = manifest.get("embedding_dim")
+    if not isinstance(pack_dim, int):
+        return None  # nothing to check against; let ingest decide
+    try:
+        from skillsmith.config import get_settings
+        from skillsmith.storage.vector_store import open_or_create
+
+        settings = get_settings()
+        with open_or_create(settings.duckdb_path) as vs:
+            row = vs._conn.execute(  # pyright: ignore[reportPrivateUsage]
+                "SELECT COUNT(*) FROM fragment_embeddings WHERE embedding IS NOT NULL"
+            ).fetchone()
+            corpus_has_embeddings = bool(row and row[0])
+            if not corpus_has_embeddings:
+                return None  # corpus is empty; pack defines the dim
+            sample = vs._conn.execute(  # pyright: ignore[reportPrivateUsage]
+                "SELECT len(embedding) FROM fragment_embeddings "
+                "WHERE embedding IS NOT NULL LIMIT 1"
+            ).fetchone()
+            if not sample:
+                return None
+            current_dim = int(sample[0])
+            if current_dim != pack_dim:
+                return (
+                    f"embedding dimension mismatch: pack expects {pack_dim}-dim "
+                    f"but corpus is {current_dim}-dim. Re-embed with a matching "
+                    f"model or pick a pack with embedding_dim={current_dim}."
+                )
+    except Exception:  # noqa: BLE001 — best-effort; let downstream surface real failures
+        return None
+    return None
+
+
+def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
+    """Install a pack from a local directory (containing pack.yaml + YAMLs).
+
+    No tarball download, no sha256 check. Trusts the local filesystem.
+    """
+    t0 = time.monotonic()
+    pack_dir = pack_dir.resolve()
+
+    manifest, errors = _read_pack_manifest(pack_dir)
+    if manifest is None or errors:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "action": "manifest_invalid",
+            "pack_dir": str(pack_dir),
+            "errors": errors,
+            "duration_ms": int((time.monotonic() - t0) * 1000),
+        }
+
+    name = str(manifest["name"])
+
+    dim_err = _check_embedding_dim(manifest, root)
+    if dim_err:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "action": "embedding_dim_mismatch",
+            "pack": name,
+            "pack_dir": str(pack_dir),
+            "error": dim_err,
+            "remediation": (
+                "Either re-embed the corpus with a model matching the pack, "
+                "or install only packs with the same embedding_dim as the existing corpus."
+            ),
+            "duration_ms": int((time.monotonic() - t0) * 1000),
+        }
+
+    skills_entries = manifest.get("skills") or []
+    ingest_results: list[dict[str, Any]] = []
+    for entry in skills_entries:
+        yaml_path = pack_dir / str(entry["file"])
+        ingest_results.append(_ingest_yaml(yaml_path, root))
+
+    failed = [r for r in ingest_results if r["exit_code"] != 0]
+
+    state = install_state.load_state(root)
+    packs = state.get("installed_packs") or []
+    packs.append(
+        {
+            "name": name,
+            "source": f"local:{pack_dir}",
+            "version": str(manifest.get("version", "")),
+            "embed_model": str(manifest.get("embed_model", "")),
+            "embedding_dim": int(manifest.get("embedding_dim", 0)),
+            "yaml_files": [str(e["file"]) for e in skills_entries],
+            "skill_count": len(skills_entries),
+            "ingest_failures": len(failed),
+            "installed_at": int(time.time()),
+        }
+    )
+    state["installed_packs"] = packs
+    install_state.record_step(state, STEP_NAME, extra={"pack": name, "source": "local"})
+    install_state.save_state(state, root)
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "action": "ingested" if not failed else "ingested_with_errors",
+        "pack": name,
+        "source": f"local:{pack_dir}",
+        "version": manifest.get("version"),
+        "skill_count": len(skills_entries),
+        "ingest_results": ingest_results,
+        "ingest_failures": len(failed),
+        "remediation": (
+            "Some YAMLs failed to ingest; inspect ingest_results.stderr_tail and "
+            "re-run `python -m skillsmith.ingest <yaml>` manually."
+            if failed
+            else None
+        ),
+        "duration_ms": int((time.monotonic() - t0) * 1000),
+    }
+
+
 def install_pack(
-    name: str,
+    name_or_path: str,
     manifest_url: str | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
-    """Install a skill pack by name. Returns contract-shaped result."""
+    """Install a skill pack. Returns contract-shaped result.
+
+    Three input shapes:
+      1. A path to a local pack directory containing pack.yaml → local install.
+      2. A pack name (resolved via manifest URL pattern) → remote tarball install.
+      3. A pack name + --manifest-url override → remote tarball install.
+    """
     from skillsmith.install.state import _repo_root  # pyright: ignore[reportPrivateUsage]
 
     root = root or _repo_root()
+
+    # Branch: local directory? (Path-like and exists as a dir on disk.)
+    candidate = Path(name_or_path)
+    if candidate.is_dir() and (candidate / "pack.yaml").is_file():
+        return install_local_pack(candidate, root=root)
+
+    # Otherwise: remote pack-by-name flow.
+    name = name_or_path
     t0 = time.monotonic()
     url = _resolve_manifest_url(name, manifest_url)
 
@@ -344,13 +513,19 @@ def add_parser(
 ) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
         "install-pack",
-        help="Pull a published skill pack into the corpus.",
+        help="Install a skill pack into the corpus (local directory or remote name).",
     )
-    p.add_argument("pack_name", help="Pack name (resolves to a known manifest URL).")
+    p.add_argument(
+        "pack",
+        help=(
+            "Pack name (resolves to a manifest URL) OR path to a local pack "
+            "directory containing pack.yaml."
+        ),
+    )
     p.add_argument(
         "--manifest-url",
         help=(
-            "Override the default manifest URL pattern. "
+            "Override the default manifest URL pattern (remote install only). "
             "Default: https://github.com/navistone/skill-pack-{name}/releases/latest/download/manifest.json"
         ),
     )
@@ -358,7 +533,7 @@ def add_parser(
 
 
 def _run(args: argparse.Namespace) -> int:
-    result = install_pack(args.pack_name, manifest_url=args.manifest_url)
+    result = install_pack(args.pack, manifest_url=args.manifest_url)
     print(json.dumps(result, indent=2))
     if result.get("ingest_failures", 0) > 0:
         return 2

@@ -1,0 +1,302 @@
+skill_type: domain
+skill_id: slo-implementation
+canonical_name: SLO Implementation
+category: ops
+skill_class: domain
+domain_tags:
+- slo
+- sli
+- sla
+- error-budget
+- burn-rate
+- multi-window-alerts
+- prometheus
+- sre
+- reliability-target
+- recording-rules
+- availability
+- latency
+- durability
+- error-budget-policy
+- alerting
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin observability-monitoring/slo-implementation
+raw_prose: '# SLO Implementation
+
+
+  Define and implement Service Level Indicators (SLIs), Service Level Objectives (SLOs), and error budgets to balance reliability with innovation velocity.
+
+
+  ## When to Use
+
+
+  - Defining service reliability targets
+
+  - Measuring user-perceived reliability
+
+  - Implementing error budgets to govern release cadence
+
+  - Creating SLO-based alerts (multi-window burn rates)
+
+  - Tracking reliability against business goals
+
+
+  ## SLI / SLO / SLA Hierarchy
+
+
+  - **SLA** (Service Level Agreement) — contractual commitment to customers
+
+  - **SLO** (Service Level Objective) — internal target, stricter than SLA
+
+  - **SLI** (Service Level Indicator) — actual measurement of behavior
+
+
+  Always set SLO stricter than SLA so you have buffer before contractual penalty kicks in.
+
+
+  ## Common SLI Types
+
+
+  - **Availability**: successful requests / total requests
+
+  - **Latency**: requests below threshold / total requests
+
+  - **Durability**: successful writes / total writes
+
+  - **Quality**: requests meeting freshness/correctness threshold
+
+
+  ## SLO Targets
+
+
+  | SLO % | Downtime/Month | Downtime/Year |
+
+  |---|---|---|
+
+  | 99%    | 7.2 hours    | 3.65 days   |
+
+  | 99.9%  | 43.2 minutes | 8.76 hours  |
+
+  | 99.95% | 21.6 minutes | 4.38 hours  |
+
+  | 99.99% | 4.32 minutes | 52.56 min   |
+
+
+  Choose by user expectations, business requirements, current performance, cost of reliability, competitor benchmarks. Don''t aim for 100% — it''s not achievable and the marginal cost is brutal.
+
+
+  ## Error Budget
+
+
+  `Error Budget = 1 − SLO Target`. With a 99.9% SLO, the budget is 0.1% (43.2 min/month) of allowable failure. Spend it on planned changes, recovery, experiments. When the budget is exhausted, freeze risky changes.
+
+
+  Error budget policy (example): 100% remaining → normal velocity; 50% → postpone risky changes; 10% → freeze non-critical; 0% → feature freeze, focus on reliability.
+
+
+  ## Multi-Window Burn Rate Alerts
+
+
+  Single-window alerts produce false positives. Multi-window alerts require both a long and short window to exceed threshold simultaneously, reducing noise:
+
+
+  - Fast burn (critical): 14.4× rate sustained over 1h AND 5m → page
+
+  - Slow burn (warning): 6× rate sustained over 6h AND 30m → ticket
+
+
+  ## SLO Review Cadence
+
+
+  - Weekly: current compliance, error budget status, trend, recent incidents
+
+  - Monthly: achievement, budget usage, postmortems, target adjustments
+
+  - Quarterly: SLO relevance, target adjustments, process and tooling improvements
+
+
+  ## Best Practices
+
+
+  Start with user-facing services. Use multiple SLIs per service. Set achievable targets. Implement multi-window alerts. Track error budgets consistently. Review SLOs regularly. Document SLO decisions. Align with business goals. Automate SLO reporting. Use SLOs for prioritization (engineering vs reliability work).'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Why SLOs
+
+
+    "How reliable should this service be?" is a business question, not a technical one. Without an explicit answer, every team converges on its own implicit target — usually "as reliable as I can make it," which optimizes engineer time toward marginal nines that no user notices, at the cost of features users do notice.
+
+
+    **SLOs make the trade-off explicit.** A 99.9% availability target tells everyone — engineering, product, ops, leadership — that ~43 minutes of downtime per month is *acceptable*. It is not a goal; it is a budget. Spending less than the budget means the service is over-engineered for reliability and under-engineered for everything else; spending more means the team needs to slow feature work and invest in stability.
+
+
+    **Error budgets convert reliability into a finite resource.** Once a team accepts that their SLO budget is 43 minutes/month, every planned change consumes some of it: deploys, migrations, dependency upgrades, chaos experiments. When the budget is exhausted, risky changes get frozen — not as punishment, but as the natural consequence of having spent the resource. This is the single most important property of SLO discipline: it makes "should we deploy this risky change?" answerable from data, not opinion.
+
+
+    **Multi-window burn rate alerts replace static thresholds** because static thresholds (`error_rate > 1%`) page on every transient blip and miss slow burns that consume the budget over hours. A burn-rate alert that requires *both* a long and a short window to exceed threshold is dramatically less noisy and more correlated with actual user impact.
+
+
+    **Core principle:** Treat reliability as a measured budget tied to user expectations, not as an aspiration. Every SLO decision in this skill exists to make that budget visible, finite, and enforced.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    Use the SLO Implementation skill when establishing reliability targets, implementing SRE practices, or measuring service performance.
+
+
+    - Defining service reliability targets
+
+    - Measuring user-perceived reliability
+
+    - Implementing error budgets to govern release cadence
+
+    - Creating SLO-based alerts (multi-window burn rates)
+
+    - Tracking reliability against business goals
+
+    - Negotiating release-freeze policies between engineering and product
+
+    - Establishing SLI/SLO/SLA hierarchy for a new service or platform'
+- sequence: 3
+  fragment_type: setup
+  content: "## SLI / SLO / SLA Hierarchy\n\n```\nSLA (Service Level Agreement)\n  ↓ Contract with customers — penalties on miss\nSLO (Service Level Objective)\n  ↓ Internal reliability target — stricter than SLA\nSLI (Service Level Indicator)\n  ↓ Actual measurement of behavior\n```\n\n**Always set SLO stricter than SLA.** The buffer is there so the team has time to recover before contractual penalty kicks in. Pairing a 99.9% SLA with a 99.95% SLO gives you internal alert time before customer credits trigger.\n\nCommon SLI types: availability (success/total), latency (fast-enough/total), durability (writes-persisted/total), quality (fresh-enough/total)."
+- sequence: 4
+  fragment_type: example
+  content: '## SLI Definitions (PromQL)
+
+
+    Availability — successful requests over total over a 28d window:
+
+
+    ```promql
+
+    sum(rate(http_requests_total{status!~"5.."}[28d]))
+
+    /
+
+    sum(rate(http_requests_total[28d]))
+
+    ```
+
+
+    Latency — fraction of requests under 500ms:
+
+
+    ```promql
+
+    sum(rate(http_request_duration_seconds_bucket{le="0.5"}[28d]))
+
+    /
+
+    sum(rate(http_request_duration_seconds_count[28d]))
+
+    ```
+
+
+    Durability — successful writes over total writes:
+
+
+    ```promql
+
+    sum(storage_writes_successful_total)
+
+    /
+
+    sum(storage_writes_total)
+
+    ```
+
+
+    Quality — fraction of responses meeting a freshness or correctness threshold (e.g., data pipelines emitting records within an SLA, search results above a relevance score). Defined as `meeting_threshold / total` with the threshold tuned to user expectations.
+
+
+    Use a 28-day rolling window for quarterly business alignment. Shorter windows (1d, 7d) for tactical dashboards.'
+- sequence: 5
+  fragment_type: setup
+  content: '## SLO Targets
+
+
+    | SLO % | Downtime/Month | Downtime/Year |
+
+    |---|---|---|
+
+    | 99%    | 7.2 hours    | 3.65 days   |
+
+    | 99.9%  | 43.2 minutes | 8.76 hours  |
+
+    | 99.95% | 21.6 minutes | 4.38 hours  |
+
+    | 99.99% | 4.32 minutes | 52.56 min   |
+
+
+    Don''t aim for 100% — unachievable, and the marginal user-perceived value drops sharply past 99.95% for most consumer services.
+
+
+    Choose by: user expectations, business requirements, current measured performance, cost of reliability, competitor benchmarks.'
+- sequence: 6
+  fragment_type: example
+  content: "## Prometheus Recording Rules\n\nPre-compute SLIs and SLO compliance so dashboards and alerts query cheap recorded series. Multi-window burn-rate alerts require burn-rate recordings at every window they reference (5m, 30m, 1h, 6h):\n\n```yaml\ngroups:\n  - name: sli_rules\n    interval: 30s\n    rules:\n      - record: sli:http_availability:ratio\n        expr: |\n          sum(rate(http_requests_total{status!~\"5..\"}[28d]))\n          /\n          sum(rate(http_requests_total[28d]))\n\n      - record: sli:http_latency:ratio\n        expr: |\n          sum(rate(http_request_duration_seconds_bucket{le=\"0.5\"}[28d]))\n          /\n          sum(rate(http_request_duration_seconds_count[28d]))\n\n  - name: slo_rules\n    interval: 5m\n    rules:\n      # 1 = meeting SLO, 0 = violating\n      - record: slo:http_availability:compliance\n        expr: sli:http_availability:ratio >= bool 0.999\n\n      # Error budget remaining (percentage)\n      - record: slo:http_availability:error_budget_remaining\n        expr: (sli:http_availability:ratio - 0.999) / (1 - 0.999) * 100\n\n      # Burn rates — one recording per window referenced by alerts\n      - record: slo:http_availability:burn_rate_5m\n        expr: |\n          (1 - (\n            sum(rate(http_requests_total{status!~\"5..\"}[5m]))\n            /\n            sum(rate(http_requests_total[5m]))\n          )) / (1 - 0.999)\n\n      - record: slo:http_availability:burn_rate_30m\n        expr: |\n          (1 - (\n            sum(rate(http_requests_total{status!~\"5..\"}[30m]))\n            /\n            sum(rate(http_requests_total[30m]))\n          )) / (1 - 0.999)\n\n      - record: slo:http_availability:burn_rate_1h\n        expr: |\n          (1 - (\n            sum(rate(http_requests_total{status!~\"5..\"}[1h]))\n            /\n            sum(rate(http_requests_total[1h]))\n          )) / (1 - 0.999)\n\n      - record: slo:http_availability:burn_rate_6h\n        expr: |\n          (1 - (\n            sum(rate(http_requests_total{status!~\"5..\"}[6h]))\n            /\n            sum(rate(http_requests_total[6h]))\n          )) / (1 - 0.999)\n```"
+- sequence: 7
+  fragment_type: setup
+  content: "## Error Budget and Policy\n\n`Error Budget = 1 − SLO Target`.\n\nWith a 99.9% SLO, the budget is 0.1% = 43.2 minutes/month. The team is *entitled* to spend it on planned changes (deploys, migrations, experiments) before the SLO is at risk. When the budget is exhausted, risky changes are paused.\n\nStandard error budget policy:\n\n```yaml\nerror_budget_policy:\n  - remaining_budget: 100%\n    action: Normal development velocity\n  - remaining_budget: 50%\n    action: Consider postponing risky changes\n  - remaining_budget: 10%\n    action: Freeze non-critical changes\n  - remaining_budget: 0%\n    action: Feature freeze; engineering focuses on reliability work\n```\n\nThe policy should be agreed up-front between engineering and product before the first SLO is set. Without that pre-agreement, freeze decisions devolve into ad-hoc politics during incidents."
+- sequence: 8
+  fragment_type: execution
+  content: "## Multi-Window Burn Rate Alerts\n\nSingle-window alerts produce noise. Multi-window alerts require *both* a long and short window to exceed threshold simultaneously, dramatically reducing false positives while still catching real budget burns:\n\n```yaml\ngroups:\n  - name: slo_alerts\n    interval: 1m\n    rules:\n      # Fast burn: 14.4x rate sustained over 1h AND 5m\n      # Consumes 2% of monthly budget in 1 hour — page immediately\n      - alert: SLOErrorBudgetBurnFast\n        expr: |\n          slo:http_availability:burn_rate_1h > 14.4\n          and\n          slo:http_availability:burn_rate_5m > 14.4\n        for: 2m\n        labels: { severity: critical }\n\n      # Slow burn: 6x rate sustained over 6h AND 30m\n      # Consumes 5% of monthly budget in 6 hours — ticket\n      - alert: SLOErrorBudgetBurnSlow\n        expr: |\n          slo:http_availability:burn_rate_6h > 6\n          and\n          slo:http_availability:burn_rate_30m > 6\n        for: 15m\n        labels: { severity: warning }\n\n      # Budget exhausted\n      - alert: SLOErrorBudgetExhausted\n        expr: slo:http_availability:error_budget_remaining < 0\n        for: 5m\n        labels: { severity: critical }\n```\n\nThe fast/slow burn pair is the standard SRE pattern. Fast burn pages on-call; slow burn opens a ticket for the on-call to investigate during business hours."
+- sequence: 9
+  fragment_type: setup
+  content: '## SLO Review Cadence
+
+
+    - **Weekly** — current SLO compliance, error budget status, trend analysis, incident impact. Reviewed in the team''s ops sync.
+
+    - **Monthly** — SLO achievement, error budget usage, incident postmortems, candidate target adjustments. Reviewed with product.
+
+    - **Quarterly** — SLO relevance to business goals, target adjustments based on observed user expectations, process improvements, tooling enhancements. Reviewed with leadership.
+
+
+    The cadence matters because SLOs that aren''t reviewed become stale: targets too generous (team is over-engineering), too tight (chronic budget exhaustion produces alarm fatigue), or measuring the wrong thing entirely (e.g., availability when latency is the actual user pain).'
+- sequence: 10
+  fragment_type: rationale
+  content: '## Best Practices
+
+
+    1. **Start with user-facing services.** Internal services without direct user impact are a distraction until customer-facing reliability is well-measured.
+
+    2. **Use multiple SLIs per service.** Availability + latency at minimum; durability for stateful services; quality (freshness) for data pipelines.
+
+    3. **Set achievable SLOs.** Don''t aim for 100%. Past 99.95%, marginal user-perceived value drops sharply for most services.
+
+    4. **Implement multi-window burn rate alerts.** Single-window thresholds produce alarm fatigue.
+
+    5. **Track error budgets consistently.** A budget that no one watches is not a budget.
+
+    6. **Review SLOs regularly.** Weekly/monthly/quarterly cadence keeps targets honest and prevents staleness.
+
+    7. **Document SLO decisions.** Why this target, what evidence, what alternatives were considered. Future-you needs to know.
+
+    8. **Align with business goals.** SLOs that diverge from business priorities lose credibility fast.
+
+    9. **Automate SLO reporting.** Manual report assembly does not survive contact with on-call rotation; bake it into the dashboard pipeline.
+
+    10. **Use SLOs for prioritization.** Reliability work funded out of error budget excess; feature work funded by remaining budget.'
+- sequence: 11
+  fragment_type: guardrail
+  content: '## Anti-Patterns
+
+
+    - **Aspirational targets** — "we want 99.99% availability" without measurement, redundancy, or budget enforcement. Targets without enforcement are theater.
+
+    - **Single-window alerts** — `error_rate > 1%` pages every transient blip, misses slow burns, produces alarm fatigue. Always pair long + short windows.
+
+    - **Targets set by engineering alone** — SLOs are a business contract; product and leadership must co-own them.
+
+    - **Ignoring the error budget when it''s exhausted** — defeats the entire purpose. If "budget exhausted" doesn''t actually freeze risky changes, the team has an SLO in name only.
+
+    - **Measuring what''s easy, not what users feel** — request-rate ≠ user-perceived availability. If users hit a CDN, your origin''s availability is not the SLI you want.
+
+    - **Window mismatches** — SLO is "monthly," recording rule uses 28d, alert burn-rate uses 5m vs the 1-month budget. Be deliberate about windows; don''t mix conventions across the same SLO.'

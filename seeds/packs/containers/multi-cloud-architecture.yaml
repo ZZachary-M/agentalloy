@@ -1,0 +1,271 @@
+skill_type: domain
+skill_id: multi-cloud-architecture
+canonical_name: Multi-Cloud Architecture
+category: ops
+skill_class: domain
+domain_tags:
+- multi-cloud
+- aws
+- azure
+- gcp
+- oci
+- vendor-lock-in
+- cloud-agnostic
+- migration
+- cost-optimization
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Multi-Cloud Architecture\n\nDecision framework and patterns for architecting applications across AWS, Azure, GCP, and OCI.\n\n## Purpose\n\nDesign cloud-agnostic architectures and make informed decisions about service selection across cloud providers.\n\n## When to Use\n\n- Design multi-cloud strategies\n- Migrate between cloud providers\n- Select cloud services for specific workloads\n- Implement cloud-agnostic architectures\n- Optimize costs across providers\n\n## Cloud Service Comparison\n\n### Compute Services\n\n| AWS     | Azure               | GCP             | OCI                 | Use Case           |\n| ------- | ------------------- | --------------- | ------------------- | ------------------ |\n| EC2     | Virtual Machines    | Compute Engine  | Compute             | IaaS VMs           |\n| ECS     | Container Instances | Cloud Run       | Container Instances | Containers         |\n| EKS     | AKS                 | GKE             | OKE                 | Kubernetes         |\n| Lambda  | Functions           | Cloud Functions | Functions           | Serverless         |\n| Fargate | Container Apps      | Cloud Run       | Container Instances | Managed containers |\n\n### Storage Services\n\n| AWS     | Azure           | GCP             | OCI            | Use Case       |\n| ------- | --------------- | --------------- | -------------- | -------------- |\n| S3      | Blob Storage    | Cloud Storage   | Object Storage | Object storage |\n| EBS     | Managed Disks   | Persistent Disk | Block Volumes  | Block storage  |\n| EFS     | Azure Files     | Filestore       | File Storage   | File storage   |\n| Glacier | Archive Storage | Archive Storage | Archive Storage | Cold storage   |\n\n### Database Services\n\n| AWS         | Azure            | GCP           | OCI                 | Use Case        |\n| ----------- | ---------------- | ------------- | ------------------- | --------------- |\n| RDS         | SQL Database     | Cloud SQL     | MySQL HeatWave      | Managed SQL     |\n| DynamoDB    | Cosmos DB        | Firestore     | NoSQL Database      | NoSQL           |\n| Aurora      | PostgreSQL/MySQL | Cloud Spanner | Autonomous Database | Distributed SQL |\n| ElastiCache | Cache for Redis  | Memorystore   | OCI Cache           | Caching         |\n\n**Reference:** See `references/service-comparison.md` for complete comparison\n\n## Multi-Cloud Patterns\n\n### Pattern 1: Single Provider with DR\n\n- Primary workload in one cloud\n- Disaster recovery in another\n- Database replication across clouds\n- Automated failover\n\n### Pattern 2: Best-of-Breed\n\n- Use best service from each provider\n- AI/ML on GCP\n- Enterprise apps on Azure\n- Regulated data platforms on OCI\n- General compute on AWS\n\n### Pattern 3: Geographic Distribution\n\n- Serve users from nearest cloud region\n- Data sovereignty compliance\n- Global load balancing\n- Regional failover\n\n### Pattern 4: Cloud-Agnostic Abstraction\n\n- Kubernetes for compute\n- PostgreSQL for database\n- S3-compatible storage (MinIO)\n- Open source tools\n\n## Cloud-Agnostic Architecture\n\n### Use Cloud-Native Alternatives\n\n- **Compute:** Kubernetes (EKS/AKS/GKE/OKE)\n- **Database:** PostgreSQL/MySQL (RDS/SQL Database/Cloud SQL/MySQL HeatWave)\n- **Message Queue:** Apache Kafka or managed streaming (MSK/Event Hubs/Confluent/OCI Streaming)\n- **Cache:** Redis (ElastiCache/Azure Cache/Memorystore/OCI Cache)\n- **Object Storage:** S3-compatible API\n- **Monitoring:** Prometheus/Grafana\n- **Service Mesh:** Istio/Linkerd\n\n### Abstraction Layers\n\n```\nApplication Layer\n    ↓\nInfrastructure Abstraction (Terraform)\n    ↓\nCloud Provider APIs\n    ↓\nAWS / Azure / GCP / OCI\n```\n\n## Cost Comparison\n\n### Compute Pricing Factors\n\n- **AWS:** On-demand, Reserved, Spot, Savings Plans\n- **Azure:** Pay-as-you-go, Reserved, Spot\n- **GCP:** On-demand, Committed use, Preemptible\n- **OCI:** Pay-as-you-go, annual commitments, burstable/flexible shapes, preemptible instances\n\n### Cost Optimization Strategies\n\n1. Use reserved/committed capacity (30-70% savings)\n2. Leverage spot/preemptible instances\n3. Right-size resources\n4. Use serverless for variable workloads\n5. Optimize data transfer costs\n6. Implement lifecycle policies\n7. Use cost allocation tags\n8. Monitor with cloud cost tools\n\n**Reference:** See `references/multi-cloud-patterns.md`\n\n## Migration Strategy\n\n### Phase 1: Assessment\n\n- Inventory current infrastructure\n- Identify dependencies\n- Assess cloud compatibility\n- Estimate costs\n\n### Phase 2: Pilot\n\n- Select pilot workload\n- Implement in target cloud\n- Test thoroughly\n- Document learnings\n\n### Phase 3: Migration\n\n- Migrate workloads incrementally\n- Maintain dual-run period\n- Monitor performance\n- Validate functionality\n\n### Phase 4: Optimization\n\n- Right-size resources\n- Implement cloud-native services\n- Optimize costs\n- Enhance security\n\n## Best Practices\n\n1. **Use infrastructure as code** (Terraform/OpenTofu)\n2. **Implement CI/CD pipelines** for deployments\n3. **Design for failure** across clouds\n4. **Use managed services** when possible\n5. **Implement comprehensive monitoring**\n6. **Automate cost optimization**\n7. **Follow security best practices**\n8. **Document cloud-specific configurations**\n9. **Test disaster recovery** procedures\n10. **Train teams** on multiple clouds\n\n\n## Related Skills\n\n- `terraform-module-library` - For IaC implementation\n- `cost-optimization` - For cost management\n- `hybrid-cloud-networking` - For connectivity"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Design multi-cloud strategies
+
+    - Migrate between cloud providers
+
+    - Select cloud services for specific workloads
+
+    - Implement cloud-agnostic architectures
+
+    - Optimize costs across providers'
+- sequence: 2
+  fragment_type: rationale
+  content: '## Cloud Service Comparison
+
+
+    ### Compute Services
+
+
+    | AWS     | Azure               | GCP             | OCI                 | Use Case           |
+
+    | ------- | ------------------- | --------------- | ------------------- | ------------------ |
+
+    | EC2     | Virtual Machines    | Compute Engine  | Compute             | IaaS VMs           |
+
+    | ECS     | Container Instances | Cloud Run       | Container Instances | Containers         |
+
+    | EKS     | AKS                 | GKE             | OKE                 | Kubernetes         |
+
+    | Lambda  | Functions           | Cloud Functions | Functions           | Serverless         |
+
+    | Fargate | Container Apps      | Cloud Run       | Container Instances | Managed containers |
+
+
+    ### Storage Services
+
+
+    | AWS     | Azure           | GCP             | OCI            | Use Case       |
+
+    | ------- | --------------- | --------------- | -------------- | -------------- |
+
+    | S3      | Blob Storage    | Cloud Storage   | Object Storage | Object storage |
+
+    | EBS     | Managed Disks   | Persistent Disk | Block Volumes  | Block storage  |
+
+    | EFS     | Azure Files     | Filestore       | File Storage   | File storage   |
+
+    | Glacier | Archive Storage | Archive Storage | Archive Storage | Cold storage   |
+
+
+    ### Database Services
+
+
+    | AWS         | Azure            | GCP           | OCI                 | Use Case        |
+
+    | ----------- | ---------------- | ------------- | ------------------- | --------------- |
+
+    | RDS         | SQL Database     | Cloud SQL     | MySQL HeatWave      | Managed SQL     |
+
+    | DynamoDB    | Cosmos DB        | Firestore     | NoSQL Database      | NoSQL           |
+
+    | Aurora      | PostgreSQL/MySQL | Cloud Spanner | Autonomous Database | Distributed SQL |
+
+    | ElastiCache | Cache for Redis  | Memorystore   | OCI Cache           | Caching         |
+
+
+    **Reference:** See `references/service-comparison.md` for complete comparison'
+- sequence: 3
+  fragment_type: execution
+  content: '## Multi-Cloud Patterns
+
+
+    ### Pattern 1: Single Provider with DR
+
+
+    - Primary workload in one cloud
+
+    - Disaster recovery in another
+
+    - Database replication across clouds
+
+    - Automated failover
+
+
+    ### Pattern 2: Best-of-Breed
+
+
+    - Use best service from each provider
+
+    - AI/ML on GCP
+
+    - Enterprise apps on Azure
+
+    - Regulated data platforms on OCI
+
+    - General compute on AWS
+
+
+    ### Pattern 3: Geographic Distribution
+
+
+    - Serve users from nearest cloud region
+
+    - Data sovereignty compliance
+
+    - Global load balancing
+
+    - Regional failover
+
+
+    ### Pattern 4: Cloud-Agnostic Abstraction
+
+
+    - Kubernetes for compute
+
+    - PostgreSQL for database
+
+    - S3-compatible storage (MinIO)
+
+    - Open source tools'
+- sequence: 4
+  fragment_type: rationale
+  content: "## Cloud-Agnostic Architecture\n\n### Use Cloud-Native Alternatives\n\n- **Compute:** Kubernetes (EKS/AKS/GKE/OKE)\n- **Database:** PostgreSQL/MySQL (RDS/SQL Database/Cloud SQL/MySQL HeatWave)\n- **Message Queue:** Apache Kafka or managed streaming (MSK/Event Hubs/Confluent/OCI Streaming)\n- **Cache:** Redis (ElastiCache/Azure Cache/Memorystore/OCI Cache)\n- **Object Storage:** S3-compatible API\n- **Monitoring:** Prometheus/Grafana\n- **Service Mesh:** Istio/Linkerd\n\n### Abstraction Layers\n\n```\nApplication Layer\n    ↓\nInfrastructure Abstraction (Terraform)\n    ↓\nCloud Provider APIs\n    ↓\nAWS / Azure / GCP / OCI\n```"
+- sequence: 5
+  fragment_type: rationale
+  content: '## Cost Comparison
+
+
+    ### Compute Pricing Factors
+
+
+    - **AWS:** On-demand, Reserved, Spot, Savings Plans
+
+    - **Azure:** Pay-as-you-go, Reserved, Spot
+
+    - **GCP:** On-demand, Committed use, Preemptible
+
+    - **OCI:** Pay-as-you-go, annual commitments, burstable/flexible shapes, preemptible instances
+
+
+    ### Cost Optimization Strategies
+
+
+    1. Use reserved/committed capacity (30-70% savings)
+
+    2. Leverage spot/preemptible instances
+
+    3. Right-size resources
+
+    4. Use serverless for variable workloads
+
+    5. Optimize data transfer costs
+
+    6. Implement lifecycle policies
+
+    7. Use cost allocation tags
+
+    8. Monitor with cloud cost tools
+
+
+    **Reference:** See `references/multi-cloud-patterns.md`'
+- sequence: 6
+  fragment_type: execution
+  content: '## Migration Strategy
+
+
+    ### Phase 1: Assessment
+
+
+    - Inventory current infrastructure
+
+    - Identify dependencies
+
+    - Assess cloud compatibility
+
+    - Estimate costs
+
+
+    ### Phase 2: Pilot
+
+
+    - Select pilot workload
+
+    - Implement in target cloud
+
+    - Test thoroughly
+
+    - Document learnings
+
+
+    ### Phase 3: Migration
+
+
+    - Migrate workloads incrementally
+
+    - Maintain dual-run period
+
+    - Monitor performance
+
+    - Validate functionality
+
+
+    ### Phase 4: Optimization
+
+
+    - Right-size resources
+
+    - Implement cloud-native services
+
+    - Optimize costs
+
+    - Enhance security'
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Use infrastructure as code** (Terraform/OpenTofu)
+
+    2. **Implement CI/CD pipelines** for deployments
+
+    3. **Design for failure** across clouds
+
+    4. **Use managed services** when possible
+
+    5. **Implement comprehensive monitoring**
+
+    6. **Automate cost optimization**
+
+    7. **Follow security best practices**
+
+    8. **Document cloud-specific configurations**
+
+    9. **Test disaster recovery** procedures
+
+    10. **Train teams** on multiple clouds'
+- sequence: 8
+  fragment_type: rationale
+  content: '## Related Skills
+
+
+    - `terraform-module-library` - For IaC implementation
+
+    - `cost-optimization` - For cost management
+
+    - `hybrid-cloud-networking` - For connectivity'

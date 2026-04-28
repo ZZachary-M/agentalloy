@@ -1,0 +1,315 @@
+skill_type: domain
+skill_id: bash-defensive-patterns
+canonical_name: Bash Defensive Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- bash
+- shell-scripting
+- error-handling
+- automation
+- ci-cd-scripts
+- defensive-programming
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents shell-scripting plugin
+raw_prose: '# Bash Defensive Patterns
+
+
+  Comprehensive guidance for writing production-ready Bash scripts using defensive programming techniques, error handling, and safety best practices to prevent common pitfalls and ensure reliability.
+
+
+  ## When to Use
+
+
+  - Writing production automation scripts
+
+  - Building CI/CD pipeline scripts
+
+  - Creating system administration utilities
+
+  - Developing error-resilient deployment automation
+
+  - Writing scripts that must handle edge cases safely
+
+  - Building maintainable shell script libraries
+
+  - Implementing comprehensive logging and monitoring
+
+  - Creating scripts that must work across different platforms
+
+
+  ## Core Defensive Principles
+
+
+  ### Strict Mode
+
+  `set -Eeuo pipefail` at script top: -E inherits ERR trap, -e exits on any error, -u exits on undefined variable, -o pipefail propagates pipe failures.
+
+
+  ### Error Trapping and Cleanup
+
+  `trap ''echo "Error on line $LINENO"'' ERR` and `trap ''rm -rf "$TMPDIR"'' EXIT` to ensure cleanup even on crash.
+
+
+  ### Variable Safety
+
+  Always quote variables. `: "${REQUIRED_VAR:?REQUIRED_VAR is not set}"` for required vars.
+
+
+  ### Array Handling
+
+  `for item in "${items[@]}"`. Read into array via `mapfile -t lines < <(some_command)`.
+
+
+  ### Conditional Safety
+
+  Use `[[ ]]` for Bash-specific features, `[ ]` for POSIX. Check existence with `[[ -z "${VAR:-}" ]]`.
+
+
+  ## Fundamental Patterns
+
+
+  - **Pattern 1: Safe Script Directory** — `SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"`
+
+  - **Pattern 2: Function Template** — `local -r` constants, validate inputs, return 0/1, errors to stderr
+
+  - **Pattern 3: Temp File Handling** — `TMPDIR=$(mktemp -d)`, `trap ''rm -rf -- "$TMPDIR"'' EXIT`
+
+  - **Pattern 4: Argument Parsing** — `while $# -gt 0; case ... esac` loop with shift, usage() heredoc
+
+  - **Pattern 5: Structured Logging** — `log_info/warn/error/debug` functions with timestamp, logs to stderr
+
+  - **Pattern 6: Signal Handling** — `trap` ERR, EXIT, SIGTERM, SIGINT for graceful shutdown
+
+  - **Pattern 7: Safe File Operations** — `mv -n` (no clobber), atomic writes via temp + rename
+
+  - **Pattern 8: Idempotent Scripts** — check state before mutation; safe to re-run
+
+  - **Pattern 9: Safe Command Substitution** — quote `$(cmd)` results, capture exit code separately
+
+  - **Pattern 10: Dry-Run Support** — `if $DRY_RUN; then echo "would: $cmd"; else eval $cmd; fi`
+
+
+  ## Advanced Defensive Techniques
+
+
+  - **Named Parameters** — pass key=value pairs, parse in function
+
+  - **Dependency Checking** — verify required commands at start with `command -v`
+
+
+  ## Best Practices Summary
+
+
+  1. Always use strict mode (`set -Eeuo pipefail`)
+
+  2. Quote everything; use `${var:-default}` for optionals
+
+  3. Trap EXIT for cleanup; trap ERR for diagnostics
+
+  4. Validate inputs early; fail with clear stderr messages
+
+  5. Use `local` and `readonly` (`local -r`) inside functions
+
+  6. Prefer `[[ ]]` over `[ ]` in Bash
+
+  7. Use `mktemp` for temp files; never hardcode `/tmp/foo`
+
+  8. Process files with `find ... -print0` and `read -d ''''` for null-delimited safety'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Bash Defensive Patterns
+
+
+    Comprehensive guidance for writing production-ready Bash scripts using defensive programming techniques, error handling, and safety best practices to prevent common pitfalls and ensure reliability.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Writing production automation scripts
+
+    - Building CI/CD pipeline scripts
+
+    - Creating system administration utilities
+
+    - Developing error-resilient deployment automation
+
+    - Writing scripts that must handle edge cases safely
+
+    - Building maintainable shell script libraries
+
+    - Implementing comprehensive logging and monitoring
+
+    - Creating scripts that must work across different platforms'
+- sequence: 3
+  fragment_type: execution
+  content: '### Strict Mode
+
+
+    Enable bash strict mode at the start of every script.
+
+
+    ```bash
+
+    #!/bin/bash
+
+    set -Eeuo pipefail
+
+    ```
+
+
+    Flags:
+
+    - `set -E` — inherit ERR trap in functions
+
+    - `set -e` — exit on any error
+
+    - `set -u` — exit on undefined variable reference
+
+    - `set -o pipefail` — pipe fails if any command fails (not just last)'
+- sequence: 4
+  fragment_type: execution
+  content: '### Error Trapping and Cleanup
+
+
+    ```bash
+
+    #!/bin/bash
+
+    set -Eeuo pipefail
+
+
+    trap ''echo "Error on line $LINENO"'' ERR
+
+    trap ''echo "Cleaning up..."; rm -rf "$TMPDIR"'' EXIT
+
+
+    TMPDIR=$(mktemp -d)
+
+    # Script code here
+
+    ```
+
+
+    ERR fires on any non-zero exit; EXIT fires regardless of success/failure.'
+- sequence: 5
+  fragment_type: execution
+  content: '### Variable Safety
+
+
+    Always quote variables to prevent word splitting and globbing.
+
+
+    ```bash
+
+    # Wrong — unsafe
+
+    cp $source $dest
+
+
+    # Correct — safe
+
+    cp "$source" "$dest"
+
+
+    # Required variables — fail with message if unset
+
+    : "${REQUIRED_VAR:?REQUIRED_VAR is not set}"
+
+
+    # Optional with default
+
+    VERBOSE="${VERBOSE:-0}"
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: "### Array Handling\n\n```bash\n# Safe array iteration\ndeclare -a items=(\"item 1\" \"item 2\" \"item 3\")\nfor item in \"${items[@]}\"; do\n    echo \"Processing: $item\"\ndone\n\n# Read command output into array safely\nmapfile -t lines < <(some_command)\nreadarray -t numbers < <(seq 1 10)\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### Conditional Safety\n\n```bash\n# Bash-specific — safer\nif [[ -f \"$file\" && -r \"$file\" ]]; then\n    content=$(<\"$file\")\nfi\n\n# POSIX — portable\nif [ -f \"$file\" ] && [ -r \"$file\" ]; then\n    content=$(cat \"$file\")\nfi\n\n# Test for unset/empty\nif [[ -z \"${VAR:-}\" ]]; then\n    echo \"VAR is not set or is empty\"\nfi\n```"
+- sequence: 8
+  fragment_type: example
+  content: '### Pattern: Safe Script Directory Detection
+
+
+    ```bash
+
+    #!/bin/bash
+
+    set -Eeuo pipefail
+
+
+    SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+    SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
+
+    echo "Script location: $SCRIPT_DIR/$SCRIPT_NAME"
+
+    ```'
+- sequence: 9
+  fragment_type: example
+  content: "### Pattern: Comprehensive Function Template\n\n```bash\nvalidate_file() {\n    local -r file=\"$1\"\n    local -r message=\"${2:-File not found: $file}\"\n    if [[ ! -f \"$file\" ]]; then\n        echo \"ERROR: $message\" >&2\n        return 1\n    fi\n    return 0\n}\n\nprocess_files() {\n    local -r input_dir=\"$1\"\n    local -r output_dir=\"$2\"\n    [[ -d \"$input_dir\" ]] || { echo \"ERROR: input_dir not a directory\" >&2; return 1; }\n    mkdir -p \"$output_dir\" || { echo \"ERROR: Cannot create output_dir\" >&2; return 1; }\n\n    # Null-delimited file iteration\n    while IFS= read -r -d '' file; do\n        echo \"Processing: $file\"\n    done < <(find \"$input_dir\" -maxdepth 1 -type f -print0)\n    return 0\n}\n```"
+- sequence: 10
+  fragment_type: example
+  content: '### Pattern: Safe Temporary File Handling
+
+
+    ```bash
+
+    #!/bin/bash
+
+    set -Eeuo pipefail
+
+
+    trap ''rm -rf -- "$TMPDIR"'' EXIT
+
+
+    TMPDIR=$(mktemp -d) || { echo "ERROR: Failed to create temp directory" >&2; exit 1; }
+
+    TMPFILE1="$TMPDIR/temp1.txt"
+
+    TMPFILE2="$TMPDIR/temp2.txt"
+
+    ```'
+- sequence: 11
+  fragment_type: example
+  content: "### Pattern: Robust Argument Parsing\n\n```bash\nVERBOSE=false; DRY_RUN=false; OUTPUT_FILE=\"\"; THREADS=4\n\nusage() {\n    cat <<EOF\nUsage: $0 [OPTIONS]\nOptions:\n    -v, --verbose       Enable verbose output\n    -d, --dry-run       Run without making changes\n    -o, --output FILE   Output file path\n    -j, --jobs NUM      Number of parallel jobs\n    -h, --help          Show this help\nEOF\n    exit \"${1:-0}\"\n}\n\nwhile [[ $# -gt 0 ]]; do\n    case \"$1\" in\n        -v|--verbose)  VERBOSE=true; shift ;;\n        -d|--dry-run)  DRY_RUN=true; shift ;;\n        -o|--output)   OUTPUT_FILE=\"$2\"; shift 2 ;;\n        -j|--jobs)     THREADS=\"$2\"; shift 2 ;;\n        -h|--help)     usage 0 ;;\n        --)            shift; break ;;\n        *)             echo \"ERROR: Unknown option: $1\" >&2; usage 1 ;;\n    esac\ndone\n\n[[ -n \"$OUTPUT_FILE\" ]] || { echo \"ERROR: -o/--output is required\" >&2; usage 1; }\n```"
+- sequence: 12
+  fragment_type: example
+  content: "### Pattern: Structured Logging\n\n```bash\nlog_info()  { echo \"[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $*\"  >&2; }\nlog_warn()  { echo \"[$(date +'%Y-%m-%d %H:%M:%S')] WARN: $*\"  >&2; }\nlog_error() { echo \"[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $*\" >&2; }\nlog_debug() {\n    if [[ \"${DEBUG:-0}\" == \"1\" ]]; then\n        echo \"[$(date +'%Y-%m-%d %H:%M:%S')] DEBUG: $*\" >&2\n    fi\n}\n\nlog_info  \"Starting script\"\nlog_debug \"Detailed info (set DEBUG=1 to show)\"\nlog_warn  \"Warning message\"\nlog_error \"Error occurred\"\n```\n\nAll logs go to stderr so script stdout stays usable for data."
+- sequence: 13
+  fragment_type: execution
+  content: "### Patterns 6–10: Signals, File Ops, Idempotence, Substitution, Dry-Run\n\n- **Signal Handling** — `trap 'cleanup' ERR EXIT SIGTERM SIGINT` for graceful shutdown.\n- **Safe File Operations** — `mv -n` (no clobber); atomic writes via temp file + `mv` to final.\n- **Idempotent Scripts** — check state before mutation: `[[ -L \"$link\" ]] || ln -s ...`. Safe to re-run.\n- **Safe Command Substitution** — quote `$(cmd)` results; capture exit code separately:\n  ```bash\n  output=$(cmd) || { rc=$?; log_error \"cmd failed: $rc\"; exit $rc; }\n  ```\n- **Dry-Run Support** —\n  ```bash\n  run() {\n      if $DRY_RUN; then\n          log_info \"would run: $*\"\n      else\n          \"$@\"\n      fi\n  }\n  run rm -rf \"$target\"\n  ```"
+- sequence: 14
+  fragment_type: execution
+  content: "### Advanced: Dependency Checking\n\nVerify required commands at script start:\n\n```bash\ncheck_deps() {\n    local -ra required=(\"git\" \"curl\" \"jq\")\n    local missing=()\n    for cmd in \"${required[@]}\"; do\n        command -v \"$cmd\" >/dev/null 2>&1 || missing+=(\"$cmd\")\n    done\n    if (( ${#missing[@]} > 0 )); then\n        log_error \"Missing required commands: ${missing[*]}\"\n        exit 1\n    fi\n}\n\ncheck_deps\n```"
+- sequence: 15
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Always use strict mode** — `set -Eeuo pipefail`
+
+    2. **Quote everything** — use `${var:-default}` for optionals
+
+    3. **Trap EXIT for cleanup; trap ERR for diagnostics**
+
+    4. **Validate inputs early** — fail with clear stderr messages
+
+    5. **Use `local` and `readonly` (`local -r`) inside functions**
+
+    6. **Prefer `[[ ]]` over `[ ]`** in Bash scripts
+
+    7. **Use `mktemp` for temp files** — never hardcode `/tmp/foo`
+
+    8. **Process files null-delimited** — `find -print0` + `read -d ''''`
+
+    9. **Send logs to stderr** — keep stdout for data
+
+    10. **Check dependencies at script start** with `command -v`'

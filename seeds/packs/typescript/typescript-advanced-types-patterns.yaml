@@ -1,0 +1,115 @@
+skill_type: domain
+skill_id: typescript-advanced-types-patterns
+canonical_name: TypeScript Advanced Types Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- typescript
+- generics
+- type-safety
+- conditional-types
+- utility-types
+always_apply: false
+phase_scope: null
+category_scope: null
+author: github-copilot
+change_summary: QA revision (Claude Opus 4.7) — stripped dead pointer-list tail from example fragment; added brand types + deep readonly examples; added guardrail fragment with anti-patterns and verification checklist.
+raw_prose: "---\nname: typescript-magician\ndescription: Designs complex generic types, refactors `any` types to strict alternatives, creates type guards and utility types, and resolves TypeScript compiler errors. Use when the user asks about TypeScript (TS) types, generics, type inference, type guards, removing `any` types, strict typing, type errors, `infer`, `extends`, conditional types, mapped types, template literal types, branded/opaque types, or utility types like `Partial`, `Record`, `ReturnType`, and `Awaited`.\nmetadata:\n  tags: typescript, types, generics, type-safety, advanced-typescript\n---\n\n## When to use\n\nUse this skill for:\n- TypeScript errors and type challenges\n- Eliminating `any` types from codebases\n- Complex generics and type inference issues\n- When strict typing is needed\n\n## Instructions\n\nWhen invoked:\n1. Run `tsc --noEmit` to capture the full error output before making changes\n2. Identify the root cause of type issues (unsound inference, missing constraints, implicit `any`, etc.)\n3. Craft precise, type-safe solutions using advanced TypeScript features\n4. Eliminate all `any` types with proper typing — validate each replacement still satisfies call sites\n5. Confirm the fix compiles cleanly with a second `tsc --noEmit` pass\n\nCapabilities include:\n- Advanced generics and conditional types\n- Template literal types and mapped types\n- Utility types and type manipulation\n- Brand types and nominal typing\n- Complex inference patterns\n- Variance and distribution rules\n- Module augmentation and declaration merging\n\nFor every TypeScript challenge:\n- Explain the type theory behind the problem\n- Provide multiple solution approaches when applicable\n- Show before/after type representations\n- Include comprehensive type tests\n- Ensure full IntelliSense support\n\n## Quick Examples\n\n### Eliminating `any` with generics\n\n**Before**\n```ts\nfunction getProperty(obj: any, key: string): any {\n  return obj[key];\n}\n```\n\n**After**\n```ts\nfunction getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {\n  return obj[key];\n}\n// getProperty({ name: \"Alice\" }, \"name\") → inferred as string ✓\n```\n\n### Narrowing an unknown API response\n\n**Before**\n```ts\nasync function fetchUser(): Promise<any> {\n  const res = await fetch(\"/api/user\");\n  return res.json();\n}\n```\n\n**After**\n```ts\ninterface User { id: number; name: string }\n\nfunction isUser(value: unknown): value is User {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    \"id\" in value &&\n    \"name\" in value\n  );\n}\n\nasync function fetchUser(): Promise<User> {\n  const res = await fetch(\"/api/user\");\n  const data: unknown = await res.json();\n  if (!isUser(data)) throw new Error(\"Invalid user shape\");\n  return data;\n}\n```\n\n## Reference\n\nRead individual rule files for detailed explanations and code examples:\n\n### Core Patterns\n- [rules/as-const-typeof.md](rules/as-const-typeof.md) - Deriving types from runtime values using `as const` and `typeof`\n- [rules/array-index-access.md](rules/array-index-access.md) - Accessing array element types using `[number]` indexing\n- [rules/utility-types.md](rules/utility-types.md) - Built-in utility types: Parameters, ReturnType, Awaited, Omit, Partial, Record\n\n### Advanced Generics\n- [rules/generics-basics.md](rules/generics-basics.md) - Fundamentals of generic types, constraints, and inference\n- [rules/builder-pattern.md](rules/builder-pattern.md) - Type-safe builder pattern with chainable methods\n- [rules/deep-inference.md](rules/deep-inference.md) - Achieving deep type inference with F.Narrow and const type parameters\n\n### Type-Level Programming\n- [rules/conditional-types.md](rules/conditional-types.md) - Conditional types for type-level if/else logic\n- [rules/infer-keyword.md](rules/infer-keyword.md) - Using `infer` to extract types within conditional types\n- [rules/template-literal-types.md](rules/template-literal-types.md) - String manipulation at the type level\n- [rules/mapped-types.md](rules/mapped-types.md) - Creating new types by transforming existing type properties\n\n### Type Safety Patterns\n- [rules/opaque-types.md](rules/opaque-types.md) - Brand types and opaque types for type-safe identifiers\n- [rules/type-narrowing.md](rules/type-narrowing.md) - Narrowing types through control flow analysis\n- [rules/function-overloads.md](rules/function-overloads.md) - Using function overloads for complex function signatures\n\n### Debugging\n- [rules/error-diagnosis.md](rules/error-diagnosis.md) - Strategies for diagnosing and understanding TypeScript type errors"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to use
+
+
+    Use this skill for:
+
+    - TypeScript errors and type challenges
+
+    - Eliminating `any` types from codebases
+
+    - Complex generics and type inference issues
+
+    - When strict typing is needed'
+- sequence: 2
+  fragment_type: execution
+  content: '## Instructions
+
+
+    When invoked:
+
+    1. Run `tsc --noEmit` to capture the full error output before making changes
+
+    2. Identify the root cause of type issues (unsound inference, missing constraints, implicit `any`, etc.)
+
+    3. Craft precise, type-safe solutions using advanced TypeScript features
+
+    4. Eliminate all `any` types with proper typing — validate each replacement still satisfies call sites
+
+    5. Confirm the fix compiles cleanly with a second `tsc --noEmit` pass
+
+
+    Capabilities include:
+
+    - Advanced generics and conditional types
+
+    - Template literal types and mapped types
+
+    - Utility types and type manipulation
+
+    - Brand types and nominal typing
+
+    - Complex inference patterns
+
+    - Variance and distribution rules
+
+    - Module augmentation and declaration merging
+
+
+    For every TypeScript challenge:
+
+    - Explain the type theory behind the problem
+
+    - Provide multiple solution approaches when applicable
+
+    - Show before/after type representations
+
+    - Include comprehensive type tests
+
+    - Ensure full IntelliSense support'
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Examples\n\n### Eliminating `any` with generics\n\n**Before**\n```ts\nfunction getProperty(obj: any, key: string): any {\n  return obj[key];\n}\n```\n\n**After**\n```ts\nfunction getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {\n  return obj[key];\n}\n// getProperty({ name: \"Alice\" }, \"name\") → inferred as string ✓\n```\n\n### Narrowing an unknown API response\n\n**Before**\n```ts\nasync function fetchUser(): Promise<any> {\n  const res = await fetch(\"/api/user\");\n  return res.json();\n}\n```\n\n**After**\n```ts\ninterface User { id: number; name: string }\n\nfunction isUser(value: unknown): value is User {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    \"id\" in value &&\n    \"name\" in value\n  );\n}\n\nasync function fetchUser(): Promise<User> {\n  const res = await fetch(\"/api/user\");\n  const data: unknown = await res.json();\n  if (!isUser(data)) throw new Error(\"Invalid user shape\");\n  return data;\n}\n```\n\n### Brand types for nominal IDs\n\n```ts\ntype Brand<T, B> = T & { __brand: B };\ntype UserId = Brand<string, 'UserId'>;\ntype OrderId = Brand<string, 'OrderId'>;\n\nfunction asUserId(s: string): UserId { return s as UserId; }\nfunction loadUser(id: UserId) { /* ... */ }\n\nconst oid: OrderId = 'o-1' as OrderId;\n// loadUser(oid); // Error: OrderId is not assignable to UserId ✓\n```\n\n### Mapped + conditional: deep readonly\n\n```ts\ntype DeepReadonly<T> = T extends (infer U)[]\n  ? readonly DeepReadonly<U>[]\n  : T extends object\n  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }\n  : T;\n```"
+- sequence: 4
+  fragment_type: guardrail
+  content: '## Anti-Patterns
+
+
+    | Anti-Pattern | Problem | Fix |
+
+    |---|---|---|
+
+    | `as any` to silence errors | Loses all type safety in that subtree | Narrow with type guards or fix the upstream type |
+
+    | `as unknown as T` cast chains | Lying to the compiler; runtime breaks silently | Use a type guard; if structure is uncertain, parse with Zod |
+
+    | `enum` in modern TS code | Generates runtime artifacts; doesn''t tree-shake well; non-trivial type behavior | `as const` object + `typeof` |
+
+    | `// @ts-ignore` without explanation | Hides genuine bugs | `// @ts-expect-error <reason>` (errors when no longer needed) |
+
+    | Returning `any` from JSON parsers | Untyped data flows through the codebase | Return `unknown`, validate with a guard or schema |
+
+    | Overusing `Function` type | Unsafe, accepts anything callable | `(...args: T[]) => U` with explicit signatures |
+
+    | Deeply nested conditional types | Compiler slow; unreadable | Refactor into named helpers; consider dedicated branded types |
+
+
+    ### Verification
+
+
+    - [ ] `tsc --noEmit` passes with `"strict": true`
+
+    - [ ] No new `any` introduced (run `eslint` with `@typescript-eslint/no-explicit-any: ''error''`)
+
+    - [ ] Each `as` cast has a comment justifying it
+
+    - [ ] Public APIs return concrete types, not `unknown` (callers shouldn''t have to re-narrow)'

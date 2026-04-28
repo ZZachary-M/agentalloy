@@ -1,0 +1,116 @@
+skill_type: domain
+skill_id: modern-javascript-patterns
+canonical_name: Modern JavaScript Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- es6
+- arrow-functions
+- destructuring
+- spread-rest
+- template-literals
+- promises
+- async-await
+- modules
+- functional-patterns
+- optional-chaining
+- nullish-coalescing
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin javascript-typescript/modern-javascript-patterns source
+raw_prose: "# Modern JavaScript Patterns\n\nWrite clean, efficient JavaScript using ES6+ features and modern patterns. This skill covers arrow functions, destructuring, spread/rest operators, template literals, enhanced object literals, promises, async/await, functional programming patterns, modules, and modern operators.\n\n## When to Use This Skill\n\n- Writing new JavaScript code or modernizing legacy code\n- Refactoring callbacks to promises or async/await\n- Using destructuring and spread operators effectively\n- Implementing functional programming patterns\n- Working with ES modules\n- Using modern operators (optional chaining, nullish coalescing)\n\n## Quick Start\n\n```javascript\n// Modern JavaScript in action\nconst fetchUsers = async ({ role = \"user\", limit = 10 } = {}) => {\n  const response = await fetch(`/api/users?role=${role}&limit=${limit}`);\n  if (!response.ok) throw new Error(`HTTP ${response.status}`);\n  return response.json();\n};\n\nconst admins = await fetchUsers({ role: \"admin\" });\nconst names = admins.map(({ name }) => name);\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Arrow Functions\n\n```javascript\n// Expression body (implicit return)\nconst double = (x) => x * 2;\nconst isAdult = (user) => user.age >= 18;\n\n// Block body (explicit return)\nconst processUser = (user) => {\n  const fullName = `${user.firstName} ${user.lastName}`;\n  return { ...user, fullName };\n};\n\n// Returning objects (wrap in parentheses)\nconst toDTO = (user) => ({\n  id: user.id,\n  name: user.name,\n  email: user.email,\n});\n\n// Array methods with arrows\nconst adults = users.filter((u) => u.age >= 18);\nconst names = users.map((u) => u.name);\nconst totalAge = users.reduce((sum, u) => sum + u.age, 0);\n```\n\n**Key difference:** Arrow functions don't have their own `this` — they inherit from the enclosing scope. Use regular functions for methods that need their own `this`.\n\n### Pattern 2: Destructuring\n\n```javascript\n// Object destructuring\nconst { name, age, role = \"user\" } = user;\n\n// Nested destructuring\nconst {\n  address: { city, zip },\n} = user;\n\n// Renaming\nconst { name: userName, id: userId } = user;\n\n// Array destructuring\nconst [first, second, ...rest] = items;\nconst [, , third] = items; // Skip elements\n\n// Function parameter destructuring\nfunction createUser({ name, email, role = \"user\" }) {\n  return { name, email, role, createdAt: new Date() };\n}\n\n// Swap variables\nlet a = 1,\n  b = 2;\n[a, b] = [b, a];\n```\n\n### Pattern 3: Spread and Rest Operators\n\n```javascript\n// Spread: expand iterables\nconst merged = { ...defaults, ...overrides };\nconst allItems = [...existingItems, ...newItems];\n\n// Shallow clone\nconst clone = { ...original };\nconst cloneArray = [...originalArray];\n\n// Remove properties (rest in destructuring)\nconst { password, __v, ...safeUser } = user;\n\n// Rest parameters\nfunction log(level, ...messages) {\n  console[level](...messages);\n}\n\n// Conditional spread\nconst config = {\n  host: \"localhost\",\n  ...(process.env.NODE_ENV === \"production\" && { host: \"api.example.com\" }),\n};\n```\n\n### Pattern 4: Template Literals\n\n```javascript\n// Basic interpolation\nconst greeting = `Hello, ${user.name}!`;\n\n// Multi-line strings\nconst html = `\n  <div class=\"card\">\n    <h2>${title}</h2>\n    <p>${description}</p>\n  </div>\n`;\n\n// Expressions in templates\nconst summary = `${items.length} item${items.length === 1 ? \"\" : \"s\"}`;\n\n// Tagged templates\nfunction sql(strings, ...values) {\n  return {\n    text: strings.join(\"$\"),\n    values,\n  };\n}\nconst query = sql`SELECT * FROM users WHERE id = ${userId}`;\n```\n\n### Pattern 5: Enhanced Object Literals\n\n```javascript\n// Shorthand properties\nconst name = \"Alice\";\nconst age = 30;\nconst user = { name, age }; // { name: \"Alice\", age: 30 }\n\n// Shorthand methods\nconst api = {\n  getUsers() {\n    return fetch(\"/users\");\n  },\n  async createUser(data) {\n    return fetch(\"/users\", { method: \"POST\", body: JSON.stringify(data) });\n  },\n};\n\n// Computed property names\nconst field = \"email\";\nconst updates = { [field]: \"new@example.com\" };\n\n// Dynamic keys\nfunction groupBy(items, key) {\n  return items.reduce((groups, item) => {\n    const group = item[key];\n    return { ...groups, [group]: [...(groups[group] || []), item] };\n  }, {});\n}\n```\n\n### Pattern 6: Promises\n\n```javascript\n// Creating promises\nconst delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n\n// Chaining\nfetch(\"/api/user\")\n  .then((res) => res.json())\n  .then((user) => fetch(`/api/posts?userId=${user.id}`))\n  .then((res) => res.json())\n  .catch((err) => console.error(\"Failed:\", err));\n\n// Promise.all - parallel execution\nconst [users, posts, comments] = await Promise.all([\n  fetchUsers(),\n  fetchPosts(),\n  fetchComments(),\n]);\n\n// Promise.allSettled - all results regardless of failures\nconst results = await Promise.allSettled([\n  fetchFromPrimary(),\n  fetchFromBackup(),\n]);\nconst succeeded = results.filter((r) => r.status === \"fulfilled\");\n\n// Promise.race - first to resolve/reject\nconst result = await Promise.race([fetchData(), timeout(5000)]);\n```\n\n### Pattern 7: Async/Await\n\n```javascript\n// Basic async function\nasync function getUser(id) {\n  const response = await fetch(`/api/users/${id}`);\n  if (!response.ok) throw new Error(`HTTP ${response.status}`);\n  return response.json();\n}\n\n// Error handling\nasync function safeGetUser(id) {\n  try {\n    return await getUser(id);\n  } catch (error) {\n    if (error.message.includes(\"404\")) return null;\n    throw error;\n  }\n}\n\n// Sequential vs parallel\n// Sequential (slow)\nconst user = await getUser(1);\nconst posts = await getPosts(user.id);\n\n// Parallel (fast)\nconst [user, settings] = await Promise.all([getUser(1), getSettings(1)]);\n\n// Async iteration\nasync function* paginate(url) {\n  let nextUrl = url;\n  while (nextUrl) {\n    const response = await fetch(nextUrl);\n    const data = await response.json();\n    yield data.items;\n    nextUrl = data.nextPage;\n  }\n}\n\nfor await (const page of paginate(\"/api/items\")) {\n  processItems(page);\n}\n```\n\n### Pattern 8: Functional Patterns\n\n```javascript\n// Pipe/compose\nconst pipe =\n  (...fns) =>\n  (x) =>\n    fns.reduce((v, f) => f(v), x);\n\nconst processUser = pipe(normalize, validate, enrich, format);\n\n// Partial application\nconst multiply = (a) => (b) => a * b;\nconst double = multiply(2);\nconst triple = multiply(3);\n\n// Immutable updates\nconst updateUser = (user, updates) => ({ ...user, ...updates });\nconst addItem = (arr, item) => [...arr, item];\nconst removeItem = (arr, index) => [...arr.slice(0, index), ...arr.slice(index + 1)];\n\n// Map/Filter/Reduce chains\nconst result = orders\n  .filter((o) => o.status === \"completed\")\n  .map((o) => ({ ...o, total: o.items.reduce((sum, i) => sum + i.price, 0) }))\n  .reduce((sum, o) => sum + o.total, 0);\n```\n\n### Pattern 9: Modules\n\n```javascript\n// Named exports\nexport const API_URL = \"/api\";\nexport function fetchUser(id) { /* ... */ }\nexport class UserService { /* ... */ }\n\n// Default export\nexport default class ApiClient { /* ... */ }\n\n// Import patterns\nimport ApiClient from \"./api-client.js\";\nimport { fetchUser, API_URL } from \"./api.js\";\nimport { fetchUser as getUser } from \"./api.js\";\nimport * as api from \"./api.js\";\n\n// Dynamic imports (code splitting)\nconst { Chart } = await import(\"./chart.js\");\n\n// Re-exports (barrel files)\nexport { UserService } from \"./user-service.js\";\nexport { default as ApiClient } from \"./api-client.js\";\nexport * from \"./utils.js\";\n```\n\n### Pattern 10: Modern Operators\n\n```javascript\n// Optional chaining (?.)\nconst city = user?.address?.city;\nconst firstItem = arr?.[0];\nconst result = obj?.method?.();\n\n// Nullish coalescing (??)\nconst name = user.name ?? \"Anonymous\";\nconst count = config.count ?? 0;\nconst port = process.env.PORT ?? 3000;\n\n// Logical assignment\noptions.timeout ??= 5000; // Assign if null/undefined\nuser.name ||= \"Anonymous\"; // Assign if falsy\nconfig.debug &&= process.env.NODE_ENV !== \"production\"; // Assign if truthy\n\n// structuredClone (deep copy)\nconst deepCopy = structuredClone(original);\n```\n\n## Best Practices Summary\n\n1. **Use arrow functions** for callbacks and short functions\n2. **Destructure** parameters and return values\n3. **Spread for immutability** — never mutate, always copy\n4. **async/await over .then()** chains — cleaner error handling\n5. **Promise.all for parallel work** — don't await sequentially\n6. **Use optional chaining** — avoid verbose null checks\n7. **Use nullish coalescing** — `??` over `||` for defaults\n8. **Named exports** over default exports — better refactoring\n9. **Dynamic imports** for code splitting — load on demand\n10. **Functional patterns** — pipe, partial application, immutable updates"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Modern JavaScript Patterns
+
+
+    Write clean, efficient JavaScript using ES6+ features and modern patterns. Covers arrow functions, destructuring, spread/rest, template literals, enhanced objects, promises, async/await, functional programming patterns, modules, and modern operators.
+
+
+    ## When to Use This Skill
+
+
+    - Writing new JavaScript code or modernizing legacy code
+
+    - Refactoring callbacks to promises or async/await
+
+    - Using destructuring and spread operators effectively
+
+    - Implementing functional programming patterns
+
+    - Working with ES modules
+
+    - Using modern operators (optional chaining, nullish coalescing)'
+- sequence: 2
+  fragment_type: example
+  content: "## Pattern 1: Arrow Functions\n\n```javascript\nconst double = (x) => x * 2;\nconst processUser = (user) => {\n  const fullName = `${user.firstName} ${user.lastName}`;\n  return { ...user, fullName };\n};\nconst toDTO = (user) => ({ id: user.id, name: user.name, email: user.email });\nconst adults = users.filter((u) => u.age >= 18);\nconst names = users.map((u) => u.name);\nconst totalAge = users.reduce((sum, u) => sum + u.age, 0);\n```\n\nArrow functions don't have their own `this` — they inherit from enclosing scope. Use regular functions for methods that need their own `this`."
+- sequence: 3
+  fragment_type: example
+  content: "## Pattern 2: Destructuring\n\n```javascript\nconst { name, age, role = \"user\" } = user;\nconst { address: { city, zip } } = user;\nconst { name: userName, id: userId } = user;\nconst [first, second, ...rest] = items;\n\nfunction createUser({ name, email, role = \"user\" }) {\n  return { name, email, role, createdAt: new Date() };\n}\n\nlet a = 1, b = 2;\n[a, b] = [b, a]; // Swap\n```\n\n## Pattern 3: Spread and Rest\n\n```javascript\nconst merged = { ...defaults, ...overrides };\nconst clone = { ...original };\nconst { password, __v, ...safeUser } = user;\nconst config = { host: \"localhost\", ...(isProd && { host: \"api.example.com\" }) };\n```"
+- sequence: 4
+  fragment_type: example
+  content: "## Pattern 4: Template Literals\n\n```javascript\nconst greeting = `Hello, ${user.name}!`;\nconst summary = `${items.length} item${items.length === 1 ? \"\" : \"s\"}`;\nfunction sql(strings, ...values) {\n  return { text: strings.join(\"$\"), values };\n}\nconst query = sql`SELECT * FROM users WHERE id = ${userId}`;\n```\n\n## Pattern 5: Enhanced Object Literals\n\n```javascript\nconst user = { name, age }; // Shorthand properties\nconst api = {\n  getUsers() { return fetch(\"/users\"); },\n  async createUser(data) { return fetch(\"/users\", { method: \"POST\", body: JSON.stringify(data) }); },\n};\nconst updates = { [field]: \"new@example.com\" }; // Computed keys\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 6: Promises
+
+
+    Create promises with `new Promise((resolve, reject) => ...)`. Chain with `.then()/.catch()`. Use `Promise.all()` for parallel execution (fails fast on first rejection). Use `Promise.allSettled()` to get all results regardless of failures. Use `Promise.race()` for timeout patterns.
+
+
+    ## Pattern 7: Async/Await
+
+
+    Prefer async/await over `.then()` chains for cleaner error handling. Use `try/catch` for error handling. For parallel execution, start all promises first, then await together with `Promise.all()`. Use `async function*` generators with `for await...of` for paginated APIs.'
+- sequence: 6
+  fragment_type: example
+  content: "## Promises & Async/Await Examples\n\n```javascript\nconst [users, posts, comments] = await Promise.all([\n  fetchUsers(), fetchPosts(), fetchComments(),\n]);\n\nconst results = await Promise.allSettled([fetchFromPrimary(), fetchFromBackup()]);\nconst succeeded = results.filter((r) => r.status === \"fulfilled\");\n```\n\n```javascript\nasync function safeGetUser(id) {\n  try {\n    return await getUser(id);\n  } catch (error) {\n    if (error.message.includes(\"404\")) return null;\n    throw error;\n  }\n}\n\nasync function* paginate(url) {\n  let nextUrl = url;\n  while (nextUrl) {\n    const response = await fetch(nextUrl);\n    const data = await response.json();\n    yield data.items;\n    nextUrl = data.nextPage;\n  }\n}\n```"
+- sequence: 7
+  fragment_type: example
+  content: "## Pattern 8: Functional Patterns\n\n```javascript\nconst pipe = (...fns) => (x) => fns.reduce((v, f) => f(v), x);\nconst processUser = pipe(normalize, validate, enrich, format);\n\nconst multiply = (a) => (b) => a * b;\nconst double = multiply(2);\n\nconst updateUser = (user, updates) => ({ ...user, ...updates });\nconst addItem = (arr, item) => [...arr, item];\nconst removeItem = (arr, index) => [...arr.slice(0, index), ...arr.slice(index + 1)];\n\nconst result = orders\n  .filter((o) => o.status === \"completed\")\n  .map((o) => ({ ...o, total: o.items.reduce((sum, i) => sum + i.price, 0) }))\n  .reduce((sum, o) => sum + o.total, 0);\n```"
+- sequence: 8
+  fragment_type: execution
+  content: '## Pattern 9: Modules
+
+
+    Use named exports (`export const`, `export function`, `export class`) over default exports for better refactoring. Import with `import { name } from "./module.js"`. Use dynamic imports (`await import("./module.js")`) for code splitting. Create barrel files with re-exports to simplify import paths.
+
+
+    ## Pattern 10: Modern Operators
+
+
+    - **Optional chaining** (`?.`): safely access nested properties, array indices, and methods
+
+    - **Nullish coalescing** (`??`): default values only for `null`/`undefined`, not falsy values
+
+    - **Logical assignment** (`??=`, `||=`, `&&=`): conditional assignment operators
+
+    - **structuredClone**: deep copy objects without JSON.parse/JSON.stringify limitations'
+- sequence: 9
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Use arrow functions** for callbacks and short functions
+
+    2. **Destructure** parameters and return values
+
+    3. **Spread for immutability** — never mutate, always copy
+
+    4. **async/await over .then()** chains — cleaner error handling
+
+    5. **Promise.all for parallel work** — don''t await sequentially
+
+    6. **Use optional chaining** — avoid verbose null checks
+
+    7. **Use nullish coalescing** — `??` over `||` for defaults
+
+    8. **Named exports** over default exports — better refactoring
+
+    9. **Dynamic imports** for code splitting — load on demand
+
+    10. **Functional patterns** — pipe, partial application, immutable updates'

@@ -1,0 +1,182 @@
+skill_type: domain
+skill_id: python-anti-patterns
+canonical_name: Python Anti-Patterns Checklist
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- anti-patterns
+- code-review
+- checklist
+- error-handling
+- resource-management
+- type-safety
+- testing
+- architecture
+- retry-logic
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin python-development/python-anti-patterns source
+raw_prose: "# Python Anti-Patterns Checklist\n\nA reference checklist of common mistakes and anti-patterns in Python code. Review this before finalizing implementations to catch issues early.\n\n## When to Use This Skill\n\n- Reviewing code before merge\n- Debugging mysterious issues\n- Teaching or learning Python best practices\n- Establishing team coding standards\n- Refactoring legacy code\n\n**Note:** This skill focuses on what to avoid. For guidance on positive patterns and architecture, see the `python-design-patterns` skill.\n\n## Infrastructure Anti-Patterns\n\n### Scattered Timeout/Retry Logic\n\n```python\n# BAD: Timeout logic duplicated everywhere\ndef fetch_user(user_id):\n    try:\n        return requests.get(url, timeout=30)\n    except Timeout:\n        logger.warning(\"Timeout fetching user\")\n        return None\n\ndef fetch_orders(user_id):\n    try:\n        return requests.get(url, timeout=30)\n    except Timeout:\n        logger.warning(\"Timeout fetching orders\")\n        return None\n```\n\n**Fix:** Centralize in decorators or client wrappers.\n\n```python\n# GOOD: Centralized retry logic\n@retry(stop=stop_after_attempt(3), wait=wait_exponential())\ndef http_get(url: str) -> Response:\n    return requests.get(url, timeout=30)\n```\n\n### Double Retry\n\n```python\n# BAD: Retrying at multiple layers\n@retry(max_attempts=3)  # Application retry\ndef call_service():\n    return client.request()  # Client also has retry configured!\n```\n\n**Fix:** Retry at one layer only. Know your infrastructure's retry behavior.\n\n### Hard-Coded Configuration\n\n```python\n# BAD: Secrets and config in code\nDB_HOST = \"prod-db.example.com\"\nAPI_KEY = \"sk-12345\"\n\ndef connect():\n    return psycopg.connect(f\"host={DB_HOST}...\")\n```\n\n**Fix:** Use environment variables with typed settings.\n\n```python\n# GOOD\nfrom pydantic_settings import BaseSettings\n\nclass Settings(BaseSettings):\n    db_host: str = Field(alias=\"DB_HOST\")\n    api_key: str = Field(alias=\"API_KEY\")\n\nsettings = Settings()\n```\n\n## Architecture Anti-Patterns\n\n### Exposed Internal Types\n\n```python\n# BAD: Leaking ORM model to API\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserModel:  # SQLAlchemy model\n    return db.query(UserModel).get(id)\n```\n\n**Fix:** Use DTOs/response models.\n\n```python\n# GOOD\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserResponse:\n    user = db.query(UserModel).get(id)\n    return UserResponse.from_orm(user)\n```\n\n### Mixed I/O and Business Logic\n\n```python\n# BAD: SQL embedded in business logic\ndef calculate_discount(user_id: str) -> float:\n    user = db.query(\"SELECT * FROM users WHERE id = ?\", user_id)\n    orders = db.query(\"SELECT * FROM orders WHERE user_id = ?\", user_id)\n    # Business logic mixed with data access\n    if len(orders) > 10:\n        return 0.15\n    return 0.0\n```\n\n**Fix:** Repository pattern. Keep business logic pure.\n\n```python\n# GOOD\ndef calculate_discount(user: User, orders: list[Order]) -> float:\n    # Pure business logic, easily testable\n    if len(orders) > 10:\n        return 0.15\n    return 0.0\n```\n\n## Error Handling Anti-Patterns\n\n### Bare Exception Handling\n\n```python\n# BAD: Swallowing all exceptions\ntry:\n    process()\nexcept Exception:\n    pass  # Silent failure - bugs hidden forever\n```\n\n**Fix:** Catch specific exceptions. Log or handle appropriately.\n\n```python\n# GOOD\ntry:\n    process()\nexcept ConnectionError as e:\n    logger.warning(\"Connection failed, will retry\", error=str(e))\n    raise\nexcept ValueError as e:\n    logger.error(\"Invalid input\", error=str(e))\n    raise BadRequestError(str(e))\n```\n\n### Ignored Partial Failures\n\n```python\n# BAD: Stops on first error\ndef process_batch(items):\n    results = []\n    for item in items:\n        result = process(item)  # Raises on error - batch aborted\n        results.append(result)\n    return results\n```\n\n**Fix:** Capture both successes and failures.\n\n```python\n# GOOD\ndef process_batch(items) -> BatchResult:\n    succeeded = {}\n    failed = {}\n    for idx, item in enumerate(items):\n        try:\n            succeeded[idx] = process(item)\n        except Exception as e:\n            failed[idx] = e\n    return BatchResult(succeeded, failed)\n```\n\n### Missing Input Validation\n\n```python\n# BAD: No validation\ndef create_user(data: dict):\n    return User(**data)  # Crashes deep in code on bad input\n```\n\n**Fix:** Validate early at API boundaries.\n\n```python\n# GOOD\ndef create_user(data: dict) -> User:\n    validated = CreateUserInput.model_validate(data)\n    return User.from_input(validated)\n```\n\n## Resource Anti-Patterns\n\n### Unclosed Resources\n\n```python\n# BAD: File never closed\ndef read_file(path):\n    f = open(path)\n    return f.read()  # What if this raises?\n```\n\n**Fix:** Use context managers.\n\n```python\n# GOOD\ndef read_file(path):\n    with open(path) as f:\n        return f.read()\n```\n\n### Blocking in Async\n\n```python\n# BAD: Blocks the entire event loop\nasync def fetch_data():\n    time.sleep(1)  # Blocks everything!\n    response = requests.get(url)  # Also blocks!\n```\n\n**Fix:** Use async-native libraries.\n\n```python\n# GOOD\nasync def fetch_data():\n    await asyncio.sleep(1)\n    async with httpx.AsyncClient() as client:\n        response = await client.get(url)\n```\n\n## Type Safety Anti-Patterns\n\n### Missing Type Hints\n\n```python\n# BAD: No types\ndef process(data):\n    return data[\"value\"] * 2\n```\n\n**Fix:** Annotate all public functions.\n\n```python\n# GOOD\ndef process(data: dict[str, int]) -> int:\n    return data[\"value\"] * 2\n```\n\n### Untyped Collections\n\n```python\n# BAD: Generic list without type parameter\ndef get_users() -> list:\n    ...\n```\n\n**Fix:** Use type parameters.\n\n```python\n# GOOD\ndef get_users() -> list[User]:\n    ...\n```\n\n## Testing Anti-Patterns\n\n### Only Testing Happy Paths\n\n```python\n# BAD: Only tests success case\ndef test_create_user():\n    user = service.create_user(valid_data)\n    assert user.id is not None\n```\n\n**Fix:** Test error conditions and edge cases.\n\n```python\n# GOOD\ndef test_create_user_success():\n    user = service.create_user(valid_data)\n    assert user.id is not None\n\ndef test_create_user_invalid_email():\n    with pytest.raises(ValueError, match=\"Invalid email\"):\n        service.create_user(invalid_email_data)\n\ndef test_create_user_duplicate_email():\n    service.create_user(valid_data)\n    with pytest.raises(ConflictError):\n        service.create_user(valid_data)\n```\n\n### Over-Mocking\n\n```python\n# BAD: Mocking everything\ndef test_user_service():\n    mock_repo = Mock()\n    mock_cache = Mock()\n    mock_logger = Mock()\n    mock_metrics = Mock()\n    # Test doesn't verify real behavior\n```\n\n**Fix:** Use integration tests for critical paths. Mock only external services.\n\n## Quick Review Checklist\n\nBefore finalizing code, verify:\n\n- [ ] No scattered timeout/retry logic (centralized)\n- [ ] No double retry (app + infrastructure)\n- [ ] No hard-coded configuration or secrets\n- [ ] No exposed internal types (ORM models, protobufs)\n- [ ] No mixed I/O and business logic\n- [ ] No bare `except Exception: pass`\n- [ ] No ignored partial failures in batches\n- [ ] No missing input validation\n- [ ] No unclosed resources (using context managers)\n- [ ] No blocking calls in async code\n- [ ] All public functions have type hints\n- [ ] Collections have type parameters\n- [ ] Error paths are tested\n- [ ] Edge cases are covered\n\n## Common Fixes Summary\n\n| Anti-Pattern | Fix |\n|-------------|-----|\n| Scattered retry logic | Centralized decorators |\n| Hard-coded config | Environment variables + pydantic-settings |\n| Exposed ORM models | DTO/response schemas |\n| Mixed I/O + logic | Repository pattern |\n| Bare except | Catch specific exceptions |\n| Batch stops on error | Return BatchResult with successes/failures |\n| No validation | Validate at boundaries with Pydantic |\n| Unclosed resources | Context managers |\n| Blocking in async | Async-native libraries |\n| Missing types | Type annotations on all public APIs |\n| Only happy path tests | Test errors and edge cases |"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Anti-Patterns Checklist
+
+
+    A reference checklist of common mistakes and anti-patterns in Python code. Review this before finalizing implementations to catch issues early.
+
+
+    ## When to Use This Skill
+
+
+    - Reviewing code before merge
+
+    - Debugging mysterious issues
+
+    - Teaching or learning Python best practices
+
+    - Establishing team coding standards
+
+    - Refactoring legacy code
+
+
+    **Note:** This skill focuses on what to avoid. For guidance on positive patterns and architecture, see the `python-design-patterns` skill.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Infrastructure Anti-Patterns
+
+
+    ### Scattered Timeout/Retry Logic
+
+    BAD: Timeout logic duplicated everywhere across functions. Fix: Centralize in decorators or client wrappers using tenacity `@retry` with `stop_after_attempt` and `wait_exponential`.
+
+
+    ### Double Retry
+
+    BAD: Retrying at multiple layers (application retry + client retry). Fix: Retry at one layer only. Know your infrastructure''s retry behavior.
+
+
+    ### Hard-Coded Configuration
+
+    BAD: Secrets and config values in code. Fix: Use environment variables with typed settings via `pydantic_settings.BaseSettings`.'
+- sequence: 3
+  fragment_type: example
+  content: "## Infrastructure Anti-Patterns Code Examples\n\n```python\n# BAD: Scattered retry\ndef fetch_user(user_id):\n    try:\n        return requests.get(url, timeout=30)\n    except Timeout:\n        logger.warning(\"Timeout fetching user\")\n        return None\n\n# GOOD: Centralized retry logic\n@retry(stop=stop_after_attempt(3), wait=wait_exponential())\ndef http_get(url: str) -> Response:\n    return requests.get(url, timeout=30)\n```\n\n```python\n# GOOD: Typed settings\nfrom pydantic_settings import BaseSettings\n\nclass Settings(BaseSettings):\n    db_host: str = Field(alias=\"DB_HOST\")\n    api_key: str = Field(alias=\"API_KEY\")\n\nsettings = Settings()\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Architecture Anti-Patterns
+
+
+    ### Exposed Internal Types
+
+    BAD: Leaking ORM model to API layer. Fix: Use DTOs/response models. Never return SQLAlchemy models or protobufs directly from API endpoints.
+
+
+    ### Mixed I/O and Business Logic
+
+    BAD: SQL queries embedded in business logic functions. Fix: Repository pattern. Keep business logic pure — accept data as parameters, return results. This makes functions easily testable without mocking databases.'
+- sequence: 5
+  fragment_type: example
+  content: "## Architecture Anti-Patterns Code Examples\n\n```python\n# BAD: Leaking ORM model\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserModel:  # SQLAlchemy model\n    return db.query(UserModel).get(id)\n\n# GOOD: DTO response model\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserResponse:\n    user = db.query(UserModel).get(id)\n    return UserResponse.from_orm(user)\n```\n\n```python\n# GOOD: Pure business logic\ndef calculate_discount(user: User, orders: list[Order]) -> float:\n    if len(orders) > 10:\n        return 0.15\n    return 0.0\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Error Handling Anti-Patterns
+
+
+    ### Bare Exception Handling
+
+    BAD: `except Exception: pass` swallows all exceptions — bugs hidden forever. Fix: Catch specific exceptions. Log or handle appropriately.
+
+
+    ### Ignored Partial Failures
+
+    BAD: Batch processing stops on first error. Fix: Capture both successes and failures in a `BatchResult` with separate dictionaries for succeeded and failed items.
+
+
+    ### Missing Input Validation
+
+    BAD: No validation before creating domain objects. Fix: Validate early at API boundaries using Pydantic''s `model_validate`.
+
+
+    ## Resource Anti-Patterns
+
+
+    ### Unclosed Resources
+
+    BAD: Opening files without context managers. Fix: Always use `with` statements for files, connections, and other resources.
+
+
+    ### Blocking in Async
+
+    BAD: Using `time.sleep()` or `requests.get()` in async functions. Fix: Use async-native libraries (`asyncio.sleep`, `httpx.AsyncClient`).'
+- sequence: 7
+  fragment_type: example
+  content: "## Error Handling & Resource Anti-Patterns Code Examples\n\n```python\n# GOOD: Catch specific exceptions\ntry:\n    process()\nexcept ConnectionError as e:\n    logger.warning(\"Connection failed, will retry\", error=str(e))\n    raise\nexcept ValueError as e:\n    logger.error(\"Invalid input\", error=str(e))\n    raise BadRequestError(str(e))\n```\n\n```python\n# GOOD: Batch with partial failure handling\ndef process_batch(items) -> BatchResult:\n    succeeded = {}\n    failed = {}\n    for idx, item in enumerate(items):\n        try:\n            succeeded[idx] = process(item)\n        except Exception as e:\n            failed[idx] = e\n    return BatchResult(succeeded, failed)\n```\n\n```python\n# GOOD: Async-native\nasync def fetch_data():\n    await asyncio.sleep(1)\n    async with httpx.AsyncClient() as client:\n        response = await client.get(url)\n```"
+- sequence: 8
+  fragment_type: verification
+  content: '## Quick Review Checklist
+
+
+    Before finalizing code, verify:
+
+
+    - [ ] No scattered timeout/retry logic (centralized)
+
+    - [ ] No double retry (app + infrastructure)
+
+    - [ ] No hard-coded configuration or secrets
+
+    - [ ] No exposed internal types (ORM models, protobufs)
+
+    - [ ] No mixed I/O and business logic
+
+    - [ ] No bare `except Exception: pass`
+
+    - [ ] No ignored partial failures in batches
+
+    - [ ] No missing input validation
+
+    - [ ] No unclosed resources (using context managers)
+
+    - [ ] No blocking calls in async code
+
+    - [ ] All public functions have type hints
+
+    - [ ] Collections have type parameters
+
+    - [ ] Error paths are tested
+
+    - [ ] Edge cases are covered'
+- sequence: 9
+  fragment_type: guardrail
+  content: '## Common Fixes Summary
+
+
+    | Anti-Pattern | Fix |
+
+    |-------------|-----|
+
+    | Scattered retry logic | Centralized decorators |
+
+    | Hard-coded config | Environment variables + pydantic-settings |
+
+    | Exposed ORM models | DTO/response schemas |
+
+    | Mixed I/O + logic | Repository pattern |
+
+    | Bare except | Catch specific exceptions |
+
+    | Batch stops on error | Return BatchResult with successes/failures |
+
+    | No validation | Validate at boundaries with Pydantic |
+
+    | Unclosed resources | Context managers |
+
+    | Blocking in async | Async-native libraries |
+
+    | Missing types | Type annotations on all public APIs |
+
+    | Only happy path tests | Test errors and edge cases |'

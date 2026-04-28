@@ -1,0 +1,131 @@
+skill_type: domain
+skill_id: javascript-testing-patterns
+canonical_name: JavaScript Testing Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- typescript
+- testing
+- jest
+- vitest
+- mocking
+- unit-testing
+- integration-testing
+- testing-library
+- fixtures
+- factories
+- tdd
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin javascript-typescript/javascript-testing-patterns source
+raw_prose: "# JavaScript Testing Patterns\n\nComprehensive patterns for testing JavaScript and TypeScript applications using Jest and Vitest, covering unit testing, mocking, integration testing, and Testing Library patterns.\n\n## When to Use This Skill\n\n- Writing unit tests for JavaScript/TypeScript code\n- Setting up Jest or Vitest configuration\n- Mocking modules, APIs, and dependencies\n- Testing async code, promises, and timers\n- Building test fixtures and factories\n- Testing React/Vue components with Testing Library\n- Implementing TDD workflow\n- Writing integration tests\n\n## Core Concepts\n\n### 1. Test Structure (AAA)\nArrange-Act-Assert: Set up preconditions, execute the code under test, verify results.\n\n### 2. Test Isolation\nEach test should be independent. Mock external dependencies, use beforeEach/afterEach for setup/teardown.\n\n### 3. Test Doubles\n- **Mock**: Replaces implementation, tracks calls\n- **Stub**: Returns predetermined values\n- **Spy**: Wraps real implementation, records calls\n\n### 4. Testing Pyramid\nMany unit tests, fewer integration tests, fewest E2E tests.\n\n## Quick Start\n\n```typescript\n// vitest.config.ts\nimport { defineConfig } from \"vitest/config\";\nexport default defineConfig({\n  test: {\n    globals: true,\n    environment: \"node\",\n    coverage: { provider: \"v8\", reporter: [\"text\", \"lcov\"] },\n  },\n});\n```\n\n```typescript\nimport { describe, it, expect } from \"vitest\";\nimport { add } from \"./math\";\n\ndescribe(\"add\", () => {\n  it(\"adds two numbers\", () => {\n    expect(add(1, 2)).toBe(3);\n  });\n});\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Jest/Vitest Configuration\n\n```typescript\n// jest.config.ts\nimport type { Config } from \"jest\";\nconst config: Config = {\n  preset: \"ts-jest\",\n  testEnvironment: \"node\",\n  roots: [\"<rootDir>/src\"],\n  testMatch: [\"**/*.test.ts\"],\n  moduleNameMapper: { \"^@/(.*)$\": \"<rootDir>/src/$1\" },\n  collectCoverageFrom: [\"src/**/*.ts\", \"!src/**/*.d.ts\"],\n  coverageThreshold: { global: { branches: 80, functions: 80, lines: 80, statements: 80 } },\n};\nexport default config;\n```\n\n```typescript\n// vitest.config.ts\nimport { defineConfig } from \"vitest/config\";\nimport path from \"path\";\nexport default defineConfig({\n  test: {\n    globals: true,\n    environment: \"node\",\n    include: [\"src/**/*.test.ts\"],\n    coverage: {\n      provider: \"v8\",\n      reporter: [\"text\", \"lcov\", \"html\"],\n      exclude: [\"node_modules/\", \"src/**/*.d.ts\"],\n      thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 },\n    },\n  },\n  resolve: { alias: { \"@\": path.resolve(__dirname, \"./src\") } },\n});\n```\n\n### Pattern 2: Testing Pure Functions\n\n```typescript\n// math.ts\nexport function calculateDiscount(price: number, percentage: number): number {\n  if (price < 0) throw new Error(\"Price must be non-negative\");\n  if (percentage < 0 || percentage > 100) throw new Error(\"Invalid percentage\");\n  return price * (1 - percentage / 100);\n}\n\n// math.test.ts\ndescribe(\"calculateDiscount\", () => {\n  it(\"applies discount correctly\", () => {\n    expect(calculateDiscount(100, 20)).toBe(80);\n  });\n  it(\"handles zero discount\", () => {\n    expect(calculateDiscount(100, 0)).toBe(100);\n  });\n  it(\"handles full discount\", () => {\n    expect(calculateDiscount(100, 100)).toBe(0);\n  });\n  it(\"throws for negative price\", () => {\n    expect(() => calculateDiscount(-1, 10)).toThrow(\"Price must be non-negative\");\n  });\n  it(\"throws for invalid percentage\", () => {\n    expect(() => calculateDiscount(100, 101)).toThrow(\"Invalid percentage\");\n  });\n});\n```\n\n### Pattern 3: Testing Classes\n\n```typescript\ndescribe(\"UserService\", () => {\n  let service: UserService;\n  let mockRepo: jest.Mocked<UserRepository>;\n\n  beforeEach(() => {\n    mockRepo = {\n      findById: jest.fn(),\n      save: jest.fn(),\n      delete: jest.fn(),\n    } as any;\n    service = new UserService(mockRepo);\n  });\n\n  describe(\"getUser\", () => {\n    it(\"returns user when found\", async () => {\n      const user = { id: \"1\", name: \"Alice\", email: \"alice@example.com\" };\n      mockRepo.findById.mockResolvedValue(user);\n\n      const result = await service.getUser(\"1\");\n      expect(result).toEqual(user);\n      expect(mockRepo.findById).toHaveBeenCalledWith(\"1\");\n    });\n\n    it(\"throws NotFoundError when user not found\", async () => {\n      mockRepo.findById.mockResolvedValue(null);\n      await expect(service.getUser(\"999\")).rejects.toThrow(NotFoundError);\n    });\n  });\n});\n```\n\n### Pattern 4: Testing Async Code\n\n```typescript\ndescribe(\"async patterns\", () => {\n  it(\"resolves with data\", async () => {\n    const data = await fetchData();\n    expect(data).toEqual({ id: 1, name: \"Test\" });\n  });\n\n  it(\"rejects with error\", async () => {\n    await expect(fetchData(\"invalid\")).rejects.toThrow(\"Not found\");\n  });\n\n  it(\"handles Promise.all\", async () => {\n    const [users, posts] = await Promise.all([fetchUsers(), fetchPosts()]);\n    expect(users).toHaveLength(3);\n    expect(posts).toHaveLength(5);\n  });\n\n  it(\"tests with fake timers\", () => {\n    vi.useFakeTimers();\n    const callback = vi.fn();\n    setTimeout(callback, 1000);\n    vi.advanceTimersByTime(1000);\n    expect(callback).toHaveBeenCalledOnce();\n    vi.useRealTimers();\n  });\n});\n```\n\n### Pattern 5: Mocking Modules\n\n```typescript\n// Mock entire module\nvi.mock(\"./api\", () => ({\n  fetchUser: vi.fn(),\n  fetchPosts: vi.fn(),\n}));\n\n// Mock with factory\nvi.mock(\"./database\", () => ({\n  Database: vi.fn().mockImplementation(() => ({\n    query: vi.fn().mockResolvedValue([]),\n    connect: vi.fn(),\n    disconnect: vi.fn(),\n  })),\n}));\n\n// Partial mock (keep some real implementations)\nvi.mock(\"./utils\", async () => {\n  const actual = await vi.importActual(\"./utils\");\n  return { ...actual, formatDate: vi.fn(() => \"2024-01-01\") };\n});\n```\n\n### Pattern 6: Dependency Injection for Testability\n\n```typescript\n// Service with injected dependencies\nclass OrderService {\n  constructor(\n    private readonly orderRepo: OrderRepository,\n    private readonly paymentGateway: PaymentGateway,\n    private readonly emailService: EmailService,\n  ) {}\n\n  async createOrder(dto: CreateOrderDTO): Promise<Order> {\n    const order = Order.create(dto);\n    await this.orderRepo.save(order);\n    await this.paymentGateway.charge(order.total);\n    await this.emailService.sendConfirmation(order);\n    return order;\n  }\n}\n\n// Test with mock dependencies\ndescribe(\"OrderService\", () => {\n  let service: OrderService;\n  let mockOrderRepo: jest.Mocked<OrderRepository>;\n  let mockPayment: jest.Mocked<PaymentGateway>;\n  let mockEmail: jest.Mocked<EmailService>;\n\n  beforeEach(() => {\n    mockOrderRepo = { save: vi.fn(), findById: vi.fn() } as any;\n    mockPayment = { charge: vi.fn() } as any;\n    mockEmail = { sendConfirmation: vi.fn() } as any;\n    service = new OrderService(mockOrderRepo, mockPayment, mockEmail);\n  });\n\n  it(\"creates order and processes payment\", async () => {\n    const dto = { items: [{ productId: \"1\", quantity: 2 }] };\n    mockOrderRepo.save.mockResolvedValue(undefined);\n    mockPayment.charge.mockResolvedValue({ transactionId: \"tx-123\" });\n    mockEmail.sendConfirmation.mockResolvedValue(undefined);\n\n    const order = await service.createOrder(dto);\n    expect(mockOrderRepo.save).toHaveBeenCalledOnce();\n    expect(mockPayment.charge).toHaveBeenCalledWith(order.total);\n    expect(mockEmail.sendConfirmation).toHaveBeenCalledWith(order);\n  });\n});\n```\n\n### Pattern 7: Spying on Functions\n\n```typescript\ndescribe(\"spying\", () => {\n  it(\"spies on method calls\", () => {\n    const user = new UserService(mockRepo);\n    const spy = vi.spyOn(user, \"validateEmail\");\n    user.createUser({ email: \"test@example.com\" });\n    expect(spy).toHaveBeenCalledWith(\"test@example.com\");\n    spy.mockRestore();\n  });\n\n  it(\"spies on console\", () => {\n    const spy = vi.spyOn(console, \"error\").mockImplementation(() => {});\n    doSomethingThatLogs();\n    expect(spy).toHaveBeenCalledWith(expect.stringContaining(\"error\"));\n    spy.mockRestore();\n  });\n});\n```\n\n## Test Fixtures and Factories\n\nUse `@faker-js/faker` to generate realistic test data factories. Factories accept optional `overrides` so tests can set only the fields they care about:\n\n```typescript\nimport { faker } from \"@faker-js/faker\";\n\nexport function createUserFixture(overrides?: Partial<User>): User {\n  return {\n    id: faker.string.uuid(),\n    name: faker.person.fullName(),\n    email: faker.internet.email(),\n    createdAt: faker.date.past(),\n    ...overrides,\n  };\n}\n```\n\n## Best Practices\n\n1. **Follow AAA Pattern**: Arrange, Act, Assert\n2. **One assertion per test**: Or logically related assertions\n3. **Descriptive test names**: Should describe what is being tested\n4. **Use beforeEach/afterEach**: For setup and teardown\n5. **Mock external dependencies**: Keep tests isolated\n6. **Test edge cases**: Not just happy paths\n7. **Avoid implementation details**: Test behavior, not implementation\n8. **Use test factories**: For consistent test data\n9. **Keep tests fast**: Mock slow operations\n10. **Write tests first (TDD)**: When possible\n11. **Maintain test coverage**: Aim for 80%+ coverage\n12. **Use TypeScript**: For type-safe tests\n13. **Test error handling**: Not just success cases\n14. **Use data-testid sparingly**: Prefer semantic queries\n15. **Clean up after tests**: Prevent test pollution"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# JavaScript Testing Patterns
+
+
+    Comprehensive patterns for testing JavaScript and TypeScript applications using Jest and Vitest, covering unit testing, mocking, integration testing, and Testing Library patterns.
+
+
+    ## Core Concepts
+
+
+    1. **Test Structure (AAA)** — Arrange-Act-Assert: set up preconditions, execute, verify.
+
+    2. **Test Isolation** — Each test independent. Mock external dependencies, use setup/teardown.
+
+    3. **Test Doubles** — Mock (replaces implementation, tracks calls), Stub (predetermined values), Spy (wraps real, records calls).
+
+    4. **Testing Pyramid** — Many unit tests, fewer integration tests, fewest E2E tests.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Writing unit tests for JavaScript/TypeScript code
+
+    - Setting up Jest or Vitest configuration
+
+    - Mocking modules, APIs, and dependencies
+
+    - Testing async code, promises, and timers
+
+    - Building test fixtures and factories
+
+    - Testing React/Vue components with Testing Library
+
+    - Implementing TDD workflow'
+- sequence: 3
+  fragment_type: example
+  content: "## Jest/Vitest Configuration (Pattern 1)\n\n```typescript\n// vitest.config.ts\nimport { defineConfig } from \"vitest/config\";\nexport default defineConfig({\n  test: {\n    globals: true,\n    environment: \"node\",\n    include: [\"src/**/*.test.ts\"],\n    coverage: {\n      provider: \"v8\",\n      reporter: [\"text\", \"lcov\", \"html\"],\n      thresholds: { branches: 80, functions: 80, lines: 80, statements: 80 },\n    },\n  },\n});\n```"
+- sequence: 4
+  fragment_type: example
+  content: "## Testing Pure Functions (Pattern 2)\n\n```typescript\ndescribe(\"calculateDiscount\", () => {\n  it(\"applies discount correctly\", () => {\n    expect(calculateDiscount(100, 20)).toBe(80);\n  });\n  it(\"handles zero discount\", () => {\n    expect(calculateDiscount(100, 0)).toBe(100);\n  });\n  it(\"throws for negative price\", () => {\n    expect(() => calculateDiscount(-1, 10)).toThrow(\"Price must be non-negative\");\n  });\n  it(\"throws for invalid percentage\", () => {\n    expect(() => calculateDiscount(100, 101)).toThrow(\"Invalid percentage\");\n  });\n});\n```\n\n## Testing Async Code (Pattern 4)\n\n```typescript\nit(\"resolves with data\", async () => {\n  const data = await fetchData();\n  expect(data).toEqual({ id: 1, name: \"Test\" });\n});\n\nit(\"tests with fake timers\", () => {\n  vi.useFakeTimers();\n  const callback = vi.fn();\n  setTimeout(callback, 1000);\n  vi.advanceTimersByTime(1000);\n  expect(callback).toHaveBeenCalledOnce();\n  vi.useRealTimers();\n});\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 3: Testing Classes
+
+
+    Use dependency injection to provide mock implementations of repositories and services via `jest.Mocked<T>` or `vi.fn()`. Create mocks in `beforeEach`, instantiate the class under test with mocks. Assert both return values and that mocks were called with expected arguments.
+
+
+    ## Pattern 5: Mocking Modules
+
+
+    - Mock entire modules with `vi.mock("./api", () => ({ ... }))`.
+
+    - For partial mocks, use `vi.importActual()` to keep real implementations while overriding specific exports.
+
+    - Mock constructors by returning `vi.fn().mockImplementation(() => ({ ... }))`.
+
+
+    ## Pattern 6: Dependency Injection for Testability
+
+
+    Design services with constructor-injected dependencies. In tests, provide mock implementations. This avoids brittle module-level mocking and makes tests explicit about what they''re testing.
+
+
+    ## Pattern 7: Spying on Functions
+
+
+    Use `vi.spyOn(object, "method")` to observe calls without replacing implementation. Always call `spy.mockRestore()` in cleanup. For console spying, use `.mockImplementation(() => {})` to suppress output.'
+- sequence: 6
+  fragment_type: example
+  content: "## Mocking & DI Examples (Patterns 5-6)\n\n```typescript\n// Mock entire module\nvi.mock(\"./api\", () => ({\n  fetchUser: vi.fn(),\n  fetchPosts: vi.fn(),\n}));\n\n// Partial mock\nvi.mock(\"./utils\", async () => {\n  const actual = await vi.importActual(\"./utils\");\n  return { ...actual, formatDate: vi.fn(() => \"2024-01-01\") };\n});\n```\n\n```typescript\n// DI test pattern\nlet service: OrderService;\nlet mockOrderRepo: jest.Mocked<OrderRepository>;\nlet mockPayment: jest.Mocked<PaymentGateway>;\n\nbeforeEach(() => {\n  mockOrderRepo = { save: vi.fn(), findById: vi.fn() } as any;\n  mockPayment = { charge: vi.fn() } as any;\n  service = new OrderService(mockOrderRepo, mockPayment);\n});\n\nit(\"creates order and processes payment\", async () => {\n  mockOrderRepo.save.mockResolvedValue(undefined);\n  mockPayment.charge.mockResolvedValue({ transactionId: \"tx-123\" });\n  const order = await service.createOrder(dto);\n  expect(mockPayment.charge).toHaveBeenCalledWith(order.total);\n});\n```"
+- sequence: 7
+  fragment_type: example
+  content: "## Test Fixtures and Factories\n\n```typescript\nimport { faker } from \"@faker-js/faker\";\n\nexport function createUserFixture(overrides?: Partial<User>): User {\n  return {\n    id: faker.string.uuid(),\n    name: faker.person.fullName(),\n    email: faker.internet.email(),\n    createdAt: faker.date.past(),\n    ...overrides,\n  };\n}\n```\n\nFactories accept optional `overrides` so tests set only the fields they care about. Use `@faker-js/faker` for realistic data generation."
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Follow AAA Pattern**: Arrange, Act, Assert
+
+    2. **One assertion per test**: Or logically related assertions
+
+    3. **Descriptive test names**: Describe what is being tested
+
+    4. **Use beforeEach/afterEach**: For setup and teardown
+
+    5. **Mock external dependencies**: Keep tests isolated
+
+    6. **Test edge cases**: Not just happy paths
+
+    7. **Avoid implementation details**: Test behavior, not implementation
+
+    8. **Use test factories**: For consistent test data
+
+    9. **Keep tests fast**: Mock slow operations
+
+    10. **Write tests first (TDD)**: When possible
+
+    11. **Maintain test coverage**: Aim for 80%+ coverage
+
+    12. **Test error handling**: Not just success cases
+
+    13. **Clean up after tests**: Prevent test pollution'

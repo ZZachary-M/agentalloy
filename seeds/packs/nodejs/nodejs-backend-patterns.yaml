@@ -1,0 +1,146 @@
+skill_type: domain
+skill_id: nodejs-backend-patterns
+canonical_name: Node.js Backend Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- nodejs
+- express
+- fastify
+- backend
+- rest-api
+- middleware
+- dependency-injection
+- error-handling
+- zod
+- validation
+- rate-limiting
+- layered-architecture
+- authentication
+- caching
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin javascript-typescript/nodejs-backend-patterns source
+raw_prose: "# Node.js Backend Patterns\n\nBuild production-ready Node.js backends with Express or Fastify, covering project structure, middleware patterns, error handling, validation, authentication, and database patterns.\n\n## When to Use This Skill\n\n- Building REST APIs with Express or Fastify\n- Setting up backend project structure\n- Implementing middleware (auth, validation, rate limiting, logging)\n- Error handling strategies for Node.js backends\n- Database patterns (connection pooling, transactions)\n- Authentication and authorization (JWT)\n- Caching strategies with Redis\n\n## Core Concepts\n\n### 1. Layered Architecture\n- **Controller**: HTTP handling, request parsing, response formatting\n- **Service**: Business logic, orchestration\n- **Repository**: Data access, database queries\n\n### 2. Middleware Pipeline\nRequest flows through middleware chain: logging → auth → validation → rate limiting → handler → error handler.\n\n### 3. Dependency Injection\nInject dependencies through constructors for testability.\n\n### 4. Error Handling\nUse custom error classes with status codes. Centralize error handling in middleware.\n\n## Quick Start\n\n```typescript\nimport express from \"express\";\nconst app = express();\napp.use(express.json());\napp.get(\"/health\", (req, res) => res.json({ status: \"ok\" }));\napp.listen(3000, () => console.log(\"Server running on port 3000\"));\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Express Application Setup\n\n```typescript\nimport express from \"express\";\nimport cors from \"cors\";\nimport helmet from \"helmet\";\nimport compression from \"compression\";\n\nconst app = express();\napp.use(helmet());\napp.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(\",\") }));\napp.use(compression());\napp.use(express.json({ limit: \"10mb\" }));\napp.use(express.urlencoded({ extended: true }));\n```\n\n### Pattern 2: Fastify Application Setup\n\n```typescript\nimport Fastify from \"fastify\";\nimport cors from \"@fastify/cors\";\nimport helmet from \"@fastify/helmet\";\n\nconst app = Fastify({ logger: true, trustProxy: true });\nawait app.register(cors, { origin: true });\nawait app.register(helmet);\n```\n\n### Pattern 3: Layered Architecture\n\n```typescript\n// Controller - HTTP layer\nclass UserController {\n  constructor(private userService: UserService) {}\n  async getUser(req: Request, res: Response) {\n    const user = await this.userService.findById(req.params.id);\n    if (!user) return res.status(404).json({ error: \"User not found\" });\n    res.json(UserDTO.fromEntity(user));\n  }\n}\n\n// Service - Business logic\nclass UserService {\n  constructor(private userRepo: UserRepository, private cache: CacheService) {}\n  async findById(id: string): Promise<User | null> {\n    const cached = await this.cache.get(`user:${id}`);\n    if (cached) return cached;\n    const user = await this.userRepo.findById(id);\n    if (user) await this.cache.set(`user:${id}`, user, 300);\n    return user;\n  }\n}\n\n// Repository - Data access\nclass UserRepository {\n  constructor(private db: Pool) {}\n  async findById(id: string): Promise<User | null> {\n    const result = await this.db.query(\"SELECT * FROM users WHERE id = $1\", [id]);\n    return result.rows[0] ?? null;\n  }\n}\n```\n\n### Pattern 4: Dependency Injection Container\n\n```typescript\nclass Container {\n  private services = new Map<string, any>();\n\n  register<T>(name: string, factory: () => T): void {\n    this.services.set(name, factory());\n  }\n\n  resolve<T>(name: string): T {\n    const service = this.services.get(name);\n    if (!service) throw new Error(`Service ${name} not registered`);\n    return service;\n  }\n}\n\nconst container = new Container();\ncontainer.register(\"db\", () => new Pool(dbConfig));\ncontainer.register(\"userRepo\", () => new UserRepository(container.resolve(\"db\")));\ncontainer.register(\"userService\", () => new UserService(container.resolve(\"userRepo\")));\n```\n\n### Pattern 5: Authentication Middleware (JWT)\n\n```typescript\nimport jwt from \"jsonwebtoken\";\n\nconst authenticate = async (req: Request, res: Response, next: NextFunction) => {\n  const token = req.headers.authorization?.replace(\"Bearer \", \"\");\n  if (!token) return res.status(401).json({ error: \"No token provided\" });\n  try {\n    const decoded = jwt.verify(token, process.env.JWT_SECRET!);\n    req.user = decoded as AuthUser;\n    next();\n  } catch {\n    res.status(401).json({ error: \"Invalid token\" });\n  }\n};\n\nconst authorize = (...roles: string[]) => {\n  return (req: Request, res: Response, next: NextFunction) => {\n    if (!roles.includes(req.user.role)) {\n      return res.status(403).json({ error: \"Insufficient permissions\" });\n    }\n    next();\n  };\n};\n\napp.get(\"/admin\", authenticate, authorize(\"admin\"), adminController.dashboard);\n```\n\n### Pattern 6: Input Validation with Zod\n\n```typescript\nimport { z } from \"zod\";\n\nconst CreateUserSchema = z.object({\n  name: z.string().min(2).max(100),\n  email: z.string().email(),\n  password: z.string().min(8).regex(/(?=.*[A-Z])(?=.*[0-9])/),\n  role: z.enum([\"user\", \"admin\"]).default(\"user\"),\n});\n\nconst validate = (schema: z.ZodSchema) => {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const result = schema.safeParse(req.body);\n    if (!result.success) {\n      return res.status(400).json({ errors: result.error.flatten().fieldErrors });\n    }\n    req.body = result.data;\n    next();\n  };\n};\n\napp.post(\"/users\", validate(CreateUserSchema), userController.create);\n```\n\n### Pattern 7: Rate Limiting\n\n```typescript\nimport rateLimit from \"express-rate-limit\";\nimport RedisStore from \"rate-limit-redis\";\n\nconst apiLimiter = rateLimit({\n  windowMs: 15 * 60 * 1000,\n  max: 100,\n  standardHeaders: true,\n  legacyHeaders: false,\n  store: new RedisStore({ sendCommand: (...args) => redisClient.sendCommand(args) }),\n});\n\napp.use(\"/api/\", apiLimiter);\n```\n\n### Pattern 8: Structured Logging Middleware\n\n```typescript\nimport pino from \"pino\";\nimport { randomUUID } from \"crypto\";\n\nconst logger = pino({ level: process.env.LOG_LEVEL || \"info\" });\n\nconst requestLogger = (req: Request, res: Response, next: NextFunction) => {\n  const requestId = randomUUID();\n  req.requestId = requestId;\n  const start = Date.now();\n  res.on(\"finish\", () => {\n    logger.info({\n      requestId,\n      method: req.method,\n      url: req.url,\n      statusCode: res.statusCode,\n      duration: Date.now() - start,\n    });\n  });\n  next();\n};\n```\n\n### Pattern 9: Custom Error Classes\n\n```typescript\nclass AppError extends Error {\n  constructor(\n    public message: string,\n    public statusCode: number = 500,\n    public isOperational: boolean = true,\n  ) {\n    super(message);\n    Object.setPrototypeOf(this, AppError.prototype);\n    Error.captureStackTrace(this, this.constructor);\n  }\n}\n\nclass ValidationError extends AppError {\n  constructor(message: string, public errors?: any[]) { super(message, 400); }\n}\nclass NotFoundError extends AppError {\n  constructor(message: string = \"Resource not found\") { super(message, 404); }\n}\nclass UnauthorizedError extends AppError {\n  constructor(message: string = \"Unauthorized\") { super(message, 401); }\n}\nclass ForbiddenError extends AppError {\n  constructor(message: string = \"Forbidden\") { super(message, 403); }\n}\nclass ConflictError extends AppError {\n  constructor(message: string) { super(message, 409); }\n}\n```\n\n### Global Error Handler\n\n```typescript\nconst errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {\n  if (err instanceof AppError) {\n    return res.status(err.statusCode).json({\n      status: \"error\",\n      message: err.message,\n      ...(err instanceof ValidationError && { errors: err.errors }),\n    });\n  }\n  logger.error({ error: err.message, stack: err.stack, url: req.url, method: req.method });\n  const message = process.env.NODE_ENV === \"production\" ? \"Internal server error\" : err.message;\n  res.status(500).json({ status: \"error\", message });\n};\n\nconst asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => {\n  return (req: Request, res: Response, next: NextFunction) => {\n    Promise.resolve(fn(req, res, next)).catch(next);\n  };\n};\n```\n\n## Database Patterns\n\nNode.js supports both SQL and NoSQL databases. Use connection pooling for all production databases. Key patterns: PostgreSQL with `pg` Pool and graceful shutdown, MongoDB with Mongoose, transaction pattern with `BEGIN`/`COMMIT`/`ROLLBACK`.\n\n## Authentication & Authorization\n\nJWT-based auth with access tokens (short-lived, 15m) and refresh tokens (7d). Full `AuthService` with bcrypt password comparison.\n\n## Caching Strategies\n\nRedis-backed `CacheService` with get/set/delete/invalidatePattern, plus `@Cacheable` decorator for method-level caching.\n\n## API Response Format\n\nStandardized `ApiResponse` helper with `success`, `error`, and `paginated` static methods for consistent response shapes.\n\n## Best Practices\n\n1. **Use TypeScript**: Type safety prevents runtime errors\n2. **Implement proper error handling**: Use custom error classes\n3. **Validate input**: Use libraries like Zod or Joi\n4. **Use environment variables**: Never hardcode secrets\n5. **Implement logging**: Use structured logging (Pino, Winston)\n6. **Add rate limiting**: Prevent abuse\n7. **Use HTTPS**: Always in production\n8. **Implement CORS properly**: Don't use `*` in production\n9. **Use dependency injection**: Easier testing and maintenance\n10. **Write tests**: Unit, integration, and E2E tests\n11. **Handle graceful shutdown**: Clean up resources\n12. **Use connection pooling**: For databases\n13. **Implement health checks**: For monitoring\n14. **Use compression**: Reduce response size\n15. **Monitor performance**: Use APM tools"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Node.js Backend Patterns
+
+
+    Build production-ready Node.js backends with Express or Fastify, covering project structure, middleware patterns, error handling, validation, authentication, and database patterns.
+
+
+    ## Core Concepts
+
+
+    1. **Layered Architecture** — Controller (HTTP), Service (business logic), Repository (data access)
+
+    2. **Middleware Pipeline** — Logging → Auth → Validation → Rate Limiting → Handler → Error Handler
+
+    3. **Dependency Injection** — Constructor injection for testability
+
+    4. **Error Handling** — Custom error classes with status codes, centralized error middleware'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Building REST APIs with Express or Fastify
+
+    - Setting up backend project structure
+
+    - Implementing middleware (auth, validation, rate limiting, logging)
+
+    - Error handling strategies for Node.js backends
+
+    - Database patterns (connection pooling, transactions)
+
+    - Authentication and authorization (JWT)
+
+    - Caching strategies with Redis'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1-2: Application Setup
+
+
+    Express: Use `helmet()` for security headers, `cors()` with explicit allowed origins (never `*` in production), `compression()`, and `express.json()` with size limits. Fastify: Use `@fastify/cors`, `@fastify/helmet`, and built-in `logger: true`.
+
+
+    ## Pattern 3: Layered Architecture
+
+
+    Controller handles HTTP: parse request params, call service, format response with DTOs. Service handles business logic: caching, validation rules, orchestrating multiple repositories. Repository handles data: raw SQL or ORM queries against connection pool.
+
+
+    ## Pattern 4: Dependency Injection Container
+
+
+    Register services with factory functions. Resolve dependencies by name. Build dependency graph at startup — controllers depend on services, services depend on repositories, repositories depend on the connection pool.'
+- sequence: 4
+  fragment_type: example
+  content: "## Layered Architecture Example (Pattern 3)\n\n```typescript\nclass UserController {\n  constructor(private userService: UserService) {}\n  async getUser(req: Request, res: Response) {\n    const user = await this.userService.findById(req.params.id);\n    if (!user) return res.status(404).json({ error: \"User not found\" });\n    res.json(UserDTO.fromEntity(user));\n  }\n}\n\nclass UserService {\n  constructor(private userRepo: UserRepository, private cache: CacheService) {}\n  async findById(id: string): Promise<User | null> {\n    const cached = await this.cache.get(`user:${id}`);\n    if (cached) return cached;\n    const user = await this.userRepo.findById(id);\n    if (user) await this.cache.set(`user:${id}`, user, 300);\n    return user;\n  }\n}\n\nclass UserRepository {\n  constructor(private db: Pool) {}\n  async findById(id: string): Promise<User | null> {\n    const result = await this.db.query(\"SELECT * FROM users WHERE id = $1\", [id]);\n    return result.rows[0] ?? null;\n  }\n}\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 5: Authentication Middleware (JWT)
+
+
+    Extract Bearer token from `Authorization` header. Verify with `jwt.verify()` and attach decoded user to request. Compose with role-based `authorize(...roles)` middleware that checks `req.user.role`. Stack as: `authenticate, authorize("admin"), handler`.
+
+
+    ## Pattern 6: Input Validation with Zod
+
+
+    Define schemas with `z.object()`. Create a `validate(schema)` middleware factory that calls `schema.safeParse(req.body)`. Return 400 with `error.flatten().fieldErrors` on failure. Assign validated `result.data` back to `req.body`.
+
+
+    ## Pattern 7: Rate Limiting
+
+
+    Use `express-rate-limit` with Redis store for distributed setups. Configure `windowMs`, `max`, `standardHeaders: true`. Apply per-route or globally.
+
+
+    ## Pattern 8: Structured Logging
+
+
+    Use Pino for JSON logging. Generate `requestId` (UUID) per request. Log on `res.finish` event with method, URL, statusCode, and duration.'
+- sequence: 6
+  fragment_type: example
+  content: "## Validation & Auth Examples (Patterns 5-6)\n\n```typescript\nimport { z } from \"zod\";\nconst CreateUserSchema = z.object({\n  name: z.string().min(2).max(100),\n  email: z.string().email(),\n  password: z.string().min(8).regex(/(?=.*[A-Z])(?=.*[0-9])/),\n  role: z.enum([\"user\", \"admin\"]).default(\"user\"),\n});\n\nconst validate = (schema: z.ZodSchema) => {\n  return (req: Request, res: Response, next: NextFunction) => {\n    const result = schema.safeParse(req.body);\n    if (!result.success) return res.status(400).json({ errors: result.error.flatten().fieldErrors });\n    req.body = result.data;\n    next();\n  };\n};\napp.post(\"/users\", validate(CreateUserSchema), userController.create);\n```\n\n```typescript\nconst authenticate = async (req, res, next) => {\n  const token = req.headers.authorization?.replace(\"Bearer \", \"\");\n  if (!token) return res.status(401).json({ error: \"No token\" });\n  try {\n    req.user = jwt.verify(token, process.env.JWT_SECRET!) as AuthUser;\n    next();\n  } catch { res.status(401).json({ error: \"Invalid token\" }); }\n};\n```"
+- sequence: 7
+  fragment_type: example
+  content: "## Error Handling (Pattern 9)\n\n```typescript\nclass AppError extends Error {\n  constructor(public message: string, public statusCode: number = 500, public isOperational = true) {\n    super(message);\n    Object.setPrototypeOf(this, AppError.prototype);\n  }\n}\nclass NotFoundError extends AppError {\n  constructor(msg = \"Resource not found\") { super(msg, 404); }\n}\nclass ValidationError extends AppError {\n  constructor(msg: string, public errors?: any[]) { super(msg, 400); }\n}\n\nconst errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {\n  if (err instanceof AppError) {\n    return res.status(err.statusCode).json({ status: \"error\", message: err.message });\n  }\n  logger.error({ error: err.message, stack: err.stack, url: req.url });\n  const message = process.env.NODE_ENV === \"production\" ? \"Internal server error\" : err.message;\n  res.status(500).json({ status: \"error\", message });\n};\n\nconst asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);\n```"
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Use TypeScript** — Type safety prevents runtime errors
+
+    2. **Implement proper error handling** — Custom error classes with status codes
+
+    3. **Validate input** — Zod or Joi at API boundaries
+
+    4. **Use environment variables** — Never hardcode secrets
+
+    5. **Structured logging** — Pino or Winston with JSON output
+
+    6. **Rate limiting** — Prevent abuse with Redis-backed limits
+
+    7. **Use HTTPS** — Always in production
+
+    8. **Implement CORS properly** — Don''t use `*` in production
+
+    9. **Dependency injection** — Constructor injection for testability
+
+    10. **Connection pooling** — For all database connections
+
+    11. **Graceful shutdown** — Clean up connections and pending requests
+
+    12. **Health checks** — Endpoint for monitoring
+
+    13. **Compression** — Reduce response payload size
+
+    14. **Monitor performance** — APM tooling for production'

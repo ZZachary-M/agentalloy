@@ -1,0 +1,192 @@
+skill_type: domain
+skill_id: verification-before-completion
+canonical_name: Verification Before Completion
+category: quality
+skill_class: domain
+domain_tags:
+- verification
+- completion-discipline
+- honesty
+- evidence-based
+- regression-test
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from local-workstation superpowers
+raw_prose: "# Verification Before Completion\n\n## Overview\n\nClaiming work is complete without verification is dishonesty, not efficiency.\n\n**Core principle:** Evidence before claims, always.\n\n**Violating the letter of this rule is violating the spirit of this rule.**\n\n## The Iron Law\n\n```\nNO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE\n```\n\nIf you haven't run the verification command in this message, you cannot claim it passes.\n\n## The Gate Function\n\n```\nBEFORE claiming any status or expressing satisfaction:\n\n1. IDENTIFY: What command proves this claim?\n2. RUN: Execute the FULL command (fresh, complete)\n3. READ: Full output, check exit code, count failures\n4. VERIFY: Does output confirm the claim?\n   - If NO: State actual status with evidence\n   - If YES: State claim WITH evidence\n5. ONLY THEN: Make the claim\n\nSkip any step = lying, not verifying\n```\n\n## Common Failures\n\n| Claim | Requires | Not Sufficient |\n|-------|----------|----------------|\n| Tests pass | Test command output: 0 failures | Previous run, \"should pass\" |\n| Linter clean | Linter output: 0 errors | Partial check, extrapolation |\n| Build succeeds | Build command: exit 0 | Linter passing, logs look good |\n| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |\n| Regression test works | Red-green cycle verified | Test passes once |\n| Agent completed | VCS diff shows changes | Agent reports \"success\" |\n| Requirements met | Line-by-line checklist | Tests passing |\n\n## Red Flags — STOP\n\n- Using \"should\", \"probably\", \"seems to\"\n- Expressing satisfaction before verification (\"Great!\", \"Perfect!\", \"Done!\")\n- About to commit/push/PR without verification\n- Trusting agent success reports\n- Relying on partial verification\n- Thinking \"just this once\"\n- Tired and wanting work over\n- **ANY wording implying success without having run verification**\n\n## Rationalization Prevention\n\n| Excuse | Reality |\n|--------|---------|\n| \"Should work now\" | RUN the verification |\n| \"I'm confident\" | Confidence ≠ evidence |\n| \"Just this once\" | No exceptions |\n| \"Linter passed\" | Linter ≠ compiler |\n| \"Agent said success\" | Verify independently |\n| \"I'm tired\" | Exhaustion ≠ excuse |\n| \"Partial check is enough\" | Partial proves nothing |\n\n## Key Patterns\n\n- **Tests** — run command → see N/N pass → claim\n- **Regression test (TDD red-green)** — write → run (pass) → revert fix → run (MUST FAIL) → restore → run (pass)\n- **Build** — run build → exit 0 → claim\n- **Requirements** — re-read plan → checklist → verify each → report gaps or completion\n- **Agent delegation** — agent reports success → check VCS diff → verify changes → report actual state\n\n## When to Apply\n\nALWAYS before any variation of success/completion claims, expression of satisfaction, positive statement about work state, committing, PR creation, task completion, moving to next task, delegating to agents.\n\nRule applies to exact phrases, paraphrases and synonyms, implications of success, any communication suggesting completion/correctness.\n\n## The Bottom Line\n\n**No shortcuts for verification.**\n\nRun the command. Read the output. THEN claim the result.\n\nThis is non-negotiable."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Verification Before Completion — Overview
+
+
+    Claiming work is complete without verification is dishonesty, not efficiency.
+
+
+    **Core principle:** Evidence before claims, always.
+
+
+    **Violating the letter of this rule is violating the spirit of this rule.**'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Apply
+
+
+    ALWAYS before:
+
+    - ANY variation of success/completion claims
+
+    - ANY expression of satisfaction
+
+    - ANY positive statement about work state
+
+    - Committing, PR creation, task completion
+
+    - Moving to next task
+
+    - Delegating to agents
+
+
+    The rule applies to exact phrases, paraphrases and synonyms, implications of success, and ANY communication suggesting completion/correctness.'
+- sequence: 3
+  fragment_type: execution
+  content: '## The Iron Law
+
+
+    ```
+
+    NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
+
+    ```
+
+
+    If you haven''t run the verification command **in this message**, you cannot claim it passes.'
+- sequence: 4
+  fragment_type: execution
+  content: "## The Gate Function\n\nBefore claiming any status or expressing satisfaction:\n\n1. **IDENTIFY** — What command proves this claim?\n2. **RUN** — Execute the FULL command (fresh, complete)\n3. **READ** — Full output, check exit code, count failures\n4. **VERIFY** — Does output confirm the claim?\n   - If NO: state actual status with evidence\n   - If YES: state claim WITH evidence\n5. **ONLY THEN** — make the claim\n\nSkip any step = lying, not verifying."
+- sequence: 5
+  fragment_type: verification
+  content: '## Common Failure Patterns
+
+
+    | Claim | Requires | Not Sufficient |
+
+    |-------|----------|----------------|
+
+    | Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+
+    | Linter clean | Linter output: 0 errors | Partial check, extrapolation |
+
+    | Build succeeds | Build command: exit 0 | Linter passing, logs look good |
+
+    | Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
+
+    | Regression test works | Red-green cycle verified | Test passes once |
+
+    | Agent completed | VCS diff shows changes | Agent reports "success" |
+
+    | Requirements met | Line-by-line checklist | Tests passing |'
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Red Flags — STOP
+
+
+    - Using "should", "probably", "seems to"
+
+    - Expressing satisfaction before verification ("Great!", "Perfect!", "Done!")
+
+    - About to commit / push / PR without verification
+
+    - Trusting agent success reports
+
+    - Relying on partial verification
+
+    - Thinking "just this once"
+
+    - Tired and wanting work over
+
+    - **ANY wording implying success without having run verification**'
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Rationalization Prevention
+
+
+    | Excuse | Reality |
+
+    |--------|---------|
+
+    | "Should work now" | RUN the verification |
+
+    | "I''m confident" | Confidence ≠ evidence |
+
+    | "Just this once" | No exceptions |
+
+    | "Linter passed" | Linter ≠ compiler |
+
+    | "Agent said success" | Verify independently |
+
+    | "I''m tired" | Exhaustion ≠ excuse |
+
+    | "Partial check is enough" | Partial proves nothing |
+
+    | "Different words so rule doesn''t apply" | Spirit over letter |'
+- sequence: 8
+  fragment_type: example
+  content: '## Key Verification Patterns
+
+
+    **Tests:**
+
+    ```
+
+    ✅ [Run test command] [See: 34/34 pass] → "All tests pass"
+
+    ❌ "Should pass now" / "Looks correct"
+
+    ```
+
+
+    **Regression test (TDD red-green):**
+
+    ```
+
+    ✅ Write test → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
+
+    ❌ "I''ve written a regression test" (without red-green verification)
+
+    ```
+
+
+    **Build:**
+
+    ```
+
+    ✅ [Run build] [See: exit 0] → "Build passes"
+
+    ❌ "Linter passed" (linter doesn''t check compilation)
+
+    ```
+
+
+    **Agent delegation:**
+
+    ```
+
+    ✅ Agent reports success → Check VCS diff → Verify changes → Report actual state
+
+    ❌ Trust agent report verbatim
+
+    ```'
+- sequence: 9
+  fragment_type: rationale
+  content: '## The Bottom Line
+
+
+    **No shortcuts for verification.**
+
+
+    Run the command. Read the output. THEN claim the result.
+
+
+    This is non-negotiable. The cost of false completion (rework, lost trust, broken systems) always exceeds the cost of running the verification command one more time.'

@@ -1,0 +1,184 @@
+skill_type: domain
+skill_id: changelog-automation
+canonical_name: Changelog Automation
+category: tooling
+skill_class: domain
+domain_tags:
+- changelog
+- conventional-commits
+- semantic-versioning
+- release-automation
+- semantic-release
+- git-cliff
+- commitizen
+- standard-version
+- keep-a-changelog
+- ci-cd
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin documentation-generation/changelog-automation source
+raw_prose: "# Changelog Automation\n\nAutomate changelog generation from Git commit history using Conventional Commits. A good changelog communicates what changed, why, and what users need to do. Automation ensures every release has accurate, complete documentation.\n\n## When to Use This Skill\n\n- Setting up automated changelog generation\n- Implementing Conventional Commits in a project\n- Configuring semantic versioning automation\n- Choosing between changelog tools (semantic-release, git-cliff, etc.)\n- Creating release templates and formats\n- Integrating changelog generation into CI/CD\n\n## Core Concepts\n\n### Keep a Changelog Format\n\nThe standard format from keepachangelog.com:\n\n```markdown\n# Changelog\n\n## [Unreleased]\n\n## [2.1.0] - 2024-01-15\n\n### Added\n- OAuth2 support for Google login\n- Dark mode toggle in settings\n\n### Changed\n- Improved checkout flow performance by 40%\n\n### Fixed\n- Race condition in payment processing (#123)\n- Memory leak in websocket handler\n\n### Deprecated\n- Legacy `/api/v1/users` endpoint (use `/api/v2/users`)\n\n### Security\n- Updated lodash to 4.17.21 (CVE-2021-23337)\n```\n\n### Conventional Commits\n\nFormat: `type(scope): description`\n\nTypes and their changelog mapping:\n- `feat` → **Added** (MINOR version bump)\n- `fix` → **Fixed** (PATCH version bump)\n- `feat!` or `BREAKING CHANGE:` → **Breaking** (MAJOR version bump)\n- `perf` → **Performance**\n- `docs` → **Documentation** (no version bump)\n- `chore` → Not included in changelog\n- `refactor` → Not included (or **Changed**)\n- `test` → Not included\n- `ci` → Not included\n\n### Semantic Versioning\n\nMAJOR.MINOR.PATCH:\n- MAJOR: Breaking changes\n- MINOR: New features (backward compatible)\n- PATCH: Bug fixes (backward compatible)\n\n## Automation Methods\n\n### Method 1: conventional-changelog (Node.js)\n\n```bash\nnpx conventional-changelog -p angular -i CHANGELOG.md -s\n```\n\n```json\n// package.json\n{\n  \"scripts\": {\n    \"changelog\": \"conventional-changelog -p angular -i CHANGELOG.md -s\",\n    \"version\": \"conventional-changelog -p angular -i CHANGELOG.md -s && git add CHANGELOG.md\"\n  }\n}\n```\n\n### Method 2: standard-version\n\n```bash\nnpx standard-version\nnpx standard-version --first-release\nnpx standard-version --release-as minor\nnpx standard-version --prerelease alpha\n```\n\n```json\n// .versionrc.json\n{\n  \"types\": [\n    {\"type\": \"feat\", \"section\": \"Features\"},\n    {\"type\": \"fix\", \"section\": \"Bug Fixes\"},\n    {\"type\": \"perf\", \"section\": \"Performance\"},\n    {\"type\": \"docs\", \"section\": \"Documentation\", \"hidden\": false},\n    {\"type\": \"chore\", \"hidden\": true},\n    {\"type\": \"refactor\", \"hidden\": true}\n  ],\n  \"commitUrlFormat\": \"https://github.com/org/repo/commit/{{hash}}\",\n  \"compareUrlFormat\": \"https://github.com/org/repo/compare/{{previousTag}}...{{currentTag}}\"\n}\n```\n\n### Method 3: semantic-release\n\n```json\n// .releaserc.json\n{\n  \"branches\": [\"main\", {\"name\": \"beta\", \"prerelease\": true}],\n  \"plugins\": [\n    \"@semantic-release/commit-analyzer\",\n    \"@semantic-release/release-notes-generator\",\n    [\"@semantic-release/changelog\", {\"changelogFile\": \"CHANGELOG.md\"}],\n    [\"@semantic-release/npm\", {\"npmPublish\": true}],\n    [\"@semantic-release/git\", {\n      \"assets\": [\"CHANGELOG.md\", \"package.json\"],\n      \"message\": \"chore(release): ${nextRelease.version}\\n\\n${nextRelease.notes}\"\n    }],\n    \"@semantic-release/github\"\n  ]\n}\n```\n\n### Method 4: GitHub Actions Integration\n\n```yaml\nname: Release\non:\n  push:\n    branches: [main]\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          persist-credentials: false\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - run: npm ci\n      - run: npx semantic-release\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n```\n\n### Method 5: git-cliff (Rust-based)\n\n```toml\n# cliff.toml\n[changelog]\nheader = \"# Changelog\\n\\n\"\nbody = \"\"\"\n## [{{ version }}] - {{ timestamp | date(format=\"%Y-%m-%d\") }}\n{% for group, commits in commits | group_by(attribute=\"group\") %}\n### {{ group | upper_first }}\n{% for commit in commits %}\n- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end=\"\") }})\n{%- endfor %}\n{% endfor %}\n\"\"\"\ntrim = true\n\n[git]\nconventional_commits = true\nfilter_unconventional = true\ncommit_parsers = [\n  { message = \"^feat\", group = \"Features\" },\n  { message = \"^fix\", group = \"Bug Fixes\" },\n  { message = \"^perf\", group = \"Performance\" },\n  { message = \"^doc\", group = \"Documentation\" },\n  { message = \"^refactor\", group = \"Refactoring\" },\n]\n```\n\n```bash\ngit-cliff -o CHANGELOG.md\ngit-cliff --latest -o LATEST_CHANGES.md\ngit-cliff --unreleased --tag v1.0.0\n```\n\n### Method 6: commitizen (Python)\n\n```toml\n# pyproject.toml\n[tool.commitizen]\nname = \"cz_conventional_commits\"\nversion = \"1.0.0\"\ntag_format = \"v$version\"\nversion_files = [\n  \"pyproject.toml:version\",\n  \"src/my_package/__init__.py:__version__\",\n]\nchangelog_file = \"CHANGELOG.md\"\nupdate_changelog_on_bump = true\n```\n\n```bash\ncz bump\ncz changelog\ncz bump --changelog --yes\n```\n\n## Release Notes Template\n\n```markdown\n# Release v2.1.0\n\n**Release Date:** 2024-01-15\n**Release Manager:** @alice\n\n## Highlights\n\nThis release introduces OAuth2 support and significant checkout performance improvements.\n\n## What's New\n\n### Features\n- **OAuth2 support** — Google login now available\n- **Dark mode** — Toggle in user settings\n\n### Bug Fixes\n- Fixed race condition in payment processing (#123)\n- Resolved memory leak in websocket handler\n\n### Performance\n- Checkout flow is 40% faster\n- Reduced bundle size by 15%\n\n## Breaking Changes\nNone in this release.\n\n## Upgrade Guide\nNo special steps required.\n\n## Dependencies Updated\n\n| Package | From | To | Reason |\n|---------|------|----|--------|\n| react | 18.2.0 | 18.3.0 | Performance |\n| lodash | 4.17.20 | 4.17.21 | Security patch |\n```\n\n## Commit Message Examples\n\n```bash\n# Feature with scope\nfeat(auth): add OAuth2 support for Google login\n\n# Bug fix with issue reference\nfix(checkout): resolve race condition in payment processing\nCloses #123\n\n# Breaking change\nfeat(api)!: change user endpoint response format\nBREAKING CHANGE: The user endpoint now returns `userId` instead of `id`.\n\n# Multiple paragraphs\nfix(database): handle connection timeouts gracefully\nPreviously, connection timeouts would cause the entire request to fail\nwithout retry. This change implements exponential backoff with up to\n3 retries before failing.\nFixes #456\n```\n\n## Best Practices\n\n### Do's\n- **Follow Conventional Commits** — Enables automation\n- **Write clear messages** — Future you will thank you\n- **Reference issues** — Link commits to tickets\n- **Use scopes consistently** — Define team conventions\n- **Automate releases** — Reduce manual errors\n\n### Don'ts\n- **Don't mix changes** — One logical change per commit\n- **Don't skip validation** — Use commitlint\n- **Don't manual edit** — Generated changelogs only\n- **Don't forget breaking changes** — Mark with `!` or footer\n- **Don't ignore CI** — Validate commits in pipeline"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Changelog Automation
+
+
+    Automate changelog generation from Git commit history using Conventional Commits. A good changelog communicates what changed, why, and what users need to do. Automation ensures every release has accurate, complete documentation.
+
+
+    ## Core Concepts
+
+
+    **Keep a Changelog Format**: Sections for Added, Changed, Fixed, Deprecated, Security. Unreleased section at top.
+
+
+    **Conventional Commits**: `type(scope): description`. Types: `feat` (Added, MINOR bump), `fix` (Fixed, PATCH bump), `feat!`/`BREAKING CHANGE:` (MAJOR bump), `perf` (Performance), `docs` (Documentation, no bump), `chore`/`refactor`/`test`/`ci` (not in changelog).
+
+
+    **Semantic Versioning**: MAJOR.MINOR.PATCH — breaking.feature.fix.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Setting up automated changelog generation
+
+    - Implementing Conventional Commits in a project
+
+    - Configuring semantic versioning automation
+
+    - Choosing between changelog tools
+
+    - Creating release templates and formats
+
+    - Integrating changelog generation into CI/CD'
+- sequence: 3
+  fragment_type: execution
+  content: '## Method 1: conventional-changelog (Node.js)
+
+
+    Run `npx conventional-changelog -p angular -i CHANGELOG.md -s`. Add as `package.json` script. The `-s` flag writes in-place.
+
+
+    ## Method 2: standard-version
+
+
+    Run `npx standard-version` to bump version, update CHANGELOG, and create git tag. Configure section mapping in `.versionrc.json` with `types` array mapping commit types to changelog sections. Hidden types are excluded.
+
+
+    ## Method 3: semantic-release
+
+
+    Fully automated: analyzes commits, determines version, generates notes, publishes. Configure in `.releaserc.json` with plugin pipeline: commit-analyzer → release-notes-generator → changelog → npm → git → github. Supports prerelease branches.
+
+
+    ## Method 4: GitHub Actions
+
+
+    Trigger on push to main. Checkout with `fetch-depth: 0` for full history. Run `npx semantic-release` with `GITHUB_TOKEN` and `NPM_TOKEN`.
+
+
+    ## Method 5: git-cliff (Rust-based)
+
+
+    Configure in `cliff.toml` with Tera templates for changelog body. Use `commit_parsers` to map commit message patterns to groups. Run `git-cliff -o CHANGELOG.md` or `--latest` for most recent tag only.
+
+
+    ## Method 6: commitizen (Python)
+
+
+    Configure in `pyproject.toml` under `[tool.commitizen]`. Specify `version_files` for files to update. Run `cz bump --changelog --yes` for automated bump + changelog.'
+- sequence: 4
+  fragment_type: example
+  content: "## semantic-release Configuration Example\n\n```json\n{\n  \"branches\": [\"main\", {\"name\": \"beta\", \"prerelease\": true}],\n  \"plugins\": [\n    \"@semantic-release/commit-analyzer\",\n    \"@semantic-release/release-notes-generator\",\n    [\"@semantic-release/changelog\", {\"changelogFile\": \"CHANGELOG.md\"}],\n    [\"@semantic-release/npm\", {\"npmPublish\": true}],\n    [\"@semantic-release/git\", {\n      \"assets\": [\"CHANGELOG.md\", \"package.json\"],\n      \"message\": \"chore(release): ${nextRelease.version}\\n\\n${nextRelease.notes}\"\n    }],\n    \"@semantic-release/github\"\n  ]\n}\n```\n\n## git-cliff Configuration Example\n\n```toml\n[changelog]\nheader = \"# Changelog\\n\\n\"\nbody = \"\"\"\n## [{{ version }}] - {{ timestamp | date(format=\"%Y-%m-%d\") }}\n{% for group, commits in commits | group_by(attribute=\"group\") %}\n### {{ group | upper_first }}\n{% for commit in commits %}\n- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end=\"\") }})\n{%- endfor %}\n{% endfor %}\n\"\"\"\n[git]\nconventional_commits = true\ncommit_parsers = [\n  { message = \"^feat\", group = \"Features\" },\n  { message = \"^fix\", group = \"Bug Fixes\" },\n  { message = \"^perf\", group = \"Performance\" },\n]\n```"
+- sequence: 5
+  fragment_type: example
+  content: '## Commit Message Examples
+
+
+    ```bash
+
+    # Feature with scope
+
+    feat(auth): add OAuth2 support for Google login
+
+
+    # Bug fix with issue reference
+
+    fix(checkout): resolve race condition in payment processing
+
+    Closes #123
+
+
+    # Breaking change
+
+    feat(api)!: change user endpoint response format
+
+    BREAKING CHANGE: The user endpoint now returns `userId` instead of `id`.
+
+
+    # Multi-paragraph
+
+    fix(database): handle connection timeouts gracefully
+
+    Previously, timeouts caused full request failure without retry.
+
+    This implements exponential backoff with up to 3 retries.
+
+    Fixes #456
+
+    ```
+
+
+    ## commitizen Configuration (Python)
+
+
+    ```toml
+
+    [tool.commitizen]
+
+    name = "cz_conventional_commits"
+
+    version = "1.0.0"
+
+    tag_format = "v$version"
+
+    version_files = ["pyproject.toml:version", "src/my_package/__init__.py:__version__"]
+
+    changelog_file = "CHANGELOG.md"
+
+    update_changelog_on_bump = true
+
+    ```'
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    ### Do''s
+
+    - **Follow Conventional Commits** — Enables automation
+
+    - **Write clear messages** — Future you will thank you
+
+    - **Reference issues** — Link commits to tickets
+
+    - **Use scopes consistently** — Define team conventions
+
+    - **Automate releases** — Reduce manual errors
+
+
+    ### Don''ts
+
+    - **Don''t mix changes** — One logical change per commit
+
+    - **Don''t skip validation** — Use commitlint
+
+    - **Don''t manual edit** — Generated changelogs only
+
+    - **Don''t forget breaking changes** — Mark with `!` or footer
+
+    - **Don''t ignore CI** — Validate commits in pipeline'

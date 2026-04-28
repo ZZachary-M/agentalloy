@@ -1,0 +1,40 @@
+skill_type: domain
+skill_id: vue-adaptable-composables
+canonical_name: Vue Adaptable Composables
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- composables
+- reactivity
+- mayberef
+always_apply: false
+phase_scope: null
+category_scope: null
+author: github-copilot
+change_summary: initial authoring draft from SKILL.md
+raw_prose: "---\nname: create-adaptable-composable\ndescription: Create a library-grade Vue composable that accepts maybe-reactive inputs (MaybeRef / MaybeRefOrGetter) so callers can pass a plain value, ref, or getter. Normalize inputs with toValue()/toRef() inside reactive effects (watch/watchEffect) to keep behavior predictable and reactive. Use this skill when user asks for creating adaptable or reusable composables.\nlicense: MIT\nmetadata:\n  author: github.com/vuejs-ai\n  version: \"17.0.0\"\ncompatibility: Requires Vue 3 (or above) or Nuxt 3 (or above) project\n---\n\n# Create Adaptable Composable\n\nAdaptable composables are reusable functions that can accept both reactive and non-reactive inputs. This allows developers to use the composable in a variety of contexts without worrying about the reactivity of the inputs.\n\nSteps to design an adaptable composable in Vue.js:\n1. Confirm the composable's purpose and API design and expected inputs/outputs.\n2. Identify inputs params that should be reactive (MaybeRef / MaybeRefOrGetter).\n3. Use `toValue()` or `toRef()` to normalize inputs inside reactive effects.\n4. Implement the core logic of the composable using Vue's reactivity APIs.\n\n## Core Type Concepts\n\n### Type Utilities\n\n```ts\n/**\n * value or writable ref (value/ref/shallowRef/writable computed)\n */\nexport type MaybeRef<T = any> = T | Ref<T> | ShallowRef<T> | WritableComputedRef<T>;\n\n/**\n * MaybeRef<T> + ComputedRef<T> + () => T\n */\nexport type MaybeRefOrGetter<T = any> = MaybeRef<T> | ComputedRef<T> | (() => T);\n```\n\n### Policy and Rules\n\n- Read-only, computed-friendly input: use `MaybeRefOrGetter`\n- Needs to be writable / two-way input: use `MaybeRef`\n- Parameter might be a function value (callback/predicate/comparator): do not use `MaybeRefOrGetter`, or you may accidentally invoke it as a getter.\n- DOM/Element targets: if you want computed/derived targets, use `MaybeRefOrGetter`.\n\nWhen `MaybeRefOrGetter` or `MaybeRef` is used: \n- resolve reactive value using `toRef()` (e.g. watcher source)\n- resolve non-reactive value using `toValue()`\n\n### Examples\n\nAdaptable `useDocumentTitle` Composable: read-only title parameter\n\n```ts\nimport { watch, toRef } from 'vue'\nimport type { MaybeRefOrGetter } from 'vue'\n\nexport function useDocumentTitle(title: MaybeRefOrGetter<string>) {\n  watch(toRef(title), (t) => {\n    document.title = t\n  }, { immediate: true })\n}\n```\n\nAdaptable `useCounter` Composable: two-way writable count parameter\n\n```ts\nimport { watch, toRef } from 'vue'\nimport type { MaybeRef } from 'vue'\n\nfunction useCounter(count: MaybeRef<number>) {\n  const countRef = toRef(count)\n  function add() {\n    countRef.value++\n  }\n  return { add }\n}\n```"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Create Adaptable Composable
+
+
+    Adaptable composables are reusable functions that can accept both reactive and non-reactive inputs. This allows developers to use the composable in a variety of contexts without worrying about the reactivity of the inputs.
+
+
+    Steps to design an adaptable composable in Vue.js:
+
+    1. Confirm the composable''s purpose and API design and expected inputs/outputs.
+
+    2. Identify inputs params that should be reactive (MaybeRef / MaybeRefOrGetter).
+
+    3. Use `toValue()` or `toRef()` to normalize inputs inside reactive effects.
+
+    4. Implement the core logic of the composable using Vue''s reactivity APIs.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Core Type Concepts\n\n### Type Utilities\n\n```ts\n/**\n * value or writable ref (value/ref/shallowRef/writable computed)\n */\nexport type MaybeRef<T = any> = T | Ref<T> | ShallowRef<T> | WritableComputedRef<T>;\n\n/**\n * MaybeRef<T> + ComputedRef<T> + () => T\n */\nexport type MaybeRefOrGetter<T = any> = MaybeRef<T> | ComputedRef<T> | (() => T);\n```\n\n### Policy and Rules\n\n- Read-only, computed-friendly input: use `MaybeRefOrGetter`\n- Needs to be writable / two-way input: use `MaybeRef`\n- Parameter might be a function value (callback/predicate/comparator): do not use `MaybeRefOrGetter`, or you may accidentally invoke it as a getter.\n- DOM/Element targets: if you want computed/derived targets, use `MaybeRefOrGetter`.\n\nWhen `MaybeRefOrGetter` or `MaybeRef` is used: \n- resolve reactive value using `toRef()` (e.g. watcher source)\n- resolve non-reactive value using `toValue()`"
+- sequence: 3
+  fragment_type: example
+  content: "### Examples\n\nAdaptable `useDocumentTitle` Composable: read-only title parameter\n\n```ts\nimport { watch, toRef } from 'vue'\nimport type { MaybeRefOrGetter } from 'vue'\n\nexport function useDocumentTitle(title: MaybeRefOrGetter<string>) {\n  watch(toRef(title), (t) => {\n    document.title = t\n  }, { immediate: true })\n}\n```\n\nAdaptable `useCounter` Composable: two-way writable count parameter\n\n```ts\nimport { watch, toRef } from 'vue'\nimport type { MaybeRef } from 'vue'\n\nfunction useCounter(count: MaybeRef<number>) {\n  const countRef = toRef(count)\n  function add() {\n    countRef.value++\n  }\n  return { add }\n}\n```"

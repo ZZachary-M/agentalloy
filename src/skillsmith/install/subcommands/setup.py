@@ -32,6 +32,7 @@ _SETUP_STEPS = (
     ("recommend-models", "skillsmith.install.subcommands.recommend_models"),
     ("pull-models", "skillsmith.install.subcommands.pull_models"),
     ("seed-corpus", "skillsmith.install.subcommands.seed_corpus"),
+    ("install-packs", "skillsmith.install.subcommands.install_packs"),
     ("write-env", "skillsmith.install.subcommands.write_env"),
     ("enable-service", "skillsmith.install.subcommands.enable_service"),
 )
@@ -198,6 +199,13 @@ def _argv_for_step(step_name: str, parent_args: argparse.Namespace) -> list[str]
         # waiting for input that will never come.
         if not _INTERACTIVE:
             return [step_name, "--mode", "manual"]
+        return [step_name]
+    if step_name == "install-packs":
+        # In a non-TTY environment, install only always-on packs. The user
+        # can pass --packs to setup (future passthrough) or run install-packs
+        # directly with --packs <list>.
+        if not _INTERACTIVE:
+            return [step_name, "--non-interactive"]
         return [step_name]
     return [step_name]
 

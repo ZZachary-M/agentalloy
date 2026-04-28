@@ -1,0 +1,26 @@
+name: data-engineering
+version: 1.0.0
+description: Data engineering — Airflow, dbt, Spark, ML pipelines, data quality frameworks.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: airflow-dag-patterns
+  file: airflow-dag-patterns.yaml
+  fragment_count: 11
+- skill_id: data-quality-frameworks
+  file: data-quality-frameworks.yaml
+  fragment_count: 11
+- skill_id: dbt-transformation-patterns
+  file: dbt-transformation-patterns.yaml
+  fragment_count: 13
+- skill_id: ml-pipeline-workflow
+  file: ml-pipeline-workflow.yaml
+  fragment_count: 11
+- skill_id: spark-optimization
+  file: spark-optimization.yaml
+  fragment_count: 13

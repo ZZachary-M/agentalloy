@@ -1,0 +1,102 @@
+skill_type: domain
+skill_id: istio-traffic-management
+canonical_name: Istio Traffic Management
+category: ops
+skill_class: domain
+domain_tags:
+- istio
+- service-mesh
+- traffic-routing
+- canary-deployment
+- circuit-breaker
+- load-balancing
+- fault-injection
+- resilience
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Istio Traffic Management\n\nComprehensive guide to Istio traffic management for production service mesh deployments.\n\n## When to Use This Skill\n\n- Configuring service-to-service routing\n- Implementing canary or blue-green deployments\n- Setting up circuit breakers and retries\n- Load balancing configuration\n- Traffic mirroring for testing\n- Fault injection for chaos engineering\n\n## Core Concepts\n\n### 1. Traffic Management Resources\n\n| Resource            | Purpose                       | Scope         |\n| ------------------- | ----------------------------- | ------------- |\n| **VirtualService**  | Route traffic to destinations | Host-based    |\n| **DestinationRule** | Define policies after routing | Service-based |\n| **Gateway**         | Configure ingress/egress      | Cluster edge  |\n| **ServiceEntry**    | Add external services         | Mesh-wide     |\n\n### 2. Traffic Flow\n\n```\nClient → Gateway → VirtualService → DestinationRule → Service\n                   (routing)        (policies)        (pods)\n```\n\n## Templates\n\n### Template 1: Basic Routing\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: reviews-route\n  namespace: bookinfo\nspec:\n  hosts:\n    - reviews\n  http:\n    - match:\n        - headers:\n            end-user:\n              exact: jason\n      route:\n        - destination:\n            host: reviews\n            subset: v2\n    - route:\n        - destination:\n            host: reviews\n            subset: v1\n---\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: reviews-destination\n  namespace: bookinfo\nspec:\n  host: reviews\n  subsets:\n    - name: v1\n      labels:\n        version: v1\n    - name: v2\n      labels:\n        version: v2\n    - name: v3\n      labels:\n        version: v3\n```\n\n### Template 2: Canary Deployment\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: my-service-canary\nspec:\n  hosts:\n    - my-service\n  http:\n    - route:\n        - destination:\n            host: my-service\n            subset: stable\n          weight: 90\n        - destination:\n            host: my-service\n            subset: canary\n          weight: 10\n---\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: my-service-dr\nspec:\n  host: my-service\n  trafficPolicy:\n    connectionPool:\n      tcp:\n        maxConnections: 100\n      http:\n        h2UpgradePolicy: UPGRADE\n        http1MaxPendingRequests: 100\n        http2MaxRequests: 1000\n  subsets:\n    - name: stable\n      labels:\n        version: stable\n    - name: canary\n      labels:\n        version: canary\n```\n\n### Template 3: Circuit Breaker\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: circuit-breaker\nspec:\n  host: my-service\n  trafficPolicy:\n    connectionPool:\n      tcp:\n        maxConnections: 100\n      http:\n        http1MaxPendingRequests: 100\n        http2MaxRequests: 1000\n        maxRequestsPerConnection: 10\n        maxRetries: 3\n    outlierDetection:\n      consecutive5xxErrors: 5\n      interval: 30s\n      baseEjectionTime: 30s\n      maxEjectionPercent: 50\n      minHealthPercent: 30\n```\n\n### Template 4: Retry and Timeout\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: ratings-retry\nspec:\n  hosts:\n    - ratings\n  http:\n    - route:\n        - destination:\n            host: ratings\n      timeout: 10s\n      retries:\n        attempts: 3\n        perTryTimeout: 3s\n        retryOn: connect-failure,refused-stream,unavailable,cancelled,retriable-4xx,503\n        retryRemoteLocalities: true\n```\n\n### Template 5: Traffic Mirroring\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: mirror-traffic\nspec:\n  hosts:\n    - my-service\n  http:\n    - route:\n        - destination:\n            host: my-service\n            subset: v1\n      mirror:\n        host: my-service\n        subset: v2\n      mirrorPercentage:\n        value: 100.0\n```\n\n### Template 6: Fault Injection\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: fault-injection\nspec:\n  hosts:\n    - ratings\n  http:\n    - fault:\n        delay:\n          percentage:\n            value: 10\n          fixedDelay: 5s\n        abort:\n          percentage:\n            value: 5\n          httpStatus: 503\n      route:\n        - destination:\n            host: ratings\n```\n\n### Template 7: Ingress Gateway\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: Gateway\nmetadata:\n  name: my-gateway\nspec:\n  selector:\n    istio: ingressgateway\n  servers:\n    - port:\n        number: 443\n        name: https\n        protocol: HTTPS\n      tls:\n        mode: SIMPLE\n        credentialName: my-tls-secret\n      hosts:\n        - \"*.example.com\"\n---\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: my-vs\nspec:\n  hosts:\n    - \"api.example.com\"\n  gateways:\n    - my-gateway\n  http:\n    - match:\n        - uri:\n            prefix: /api/v1\n      route:\n        - destination:\n            host: api-service\n            port:\n              number: 8080\n```\n\n## Load Balancing Strategies\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: load-balancing\nspec:\n  host: my-service\n  trafficPolicy:\n    loadBalancer:\n      simple: ROUND_ROBIN # or LEAST_CONN, RANDOM, PASSTHROUGH\n---\n# Consistent hashing for sticky sessions\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: sticky-sessions\nspec:\n  host: my-service\n  trafficPolicy:\n    loadBalancer:\n      consistentHash:\n        httpHeaderName: x-user-id\n        # or: httpCookie, useSourceIp, httpQueryParameterName\n```\n\n## Best Practices\n\n### Do's\n\n- **Start simple** - Add complexity incrementally\n- **Use subsets** - Version your services clearly\n- **Set timeouts** - Always configure reasonable timeouts\n- **Enable retries** - But with backoff and limits\n- **Monitor** - Use Kiali and Jaeger for visibility\n\n### Don'ts\n\n- **Don't over-retry** - Can cause cascading failures\n- **Don't ignore outlier detection** - Enable circuit breakers\n- **Don't mirror to production** - Mirror to test environments\n- **Don't skip canary** - Test with small traffic percentage first\n\n## Debugging Commands\n\n```bash\n# Check VirtualService configuration\nistioctl analyze\n\n# View effective routes\nistioctl proxy-config routes deploy/my-app -o json\n\n# Check endpoint discovery\nistioctl proxy-config endpoints deploy/my-app\n\n# Debug traffic\nistioctl proxy-config log deploy/my-app --level debug\n```"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Configuring service-to-service routing
+
+    - Implementing canary or blue-green deployments
+
+    - Setting up circuit breakers and retries
+
+    - Load balancing configuration
+
+    - Traffic mirroring for testing
+
+    - Fault injection for chaos engineering'
+- sequence: 2
+  fragment_type: rationale
+  content: "## Core Concepts\n\n### 1. Traffic Management Resources\n\n| Resource            | Purpose                       | Scope         |\n| ------------------- | ----------------------------- | ------------- |\n| **VirtualService**  | Route traffic to destinations | Host-based    |\n| **DestinationRule** | Define policies after routing | Service-based |\n| **Gateway**         | Configure ingress/egress      | Cluster edge  |\n| **ServiceEntry**    | Add external services         | Mesh-wide     |\n\n### 2. Traffic Flow\n\n```\nClient → Gateway → VirtualService → DestinationRule → Service\n                   (routing)        (policies)        (pods)\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Templates\n\n### Template 1: Basic Routing\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: reviews-route\n  namespace: bookinfo\nspec:\n  hosts:\n    - reviews\n  http:\n    - match:\n        - headers:\n            end-user:\n              exact: jason\n      route:\n        - destination:\n            host: reviews\n            subset: v2\n    - route:\n        - destination:\n            host: reviews\n            subset: v1\n---\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: reviews-destination\n  namespace: bookinfo\nspec:\n  host: reviews\n  subsets:\n    - name: v1\n      labels:\n        version: v1\n    - name: v2\n      labels:\n        version: v2\n    - name: v3\n      labels:\n        version: v3\n```\n\n### Template 2: Canary Deployment\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: my-service-canary\nspec:\n  hosts:\n    - my-service\n  http:\n    - route:\n        - destination:\n            host: my-service\n            subset: stable\n          weight: 90\n        - destination:\n            host: my-service\n            subset: canary\n          weight: 10\n---\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: my-service-dr\nspec:\n  host: my-service\n  trafficPolicy:\n    connectionPool:\n      tcp:\n        maxConnections: 100\n      http:\n        h2UpgradePolicy: UPGRADE\n        http1MaxPendingRequests: 100\n        http2MaxRequests: 1000\n  subsets:\n    - name: stable\n      labels:\n        version: stable\n    - name: canary\n      labels:\n        version: canary\n```\n\n### Template 3: Circuit Breaker\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: circuit-breaker\nspec:\n  host: my-service\n  trafficPolicy:\n    connectionPool:\n      tcp:\n        maxConnections: 100\n      http:\n        http1MaxPendingRequests: 100\n        http2MaxRequests: 1000\n        maxRequestsPerConnection: 10\n        maxRetries: 3\n    outlierDetection:\n      consecutive5xxErrors: 5\n      interval: 30s\n      baseEjectionTime: 30s\n      maxEjectionPercent: 50\n      minHealthPercent: 30\n```\n\n### Template 4: Retry and Timeout\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: ratings-retry\nspec:\n  hosts:\n    - ratings\n  http:\n    - route:\n        - destination:\n            host: ratings\n      timeout: 10s\n      retries:\n        attempts: 3\n        perTryTimeout: 3s\n        retryOn: connect-failure,refused-stream,unavailable,cancelled,retriable-4xx,503\n        retryRemoteLocalities: true\n```\n\n### Template 5: Traffic Mirroring\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: mirror-traffic\nspec:\n  hosts:\n    - my-service\n  http:\n    - route:\n        - destination:\n            host: my-service\n            subset: v1\n      mirror:\n        host: my-service\n        subset: v2\n      mirrorPercentage:\n        value: 100.0\n```\n\n### Template 6: Fault Injection\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: fault-injection\nspec:\n  hosts:\n    - ratings\n  http:\n    - fault:\n        delay:\n          percentage:\n            value: 10\n          fixedDelay: 5s\n        abort:\n          percentage:\n            value: 5\n          httpStatus: 503\n      route:\n        - destination:\n            host: ratings\n```\n\n### Template 7: Ingress Gateway\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: Gateway\nmetadata:\n  name: my-gateway\nspec:\n  selector:\n    istio: ingressgateway\n  servers:\n    - port:\n        number: 443\n        name: https\n        protocol: HTTPS\n      tls:\n        mode: SIMPLE\n        credentialName: my-tls-secret\n      hosts:\n        - \"*.example.com\"\n---\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: my-vs\nspec:\n  hosts:\n    - \"api.example.com\"\n  gateways:\n    - my-gateway\n  http:\n    - match:\n        - uri:\n            prefix: /api/v1\n      route:\n        - destination:\n            host: api-service\n            port:\n              number: 8080\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Load Balancing Strategies\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: load-balancing\nspec:\n  host: my-service\n  trafficPolicy:\n    loadBalancer:\n      simple: ROUND_ROBIN # or LEAST_CONN, RANDOM, PASSTHROUGH\n---\n# Consistent hashing for sticky sessions\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: sticky-sessions\nspec:\n  host: my-service\n  trafficPolicy:\n    loadBalancer:\n      consistentHash:\n        httpHeaderName: x-user-id\n        # or: httpCookie, useSourceIp, httpQueryParameterName\n```"
+- sequence: 5
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    ### Do''s
+
+
+    - **Start simple** - Add complexity incrementally
+
+    - **Use subsets** - Version your services clearly
+
+    - **Set timeouts** - Always configure reasonable timeouts
+
+    - **Enable retries** - But with backoff and limits
+
+    - **Monitor** - Use Kiali and Jaeger for visibility
+
+
+    ### Don''ts
+
+
+    - **Don''t over-retry** - Can cause cascading failures
+
+    - **Don''t ignore outlier detection** - Enable circuit breakers
+
+    - **Don''t mirror to production** - Mirror to test environments
+
+    - **Don''t skip canary** - Test with small traffic percentage first'
+- sequence: 6
+  fragment_type: verification
+  content: '## Debugging Commands
+
+
+    ```bash
+
+    # Check VirtualService configuration
+
+    istioctl analyze
+
+
+    # View effective routes
+
+    istioctl proxy-config routes deploy/my-app -o json
+
+
+    # Check endpoint discovery
+
+    istioctl proxy-config endpoints deploy/my-app
+
+
+    # Debug traffic
+
+    istioctl proxy-config log deploy/my-app --level debug
+
+    ```'

@@ -1,0 +1,280 @@
+skill_type: domain
+skill_id: api-design-principles
+canonical_name: API Design Principles
+category: engineering
+skill_class: domain
+domain_tags:
+- rest-api
+- graphql
+- http-semantics
+- pagination
+- versioning
+- dataloader
+- n-plus-one
+- error-handling
+- relay-pagination
+- idempotency
+- hateoas
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: revised after adversarial QA — split seq 4 (pagination example vs status/error execution), reclassified seq 9 best-practices as execution, added HATEOAS example, added GraphQL resolver example, expanded seq 1 rationale, softened versioning claim, added missing domain_tags, emphasized PUT vs PATCH
+raw_prose: '# API Design Principles
+
+
+  REST and GraphQL design patterns: resource modeling, HTTP semantics, pagination, versioning, error handling, HATEOAS, and N+1 prevention with DataLoader.
+
+
+  ## When to Use
+
+
+  - Designing new REST or GraphQL APIs
+
+  - Refactoring existing APIs for better usability
+
+  - Establishing API design standards
+
+  - Reviewing API specifications before implementation
+
+  - Migrating between paradigms (REST to GraphQL)
+
+  - Optimizing for specific use cases (mobile, third-party integrations)
+
+
+  ## REST: Resource-Oriented Architecture
+
+
+  Resources are nouns (users, orders, products), not verbs. URLs represent hierarchies. HTTP methods carry semantics. Resource-orientation beats RPC-style endpoints because it gives you a small, predictable vocabulary (the HTTP methods) that maps directly to caching, idempotency, and authorization rules baked into HTTP infrastructure (CDNs, proxies, load balancers).
+
+
+  HTTP method semantics:
+
+  - `GET` — retrieve, idempotent, safe (cacheable)
+
+  - `POST` — create new resource (not idempotent)
+
+  - `PUT` — replace entire resource, idempotent
+
+  - `PATCH` — partial update (not necessarily idempotent)
+
+  - `DELETE` — remove, idempotent
+
+
+  PUT vs PATCH is the most common confusion: PUT replaces the whole resource (omitted fields become null/default); PATCH applies a delta. If you only want to change one field, use PATCH.
+
+
+  ## Pagination, Filtering, Status Codes, Errors
+
+
+  Always paginate large collections. Use `page` + `page_size` (cap at 100) or cursor-based for infinite scroll. Return total count, current page, has_next/has_prev.
+
+
+  Status codes: 2xx success, 4xx client errors, 5xx server. Common: 200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 422 Unprocessable Entity.
+
+
+  Standardize error response shape: `error`, `message`, `details`, `timestamp`, `path`.
+
+
+  ## HATEOAS
+
+
+  Embed `_links` (self, related collections, update/delete with method) so clients discover transitions instead of hardcoding URLs.
+
+
+  ## Versioning Strategies
+
+
+  - URL: `/api/v1/users` — most common, easy to route
+
+  - Header: `Accept: application/vnd.api+json; version=1` — clean URLs but harder to browse
+
+  - Query param: `/api/users?version=1` — discouraged; many shared caches and tooling treat differently-versioned URLs identically without explicit `Vary` configuration
+
+
+  Plan for breaking changes from day one. Versioning debt compounds: every uncoordinated breaking change forces every consumer to refactor on your schedule.
+
+
+  ## GraphQL: Schema-First
+
+
+  Types define domain. Queries read. Mutations modify. Subscriptions stream.
+
+
+  Use Relay-style cursor pagination (`Connection` / `Edge` / `PageInfo`). Use enums for type safety. Custom scalars for `DateTime`, `Money`. Mutations return payload types with both result and structured errors.
+
+
+  ## N+1 Prevention with DataLoader
+
+
+  GraphQL''s flexible queries cause N+1 problems. Use DataLoader to batch and cache. Each loader has a `batch_load_fn` that takes IDs, returns results in input order. Initialize per request.
+
+
+  ## Best Practices
+
+
+  REST: consistent plural nouns (`/users`), stateless requests, correct HTTP status codes, version from day one, paginate everything, rate limiting, OpenAPI docs.
+
+
+  GraphQL: schema first, DataLoaders everywhere, structured errors in mutation payloads, cursor-based pagination, `@deprecated` for migration, monitor query complexity.
+
+
+  ## Common Pitfalls
+
+
+  - Action-oriented endpoints (`/createUser`) instead of resource-oriented
+
+  - Missing pagination, unbounded responses
+
+  - Inconsistent error formats across endpoints
+
+  - No rate limiting, abuse vector
+
+  - API mirrors database schema, tight coupling
+
+  - GraphQL N+1 from missing DataLoaders
+
+  - Breaking changes without versioning or deprecation'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# API Design Principles
+
+
+    Build intuitive, scalable, maintainable APIs. The core question every API choice answers: how do clients discover, invoke, and evolve with this surface without reading your source code?
+
+
+    **Why resource-orientation beats RPC.** RPC endpoints (`/createUser`, `/getUserById`) force clients to learn a custom verb vocabulary per service. Resource-oriented design (`POST /users`, `GET /users/{id}`) reuses HTTP''s existing vocabulary — five methods, well-defined semantics, decades of tooling. CDNs, proxies, and load balancers already know that GET is cacheable and PUT/DELETE are idempotent; RPC endpoints opt out of all of that.
+
+
+    **Why HTTP semantics matter.** Idempotency is the property that lets clients safely retry on network failure. Safety (GET, HEAD) is what lets intermediaries cache responses without coordination. Status codes are how operators page on failure modes without parsing bodies. Returning `200 OK` with `{"success": false}` breaks every layer above your handler.
+
+
+    **The cost of versioning debt.** APIs without a versioning strategy from day one accumulate de facto contracts: every field every consumer happens to read becomes load-bearing. The first time you need to remove or rename one, you discover the cost — coordinating breaking changes across N consumers you don''t control. Version from the first commit, even if v1 is the only version that ever ships.
+
+
+    **Core principles:** resource-oriented architecture, consistent HTTP semantics, structured errors, pagination, versioning from day one, hypermedia where it pays for itself, DataLoader for any GraphQL graph deeper than two hops.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Designing new REST or GraphQL APIs
+
+    - Refactoring existing APIs for better usability
+
+    - Establishing API design standards for the team
+
+    - Reviewing API specifications before implementation
+
+    - Migrating between paradigms (REST to GraphQL or back)
+
+    - Optimizing for specific use cases (mobile, third-party integrations)
+
+    - Establishing error-shape, pagination, and versioning conventions before the first endpoint ships'
+- sequence: 3
+  fragment_type: execution
+  content: "## REST: Resource-Oriented Architecture\n\nResources are nouns. URLs represent hierarchies. HTTP methods carry semantics.\n\n**HTTP method semantics:**\n- `GET` — retrieve, idempotent, safe (cacheable)\n- `POST` — create new resource (not idempotent)\n- `PUT` — replace entire resource, idempotent\n- `PATCH` — partial update (not necessarily idempotent)\n- `DELETE` — remove, idempotent\n\n**PUT vs PATCH is the single most common source of bugs.** PUT replaces the whole resource — fields you omit become null or default. PATCH applies a delta — omitted fields are untouched. If you want to change a single attribute, use PATCH. If you want to overwrite the resource wholesale (e.g., a config blob), use PUT.\n\n```\nGood — resource-oriented:\n  GET    /api/users\n  POST   /api/users\n  GET    /api/users/{id}\n  PUT    /api/users/{id}        # replace\n  PATCH  /api/users/{id}        # partial update\n  DELETE /api/users/{id}\n  GET    /api/users/{id}/orders # nested\n\nBad — action-oriented:\n  POST /api/createUser\n  POST /api/getUserById\n  POST /api/deleteUser\n```"
+- sequence: 4
+  fragment_type: example
+  content: "## Pagination — Pydantic + FastAPI\n\nAlways paginate large collections. Cap `page_size` (typical max 100) so a hostile or buggy client can't request a million rows.\n\n```python\nfrom typing import List, Optional\nfrom pydantic import BaseModel, Field\nfrom fastapi import FastAPI, Query\n\nclass PaginatedResponse(BaseModel):\n    items: List[dict]\n    total: int\n    page: int\n    page_size: int\n    pages: int\n\n    @property\n    def has_next(self) -> bool:\n        return self.page < self.pages\n\n    @property\n    def has_prev(self) -> bool:\n        return self.page > 1\n\napp = FastAPI()\n\n@app.get(\"/api/users\", response_model=PaginatedResponse)\nasync def list_users(\n    page: int = Query(1, ge=1),\n    page_size: int = Query(20, ge=1, le=100),\n    status: Optional[str] = Query(None),\n    search: Optional[str] = Query(None),\n):\n    query = build_query(status=status, search=search)\n    total = await count_users(query)\n    offset = (page - 1) * page_size\n    users = await fetch_users(query, limit=page_size, offset=offset)\n    return PaginatedResponse(\n        items=users,\n        total=total,\n        page=page,\n        page_size=page_size,\n        pages=(total + page_size - 1) // page_size,\n    )\n```\n\nFor infinite-scroll or large feeds, prefer cursor-based pagination — it avoids skip/offset drift when the underlying collection mutates between requests."
+- sequence: 5
+  fragment_type: execution
+  content: "## Status Codes & Standard Error Shape\n\nUse HTTP status codes correctly. Returning `200 OK` with `{\"success\": false}` defeats every layer of HTTP infrastructure that distinguishes success from failure (logs, metrics, retries, alerting).\n\n**Status code reference:**\n- `200 OK` — successful read or update with body\n- `201 Created` — resource created (set `Location` header to the new resource)\n- `204 No Content` — success, no body (e.g., DELETE)\n- `400 Bad Request` — malformed request\n- `401 Unauthorized` — missing/invalid credentials\n- `403 Forbidden` — authenticated but not allowed\n- `404 Not Found` — resource does not exist\n- `409 Conflict` — request conflicts with current state (e.g., duplicate)\n- `422 Unprocessable Entity` — well-formed but semantically invalid (validation failure)\n- `5xx` — server errors (never blame the client for these)\n\n**Standard error shape — return this from every error path:**\n```json\n{\n  \"error\": \"NotFound\",\n  \"message\": \"User not found\",\n  \"details\": {\"id\": \"user_123\"},\n  \"timestamp\": \"2024-01-15T10:00:00Z\",\n  \"path\": \"/api/users/user_123\"\n}\n```\n\n`error` is a stable machine-readable code. `message` is human-readable. `details` carries structured context (validation errors, conflicting field, etc.). `timestamp` and `path` are illustrative — they help correlate client-side errors with server logs without forcing the client to track them itself.\n\nImplement once in middleware/exception handler so every endpoint emits the same shape; clients should never need per-endpoint error parsing."
+- sequence: 6
+  fragment_type: example
+  content: "## HATEOAS — Hypermedia Links\n\nEmbed navigable links in responses so clients discover transitions instead of hardcoding URLs. Useful when clients are written by third parties or evolve independently.\n\n```python\nfrom pydantic import BaseModel\n\nclass UserResponse(BaseModel):\n    id: str\n    name: str\n    email: str\n    _links: dict\n\n    @classmethod\n    def from_user(cls, user, base_url: str) -> \"UserResponse\":\n        return cls(\n            id=user.id,\n            name=user.name,\n            email=user.email,\n            _links={\n                \"self\":   {\"href\": f\"{base_url}/api/users/{user.id}\"},\n                \"orders\": {\"href\": f\"{base_url}/api/users/{user.id}/orders\"},\n                \"update\": {\n                    \"href\": f\"{base_url}/api/users/{user.id}\",\n                    \"method\": \"PATCH\",\n                },\n                \"delete\": {\n                    \"href\": f\"{base_url}/api/users/{user.id}\",\n                    \"method\": \"DELETE\",\n                },\n            },\n        )\n```\n\nEach link gives a relation name (`self`, `orders`, `update`, `delete`), an `href`, and optionally the HTTP `method`. Clients follow links rather than constructing URLs from string templates, so URL structure can evolve without breaking them. HATEOAS is optional — adopt it when client-server coupling is a real cost (public APIs, multi-team monorepos), skip it for internal first-party APIs where coordinated deploys are cheap."
+- sequence: 7
+  fragment_type: execution
+  content: '## Versioning
+
+
+    | Strategy    | Example                                          | Trade-off |
+
+    |-------------|--------------------------------------------------|-----------|
+
+    | URL         | `/api/v1/users`                                  | Most common, trivially routable, ugly URLs |
+
+    | Header      | `Accept: application/vnd.api+json; version=1`    | Clean URLs, browser-unfriendly, easy to forget |
+
+    | Query param | `/api/users?version=1`                           | Discouraged — caches require explicit `Vary` configuration to treat versions as distinct, and many tools/CDNs ignore query params for cache keys by default |
+
+
+    Plan for breaking changes from day one. Once an API is public, versioning is non-negotiable — you cannot retroactively introduce v1 without a coordinated migration. Pair versioning with a deprecation policy: mark old fields/endpoints `@deprecated` (GraphQL) or `Deprecation:` header (REST), publish a sunset date, and instrument usage so you know who''s still on the old version before you remove it.'
+- sequence: 8
+  fragment_type: example
+  content: "## GraphQL: Schema Design\n\n```graphql\ntype User {\n  id: ID!\n  email: String!\n  name: String!\n  createdAt: DateTime!\n  orders(first: Int = 20, after: String, status: OrderStatus): OrderConnection!\n  profile: UserProfile\n}\n\n# Relay-style cursor pagination\ntype OrderConnection {\n  edges: [OrderEdge!]!\n  pageInfo: PageInfo!\n  totalCount: Int!\n}\n\ntype OrderEdge {\n  node: Order!\n  cursor: String!\n}\n\ntype PageInfo {\n  hasNextPage: Boolean!\n  hasPreviousPage: Boolean!\n  startCursor: String\n  endCursor: String\n}\n\nenum OrderStatus { PENDING CONFIRMED SHIPPED DELIVERED CANCELLED }\n\nscalar DateTime\nscalar Money\n\ntype Query {\n  user(id: ID!): User\n  users(first: Int = 20, after: String, search: String): UserConnection!\n}\n\ntype Mutation {\n  createUser(input: CreateUserInput!): CreateUserPayload!\n}\n\ninput CreateUserInput {\n  email: String!\n  name: String!\n  password: String!\n}\n\ntype CreateUserPayload {\n  user: User\n  errors: [Error!]\n}\n\ntype Error {\n  field: String\n  message: String!\n}\n```\n\nMutations return payload types with both result and structured errors. Enums and custom scalars (`DateTime`, `Money`) carry semantics into the type system."
+- sequence: 9
+  fragment_type: example
+  content: "## GraphQL: Resolver Design\n\nResolvers stay thin: parse args, call domain services, shape the response. Pagination decodes/encodes cursors at the resolver boundary. Mutations catch validation errors and return them in the payload rather than throwing.\n\n```python\nfrom typing import Optional\nfrom ariadne import QueryType, MutationType\n\nquery = QueryType()\nmutation = MutationType()\n\n@query.field(\"users\")\nasync def resolve_users(\n    obj, info,\n    first: int = 20,\n    after: Optional[str] = None,\n    search: Optional[str] = None,\n) -> dict:\n    \"\"\"Paginated user list — Relay-style edges/pageInfo.\"\"\"\n    offset = decode_cursor(after) if after else 0\n\n    # Fetch one extra row to detect hasNextPage\n    users = await fetch_users(limit=first + 1, offset=offset, search=search)\n    has_next = len(users) > first\n    if has_next:\n        users = users[:first]\n\n    edges = [\n        {\"node\": u, \"cursor\": encode_cursor(offset + i)}\n        for i, u in enumerate(users)\n    ]\n    return {\n        \"edges\": edges,\n        \"pageInfo\": {\n            \"hasNextPage\": has_next,\n            \"hasPreviousPage\": offset > 0,\n            \"startCursor\": edges[0][\"cursor\"] if edges else None,\n            \"endCursor\":   edges[-1][\"cursor\"] if edges else None,\n        },\n        \"totalCount\": await count_users(search=search),\n    }\n\n@mutation.field(\"createUser\")\nasync def resolve_create_user(obj, info, input: dict) -> dict:\n    \"\"\"Mutation returns {user, errors} — never raises for validation.\"\"\"\n    try:\n        validate_user_input(input)\n        user = await create_user(\n            email=input[\"email\"],\n            name=input[\"name\"],\n            password=hash_password(input[\"password\"]),\n        )\n        return {\"user\": user, \"errors\": []}\n    except ValidationError as e:\n        return {\"user\": None, \"errors\": [{\"field\": e.field, \"message\": e.message}]}\n```\n\nCursors are opaque to the client — base64-encode an offset or a (sort_key, id) tuple so you can change the encoding later without breaking clients. Mutation errors live in the payload's `errors` field; reserve top-level GraphQL `errors` for actual transport/auth/server failures."
+- sequence: 10
+  fragment_type: execution
+  content: "## N+1 Prevention with DataLoader\n\nGraphQL's flexible queries trigger N+1 problems whenever a list field resolves a relationship. Use DataLoader to batch and cache per request:\n\n```python\nfrom aiodataloader import DataLoader\nfrom typing import List\n\nclass OrdersByUserLoader(DataLoader):\n    async def batch_load_fn(self, user_ids: List[str]) -> List[List[dict]]:\n        orders = await fetch_orders_by_user_ids(user_ids)\n        by_user: dict = {}\n        for order in orders:\n            by_user.setdefault(order[\"user_id\"], []).append(order)\n        return [by_user.get(uid, []) for uid in user_ids]\n\n# In resolver:\n@user_type.field(\"orders\")\nasync def resolve_orders(user, info, first: int = 20):\n    loader = info.context[\"loaders\"][\"orders_by_user\"]\n    orders = await loader.load(user[\"id\"])  # batched across the whole request\n    return paginate(orders, first)\n```\n\nInitialize loaders per request (never globally — cross-request caching leaks data between users). Each loader returns results in input order; missing IDs return `None` or an empty list as appropriate."
+- sequence: 11
+  fragment_type: execution
+  content: '## Operating Practices
+
+
+    Apply these on every API, REST or GraphQL.
+
+
+    **REST:**
+
+    1. Use plural nouns for collections (`/users`, never `/user`).
+
+    2. Keep requests stateless — every request carries its own auth, no server-side session affinity.
+
+    3. Return correct HTTP status codes (2xx success, 4xx client, 5xx server). Never return `200 OK` with `{"success": false}`.
+
+    4. Version from day one, even if v1 is the only version that ships.
+
+    5. Paginate every collection endpoint. No unbounded responses.
+
+    6. Apply rate limits from launch — at minimum per-IP and per-API-key.
+
+    7. Publish OpenAPI/Swagger so clients can generate types and explore interactively.
+
+
+    **GraphQL:**
+
+    1. Design the schema before writing resolvers — schema is the contract.
+
+    2. Wire DataLoaders for every relationship that can appear in a list. No exceptions.
+
+    3. Validate at both schema and resolver levels — schema catches shape, resolver catches business rules.
+
+    4. Return structured errors in mutation payloads (`{user, errors}`). Reserve top-level `errors` for transport/auth failures.
+
+    5. Use cursor-based pagination (Relay spec) for every list field.
+
+    6. Use the `@deprecated` directive for fields you intend to remove; instrument usage before deletion.
+
+    7. Monitor query complexity and execution time — reject queries above a complexity budget.'
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    - **Action-oriented endpoints** (`/createUser`) instead of resource-oriented — opts out of HTTP semantics
+
+    - **PUT when you meant PATCH** (or vice versa) — silently nulls fields the client didn''t send
+
+    - **Missing pagination** — unbounded responses, OOM under load
+
+    - **Inconsistent error formats** across endpoints — every client writes per-endpoint parsers
+
+    - **Returning 200 with `success: false`** — defeats logs, metrics, retries, alerting
+
+    - **No rate limiting** — abuse vector, runaway costs
+
+    - **API mirrors database schema** — tight coupling; every schema migration is a breaking API change
+
+    - **GraphQL N+1** from missing DataLoaders — turns one query into thousands
+
+    - **Top-level GraphQL errors for validation failures** — clients can''t distinguish "user typed a bad email" from "the server is down"
+
+    - **Breaking changes without versioning or deprecation** — silently breaks every consumer
+
+    - **POST for idempotent operations** — clients can''t safely retry on network failure
+
+    - **Globally-scoped DataLoaders** — caches leak data across requests/users'

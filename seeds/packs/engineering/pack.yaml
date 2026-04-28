@@ -1,0 +1,63 @@
+name: engineering
+version: 1.0.0
+description: Generic engineering patterns — API design, error handling, ADRs, microservices,
+  performance, CQRS, event sourcing. Always installed.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: []
+skills:
+- skill_id: api-and-interface-design
+  file: api-and-interface-design.yaml
+  fragment_count: 10
+- skill_id: api-design-principles
+  file: api-design-principles.yaml
+  fragment_count: 12
+- skill_id: architecture-decision-records
+  file: architecture-decision-records.yaml
+  fragment_count: 12
+- skill_id: architecture-patterns
+  file: architecture-patterns.yaml
+  fragment_count: 10
+- skill_id: cost-optimization
+  file: cost-optimization.yaml
+  fragment_count: 10
+- skill_id: cqrs-implementation
+  file: cqrs-implementation.yaml
+  fragment_count: 7
+- skill_id: documentation-and-adrs
+  file: documentation-and-adrs.yaml
+  fragment_count: 7
+- skill_id: error-handling-patterns
+  file: error-handling-patterns.yaml
+  fragment_count: 16
+- skill_id: evaluation-methodology
+  file: evaluation-methodology.yaml
+  fragment_count: 26
+- skill_id: event-store-design
+  file: event-store-design.yaml
+  fragment_count: 8
+- skill_id: microservices-patterns
+  file: microservices-patterns.yaml
+  fragment_count: 9
+- skill_id: modern-javascript-patterns
+  file: modern-javascript-patterns.yaml
+  fragment_count: 9
+- skill_id: openapi-spec-generation
+  file: openapi-spec-generation.yaml
+  fragment_count: 7
+- skill_id: performance-optimization
+  file: performance-optimization.yaml
+  fragment_count: 17
+- skill_id: projection-patterns
+  file: projection-patterns.yaml
+  fragment_count: 8
+- skill_id: saga-orchestration
+  file: saga-orchestration.yaml
+  fragment_count: 6
+- skill_id: workflow-orchestration-patterns
+  file: workflow-orchestration-patterns.yaml
+  fragment_count: 6

@@ -1,0 +1,485 @@
+skill_type: domain
+skill_id: sql-optimization-patterns
+canonical_name: SQL Optimization Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- sql
+- database-performance
+- query-optimization
+- indexing
+- explain-plan
+- n-plus-one
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents developer-essentials plugin
+raw_prose: '# SQL Optimization Patterns
+
+
+  Transform slow database queries into lightning-fast operations through systematic optimization, proper indexing, and query plan analysis.
+
+
+  ## When to Use
+
+
+  - Debugging slow-running queries
+
+  - Designing performant database schemas
+
+  - Optimizing application response times
+
+  - Reducing database load and costs
+
+  - Improving scalability for growing datasets
+
+  - Analyzing EXPLAIN query plans
+
+  - Implementing efficient indexes
+
+  - Resolving N+1 query problems
+
+
+  ## Core Concepts
+
+
+  ### Query Execution Plans (EXPLAIN)
+
+
+  PostgreSQL: `EXPLAIN`, `EXPLAIN ANALYZE`, `EXPLAIN (ANALYZE, BUFFERS, VERBOSE)`.
+
+
+  Key metrics: Seq Scan (full table — usually slow), Index Scan (good), Index Only Scan (best), Nested Loop (small data), Hash Join (large), Merge Join (sorted data), Cost (lower is better), Rows, Actual Time.
+
+
+  ### Index Strategies
+
+
+  Types: B-Tree (default), Hash (equality only), GIN (full-text, JSONB, arrays), GiST (geometric), BRIN (very large tables with correlation).
+
+
+  Index forms: standard, composite (order matters), partial (subset of rows), expression (`LOWER(email)`), covering (INCLUDE columns), full-text (GIN tsvector), JSONB.
+
+
+  ### Query Optimization Patterns
+
+
+  - **Avoid SELECT \*** — fetch only needed columns
+
+  - **Functions in WHERE prevent index usage** — use functional index or normalized data
+
+  - **Filter before join** to shrink intermediate sets
+
+
+  ## Optimization Patterns
+
+
+  ### Pattern 1: Eliminate N+1 Queries
+
+  Replace per-row queries with a single JOIN or batch IN-clause query.
+
+
+  ### Pattern 2: Optimize Pagination
+
+  OFFSET on large tables is slow. Use cursor-based pagination: `WHERE (created_at, id) < (cursor_ts, cursor_id) ORDER BY ... LIMIT N` with a covering index.
+
+
+  ### Pattern 3: Aggregate Efficiently
+
+  COUNT(*) is slow on large tables — use `pg_class.reltuples` for estimates, or filter first. GROUP BY: filter before grouping; use covering index.
+
+
+  ### Pattern 4: Subquery Optimization
+
+  Replace correlated subqueries with JOIN + GROUP BY or window functions. Use CTEs for clarity.
+
+
+  ### Pattern 5: Batch Operations
+
+  Batch INSERT in single statement; use COPY for bulk. Batch UPDATE via temp table + UPDATE FROM.
+
+
+  ## Advanced Techniques
+
+
+  - **Materialized Views** — pre-compute expensive queries; `REFRESH MATERIALIZED VIEW [CONCURRENTLY]`.
+
+  - **Partitioning** — split large tables by range (date) or list. Queries auto-prune partitions.
+
+  - **Query hints** — `USE INDEX` (MySQL), `SET enable_nestloop = OFF` (Postgres), `max_parallel_workers_per_gather`.
+
+
+  ## Best Practices
+
+
+  1. Index Selectively — too many indexes slow writes
+
+  2. Monitor Query Performance — slow query logs
+
+  3. Keep Statistics Updated — ANALYZE regularly
+
+  4. Use Appropriate Data Types
+
+  5. Normalize Thoughtfully
+
+  6. Cache Frequently Accessed Data
+
+  7. Connection Pooling
+
+  8. Regular Maintenance — VACUUM, ANALYZE, REINDEX
+
+
+  ## Common Pitfalls
+
+
+  - **Over-Indexing** — each index slows INSERT/UPDATE/DELETE
+
+  - **Unused Indexes** — waste space and slow writes
+
+  - **Missing Indexes** — slow queries, full scans
+
+  - **Implicit Type Conversion** — prevents index usage
+
+  - **OR Conditions** — can''t use indexes efficiently
+
+  - **LIKE with Leading Wildcard** — `LIKE ''%abc''` can''t use index
+
+  - **Function in WHERE** — prevents index usage unless functional index exists
+
+
+  ## Monitoring Queries
+
+
+  PostgreSQL: `pg_stat_statements` for slow queries, `pg_stat_user_tables` for missing indexes (high `seq_scan`), `pg_stat_user_indexes` for unused indexes (`idx_scan = 0`).'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# SQL Optimization Patterns
+
+
+    Transform slow database queries into lightning-fast operations through systematic optimization, proper indexing, and query plan analysis.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Debugging slow-running queries
+
+    - Designing performant database schemas
+
+    - Optimizing application response times
+
+    - Reducing database load and costs
+
+    - Improving scalability for growing datasets
+
+    - Analyzing EXPLAIN query plans
+
+    - Implementing efficient indexes
+
+    - Resolving N+1 query problems'
+- sequence: 3
+  fragment_type: execution
+  content: '### EXPLAIN — Reading Query Plans
+
+
+    ```sql
+
+    EXPLAIN SELECT * FROM users WHERE email = ''user@example.com'';
+
+    EXPLAIN ANALYZE SELECT * FROM users WHERE email = ''user@example.com'';
+
+    EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
+
+    SELECT u.*, o.order_total
+
+    FROM users u
+
+    JOIN orders o ON u.id = o.user_id
+
+    WHERE u.created_at > NOW() - INTERVAL ''30 days'';
+
+    ```
+
+
+    Key metrics:
+
+    - **Seq Scan** — full table scan (usually slow)
+
+    - **Index Scan** — using index (good)
+
+    - **Index Only Scan** — using index without touching table (best)
+
+    - **Nested Loop / Hash Join / Merge Join** — join methods, choose by data size
+
+    - **Cost** — estimated cost (lower is better)
+
+    - **Actual Time** — real execution time'
+- sequence: 4
+  fragment_type: execution
+  content: '### Index Strategies
+
+
+    Types:
+
+    - **B-Tree** — default, equality and range
+
+    - **Hash** — equality only
+
+    - **GIN** — full-text, JSONB, arrays
+
+    - **GiST** — geometric, full-text
+
+    - **BRIN** — very large tables with correlation
+
+
+    ```sql
+
+    -- Standard B-Tree
+
+    CREATE INDEX idx_users_email ON users(email);
+
+
+    -- Composite (column order matters)
+
+    CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+
+
+    -- Partial (index subset of rows)
+
+    CREATE INDEX idx_active_users ON users(email) WHERE status = ''active'';
+
+
+    -- Expression
+
+    CREATE INDEX idx_users_lower_email ON users(LOWER(email));
+
+
+    -- Covering (include extra columns)
+
+    CREATE INDEX idx_users_email_covering ON users(email) INCLUDE (name, created_at);
+
+
+    -- Full-text
+
+    CREATE INDEX idx_posts_search ON posts USING GIN(to_tsvector(''english'', title || '' '' || body));
+
+
+    -- JSONB
+
+    CREATE INDEX idx_metadata ON events USING GIN(metadata);
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: '### Query Optimization Basics
+
+
+    **Avoid SELECT \***
+
+    ```sql
+
+    -- Bad
+
+    SELECT * FROM users WHERE id = 123;
+
+    -- Good
+
+    SELECT id, email, name FROM users WHERE id = 123;
+
+    ```
+
+
+    **Functions in WHERE prevent index usage**
+
+    ```sql
+
+    -- Bad
+
+    SELECT * FROM users WHERE LOWER(email) = ''x@y.com'';
+
+    -- Good — functional index, then exact match
+
+    CREATE INDEX idx_users_email_lower ON users(LOWER(email));
+
+    ```
+
+
+    **Filter before joining**
+
+    ```sql
+
+    -- Better — filter in subquery before JOIN
+
+    SELECT u.name, o.total
+
+    FROM (SELECT * FROM users WHERE created_at > ''2024-01-01'') u
+
+    JOIN orders o ON u.id = o.user_id;
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: "### Pattern 1: Eliminate N+1 Queries\n\nBad — N+1 queries:\n```python\nusers = db.query(\"SELECT * FROM users LIMIT 10\")\nfor user in users:\n    orders = db.query(\"SELECT * FROM orders WHERE user_id = ?\", user.id)\n```\n\nGood — single JOIN or batch IN:\n```sql\nSELECT u.id, u.name, o.id as order_id, o.total\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nWHERE u.id IN (1, 2, 3, 4, 5);\n```\n\nOr batch + group in app code:\n```python\nusers = db.query(\"SELECT * FROM users LIMIT 10\")\nuser_ids = [u.id for u in users]\norders = db.query(\"SELECT * FROM orders WHERE user_id IN (?)\", user_ids)\norders_by_user = {}\nfor order in orders:\n    orders_by_user.setdefault(order.user_id, []).append(order)\n```"
+- sequence: 7
+  fragment_type: execution
+  content: '### Pattern 2: Cursor-Based Pagination
+
+
+    OFFSET on large tables is slow. Use cursor-based pagination instead.
+
+
+    ```sql
+
+    -- Bad — slow on large offsets
+
+    SELECT * FROM users
+
+    ORDER BY created_at DESC
+
+    LIMIT 20 OFFSET 100000;
+
+
+    -- Good — cursor (last seen timestamp + id)
+
+    SELECT * FROM users
+
+    WHERE (created_at, id) < (''2024-01-15 10:30:00'', 12345)
+
+    ORDER BY created_at DESC, id DESC
+
+    LIMIT 20;
+
+
+    -- Index required
+
+    CREATE INDEX idx_users_cursor ON users(created_at DESC, id DESC);
+
+    ```'
+- sequence: 8
+  fragment_type: execution
+  content: '### Pattern 3: Aggregate Efficiently
+
+
+    ```sql
+
+    -- COUNT(*) on large tables is slow — use estimates
+
+    SELECT reltuples::bigint AS estimate
+
+    FROM pg_class
+
+    WHERE relname = ''orders'';
+
+
+    -- GROUP BY: filter first, then group
+
+    SELECT user_id, COUNT(*) as order_count
+
+    FROM orders
+
+    WHERE status = ''completed''
+
+    GROUP BY user_id
+
+    HAVING COUNT(*) > 10;
+
+
+    -- Covering index speeds up grouped queries
+
+    CREATE INDEX idx_orders_user_status ON orders(user_id, status);
+
+    ```'
+- sequence: 9
+  fragment_type: execution
+  content: "### Pattern 4: Subquery Optimization\n\n```sql\n-- Bad — correlated subquery, runs per-row\nSELECT u.name, u.email,\n    (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as order_count\nFROM users u;\n\n-- Good — JOIN + GROUP BY\nSELECT u.name, u.email, COUNT(o.id) as order_count\nFROM users u\nLEFT JOIN orders o ON o.user_id = u.id\nGROUP BY u.id, u.name, u.email;\n\n-- Use CTEs for clarity on complex queries\nWITH recent_users AS (\n    SELECT id, name, email FROM users\n    WHERE created_at > NOW() - INTERVAL '30 days'\n),\nuser_order_counts AS (\n    SELECT user_id, COUNT(*) as order_count FROM orders\n    WHERE created_at > NOW() - INTERVAL '30 days'\n    GROUP BY user_id\n)\nSELECT ru.name, ru.email, COALESCE(uoc.order_count, 0) as orders\nFROM recent_users ru\nLEFT JOIN user_order_counts uoc ON ru.id = uoc.user_id;\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Pattern 5: Batch Operations\n\n```sql\n-- Batch INSERT — single statement\nINSERT INTO users (name, email) VALUES\n    ('Alice', 'alice@example.com'),\n    ('Bob', 'bob@example.com'),\n    ('Carol', 'carol@example.com');\n\n-- Bulk INSERT — COPY (Postgres)\nCOPY users (name, email) FROM '/tmp/users.csv' CSV HEADER;\n\n-- Batch UPDATE via temp table\nCREATE TEMP TABLE temp_user_updates (id INT, new_status VARCHAR);\nINSERT INTO temp_user_updates VALUES (1, 'active'), (2, 'active');\n\nUPDATE users u\nSET status = t.new_status\nFROM temp_user_updates t\nWHERE u.id = t.id;\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Advanced: Materialized Views\n\nPre-compute expensive aggregations.\n\n```sql\nCREATE MATERIALIZED VIEW user_order_summary AS\nSELECT\n    u.id, u.name,\n    COUNT(o.id) as total_orders,\n    SUM(o.total) as total_spent,\n    MAX(o.created_at) as last_order_date\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nGROUP BY u.id, u.name;\n\nCREATE INDEX idx_user_summary_spent ON user_order_summary(total_spent DESC);\n\n-- Refresh (concurrent avoids exclusive lock)\nREFRESH MATERIALIZED VIEW CONCURRENTLY user_order_summary;\n```"
+- sequence: 12
+  fragment_type: execution
+  content: "### Advanced: Partitioning\n\n```sql\n-- Range partitioning by date (Postgres)\nCREATE TABLE orders (\n    id SERIAL,\n    user_id INT,\n    total DECIMAL,\n    created_at TIMESTAMP\n) PARTITION BY RANGE (created_at);\n\nCREATE TABLE orders_2024_q1 PARTITION OF orders\n    FOR VALUES FROM ('2024-01-01') TO ('2024-04-01');\n\nCREATE TABLE orders_2024_q2 PARTITION OF orders\n    FOR VALUES FROM ('2024-04-01') TO ('2024-07-01');\n\n-- Queries auto-prune to relevant partition\nSELECT * FROM orders WHERE created_at BETWEEN '2024-02-01' AND '2024-02-28';\n```"
+- sequence: 13
+  fragment_type: example
+  content: '### Monitoring Queries (PostgreSQL)
+
+
+    ```sql
+
+    -- Find slow queries
+
+    SELECT query, calls, total_time, mean_time
+
+    FROM pg_stat_statements
+
+    ORDER BY mean_time DESC
+
+    LIMIT 10;
+
+
+    -- Find tables doing too many seq scans
+
+    SELECT schemaname, tablename, seq_scan, seq_tup_read, idx_scan
+
+    FROM pg_stat_user_tables
+
+    WHERE seq_scan > 0
+
+    ORDER BY seq_tup_read DESC
+
+    LIMIT 10;
+
+
+    -- Find unused indexes
+
+    SELECT schemaname, tablename, indexname, idx_scan
+
+    FROM pg_stat_user_indexes
+
+    WHERE idx_scan = 0
+
+    ORDER BY pg_relation_size(indexrelid) DESC;
+
+    ```'
+- sequence: 14
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Index Selectively** — too many indexes slow down writes
+
+    2. **Monitor Query Performance** — slow query logs
+
+    3. **Keep Statistics Updated** — run ANALYZE regularly
+
+    4. **Use Appropriate Data Types** — smaller types = better performance
+
+    5. **Normalize Thoughtfully** — balance normalization vs query patterns
+
+    6. **Cache Frequently Accessed Data** — application-level caching
+
+    7. **Connection Pooling** — reuse database connections
+
+    8. **Regular Maintenance** — VACUUM, ANALYZE, rebuild indexes'
+- sequence: 15
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    - **Over-Indexing** — each index slows INSERT/UPDATE/DELETE
+
+    - **Unused Indexes** — waste space, slow writes
+
+    - **Missing Indexes** — slow queries, full table scans
+
+    - **Implicit Type Conversion** — prevents index usage
+
+    - **OR Conditions** — can''t use indexes efficiently
+
+    - **LIKE with Leading Wildcard** — `LIKE ''%abc''` can''t use index
+
+    - **Function in WHERE** — prevents index usage unless functional index exists'

@@ -1,0 +1,419 @@
+skill_type: domain
+skill_id: postmortem-writing
+canonical_name: Postmortem Writing
+category: ops
+skill_class: domain
+domain_tags:
+- postmortem
+- blameless-culture
+- root-cause
+- action-items
+- 5-whys
+- incident-review
+- sre
+- timeline
+- facilitation
+- severity
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: revised from QA findings — split blameless/anti-patterns, added cadence, quick template, worked example, verification; reclassified seq 8; expanded rationale; tightened 5-whys
+raw_prose: '# Postmortem Writing
+
+
+  Effective, blameless postmortems drive organizational learning and prevent incident recurrence. Memory of an incident fades within days, so writing the postmortem soon after resolution preserves the detail needed for genuine root-cause analysis. Reviewing postmortems collectively over time exposes patterns that no single incident reveals — the same connection-pool failure mode appearing in three services is signal that one occurrence cannot give. And insisting on blameless framing creates the psychological safety that allows engineers to disclose what they actually did, what they actually thought, and what they did not understand at the time. Without that disclosure, every analysis is shallow.
+
+
+  ## When to Write One
+
+
+  - SEV1 or SEV2 incidents
+
+  - Customer-facing outages > 15 minutes
+
+  - Data loss or security incidents
+
+  - Near-misses that could have been severe
+
+  - Novel failure modes
+
+  - Incidents requiring unusual intervention
+
+
+  ## Postmortem Cadence
+
+
+  - Day 0 — Incident occurs and is resolved
+
+  - Day 1–2 — Draft postmortem document
+
+  - Day 3–5 — Postmortem meeting
+
+  - Day 5–7 — Finalize document, create tickets
+
+  - Week 2+ — Action item completion
+
+  - Quarterly — Review patterns across incidents
+
+
+  ## Blameless Culture
+
+
+  | Blame-Focused | Blameless |
+
+  |---|---|
+
+  | "Who caused this?" | "What conditions allowed this?" |
+
+  | "Someone made a mistake" | "The system allowed this mistake" |
+
+  | Punish individuals | Improve systems |
+
+  | Hide information | Share learnings |
+
+  | Fear of speaking up | Psychological safety |
+
+
+  ## Standard Postmortem Sections
+
+
+  - **Executive Summary** — what, when, who, impact (1 paragraph)
+
+  - **Timeline** (UTC, markdown table, 1 line per event) — events with timestamps
+
+  - **Root Cause Analysis** — what happened, why, contributing factors, 5-whys
+
+  - **Detection** — what worked, what didn''t, detection gap
+
+  - **Response** — what worked, what could improve
+
+  - **Impact** — customer, business, technical
+
+  - **Lessons Learned** — went well, went wrong, where we got lucky
+
+  - **Action Items** — priority, owner, due date, ticket
+
+
+  ## 5 Whys
+
+
+  Drill through proximate causes to systemic ones. Stop at organizational/process gaps, not personal blame. Each "why" needs evidence (logs, metrics, code diffs).
+
+
+  Example chain: service failed → connections exhausted → each request opened new connection → code bypassed pool → developer unfamiliar with codebase patterns → no documentation on connection management.
+
+
+  ## Action Items Discipline
+
+
+  Every action: priority (P0–P2), owner, due date, ticket. No orphan items. Categorize: prevention, detection, mitigation.
+
+
+  ## Anti-Patterns
+
+
+  - Blame game — shuts down learning
+
+  - Shallow analysis — doesn''t prevent recurrence
+
+  - No action items — waste of meeting
+
+  - Unrealistic actions — never completed
+
+  - No follow-up — actions forgotten'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Why Postmortems
+
+
+    Postmortems exist because human memory of an incident decays within days. Engineers who responded at 03:00 will not, by Friday, remember which dashboard they checked first or why they ruled out a hypothesis. Writing the postmortem within 48 hours captures that detail while it is still recoverable; waiting a week guarantees a shallow narrative.
+
+
+    A second reason: pattern detection. Any single incident is, on its own, ambiguous — was it a one-off, or the visible edge of a systemic weakness? Only the cumulative record of postmortems answers that question. The third connection-pool failure across three services in six months is signal that no individual incident could provide. Quarterly pattern review across postmortems is where organizational learning actually happens; the document is the substrate.
+
+
+    The third reason — and the one most often misunderstood — is psychological safety. Root cause analysis depends on engineers honestly disclosing what they did, what they assumed, and what they did not understand at the time. People do not disclose this in a culture that punishes mistakes. Blameless framing is not politeness; it is the precondition for getting truthful data. Without it, every "root cause" is a defensive reconstruction, and every action item is theater.
+
+
+    The goal is system improvement, not blame attribution. Improve systems, share learnings, build psychological safety.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Write a Postmortem
+
+
+    Triggers:
+
+
+    - SEV1 or SEV2 incidents
+
+    - Customer-facing outages > 15 minutes
+
+    - Data loss or security incidents
+
+    - Near-misses that could have been severe
+
+    - Novel failure modes
+
+    - Incidents requiring unusual intervention
+
+
+    Don''t skip small incidents — they reveal patterns.'
+- sequence: 3
+  fragment_type: setup
+  content: '## Postmortem Cadence
+
+
+    The schedule from incident to organizational learning:
+
+
+    - **Day 0** — Incident occurs and is resolved. Capture raw timeline, alerts, chat logs while fresh.
+
+    - **Day 1–2** — Draft the postmortem document. Author(s) write executive summary, timeline, initial RCA.
+
+    - **Day 3–5** — Postmortem meeting. Walk timeline, discuss root causes, brainstorm action items.
+
+    - **Day 5–7** — Finalize the document and file tickets for every action item with owner + due date.
+
+    - **Week 2+** — Action item completion. Owners drive their tickets to done; track open items in weekly ops.
+
+    - **Quarterly** — Pattern review across all postmortems. Identify recurring failure modes, systemic gaps, action-item completion rate.
+
+
+    Slipping the cadence kills the value: a postmortem drafted three weeks late is fiction, and action items that miss their due dates by a quarter never ship.'
+- sequence: 4
+  fragment_type: guardrail
+  content: '## Blameless Culture
+
+
+    | Blame-Focused | Blameless |
+
+    |---|---|
+
+    | "Who caused this?" | "What conditions allowed this?" |
+
+    | "Someone made a mistake" | "The system allowed this mistake" |
+
+    | Punish individuals | Improve systems |
+
+    | Hide information | Share learnings |
+
+    | Fear of speaking up | Psychological safety |
+
+
+    Every framing decision in the document — section headings, RCA wording, action-item phrasing — must pass the right column. If a sentence names a person as the cause, rewrite it to name the condition that allowed the action.'
+- sequence: 5
+  fragment_type: guardrail
+  content: '## Anti-Patterns to Avoid
+
+
+    | Anti-Pattern | Problem | Better Approach |
+
+    |---|---|---|
+
+    | Blame game | Shuts down learning | Focus on systems |
+
+    | Shallow analysis | Doesn''t prevent recurrence | Ask "why" 5 times |
+
+    | No action items | Waste of time | Always have concrete next steps |
+
+    | Unrealistic actions | Never completed | Scope to achievable tasks |
+
+    | No follow-up | Actions forgotten | Track in ticketing system |
+
+
+    Best-practice rules:
+
+
+    - **Do** — start immediately, be specific (exact times, exact errors), include graphs, assign owners, share widely.
+
+    - **Don''t** — name and shame, skip small incidents, make it a blame doc, create busywork, skip follow-up.'
+- sequence: 6
+  fragment_type: execution
+  content: '## Standard Postmortem Structure
+
+
+    Required sections, in order:
+
+
+    1. **Executive Summary** — 1 paragraph: what happened, impact (customers/revenue/duration), root cause, resolution.
+
+    2. **Timeline** — markdown table, UTC only, one line per event, columns `Time | Event`. Include deployment, first alert, ack, escalation, decision points, mitigation, resolution. No prose narration; the table is the timeline.
+
+    3. **Root Cause Analysis** — proximate cause (1–2 sentences), contributing factors (bulleted), 5-whys chain (numbered).
+
+    4. **Detection** — what worked, what didn''t, detection gap (minutes from incident start to first alert).
+
+    5. **Response** — what worked, what could be improved (with concrete time costs, e.g. "rollback took 12 min").
+
+    6. **Impact** — customer (unique users, duration, support tickets), business (revenue, support cost, eng-hours), technical (load, replica lag, residual damage).
+
+    7. **Lessons Learned** — three subsections: went well, went wrong, where we got lucky.
+
+    8. **Action Items** — markdown table, columns `Priority | Action | Owner | Due Date | Ticket`. Every row complete; no TBD owners or due dates.'
+- sequence: 7
+  fragment_type: execution
+  content: '## Facilitation Guide (60 min meeting)
+
+
+    1. **Opening (5 min)** — remind of blameless culture: "We''re here to learn, not to blame."
+
+    2. **Timeline review (15 min)** — chronological walk-through, clarifying questions, identify gaps.
+
+    3. **Analysis discussion (20 min)** — what failed, why, what conditions allowed this, what would have prevented it.
+
+    4. **Action items (15 min)** — brainstorm, prioritize by impact/effort, assign owners + due dates.
+
+    5. **Closing (5 min)** — summarize key learnings, confirm owners, schedule follow-up if needed.
+
+
+    Facilitation tips: keep on track, redirect blame to systems, encourage quiet participants, document dissenting views, time-box tangents.'
+- sequence: 8
+  fragment_type: example
+  content: "## 5 Whys Analysis\n\nDrill from proximate cause to systemic root. Each \"why\" needs evidence. Five steps, no conflation:\n\n```\nWhy #1: Why did the service fail?\n  → Database connections exhausted (evidence: metrics show 100/100 max, 500+ pending requests)\n\nWhy #2: Why were connections exhausted?\n  → Each request opened a new connection instead of reusing the pool (evidence: connection-create rate matched request rate)\n\nWhy #3: Why did each request open a new connection?\n  → Code bypassed the pool — used DriverManager.getConnection() instead of pooled DataSource (evidence: PR #1234 diff in PaymentRepository.java)\n\nWhy #4: Why did the developer bypass the pool?\n  → Developer was unfamiliar with the codebase's connection-management patterns (evidence: PR author's commit history, review comments)\n\nWhy #5: Why was the developer unfamiliar?\n  → No documentation on connection-management patterns existed (evidence: wiki search, onboarding docs)\n```\n\nStop at organizational/process gaps, not personal blame. Categorize root causes as primary/secondary/tertiary, then map each to a systemic improvement (prevention/detection/mitigation)."
+- sequence: 9
+  fragment_type: example
+  content: '## Worked Example: SEV2 Payment Outage
+
+
+    **Incident**: Payment processing service outage, 47 minutes, SEV2.
+
+
+    **Executive Summary**: On 2024-01-15, the payment processing service experienced a 47-minute outage affecting approximately 12,000 customers. Root cause was database connection pool exhaustion triggered by deployment v2.3.4. Resolved by rollback to v2.3.3.
+
+
+    **Impact**:
+
+    - 12,000 customers unable to complete purchases
+
+    - Estimated revenue loss: $45,000
+
+    - 847 support tickets created
+
+    - No data loss or security implications
+
+
+    **Timeline (UTC)**:
+
+
+    | Time  | Event |
+
+    |-------|-------|
+
+    | 14:23 | Deployment v2.3.4 completed to production |
+
+    | 14:31 | First alert: `payment_error_rate > 5%` |
+
+    | 14:33 | On-call @alice acknowledges alert |
+
+    | 14:35 | Investigation begins, error rate at 23% |
+
+    | 14:41 | Incident declared SEV2, @bob joins |
+
+    | 14:45 | Database connection exhaustion identified |
+
+    | 14:52 | Decision to rollback |
+
+    | 14:58 | Rollback to v2.3.3 initiated |
+
+    | 15:10 | Rollback complete, error rate dropping |
+
+    | 15:18 | Service fully recovered |
+
+
+    **Action Items**:
+
+
+    | Priority | Action | Owner | Due | Ticket |
+
+    |---|---|---|---|---|
+
+    | P0 | Add integration test for connection pool | @alice | 2024-01-22 | ENG-1234 |
+
+    | P0 | Lower DB connection alert to 70% | @bob | 2024-01-17 | OPS-567 |
+
+    | P1 | Document connection management patterns | @alice | 2024-01-29 | DOC-89 |
+
+    | P1 | Deployment-correlated alerting | @bob | 2024-02-05 | OPS-568 |
+
+    | P2 | Evaluate canary deployment | @charlie | 2024-02-15 | ENG-1235 |'
+- sequence: 10
+  fragment_type: example
+  content: '## Quick Postmortem Template (SEV3 / Minor)
+
+
+    For minor incidents, a full postmortem is overkill. Use this short form:
+
+
+    ```markdown
+
+    # Quick Postmortem: [Brief Title]
+
+
+    **Date**: 2024-01-15 | **Duration**: 12 min | **Severity**: SEV3
+
+
+    ## What Happened
+
+    API latency spiked to 5s due to cache miss storm after cache flush.
+
+
+    ## Timeline
+
+    - 10:00 — Cache flush initiated for config update
+
+    - 10:02 — Latency alerts fire
+
+    - 10:05 — Identified as cache miss storm
+
+    - 10:08 — Enabled cache warming
+
+    - 10:12 — Latency normalized
+
+
+    ## Root Cause
+
+    Full cache flush for minor config update caused thundering herd.
+
+
+    ## Fix
+
+    - Immediate: Enabled cache warming
+
+    - Long-term: Implement partial cache invalidation (ENG-999)
+
+
+    ## Lessons
+
+    Don''t full-flush cache in production; use targeted invalidation.
+
+    ```
+
+
+    Keep it under one page. Still file at least one tracked action item — a SEV3 with no follow-up is the seed of the next SEV1.'
+- sequence: 11
+  fragment_type: verification
+  content: '## Before Publishing — Verification Checklist
+
+
+    Run through every item before marking the postmortem Final:
+
+
+    - [ ] **Action items complete** — every row has priority, action, owner, due date, and ticket ID. No TBDs.
+
+    - [ ] **Timeline in UTC** — all timestamps UTC, table format, one event per row, no ambiguous time zones.
+
+    - [ ] **Root causes mapped** — each identified root cause is mapped to at least one action item categorized as prevention, detection, or mitigation.
+
+    - [ ] **No personal blame** — re-read every sentence; rewrite any that name an individual as the cause rather than naming the condition that allowed the action.
+
+    - [ ] **Evidence attached** — graphs, dashboard snapshots, log excerpts, code diffs linked or embedded; no claims without evidence.
+
+    - [ ] **Impact quantified** — customers affected, duration, revenue, support tickets, eng-hours all numerically stated.
+
+    - [ ] **5-whys terminates at a system gap** — final "why" lands on a process, documentation, or tooling gap, not a person.
+
+    - [ ] **Document shared org-wide** — posted to the standard postmortem channel/wiki; not buried in a private doc.
+
+    - [ ] **Follow-up scheduled** — date set to verify action-item completion, and incident added to the next quarterly pattern review.'

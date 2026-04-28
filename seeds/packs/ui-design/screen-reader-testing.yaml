@@ -1,0 +1,295 @@
+skill_type: domain
+skill_id: screen-reader-testing
+canonical_name: Screen Reader Testing
+category: quality
+skill_class: domain
+domain_tags:
+- accessibility
+- screen-readers
+- voiceover
+- nvda
+- jaws
+- aria
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents accessibility-compliance plugin
+raw_prose: '# Screen Reader Testing
+
+
+  Practical guide to testing web applications with screen readers for comprehensive accessibility validation.
+
+
+  ## When to Use
+
+
+  - Validating screen reader compatibility
+
+  - Testing ARIA implementations
+
+  - Debugging assistive technology issues
+
+  - Verifying form accessibility
+
+  - Testing dynamic content announcements
+
+  - Ensuring navigation accessibility
+
+
+  ## Major Screen Readers
+
+
+  | Screen Reader | Platform  | Browser        | Usage |
+
+  | ------------- | --------- | -------------- | ----- |
+
+  | VoiceOver | macOS/iOS | Safari | ~15% |
+
+  | NVDA      | Windows   | Firefox/Chrome | ~31% |
+
+  | JAWS      | Windows   | Chrome/IE      | ~40% |
+
+  | TalkBack  | Android   | Chrome         | ~10% |
+
+  | Narrator  | Windows   | Edge           |  ~4% |
+
+
+  Minimum coverage: NVDA + Firefox; VoiceOver + Safari (macOS + iOS).
+
+  Comprehensive: add JAWS + Chrome, TalkBack + Chrome (Android), Narrator + Edge.
+
+
+  ## Screen Reader Modes
+
+
+  - **Browse / Virtual** — read content, default reading mode
+
+  - **Focus / Forms** — interact with controls, used filling forms
+
+  - **Application** — custom widgets, ARIA applications
+
+
+  ## VoiceOver (macOS)
+
+
+  Toggle Cmd+F5. VO modifier = Ctrl+Option. Rotor (VO+U) navigates by Headings, Links, Forms, Landmarks.
+
+  Web shortcuts: VO+Cmd+H (next heading), VO+Cmd+J (form), VO+Cmd+L (link), VO+Cmd+T (table).
+
+
+  ## NVDA (Windows)
+
+
+  Start Ctrl+Alt+N, stop Insert+Q. NVDA modifier = Insert. Quick keys: H (heading), F (form), B (button), K (link), D (landmark), T (table). Elements list: NVDA+F7. Browse mode auto-switches to Focus mode in form fields.
+
+
+  ## JAWS (Windows)
+
+
+  Start Ctrl+Alt+J. Quick keys: H, T, F, B, G, L, ; (landmark). Forms mode: Enter to enter, Numpad+ to exit. Lists: Insert+F7 (links), F6 (headings), F5 (forms).
+
+
+  ## TalkBack (Android)
+
+
+  Settings → Accessibility → TalkBack. Gestures: swipe right (next), swipe left (previous), double-tap (activate), two-finger swipe (scroll).
+
+
+  ## Common Test Scenarios
+
+
+  - **Modal Dialog** — focus trap, role="dialog", aria-modal, aria-labelledby pointing to title
+
+  - **Live Regions** — role="status" / role="alert" / aria-live="polite|assertive"
+
+  - **Tab Interface** — role="tablist"/"tab"/"tabpanel", aria-selected, aria-controls
+
+
+  ## Common Issues & Fixes
+
+
+  - Icon-only button missing label → add `aria-label`, hide SVG with `aria-hidden="true"`
+
+  - Dynamic content not announced → add `role="status"` and `aria-live="polite"`
+
+  - Form error not read → `aria-invalid="true"`, `aria-describedby` pointing to error with `role="alert"`
+
+
+  ## Best Practices
+
+
+  - Test with real screen readers, not just automated tools
+
+  - Test with keyboard only — screen readers and keyboard users overlap
+
+  - Verify focus management on modals and dynamic content
+
+  - Use semantic HTML before reaching for ARIA
+
+  - Listen to actual announcements, not just inspect ARIA attributes'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Screen Reader Testing
+
+
+    Practical guide to testing web applications with screen readers for comprehensive accessibility validation.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Validating screen reader compatibility
+
+    - Testing ARIA implementations
+
+    - Debugging assistive technology issues
+
+    - Verifying form accessibility
+
+    - Testing dynamic content announcements
+
+    - Ensuring navigation accessibility'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Major Screen Readers and Coverage Targets
+
+
+    | Screen Reader | Platform  | Browser        | Usage |
+
+    | ------------- | --------- | -------------- | ----- |
+
+    | **VoiceOver** | macOS/iOS | Safari         | ~15%  |
+
+    | **NVDA**      | Windows   | Firefox/Chrome | ~31%  |
+
+    | **JAWS**      | Windows   | Chrome/IE      | ~40%  |
+
+    | **TalkBack**  | Android   | Chrome         | ~10%  |
+
+    | **Narrator**  | Windows   | Edge           | ~4%   |
+
+
+    **Minimum:** NVDA + Firefox; VoiceOver + Safari (macOS + iOS).
+
+    **Comprehensive:** add JAWS + Chrome, TalkBack + Chrome (Android), Narrator + Edge.'
+- sequence: 4
+  fragment_type: rationale
+  content: '## Screen Reader Modes
+
+
+    | Mode               | Purpose                | When Used         |
+
+    | ------------------ | ---------------------- | ----------------- |
+
+    | Browse / Virtual   | Read content           | Default reading   |
+
+    | Focus / Forms      | Interact with controls | Filling forms     |
+
+    | Application        | Custom widgets         | ARIA applications |
+
+
+    Modes auto-switch in NVDA/JAWS when entering form fields. Manual switch: NVDA+Space.'
+- sequence: 5
+  fragment_type: execution
+  content: "### VoiceOver (macOS) — Setup and Commands\n\n```\nEnable: System Preferences → Accessibility → VoiceOver\nToggle: Cmd + F5\n\nVO = Ctrl + Option (VoiceOver modifier)\n\nNavigation:\n  VO + Right Arrow   Next element\n  VO + Left Arrow    Previous element\n  VO + Shift + Down  Enter group\n  VO + Shift + Up    Exit group\n\nReading:\n  VO + A             Read all from cursor\n  Ctrl               Stop speaking\n\nWeb shortcuts:\n  VO + Cmd + H       Next heading\n  VO + Cmd + J       Next form control\n  VO + Cmd + L       Next link\n  VO + Cmd + T       Next table\n\nRotor (VO + U):\n  Navigate by Headings, Links, Forms, Landmarks\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### NVDA (Windows) — Setup and Commands\n\n```\nDownload: nvaccess.org\nStart: Ctrl + Alt + N\nStop: Insert + Q\n\nInsert = NVDA modifier\n\nQuick keys (Browse mode):\n  H        Next heading\n  F        Next form field\n  B        Next button\n  K        Next link\n  D        Next landmark\n  T        Next table\n  E        Next edit field\n\nReading:\n  NVDA + Down Arrow  Say all\n  Ctrl               Stop speech\n\nMode switching:\n  NVDA + Space       Toggle Browse / Focus mode\n  Auto-switches to Focus mode when entering form fields\n\nElements list:\n  NVDA + F7          Links / headings / forms / landmarks\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### JAWS (Windows) — Essential Commands\n\n```\nStart: Desktop shortcut or Ctrl + Alt + J\nVirtual cursor: auto-enabled in browsers\n\nNavigation:\n  Arrow keys         Navigate content\n  Tab                Next focusable\n  Insert + Down      Read all\n  Ctrl               Stop speech\n\nQuick keys:\n  H                  Next heading\n  T                  Next table\n  F                  Next form field\n  B                  Next button\n  L                  Next list\n  ;                  Next landmark\n\nForms mode:\n  Enter              Enter forms mode\n  Numpad +           Exit forms mode\n  F5                 List form fields\n\nLists:\n  Insert + F7        Link list\n  Insert + F6        Heading list\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### TalkBack (Android) — Gestures\n\n```\nEnable: Settings → Accessibility → TalkBack\nToggle: Hold both volume buttons 3 seconds\n\nGestures:\n  Drag finger        Explore\n  Swipe right        Next element\n  Swipe left         Previous element\n  Double tap         Activate\n  Two finger swipe   Scroll\n\nReading Controls (swipe up then right):\n  Headings, Links, Controls,\n  Characters, Words, Lines, Paragraphs\n```"
+- sequence: 9
+  fragment_type: verification
+  content: '### Test Checklist (applies across screen readers)
+
+
+    **Page load**
+
+    - [ ] Page title announced
+
+    - [ ] Main landmark found
+
+    - [ ] Skip link works
+
+
+    **Navigation**
+
+    - [ ] All headings discoverable via rotor / elements list
+
+    - [ ] Heading levels logical (H1 → H2 → H3)
+
+    - [ ] Landmarks properly labeled
+
+
+    **Links & buttons**
+
+    - [ ] Link purpose clear from accessible name
+
+    - [ ] Button actions described
+
+    - [ ] New window/tab announced
+
+
+    **Forms**
+
+    - [ ] All labels read with inputs
+
+    - [ ] Required fields announced
+
+    - [ ] Error messages read; focus moves to errors
+
+
+    **Dynamic content**
+
+    - [ ] Alerts announced immediately
+
+    - [ ] Loading states communicated
+
+    - [ ] Modal focus trapped; closes return focus
+
+
+    **Tables**
+
+    - [ ] Headers associated with cells
+
+    - [ ] Table navigation works
+
+    - [ ] Complex tables have captions'
+- sequence: 10
+  fragment_type: example
+  content: "### Common Issues & Fixes\n\n```html\n<!-- Issue: button not announcing purpose -->\n<button><svg>...</svg></button>\n\n<!-- Fix -->\n<button aria-label=\"Close dialog\">\n  <svg aria-hidden=\"true\">...</svg>\n</button>\n\n<!-- Issue: dynamic content not announced -->\n<div id=\"results\">New results loaded</div>\n\n<!-- Fix -->\n<div id=\"results\" role=\"status\" aria-live=\"polite\">New results loaded</div>\n\n<!-- Issue: form error not read -->\n<input type=\"email\" />\n<span class=\"error\">Invalid email</span>\n\n<!-- Fix -->\n<input type=\"email\" aria-invalid=\"true\" aria-describedby=\"email-error\" />\n<span id=\"email-error\" role=\"alert\">Invalid email</span>\n```"
+- sequence: 11
+  fragment_type: example
+  content: '### Common Test Scenarios
+
+
+    **Modal dialog** — `role="dialog"`, `aria-modal="true"`, `aria-labelledby` pointing to title; focus trap; restore focus on close.
+
+
+    **Live regions** — `role="status"` for polite updates; `role="alert"` for assertive errors; `aria-live="polite|assertive"` controls verbosity.
+
+
+    **Tab interface** — `role="tablist"`, `role="tab"`, `role="tabpanel"`, `aria-selected`, `aria-controls`. Arrow keys move between tabs; Tab moves out.'
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    - **Test with real screen readers**, not just automated tools (axe-core misses ~30% of issues)
+
+    - **Test with keyboard only** — screen reader and keyboard users overlap heavily
+
+    - **Verify focus management** on modals, route changes, and dynamic content
+
+    - **Use semantic HTML** before reaching for ARIA — `<button>` beats `<div role="button">`
+
+    - **Listen to actual announcements**, don''t just inspect ARIA attributes
+
+    - **Test the most common pairings first** — JAWS+Chrome, NVDA+Firefox, VoiceOver+Safari
+
+    - **Don''t fix what screen readers don''t say** — sometimes silent is correct (decorative content)'

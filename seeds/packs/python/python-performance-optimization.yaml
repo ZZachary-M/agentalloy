@@ -1,0 +1,159 @@
+skill_type: domain
+skill_id: python-performance-optimization
+canonical_name: Python Performance Optimization
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- performance
+- profiling
+- cprofile
+- memory
+- caching
+- optimization
+- bottleneck
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Python Performance Optimization\n\nComprehensive guide to profiling, analyzing, and optimizing Python code for better performance, including CPU profiling, memory optimization, and implementation best practices.\n\n## When to Use This Skill\n\n- Identifying performance bottlenecks in Python applications\n- Reducing application latency and response times\n- Optimizing CPU-intensive operations\n- Reducing memory consumption and memory leaks\n- Improving database query performance\n- Optimizing I/O operations\n- Speeding up data processing pipelines\n- Implementing high-performance algorithms\n- Profiling production applications\n\n## Core Concepts\n\n### 1. Profiling Types\n\n- **CPU Profiling**: Identify time-consuming functions\n- **Memory Profiling**: Track memory allocation and leaks\n- **Line Profiling**: Profile at line-by-line granularity\n- **Call Graph**: Visualize function call relationships\n\n### 2. Performance Metrics\n\n- **Execution Time**: How long operations take\n- **Memory Usage**: Peak and average memory consumption\n- **CPU Utilization**: Processor usage patterns\n- **I/O Wait**: Time spent on I/O operations\n\n### 3. Optimization Strategies\n\n- **Algorithmic**: Better algorithms and data structures\n- **Implementation**: More efficient code patterns\n- **Parallelization**: Multi-threading/processing\n- **Caching**: Avoid redundant computation\n- **Native Extensions**: C/Rust for critical paths\n\n## Quick Start\n\n### Basic Timing\n\n```python\nimport time\n\ndef measure_time():\n    \"\"\"Simple timing measurement.\"\"\"\n    start = time.time()\n\n    # Your code here\n    result = sum(range(1000000))\n\n    elapsed = time.time() - start\n    print(f\"Execution time: {elapsed:.4f} seconds\")\n    return result\n\n# Better: use timeit for accurate measurements\nimport timeit\n\nexecution_time = timeit.timeit(\n    \"sum(range(1000000))\",\n    number=100\n)\nprint(f\"Average time: {execution_time/100:.6f} seconds\")\n```\n\n## Profiling Tools\n\n### Pattern 1: cProfile - CPU Profiling\n\n```python\nimport cProfile\nimport pstats\nfrom pstats import SortKey\n\ndef slow_function():\n    \"\"\"Function to profile.\"\"\"\n    total = 0\n    for i in range(1000000):\n        total += i\n    return total\n\ndef another_function():\n    \"\"\"Another function.\"\"\"\n    return [i**2 for i in range(100000)]\n\ndef main():\n    \"\"\"Main function to profile.\"\"\"\n    result1 = slow_function()\n    result2 = another_function()\n    return result1, result2\n\n# Profile the code\nif __name__ == \"__main__\":\n    profiler = cProfile.Profile()\n    profiler.enable()\n\n    main()\n\n    profiler.disable()\n\n    # Print stats\n    stats = pstats.Stats(profiler)\n    stats.sort_stats(SortKey.CUMULATIVE)\n    stats.print_stats(10)  # Top 10 functions\n\n    # Save to file for later analysis\n    stats.dump_stats(\"profile_output.prof\")\n```\n\n**Command-line profiling:**\n\n```bash\n# Profile a script\npython -m cProfile -o output.prof script.py\n\n# View results\npython -m pstats output.prof\n# In pstats:\n# sort cumtime\n# stats 10\n```\n\n### Pattern 2: line_profiler - Line-by-Line Profiling\n\n```python\n# Install: pip install line-profiler\n\n# Add @profile decorator (line_profiler provides this)\n@profile\ndef process_data(data):\n    \"\"\"Process data with line profiling.\"\"\"\n    result = []\n    for item in data:\n        processed = item * 2\n        result.append(processed)\n    return result\n\n# Run with:\n# kernprof -l -v script.py\n```\n\n**Manual line profiling:**\n\n```python\nfrom line_profiler import LineProfiler\n\ndef process_data(data):\n    \"\"\"Function to profile.\"\"\"\n    result = []\n    for item in data:\n        processed = item * 2\n        result.append(processed)\n    return result\n\nif __name__ == \"__main__\":\n    lp = LineProfiler()\n    lp.add_function(process_data)\n\n    data = list(range(100000))\n\n    lp_wrapper = lp(process_data)\n    lp_wrapper(data)\n\n    lp.print_stats()\n```\n\n### Pattern 3: memory_profiler - Memory Usage\n\n```python\n# Install: pip install memory-profiler\n\nfrom memory_profiler import profile\n\n@profile\ndef memory_intensive():\n    \"\"\"Function that uses lots of memory.\"\"\"\n    # Create large list\n    big_list = [i for i in range(1000000)]\n\n    # Create large dict\n    big_dict = {i: i**2 for i in range(100000)}\n\n    # Process data\n    result = sum(big_list)\n\n    return result\n\nif __name__ == \"__main__\":\n    memory_intensive()\n\n# Run with:\n# python -m memory_profiler script.py\n```\n\n### Pattern 4: py-spy - Production Profiling\n\n```bash\n# Install: pip install py-spy\n\n# Profile a running Python process\npy-spy top --pid 12345\n\n# Generate flamegraph\npy-spy record -o profile.svg --pid 12345\n\n# Profile a script\npy-spy record -o profile.svg -- python script.py\n\n# Dump current call stack\npy-spy dump --pid 12345\n```\n\n## Optimization Patterns\n\n### Pattern 5: List Comprehensions vs Loops\n\n```python\nimport timeit\n\n# Slow: Traditional loop\ndef slow_squares(n):\n    \"\"\"Create list of squares using loop.\"\"\"\n    result = []\n    for i in range(n):\n        result.append(i**2)\n    return result\n\n# Fast: List comprehension\ndef fast_squares(n):\n    \"\"\"Create list of squares using comprehension.\"\"\"\n    return [i**2 for i in range(n)]\n\n# Benchmark\nn = 100000\n\nslow_time = timeit.timeit(lambda: slow_squares(n), number=100)\nfast_time = timeit.timeit(lambda: fast_squares(n), number=100)\n\nprint(f\"Loop: {slow_time:.4f}s\")\nprint(f\"Comprehension: {fast_time:.4f}s\")\nprint(f\"Speedup: {slow_time/fast_time:.2f}x\")\n\n# Even faster for simple operations: map\ndef faster_squares(n):\n    \"\"\"Use map for even better performance.\"\"\"\n    return list(map(lambda x: x**2, range(n)))\n```\n\n### Pattern 6: Generator Expressions for Memory\n\n```python\nimport sys\n\ndef list_approach():\n    \"\"\"Memory-intensive list.\"\"\"\n    data = [i**2 for i in range(1000000)]\n    return sum(data)\n\ndef generator_approach():\n    \"\"\"Memory-efficient generator.\"\"\"\n    data = (i**2 for i in range(1000000))\n    return sum(data)\n\n# Memory comparison\nlist_data = [i for i in range(1000000)]\ngen_data = (i for i in range(1000000))\n\nprint(f\"List size: {sys.getsizeof(list_data)} bytes\")\nprint(f\"Generator size: {sys.getsizeof(gen_data)} bytes\")\n\n# Generators use constant memory regardless of size\n```\n\n### Pattern 7: String Concatenation\n\n```python\nimport timeit\n\ndef slow_concat(items):\n    \"\"\"Slow string concatenation.\"\"\"\n    result = \"\"\n    for item in items:\n        result += str(item)\n    return result\n\ndef fast_concat(items):\n    \"\"\"Fast string concatenation with join.\"\"\"\n    return \"\".join(str(item) for item in items)\n\ndef faster_concat(items):\n    \"\"\"Even faster with list.\"\"\"\n    parts = [str(item) for item in items]\n    return \"\".join(parts)\n\nitems = list(range(10000))\n\n# Benchmark\nslow = timeit.timeit(lambda: slow_concat(items), number=100)\nfast = timeit.timeit(lambda: fast_concat(items), number=100)\nfaster = timeit.timeit(lambda: faster_concat(items), number=100)\n\nprint(f\"Concatenation (+): {slow:.4f}s\")\nprint(f\"Join (generator): {fast:.4f}s\")\nprint(f\"Join (list): {faster:.4f}s\")\n```\n\n### Pattern 8: Dictionary Lookups vs List Searches\n\n```python\nimport timeit\n\n# Create test data\nsize = 10000\nitems = list(range(size))\nlookup_dict = {i: i for i in range(size)}\n\ndef list_search(items, target):\n    \"\"\"O(n) search in list.\"\"\"\n    return target in items\n\ndef dict_search(lookup_dict, target):\n    \"\"\"O(1) search in dict.\"\"\"\n    return target in lookup_dict\n\ntarget = size - 1  # Worst case for list\n\n# Benchmark\nlist_time = timeit.timeit(\n    lambda: list_search(items, target),\n    number=1000\n)\ndict_time = timeit.timeit(\n    lambda: dict_search(lookup_dict, target),\n    number=1000\n)\n\nprint(f\"List search: {list_time:.6f}s\")\nprint(f\"Dict search: {dict_time:.6f}s\")\nprint(f\"Speedup: {list_time/dict_time:.0f}x\")\n```\n\n### Pattern 9: Local Variable Access\n\n```python\nimport timeit\n\n# Global variable (slow)\nGLOBAL_VALUE = 100\n\ndef use_global():\n    \"\"\"Access global variable.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += GLOBAL_VALUE\n    return total\n\ndef use_local():\n    \"\"\"Use local variable.\"\"\"\n    local_value = 100\n    total = 0\n    for i in range(10000):\n        total += local_value\n    return total\n\n# Local is faster\nglobal_time = timeit.timeit(use_global, number=1000)\nlocal_time = timeit.timeit(use_local, number=1000)\n\nprint(f\"Global access: {global_time:.4f}s\")\nprint(f\"Local access: {local_time:.4f}s\")\nprint(f\"Speedup: {global_time/local_time:.2f}x\")\n```\n\n### Pattern 10: Function Call Overhead\n\n```python\nimport timeit\n\ndef calculate_inline():\n    \"\"\"Inline calculation.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += i * 2 + 1\n    return total\n\ndef helper_function(x):\n    \"\"\"Helper function.\"\"\"\n    return x * 2 + 1\n\ndef calculate_with_function():\n    \"\"\"Calculation with function calls.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += helper_function(i)\n    return total\n\n# Inline is faster due to no call overhead\ninline_time = timeit.timeit(calculate_inline, number=1000)\nfunction_time = timeit.timeit(calculate_with_function, number=1000)\n\nprint(f\"Inline: {inline_time:.4f}s\")\nprint(f\"Function calls: {function_time:.4f}s\")\n```\n\nFor advanced optimization techniques including NumPy vectorization, caching, memory management, parallelization, async I/O, database optimization, and benchmarking tools, see [references/advanced-patterns.md](references/advanced-patterns.md)\n\n## Best Practices\n\n1. **Profile before optimizing** - Measure to find real bottlenecks\n2. **Focus on hot paths** - Optimize code that runs\
+  \ most frequently\n3. **Use appropriate data structures** - Dict for lookups, set for membership\n4. **Avoid premature optimization** - Clarity first, then optimize\n5. **Use built-in functions** - They're implemented in C\n6. **Cache expensive computations** - Use lru_cache\n7. **Batch I/O operations** - Reduce system calls\n8. **Use generators** for large datasets\n9. **Consider NumPy** for numerical operations\n10. **Profile production code** - Use py-spy for live systems\n\n## Common Pitfalls\n\n- Optimizing without profiling\n- Using global variables unnecessarily\n- Not using appropriate data structures\n- Creating unnecessary copies of data\n- Not using connection pooling for databases\n- Ignoring algorithmic complexity\n- Over-optimizing rare code paths\n- Not considering memory usage"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Performance Optimization
+
+
+    Comprehensive guide to profiling, analyzing, and optimizing Python code for better performance, including CPU profiling, memory optimization, and implementation best practices.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Identifying performance bottlenecks in Python applications
+
+    - Reducing application latency and response times
+
+    - Optimizing CPU-intensive operations
+
+    - Reducing memory consumption and memory leaks
+
+    - Improving database query performance
+
+    - Optimizing I/O operations
+
+    - Speeding up data processing pipelines
+
+    - Implementing high-performance algorithms
+
+    - Profiling production applications'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Profiling Types
+
+
+    - **CPU Profiling**: Identify time-consuming functions
+
+    - **Memory Profiling**: Track memory allocation and leaks
+
+    - **Line Profiling**: Profile at line-by-line granularity
+
+    - **Call Graph**: Visualize function call relationships
+
+
+    ### 2. Performance Metrics
+
+
+    - **Execution Time**: How long operations take
+
+    - **Memory Usage**: Peak and average memory consumption
+
+    - **CPU Utilization**: Processor usage patterns
+
+    - **I/O Wait**: Time spent on I/O operations
+
+
+    ### 3. Optimization Strategies
+
+
+    - **Algorithmic**: Better algorithms and data structures
+
+    - **Implementation**: More efficient code patterns
+
+    - **Parallelization**: Multi-threading/processing
+
+    - **Caching**: Avoid redundant computation
+
+    - **Native Extensions**: C/Rust for critical paths'
+- sequence: 4
+  fragment_type: example
+  content: "## Quick Start\n\n### Basic Timing\n\n```python\nimport time\n\ndef measure_time():\n    \"\"\"Simple timing measurement.\"\"\"\n    start = time.time()\n\n    # Your code here\n    result = sum(range(1000000))\n\n    elapsed = time.time() - start\n    print(f\"Execution time: {elapsed:.4f} seconds\")\n    return result\n\n# Better: use timeit for accurate measurements\nimport timeit\n\nexecution_time = timeit.timeit(\n    \"sum(range(1000000))\",\n    number=100\n)\nprint(f\"Average time: {execution_time/100:.6f} seconds\")\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Profiling Tools\n\n### Pattern 1: cProfile - CPU Profiling\n\n```python\nimport cProfile\nimport pstats\nfrom pstats import SortKey\n\ndef slow_function():\n    \"\"\"Function to profile.\"\"\"\n    total = 0\n    for i in range(1000000):\n        total += i\n    return total\n\ndef another_function():\n    \"\"\"Another function.\"\"\"\n    return [i**2 for i in range(100000)]\n\ndef main():\n    \"\"\"Main function to profile.\"\"\"\n    result1 = slow_function()\n    result2 = another_function()\n    return result1, result2\n\n# Profile the code\nif __name__ == \"__main__\":\n    profiler = cProfile.Profile()\n    profiler.enable()\n\n    main()\n\n    profiler.disable()\n\n    # Print stats\n    stats = pstats.Stats(profiler)\n    stats.sort_stats(SortKey.CUMULATIVE)\n    stats.print_stats(10)  # Top 10 functions\n\n    # Save to file for later analysis\n    stats.dump_stats(\"profile_output.prof\")\n```\n\n**Command-line profiling:**\n\n```bash\n# Profile a script\npython -m cProfile -o output.prof script.py\n\n# View results\npython -m pstats output.prof\n# In pstats:\n# sort cumtime\n# stats 10\n```\n\n### Pattern 2: line_profiler - Line-by-Line Profiling\n\n```python\n# Install: pip install line-profiler\n\n# Add @profile decorator (line_profiler provides this)\n@profile\ndef process_data(data):\n    \"\"\"Process data with line profiling.\"\"\"\n    result = []\n    for item in data:\n        processed = item * 2\n        result.append(processed)\n    return result\n\n# Run with:\n# kernprof -l -v script.py\n```\n\n**Manual line profiling:**\n\n```python\nfrom line_profiler import LineProfiler\n\ndef process_data(data):\n    \"\"\"Function to profile.\"\"\"\n    result = []\n    for item in data:\n        processed = item * 2\n        result.append(processed)\n    return result\n\nif __name__ == \"__main__\":\n    lp = LineProfiler()\n    lp.add_function(process_data)\n\n    data = list(range(100000))\n\n    lp_wrapper = lp(process_data)\n    lp_wrapper(data)\n\n    lp.print_stats()\n```\n\n### Pattern 3: memory_profiler - Memory Usage\n\n```python\n# Install: pip install memory-profiler\n\nfrom memory_profiler import profile\n\n@profile\ndef memory_intensive():\n    \"\"\"Function that uses lots of memory.\"\"\"\n    # Create large list\n    big_list = [i for i in range(1000000)]\n\n    # Create large dict\n    big_dict = {i: i**2 for i in range(100000)}\n\n    # Process data\n    result = sum(big_list)\n\n    return result\n\nif __name__ == \"__main__\":\n    memory_intensive()\n\n# Run with:\n# python -m memory_profiler script.py\n```\n\n### Pattern 4: py-spy - Production Profiling\n\n```bash\n# Install: pip install py-spy\n\n# Profile a running Python process\npy-spy top --pid 12345\n\n# Generate flamegraph\npy-spy record -o profile.svg --pid 12345\n\n# Profile a script\npy-spy record -o profile.svg -- python script.py\n\n# Dump current call stack\npy-spy dump --pid 12345\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Pattern 5: List Comprehensions vs Loops\n\n```python\nimport timeit\n\n# Slow: Traditional loop\ndef slow_squares(n):\n    \"\"\"Create list of squares using loop.\"\"\"\n    result = []\n    for i in range(n):\n        result.append(i**2)\n    return result\n\n# Fast: List comprehension\ndef fast_squares(n):\n    \"\"\"Create list of squares using comprehension.\"\"\"\n    return [i**2 for i in range(n)]\n\n# Benchmark\nn = 100000\n\nslow_time = timeit.timeit(lambda: slow_squares(n), number=100)\nfast_time = timeit.timeit(lambda: fast_squares(n), number=100)\n\nprint(f\"Loop: {slow_time:.4f}s\")\nprint(f\"Comprehension: {fast_time:.4f}s\")\nprint(f\"Speedup: {slow_time/fast_time:.2f}x\")\n\n# Even faster for simple operations: map\ndef faster_squares(n):\n    \"\"\"Use map for even better performance.\"\"\"\n    return list(map(lambda x: x**2, range(n)))\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### Pattern 6: Generator Expressions for Memory\n\n```python\nimport sys\n\ndef list_approach():\n    \"\"\"Memory-intensive list.\"\"\"\n    data = [i**2 for i in range(1000000)]\n    return sum(data)\n\ndef generator_approach():\n    \"\"\"Memory-efficient generator.\"\"\"\n    data = (i**2 for i in range(1000000))\n    return sum(data)\n\n# Memory comparison\nlist_data = [i for i in range(1000000)]\ngen_data = (i for i in range(1000000))\n\nprint(f\"List size: {sys.getsizeof(list_data)} bytes\")\nprint(f\"Generator size: {sys.getsizeof(gen_data)} bytes\")\n\n# Generators use constant memory regardless of size\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### Pattern 7: String Concatenation\n\n```python\nimport timeit\n\ndef slow_concat(items):\n    \"\"\"Slow string concatenation.\"\"\"\n    result = \"\"\n    for item in items:\n        result += str(item)\n    return result\n\ndef fast_concat(items):\n    \"\"\"Fast string concatenation with join.\"\"\"\n    return \"\".join(str(item) for item in items)\n\ndef faster_concat(items):\n    \"\"\"Even faster with list.\"\"\"\n    parts = [str(item) for item in items]\n    return \"\".join(parts)\n\nitems = list(range(10000))\n\n# Benchmark\nslow = timeit.timeit(lambda: slow_concat(items), number=100)\nfast = timeit.timeit(lambda: fast_concat(items), number=100)\nfaster = timeit.timeit(lambda: faster_concat(items), number=100)\n\nprint(f\"Concatenation (+): {slow:.4f}s\")\nprint(f\"Join (generator): {fast:.4f}s\")\nprint(f\"Join (list): {faster:.4f}s\")\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Pattern 8: Dictionary Lookups vs List Searches\n\n```python\nimport timeit\n\n# Create test data\nsize = 10000\nitems = list(range(size))\nlookup_dict = {i: i for i in range(size)}\n\ndef list_search(items, target):\n    \"\"\"O(n) search in list.\"\"\"\n    return target in items\n\ndef dict_search(lookup_dict, target):\n    \"\"\"O(1) search in dict.\"\"\"\n    return target in lookup_dict\n\ntarget = size - 1  # Worst case for list\n\n# Benchmark\nlist_time = timeit.timeit(\n    lambda: list_search(items, target),\n    number=1000\n)\ndict_time = timeit.timeit(\n    lambda: dict_search(lookup_dict, target),\n    number=1000\n)\n\nprint(f\"List search: {list_time:.6f}s\")\nprint(f\"Dict search: {dict_time:.6f}s\")\nprint(f\"Speedup: {list_time/dict_time:.0f}x\")\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Pattern 9: Local Variable Access\n\n```python\nimport timeit\n\n# Global variable (slow)\nGLOBAL_VALUE = 100\n\ndef use_global():\n    \"\"\"Access global variable.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += GLOBAL_VALUE\n    return total\n\ndef use_local():\n    \"\"\"Use local variable.\"\"\"\n    local_value = 100\n    total = 0\n    for i in range(10000):\n        total += local_value\n    return total\n\n# Local is faster\nglobal_time = timeit.timeit(use_global, number=1000)\nlocal_time = timeit.timeit(use_local, number=1000)\n\nprint(f\"Global access: {global_time:.4f}s\")\nprint(f\"Local access: {local_time:.4f}s\")\nprint(f\"Speedup: {global_time/local_time:.2f}x\")\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Pattern 10: Function Call Overhead\n\n```python\nimport timeit\n\ndef calculate_inline():\n    \"\"\"Inline calculation.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += i * 2 + 1\n    return total\n\ndef helper_function(x):\n    \"\"\"Helper function.\"\"\"\n    return x * 2 + 1\n\ndef calculate_with_function():\n    \"\"\"Calculation with function calls.\"\"\"\n    total = 0\n    for i in range(10000):\n        total += helper_function(i)\n    return total\n\n# Inline is faster due to no call overhead\ninline_time = timeit.timeit(calculate_inline, number=1000)\nfunction_time = timeit.timeit(calculate_with_function, number=1000)\n\nprint(f\"Inline: {inline_time:.4f}s\")\nprint(f\"Function calls: {function_time:.4f}s\")\n```\n\nFor advanced optimization techniques including NumPy vectorization, caching, memory management, parallelization, async I/O, database optimization, and benchmarking tools, see [references/advanced-patterns.md](references/advanced-patterns.md)"
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Profile before optimizing** - Measure to find real bottlenecks
+
+    2. **Focus on hot paths** - Optimize code that runs most frequently
+
+    3. **Use appropriate data structures** - Dict for lookups, set for membership
+
+    4. **Avoid premature optimization** - Clarity first, then optimize
+
+    5. **Use built-in functions** - They''re implemented in C
+
+    6. **Cache expensive computations** - Use lru_cache
+
+    7. **Batch I/O operations** - Reduce system calls
+
+    8. **Use generators** for large datasets
+
+    9. **Consider NumPy** for numerical operations
+
+    10. **Profile production code** - Use py-spy for live systems'
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    - Optimizing without profiling
+
+    - Using global variables unnecessarily
+
+    - Not using appropriate data structures
+
+    - Creating unnecessary copies of data
+
+    - Not using connection pooling for databases
+
+    - Ignoring algorithmic complexity
+
+    - Over-optimizing rare code paths
+
+    - Not considering memory usage'

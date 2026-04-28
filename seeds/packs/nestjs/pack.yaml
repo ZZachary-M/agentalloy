@@ -1,0 +1,17 @@
+name: nestjs
+version: 1.0.0
+description: NestJS framework — modules, providers, DI, ValidationPipe, guards, interceptors,
+  exception filters.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- nodejs
+- typescript
+skills:
+- skill_id: nestjs-patterns
+  file: nestjs-patterns.yaml
+  fragment_count: 8

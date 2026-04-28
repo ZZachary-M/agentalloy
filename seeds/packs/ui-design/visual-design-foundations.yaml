@@ -1,0 +1,92 @@
+skill_type: domain
+skill_id: visual-design-foundations
+canonical_name: Visual Design Foundations
+category: design
+skill_class: domain
+domain_tags:
+- color
+- typography
+- spacing
+- layout
+- visual-hierarchy
+- grid
+- design-principles
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Visual Design Foundations\n\nBuild cohesive, accessible visual systems using typography, color, spacing, and iconography fundamentals.\n\n## When to Use This Skill\n\n- Establishing design tokens for a new project\n- Creating or refining a spacing and sizing system\n- Selecting and pairing typefaces\n- Building accessible color palettes\n- Designing icon systems and visual assets\n- Improving visual hierarchy and readability\n- Auditing designs for visual consistency\n- Implementing dark mode or theming\n\n## Core Systems\n\n### 1. Typography Scale\n\n**Modular Scale** (ratio-based sizing):\n\n```css\n:root {\n  --font-size-xs: 0.75rem; /* 12px */\n  --font-size-sm: 0.875rem; /* 14px */\n  --font-size-base: 1rem; /* 16px */\n  --font-size-lg: 1.125rem; /* 18px */\n  --font-size-xl: 1.25rem; /* 20px */\n  --font-size-2xl: 1.5rem; /* 24px */\n  --font-size-3xl: 1.875rem; /* 30px */\n  --font-size-4xl: 2.25rem; /* 36px */\n  --font-size-5xl: 3rem; /* 48px */\n}\n```\n\n**Line Height Guidelines**:\n| Text Type | Line Height |\n|-----------|-------------|\n| Headings | 1.1 - 1.3 |\n| Body text | 1.5 - 1.7 |\n| UI labels | 1.2 - 1.4 |\n\n### 2. Spacing System\n\n**8-point grid** (industry standard):\n\n```css\n:root {\n  --space-1: 0.25rem; /* 4px */\n  --space-2: 0.5rem; /* 8px */\n  --space-3: 0.75rem; /* 12px */\n  --space-4: 1rem; /* 16px */\n  --space-5: 1.25rem; /* 20px */\n  --space-6: 1.5rem; /* 24px */\n  --space-8: 2rem; /* 32px */\n  --space-10: 2.5rem; /* 40px */\n  --space-12: 3rem; /* 48px */\n  --space-16: 4rem; /* 64px */\n}\n```\n\n### 3. Color System\n\n**Semantic color tokens**:\n\n```css\n:root {\n  /* Brand */\n  --color-primary: #2563eb;\n  --color-primary-hover: #1d4ed8;\n  --color-primary-active: #1e40af;\n\n  /* Semantic */\n  --color-success: #16a34a;\n  --color-warning: #ca8a04;\n  --color-error: #dc2626;\n  --color-info: #0891b2;\n\n  /* Neutral */\n  --color-gray-50: #f9fafb;\n  --color-gray-100: #f3f4f6;\n  --color-gray-200: #e5e7eb;\n  --color-gray-300: #d1d5db;\n  --color-gray-400: #9ca3af;\n  --color-gray-500: #6b7280;\n  --color-gray-600: #4b5563;\n  --color-gray-700: #374151;\n  --color-gray-800: #1f2937;\n  --color-gray-900: #111827;\n}\n```\n\n## Quick Start: Design Tokens in Tailwind\n\n```js\n// tailwind.config.js\nmodule.exports = {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: [\"Inter\", \"system-ui\", \"sans-serif\"],\n        mono: [\"JetBrains Mono\", \"monospace\"],\n      },\n      fontSize: {\n        xs: [\"0.75rem\", { lineHeight: \"1rem\" }],\n        sm: [\"0.875rem\", { lineHeight: \"1.25rem\" }],\n        base: [\"1rem\", { lineHeight: \"1.5rem\" }],\n        lg: [\"1.125rem\", { lineHeight: \"1.75rem\" }],\n        xl: [\"1.25rem\", { lineHeight: \"1.75rem\" }],\n        \"2xl\": [\"1.5rem\", { lineHeight: \"2rem\" }],\n      },\n      colors: {\n        brand: {\n          50: \"#eff6ff\",\n          500: \"#3b82f6\",\n          600: \"#2563eb\",\n          700: \"#1d4ed8\",\n        },\n      },\n      spacing: {\n        // Extends default with custom values\n        18: \"4.5rem\",\n        88: \"22rem\",\n      },\n    },\n  },\n};\n```\n\n## Typography Best Practices\n\n### Font Pairing\n\n**Safe combinations**:\n\n- Heading: **Inter** / Body: **Inter** (single family)\n- Heading: **Playfair Display** / Body: **Source Sans Pro** (contrast)\n- Heading: **Space Grotesk** / Body: **IBM Plex Sans** (geometric)\n\n### Responsive Typography\n\n```css\n/* Fluid typography using clamp() */\nh1 {\n  font-size: clamp(2rem, 5vw + 1rem, 3.5rem);\n  line-height: 1.1;\n}\n\np {\n  font-size: clamp(1rem, 2vw + 0.5rem, 1.125rem);\n  line-height: 1.6;\n  max-width: 65ch; /* Optimal reading width */\n}\n```\n\n### Font Loading\n\n```css\n/* Prevent layout shift */\n@font-face {\n  font-family: \"Inter\";\n  src: url(\"/fonts/Inter.woff2\") format(\"woff2\");\n  font-display: swap;\n  font-weight: 400 700;\n}\n```\n\n## Color Theory\n\n### Contrast Requirements (WCAG)\n\n| Element            | Minimum Ratio |\n| ------------------ | ------------- |\n| Body text          | 4.5:1 (AA)    |\n| Large text (18px+) | 3:1 (AA)      |\n| UI components      | 3:1 (AA)      |\n| Enhanced           | 7:1 (AAA)     |\n\n### Dark Mode Strategy\n\n```css\n:root {\n  --bg-primary: #ffffff;\n  --bg-secondary: #f9fafb;\n  --text-primary: #111827;\n  --text-secondary: #6b7280;\n  --border: #e5e7eb;\n}\n\n[data-theme=\"dark\"] {\n  --bg-primary: #111827;\n  --bg-secondary: #1f2937;\n  --text-primary: #f9fafb;\n  --text-secondary: #9ca3af;\n  --border: #374151;\n}\n```\n\n### Color Accessibility\n\n```tsx\n// Check contrast programmatically\nfunction getContrastRatio(foreground: string, background: string): number {\n  const getLuminance = (hex: string) => {\n    const rgb = hexToRgb(hex);\n    const [r, g, b] = rgb.map((c) => {\n      c = c / 255;\n      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);\n    });\n    return 0.2126 * r + 0.7152 * g + 0.0722 * b;\n  };\n\n  const l1 = getLuminance(foreground);\n  const l2 = getLuminance(background);\n  const lighter = Math.max(l1, l2);\n  const darker = Math.min(l1, l2);\n\n  return (lighter + 0.05) / (darker + 0.05);\n}\n```\n\n## Spacing Guidelines\n\n### Component Spacing\n\n```\nCard padding:      16-24px (--space-4 to --space-6)\nSection gap:       32-64px (--space-8 to --space-16)\nForm field gap:    16-24px (--space-4 to --space-6)\nButton padding:    8-16px vertical, 16-24px horizontal\nIcon-text gap:     8px (--space-2)\n```\n\n### Visual Rhythm\n\n```css\n/* Consistent vertical rhythm */\n.prose > * + * {\n  margin-top: var(--space-4);\n}\n\n.prose > h2 + * {\n  margin-top: var(--space-2);\n}\n\n.prose > * + h2 {\n  margin-top: var(--space-8);\n}\n```\n\n## Iconography\n\n### Icon Sizing System\n\n```css\n:root {\n  --icon-xs: 12px;\n  --icon-sm: 16px;\n  --icon-md: 20px;\n  --icon-lg: 24px;\n  --icon-xl: 32px;\n}\n```\n\n### Icon Component\n\n```tsx\ninterface IconProps {\n  name: string;\n  size?: \"xs\" | \"sm\" | \"md\" | \"lg\" | \"xl\";\n  className?: string;\n}\n\nconst sizeMap = {\n  xs: 12,\n  sm: 16,\n  md: 20,\n  lg: 24,\n  xl: 32,\n};\n\nexport function Icon({ name, size = \"md\", className }: IconProps) {\n  return (\n    <svg\n      width={sizeMap[size]}\n      height={sizeMap[size]}\n      className={cn(\"inline-block flex-shrink-0\", className)}\n      aria-hidden=\"true\"\n    >\n      <use href={`/icons.svg#${name}`} />\n    </svg>\n  );\n}\n```\n\n## Best Practices\n\n1. **Establish Constraints**: Limit choices to maintain consistency\n2. **Document Decisions**: Create a living style guide\n3. **Test Accessibility**: Verify contrast, sizing, touch targets\n4. **Use Semantic Tokens**: Name by purpose, not appearance\n5. **Design Mobile-First**: Start with constraints, add complexity\n6. **Maintain Vertical Rhythm**: Consistent spacing creates harmony\n7. **Limit Font Weights**: 2-3 weights per family is sufficient\n\n## Common Issues\n\n- **Inconsistent Spacing**: Not using a defined scale\n- **Poor Contrast**: Failing WCAG requirements\n- **Font Overload**: Too many families or weights\n- **Magic Numbers**: Arbitrary values instead of tokens\n- **Missing States**: Forgetting hover, focus, disabled\n- **No Dark Mode Plan**: Retrofitting is harder than planning"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Establishing design tokens for a new project
+
+    - Creating or refining a spacing and sizing system
+
+    - Selecting and pairing typefaces
+
+    - Building accessible color palettes
+
+    - Designing icon systems and visual assets
+
+    - Improving visual hierarchy and readability
+
+    - Auditing designs for visual consistency
+
+    - Implementing dark mode or theming'
+- sequence: 2
+  fragment_type: execution
+  content: "## Core Systems\n\n### 1. Typography Scale\n\n**Modular Scale** (ratio-based sizing):\n\n```css\n:root {\n  --font-size-xs: 0.75rem; /* 12px */\n  --font-size-sm: 0.875rem; /* 14px */\n  --font-size-base: 1rem; /* 16px */\n  --font-size-lg: 1.125rem; /* 18px */\n  --font-size-xl: 1.25rem; /* 20px */\n  --font-size-2xl: 1.5rem; /* 24px */\n  --font-size-3xl: 1.875rem; /* 30px */\n  --font-size-4xl: 2.25rem; /* 36px */\n  --font-size-5xl: 3rem; /* 48px */\n}\n```\n\n**Line Height Guidelines**:\n| Text Type | Line Height |\n|-----------|-------------|\n| Headings | 1.1 - 1.3 |\n| Body text | 1.5 - 1.7 |\n| UI labels | 1.2 - 1.4 |\n\n### 2. Spacing System\n\n**8-point grid** (industry standard):\n\n```css\n:root {\n  --space-1: 0.25rem; /* 4px */\n  --space-2: 0.5rem; /* 8px */\n  --space-3: 0.75rem; /* 12px */\n  --space-4: 1rem; /* 16px */\n  --space-5: 1.25rem; /* 20px */\n  --space-6: 1.5rem; /* 24px */\n  --space-8: 2rem; /* 32px */\n  --space-10: 2.5rem; /* 40px */\n  --space-12: 3rem; /* 48px */\n  --space-16: 4rem; /* 64px */\n}\n```\n\n### 3. Color System\n\n**Semantic color tokens**:\n\n```css\n:root {\n  /* Brand */\n  --color-primary: #2563eb;\n  --color-primary-hover: #1d4ed8;\n  --color-primary-active: #1e40af;\n\n  /* Semantic */\n  --color-success: #16a34a;\n  --color-warning: #ca8a04;\n  --color-error: #dc2626;\n  --color-info: #0891b2;\n\n  /* Neutral */\n  --color-gray-50: #f9fafb;\n  --color-gray-100: #f3f4f6;\n  --color-gray-200: #e5e7eb;\n  --color-gray-300: #d1d5db;\n  --color-gray-400: #9ca3af;\n  --color-gray-500: #6b7280;\n  --color-gray-600: #4b5563;\n  --color-gray-700: #374151;\n  --color-gray-800: #1f2937;\n  --color-gray-900: #111827;\n}\n```"
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Start: Design Tokens in Tailwind\n\n```js\n// tailwind.config.js\nmodule.exports = {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: [\"Inter\", \"system-ui\", \"sans-serif\"],\n        mono: [\"JetBrains Mono\", \"monospace\"],\n      },\n      fontSize: {\n        xs: [\"0.75rem\", { lineHeight: \"1rem\" }],\n        sm: [\"0.875rem\", { lineHeight: \"1.25rem\" }],\n        base: [\"1rem\", { lineHeight: \"1.5rem\" }],\n        lg: [\"1.125rem\", { lineHeight: \"1.75rem\" }],\n        xl: [\"1.25rem\", { lineHeight: \"1.75rem\" }],\n        \"2xl\": [\"1.5rem\", { lineHeight: \"2rem\" }],\n      },\n      colors: {\n        brand: {\n          50: \"#eff6ff\",\n          500: \"#3b82f6\",\n          600: \"#2563eb\",\n          700: \"#1d4ed8\",\n        },\n      },\n      spacing: {\n        // Extends default with custom values\n        18: \"4.5rem\",\n        88: \"22rem\",\n      },\n    },\n  },\n};\n```"
+- sequence: 4
+  fragment_type: guardrail
+  content: "## Typography Best Practices\n\n### Font Pairing\n\n**Safe combinations**:\n\n- Heading: **Inter** / Body: **Inter** (single family)\n- Heading: **Playfair Display** / Body: **Source Sans Pro** (contrast)\n- Heading: **Space Grotesk** / Body: **IBM Plex Sans** (geometric)\n\n### Responsive Typography\n\n```css\n/* Fluid typography using clamp() */\nh1 {\n  font-size: clamp(2rem, 5vw + 1rem, 3.5rem);\n  line-height: 1.1;\n}\n\np {\n  font-size: clamp(1rem, 2vw + 0.5rem, 1.125rem);\n  line-height: 1.6;\n  max-width: 65ch; /* Optimal reading width */\n}\n```\n\n### Font Loading\n\n```css\n/* Prevent layout shift */\n@font-face {\n  font-family: \"Inter\";\n  src: url(\"/fonts/Inter.woff2\") format(\"woff2\");\n  font-display: swap;\n  font-weight: 400 700;\n}\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Color Theory\n\n### Contrast Requirements (WCAG)\n\n| Element            | Minimum Ratio |\n| ------------------ | ------------- |\n| Body text          | 4.5:1 (AA)    |\n| Large text (18px+) | 3:1 (AA)      |\n| UI components      | 3:1 (AA)      |\n| Enhanced           | 7:1 (AAA)     |\n\n### Dark Mode Strategy\n\n```css\n:root {\n  --bg-primary: #ffffff;\n  --bg-secondary: #f9fafb;\n  --text-primary: #111827;\n  --text-secondary: #6b7280;\n  --border: #e5e7eb;\n}\n\n[data-theme=\"dark\"] {\n  --bg-primary: #111827;\n  --bg-secondary: #1f2937;\n  --text-primary: #f9fafb;\n  --text-secondary: #9ca3af;\n  --border: #374151;\n}\n```\n\n### Color Accessibility\n\n```tsx\n// Check contrast programmatically\nfunction getContrastRatio(foreground: string, background: string): number {\n  const getLuminance = (hex: string) => {\n    const rgb = hexToRgb(hex);\n    const [r, g, b] = rgb.map((c) => {\n      c = c / 255;\n      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);\n    });\n    return 0.2126 * r + 0.7152 * g + 0.0722 * b;\n  };\n\n  const l1 = getLuminance(foreground);\n  const l2 = getLuminance(background);\n  const lighter = Math.max(l1, l2);\n  const darker = Math.min(l1, l2);\n\n  return (lighter + 0.05) / (darker + 0.05);\n}\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Spacing Guidelines\n\n### Component Spacing\n\n```\nCard padding:      16-24px (--space-4 to --space-6)\nSection gap:       32-64px (--space-8 to --space-16)\nForm field gap:    16-24px (--space-4 to --space-6)\nButton padding:    8-16px vertical, 16-24px horizontal\nIcon-text gap:     8px (--space-2)\n```\n\n### Visual Rhythm\n\n```css\n/* Consistent vertical rhythm */\n.prose > * + * {\n  margin-top: var(--space-4);\n}\n\n.prose > h2 + * {\n  margin-top: var(--space-2);\n}\n\n.prose > * + h2 {\n  margin-top: var(--space-8);\n}\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "## Iconography\n\n### Icon Sizing System\n\n```css\n:root {\n  --icon-xs: 12px;\n  --icon-sm: 16px;\n  --icon-md: 20px;\n  --icon-lg: 24px;\n  --icon-xl: 32px;\n}\n```\n\n### Icon Component\n\n```tsx\ninterface IconProps {\n  name: string;\n  size?: \"xs\" | \"sm\" | \"md\" | \"lg\" | \"xl\";\n  className?: string;\n}\n\nconst sizeMap = {\n  xs: 12,\n  sm: 16,\n  md: 20,\n  lg: 24,\n  xl: 32,\n};\n\nexport function Icon({ name, size = \"md\", className }: IconProps) {\n  return (\n    <svg\n      width={sizeMap[size]}\n      height={sizeMap[size]}\n      className={cn(\"inline-block flex-shrink-0\", className)}\n      aria-hidden=\"true\"\n    >\n      <use href={`/icons.svg#${name}`} />\n    </svg>\n  );\n}\n```"
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Establish Constraints**: Limit choices to maintain consistency
+
+    2. **Document Decisions**: Create a living style guide
+
+    3. **Test Accessibility**: Verify contrast, sizing, touch targets
+
+    4. **Use Semantic Tokens**: Name by purpose, not appearance
+
+    5. **Design Mobile-First**: Start with constraints, add complexity
+
+    6. **Maintain Vertical Rhythm**: Consistent spacing creates harmony
+
+    7. **Limit Font Weights**: 2-3 weights per family is sufficient'
+- sequence: 9
+  fragment_type: verification
+  content: '## Common Issues
+
+
+    - **Inconsistent Spacing**: Not using a defined scale
+
+    - **Poor Contrast**: Failing WCAG requirements
+
+    - **Font Overload**: Too many families or weights
+
+    - **Magic Numbers**: Arbitrary values instead of tokens
+
+    - **Missing States**: Forgetting hover, focus, disabled
+
+    - **No Dark Mode Plan**: Retrofitting is harder than planning'

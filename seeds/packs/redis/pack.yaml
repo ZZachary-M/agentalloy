@@ -1,0 +1,14 @@
+name: redis
+version: 1.0.0
+description: Redis runtime — caching, distributed locks, pub/sub, rate limiting.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: redis-nodejs
+  file: redis-nodejs.yaml
+  fragment_count: 8

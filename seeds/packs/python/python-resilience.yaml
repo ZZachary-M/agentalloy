@@ -1,0 +1,120 @@
+skill_type: domain
+skill_id: python-resilience
+canonical_name: Python Resilience Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- retry-logic
+- exponential-backoff
+- fault-tolerance
+- tenacity
+- timeout-handling
+- transient-failures
+- decorator-patterns
+- circuit-breaker
+- graceful-degradation
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents python-development plugin
+raw_prose: "# Python Resilience Patterns\n\nBuild fault-tolerant Python applications that gracefully handle transient failures, network issues, and service outages. Resilience patterns keep systems running when dependencies are unreliable.\n\n## When to Use This Skill\n\n- Adding retry logic to external service calls\n- Implementing timeouts for network operations\n- Building fault-tolerant microservices\n- Handling rate limiting and backpressure\n- Creating infrastructure decorators\n- Designing circuit breakers\n\n## Core Concepts\n\n### 1. Transient vs Permanent Failures\n\nRetry transient errors (network timeouts, temporary service issues). Don't retry permanent errors (invalid credentials, bad requests).\n\n### 2. Exponential Backoff\n\nIncrease wait time between retries to avoid overwhelming recovering services.\n\n### 3. Jitter\n\nAdd randomness to backoff to prevent thundering herd when many clients retry simultaneously.\n\n### 4. Bounded Retries\n\nCap both attempt count and total duration to prevent infinite retry loops.\n\n## Quick Start\n\n```python\nfrom tenacity import retry, stop_after_attempt, wait_exponential_jitter\n\n@retry(\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef call_external_service(request: dict) -> dict:\n    return httpx.post(\"https://api.example.com\", json=request).json()\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Basic Retry with Tenacity\n\nUse the `tenacity` library for production-grade retry logic. For simpler cases, consider built-in retry functionality or a lightweight custom implementation.\n\n```python\nfrom tenacity import (\n    retry,\n    stop_after_attempt,\n    stop_after_delay,\n    wait_exponential_jitter,\n    retry_if_exception_type,\n)\n\nTRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)\n\n@retry(\n    retry=retry_if_exception_type(TRANSIENT_ERRORS),\n    stop=stop_after_attempt(5) | stop_after_delay(60),\n    wait=wait_exponential_jitter(initial=1, max=30),\n)\ndef fetch_data(url: str) -> dict:\n    \"\"\"Fetch data with automatic retry on transient failures.\"\"\"\n    response = httpx.get(url, timeout=30)\n    response.raise_for_status()\n    return response.json()\n```\n\n### Pattern 2: Retry Only Appropriate Errors\n\nWhitelist specific transient exceptions. Never retry:\n\n- `ValueError`, `TypeError` - These are bugs, not transient issues\n- `AuthenticationError` - Invalid credentials won't become valid\n- HTTP 4xx errors (except 429) - Client errors are permanent\n\n```python\nfrom tenacity import retry, retry_if_exception_type\nimport httpx\n\n# Define what's retryable\nRETRYABLE_EXCEPTIONS = (\n    ConnectionError,\n    TimeoutError,\n    httpx.ConnectTimeout,\n    httpx.ReadTimeout,\n)\n\n@retry(\n    retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef resilient_api_call(endpoint: str) -> dict:\n    \"\"\"Make API call with retry on network issues.\"\"\"\n    return httpx.get(endpoint, timeout=10).json()\n```\n\n### Pattern 3: HTTP Status Code Retries\n\nRetry specific HTTP status codes that indicate transient issues.\n\n```python\nfrom tenacity import retry, retry_if_result, stop_after_attempt\nimport httpx\n\nRETRY_STATUS_CODES = {429, 502, 503, 504}\n\ndef should_retry_response(response: httpx.Response) -> bool:\n    \"\"\"Check if response indicates a retryable error.\"\"\"\n    return response.status_code in RETRY_STATUS_CODES\n\n@retry(\n    retry=retry_if_result(should_retry_response),\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef http_request(method: str, url: str, **kwargs) -> httpx.Response:\n    \"\"\"Make HTTP request with retry on transient status codes.\"\"\"\n    return httpx.request(method, url, timeout=30, **kwargs)\n```\n\n### Pattern 4: Combined Exception and Status Retry\n\nHandle both network exceptions and HTTP status codes.\n\n```python\nfrom tenacity import (\n    retry,\n    retry_if_exception_type,\n    retry_if_result,\n    stop_after_attempt,\n    wait_exponential_jitter,\n    before_sleep_log,\n)\nimport logging\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\nTRANSIENT_EXCEPTIONS = (\n    ConnectionError,\n    TimeoutError,\n    httpx.ConnectError,\n    httpx.ReadTimeout,\n)\nRETRY_STATUS_CODES = {429, 500, 502, 503, 504}\n\ndef is_retryable_response(response: httpx.Response) -> bool:\n    return response.status_code in RETRY_STATUS_CODES\n\n@retry(\n    retry=(\n        retry_if_exception_type(TRANSIENT_EXCEPTIONS) |\n        retry_if_result(is_retryable_response)\n    ),\n    stop=stop_after_attempt(5),\n    wait=wait_exponential_jitter(initial=1, max=30),\n    before_sleep=before_sleep_log(logger, logging.WARNING),\n)\ndef robust_http_call(\n    method: str,\n    url: str,\n    **kwargs,\n) -> httpx.Response:\n    \"\"\"HTTP call with comprehensive retry handling.\"\"\"\n    return httpx.request(method, url, timeout=30, **kwargs)\n```\n\n## Advanced Patterns\n\n### Pattern 5: Logging Retry Attempts\n\nTrack retry behavior for debugging and alerting.\n\n```python\nfrom tenacity import retry, stop_after_attempt, wait_exponential\nimport structlog\n\nlogger = structlog.get_logger()\n\ndef log_retry_attempt(retry_state):\n    \"\"\"Log detailed retry information.\"\"\"\n    exception = retry_state.outcome.exception()\n    logger.warning(\n        \"Retrying operation\",\n        attempt=retry_state.attempt_number,\n        exception_type=type(exception).__name__,\n        exception_message=str(exception),\n        next_wait_seconds=retry_state.next_action.sleep if retry_state.next_action else None,\n    )\n\n@retry(\n    stop=stop_after_attempt(3),\n    wait=wait_exponential(multiplier=1, max=10),\n    before_sleep=log_retry_attempt,\n)\ndef call_with_logging(request: dict) -> dict:\n    \"\"\"External call with retry logging.\"\"\"\n    ...\n```\n\n### Pattern 6: Timeout Decorator\n\nCreate reusable timeout decorators for consistent timeout handling.\n\n```python\nimport asyncio\nfrom functools import wraps\nfrom typing import TypeVar, Callable\n\nT = TypeVar(\"T\")\n\ndef with_timeout(seconds: float):\n    \"\"\"Decorator to add timeout to async functions.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        @wraps(func)\n        async def wrapper(*args, **kwargs) -> T:\n            return await asyncio.wait_for(\n                func(*args, **kwargs),\n                timeout=seconds,\n            )\n        return wrapper\n    return decorator\n\n@with_timeout(30)\nasync def fetch_with_timeout(url: str) -> dict:\n    \"\"\"Fetch URL with 30 second timeout.\"\"\"\n    async with httpx.AsyncClient() as client:\n        response = await client.get(url)\n        return response.json()\n```\n\n### Pattern 7: Cross-Cutting Concerns via Decorators\n\nStack decorators to separate infrastructure from business logic.\n\n```python\nfrom functools import wraps\nfrom typing import TypeVar, Callable\nimport structlog\n\nlogger = structlog.get_logger()\nT = TypeVar(\"T\")\n\ndef traced(name: str | None = None):\n    \"\"\"Add tracing to function calls.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        span_name = name or func.__name__\n\n        @wraps(func)\n        async def wrapper(*args, **kwargs) -> T:\n            logger.info(\"Operation started\", operation=span_name)\n            try:\n                result = await func(*args, **kwargs)\n                logger.info(\"Operation completed\", operation=span_name)\n                return result\n            except Exception as e:\n                logger.error(\"Operation failed\", operation=span_name, error=str(e))\n                raise\n        return wrapper\n    return decorator\n\n# Stack multiple concerns\n@traced(\"fetch_user_data\")\n@with_timeout(30)\n@retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter())\nasync def fetch_user_data(user_id: str) -> dict:\n    \"\"\"Fetch user with tracing, timeout, and retry.\"\"\"\n    ...\n```\n\n### Pattern 8: Dependency Injection for Testability\n\nPass infrastructure components through constructors for easy testing.\n\n```python\nfrom dataclasses import dataclass\nfrom typing import Protocol\n\nclass Logger(Protocol):\n    def info(self, msg: str, **kwargs) -> None: ...\n    def error(self, msg: str, **kwargs) -> None: ...\n\nclass MetricsClient(Protocol):\n    def increment(self, metric: str, tags: dict | None = None) -> None: ...\n    def timing(self, metric: str, value: float) -> None: ...\n\n@dataclass\nclass UserService:\n    \"\"\"Service with injected infrastructure.\"\"\"\n\n    repository: UserRepository\n    logger: Logger\n    metrics: MetricsClient\n\n    async def get_user(self, user_id: str) -> User:\n        self.logger.info(\"Fetching user\", user_id=user_id)\n        start = time.perf_counter()\n\n        try:\n            user = await self.repository.get(user_id)\n            self.metrics.increment(\"user.fetch.success\")\n            return user\n        except Exception as e:\n            self.metrics.increment(\"user.fetch.error\")\n            self.logger.error(\"Failed to fetch user\", user_id=user_id, error=str(e))\n            raise\n        finally:\n            elapsed = time.perf_counter() - start\n            self.metrics.timing(\"user.fetch.duration\", elapsed)\n\n# Easy to test with fakes\nservice = UserService(\n    repository=FakeRepository(),\n    logger=FakeLogger(),\n    metrics=FakeMetrics(),\n)\n```\n\n### Pattern 9: Fail-Safe Defaults\n\nDegrade gracefully when non-critical operations fail.\n\n```python\nfrom typing import TypeVar\nfrom collections.abc import Callable\n\nT = TypeVar(\"T\")\n\ndef fail_safe(default: T, log_failure: bool = True):\n    \"\"\"Return default value on failure instead of raising.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        @wraps(func)\n        async\
+  \ def wrapper(*args, **kwargs) -> T:\n            try:\n                return await func(*args, **kwargs)\n            except Exception as e:\n                if log_failure:\n                    logger.warning(\n                        \"Operation failed, using default\",\n                        function=func.__name__,\n                        error=str(e),\n                    )\n                return default\n        return wrapper\n    return decorator\n\n@fail_safe(default=[])\nasync def get_recommendations(user_id: str) -> list[str]:\n    \"\"\"Get recommendations, return empty list on failure.\"\"\"\n    ...\n```\n\n## Best Practices Summary\n\n1. **Retry only transient errors** - Don't retry bugs or authentication failures\n2. **Use exponential backoff** - Give services time to recover\n3. **Add jitter** - Prevent thundering herd from synchronized retries\n4. **Cap total duration** - `stop_after_attempt(5) | stop_after_delay(60)`\n5. **Log every retry** - Silent retries hide systemic problems\n6. **Use decorators** - Keep retry logic separate from business logic\n7. **Inject dependencies** - Make infrastructure testable\n8. **Set timeouts everywhere** - Every network call needs a timeout\n9. **Fail gracefully** - Return cached/default values for non-critical paths\n10. **Monitor retry rates** - High retry rates indicate underlying issues"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: 'Build fault-tolerant Python applications that gracefully handle transient failures, network issues, and service outages. Resilience patterns keep systems running when dependencies are unreliable.
+
+
+    ## When to Use This Skill
+
+
+    - Adding retry logic to external service calls
+
+    - Implementing timeouts for network operations
+
+    - Building fault-tolerant microservices
+
+    - Handling rate limiting and backpressure
+
+    - Creating infrastructure decorators
+
+    - Designing circuit breakers'
+- sequence: 2
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Transient vs Permanent Failures
+
+
+    Retry transient errors (network timeouts, temporary service issues). Don''t retry permanent errors (invalid credentials, bad requests).
+
+
+    ### 2. Exponential Backoff
+
+
+    Increase wait time between retries to avoid overwhelming recovering services.
+
+
+    ### 3. Jitter
+
+
+    Add randomness to backoff to prevent thundering herd when many clients retry simultaneously.
+
+
+    ### 4. Bounded Retries
+
+
+    Cap both attempt count and total duration to prevent infinite retry loops.'
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Start\n\n```python\nfrom tenacity import retry, stop_after_attempt, wait_exponential_jitter\n\n@retry(\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef call_external_service(request: dict) -> dict:\n    return httpx.post(\"https://api.example.com\", json=request).json()\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Basic Retry with Tenacity\n\nUse the `tenacity` library for production-grade retry logic. For simpler cases, consider built-in retry functionality or a lightweight custom implementation.\n\n```python\nfrom tenacity import (\n    retry,\n    stop_after_attempt,\n    stop_after_delay,\n    wait_exponential_jitter,\n    retry_if_exception_type,\n)\n\nTRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)\n\n@retry(\n    retry=retry_if_exception_type(TRANSIENT_ERRORS),\n    stop=stop_after_attempt(5) | stop_after_delay(60),\n    wait=wait_exponential_jitter(initial=1, max=30),\n)\ndef fetch_data(url: str) -> dict:\n    \"\"\"Fetch data with automatic retry on transient failures.\"\"\"\n    response = httpx.get(url, timeout=30)\n    response.raise_for_status()\n    return response.json()\n```"
+- sequence: 4
+  fragment_type: example
+  content: "### Pattern 2: Retry Only Appropriate Errors\n\nWhitelist specific transient exceptions. Never retry:\n\n- `ValueError`, `TypeError` - These are bugs, not transient issues\n- `AuthenticationError` - Invalid credentials won't become valid\n- HTTP 4xx errors (except 429) - Client errors are permanent\n\n```python\nfrom tenacity import retry, retry_if_exception_type\nimport httpx\n\n# Define what's retryable\nRETRYABLE_EXCEPTIONS = (\n    ConnectionError,\n    TimeoutError,\n    httpx.ConnectTimeout,\n    httpx.ReadTimeout,\n)\n\n@retry(\n    retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef resilient_api_call(endpoint: str) -> dict:\n    \"\"\"Make API call with retry on network issues.\"\"\"\n    return httpx.get(endpoint, timeout=10).json()\n```"
+- sequence: 5
+  fragment_type: example
+  content: "### Pattern 3: HTTP Status Code Retries\n\nRetry specific HTTP status codes that indicate transient issues.\n\n```python\nfrom tenacity import retry, retry_if_result, stop_after_attempt\nimport httpx\n\nRETRY_STATUS_CODES = {429, 502, 503, 504}\n\ndef should_retry_response(response: httpx.Response) -> bool:\n    \"\"\"Check if response indicates a retryable error.\"\"\"\n    return response.status_code in RETRY_STATUS_CODES\n\n@retry(\n    retry=retry_if_result(should_retry_response),\n    stop=stop_after_attempt(3),\n    wait=wait_exponential_jitter(initial=1, max=10),\n)\ndef http_request(method: str, url: str, **kwargs) -> httpx.Response:\n    \"\"\"Make HTTP request with retry on transient status codes.\"\"\"\n    return httpx.request(method, url, timeout=30, **kwargs)\n```"
+- sequence: 6
+  fragment_type: example
+  content: "### Pattern 4: Combined Exception and Status Retry\n\nHandle both network exceptions and HTTP status codes.\n\n```python\nfrom tenacity import (\n    retry,\n    retry_if_exception_type,\n    retry_if_result,\n    stop_after_attempt,\n    wait_exponential_jitter,\n    before_sleep_log,\n)\nimport logging\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\nTRANSIENT_EXCEPTIONS = (\n    ConnectionError,\n    TimeoutError,\n    httpx.ConnectError,\n    httpx.ReadTimeout,\n)\nRETRY_STATUS_CODES = {429, 500, 502, 503, 504}\n\ndef is_retryable_response(response: httpx.Response) -> bool:\n    return response.status_code in RETRY_STATUS_CODES\n\n@retry(\n    retry=(\n        retry_if_exception_type(TRANSIENT_EXCEPTIONS) |\n        retry_if_result(is_retryable_response)\n    ),\n    stop=stop_after_attempt(5),\n    wait=wait_exponential_jitter(initial=1, max=30),\n    before_sleep=before_sleep_log(logger, logging.WARNING),\n)\ndef robust_http_call(\n    method: str,\n    url: str,\n    **kwargs,\n) -> httpx.Response:\n    \"\"\"HTTP call with comprehensive retry handling.\"\"\"\n    return httpx.request(method, url, timeout=30, **kwargs)\n```"
+- sequence: 7
+  fragment_type: example
+  content: "## Advanced Patterns\n\n### Pattern 5: Logging Retry Attempts\n\nTrack retry behavior for debugging and alerting.\n\n```python\nfrom tenacity import retry, stop_after_attempt, wait_exponential\nimport structlog\n\nlogger = structlog.get_logger()\n\ndef log_retry_attempt(retry_state):\n    \"\"\"Log detailed retry information.\"\"\"\n    exception = retry_state.outcome.exception()\n    logger.warning(\n        \"Retrying operation\",\n        attempt=retry_state.attempt_number,\n        exception_type=type(exception).__name__,\n        exception_message=str(exception),\n        next_wait_seconds=retry_state.next_action.sleep if retry_state.next_action else None,\n    )\n\n@retry(\n    stop=stop_after_attempt(3),\n    wait=wait_exponential(multiplier=1, max=10),\n    before_sleep=log_retry_attempt,\n)\ndef call_with_logging(request: dict) -> dict:\n    \"\"\"External call with retry logging.\"\"\"\n    ...\n```"
+- sequence: 8
+  fragment_type: example
+  content: "### Pattern 6: Timeout Decorator\n\nCreate reusable timeout decorators for consistent timeout handling.\n\n```python\nimport asyncio\nfrom functools import wraps\nfrom typing import TypeVar, Callable\n\nT = TypeVar(\"T\")\n\ndef with_timeout(seconds: float):\n    \"\"\"Decorator to add timeout to async functions.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        @wraps(func)\n        async def wrapper(*args, **kwargs) -> T:\n            return await asyncio.wait_for(\n                func(*args, **kwargs),\n                timeout=seconds,\n            )\n        return wrapper\n    return decorator\n\n@with_timeout(30)\nasync def fetch_with_timeout(url: str) -> dict:\n    \"\"\"Fetch URL with 30 second timeout.\"\"\"\n    async with httpx.AsyncClient() as client:\n        response = await client.get(url)\n        return response.json()\n```"
+- sequence: 9
+  fragment_type: example
+  content: "### Pattern 7: Cross-Cutting Concerns via Decorators\n\nStack decorators to separate infrastructure from business logic.\n\n```python\nfrom functools import wraps\nfrom typing import TypeVar, Callable\nimport structlog\n\nlogger = structlog.get_logger()\nT = TypeVar(\"T\")\n\ndef traced(name: str | None = None):\n    \"\"\"Add tracing to function calls.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        span_name = name or func.__name__\n\n        @wraps(func)\n        async def wrapper(*args, **kwargs) -> T:\n            logger.info(\"Operation started\", operation=span_name)\n            try:\n                result = await func(*args, **kwargs)\n                logger.info(\"Operation completed\", operation=span_name)\n                return result\n            except Exception as e:\n                logger.error(\"Operation failed\", operation=span_name, error=str(e))\n                raise\n        return wrapper\n    return decorator\n\n# Stack multiple concerns\n@traced(\"fetch_user_data\")\n@with_timeout(30)\n@retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter())\nasync def fetch_user_data(user_id: str) -> dict:\n    \"\"\"Fetch user with tracing, timeout, and retry.\"\"\"\n    ...\n```"
+- sequence: 10
+  fragment_type: example
+  content: "### Pattern 8: Dependency Injection for Testability\n\nPass infrastructure components through constructors for easy testing.\n\n```python\nfrom dataclasses import dataclass\nfrom typing import Protocol\n\nclass Logger(Protocol):\n    def info(self, msg: str, **kwargs) -> None: ...\n    def error(self, msg: str, **kwargs) -> None: ...\n\nclass MetricsClient(Protocol):\n    def increment(self, metric: str, tags: dict | None = None) -> None: ...\n    def timing(self, metric: str, value: float) -> None: ...\n\n@dataclass\nclass UserService:\n    \"\"\"Service with injected infrastructure.\"\"\"\n\n    repository: UserRepository\n    logger: Logger\n    metrics: MetricsClient\n\n    async def get_user(self, user_id: str) -> User:\n        self.logger.info(\"Fetching user\", user_id=user_id)\n        start = time.perf_counter()\n\n        try:\n            user = await self.repository.get(user_id)\n            self.metrics.increment(\"user.fetch.success\")\n            return user\n        except Exception as e:\n            self.metrics.increment(\"user.fetch.error\")\n            self.logger.error(\"Failed to fetch user\", user_id=user_id, error=str(e))\n            raise\n        finally:\n            elapsed = time.perf_counter() - start\n            self.metrics.timing(\"user.fetch.duration\", elapsed)\n\n# Easy to test with fakes\nservice = UserService(\n    repository=FakeRepository(),\n    logger=FakeLogger(),\n    metrics=FakeMetrics(),\n)\n```"
+- sequence: 11
+  fragment_type: example
+  content: "### Pattern 9: Fail-Safe Defaults\n\nDegrade gracefully when non-critical operations fail.\n\n```python\nfrom typing import TypeVar\nfrom collections.abc import Callable\n\nT = TypeVar(\"T\")\n\ndef fail_safe(default: T, log_failure: bool = True):\n    \"\"\"Return default value on failure instead of raising.\"\"\"\n    def decorator(func: Callable[..., T]) -> Callable[..., T]:\n        @wraps(func)\n        async def wrapper(*args, **kwargs) -> T:\n            try:\n                return await func(*args, **kwargs)\n            except Exception as e:\n                if log_failure:\n                    logger.warning(\n                        \"Operation failed, using default\",\n                        function=func.__name__,\n                        error=str(e),\n                    )\n                return default\n        return wrapper\n    return decorator\n\n@fail_safe(default=[])\nasync def get_recommendations(user_id: str) -> list[str]:\n    \"\"\"Get recommendations, return empty list on failure.\"\"\"\n    ...\n```"
+- sequence: 12
+  fragment_type: execution
+  content: '## Best Practices Summary
+
+
+    1. **Retry only transient errors** - Don''t retry bugs or authentication failures
+
+    2. **Use exponential backoff** - Give services time to recover
+
+    3. **Add jitter** - Prevent thundering herd from synchronized retries
+
+    4. **Cap total duration** - `stop_after_attempt(5) | stop_after_delay(60)`
+
+    5. **Log every retry** - Silent retries hide systemic problems
+
+    6. **Use decorators** - Keep retry logic separate from business logic
+
+    7. **Inject dependencies** - Make infrastructure testable
+
+    8. **Set timeouts everywhere** - Every network call needs a timeout
+
+    9. **Fail gracefully** - Return cached/default values for non-critical paths
+
+    10. **Monitor retry rates** - High retry rates indicate underlying issues'

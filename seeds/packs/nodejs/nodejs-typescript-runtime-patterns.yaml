@@ -1,0 +1,110 @@
+skill_type: domain
+skill_id: nodejs-typescript-runtime-patterns
+canonical_name: Node.js TypeScript Runtime Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- nodejs
+- typescript
+- streams
+- error-handling
+- performance
+always_apply: false
+phase_scope: null
+category_scope: null
+author: github-copilot
+change_summary: initial authoring draft from SKILL.md
+raw_prose: "---\nname: node\ndescription: Provides domain-specific best practices for Node.js development with TypeScript, covering type stripping, async patterns, error handling, streams, modules, testing, performance, caching, logging, and more. Use when setting up Node.js projects with native TypeScript support, configuring type stripping (--experimental-strip-types), writing Node 22+ TypeScript without a build step, or when the user mentions 'native TypeScript in Node', 'strip types', 'Node 22 TypeScript', '.ts files without compilation', 'ts-node alternative', or needs guidance on error handling, graceful shutdown, flaky tests, profiling, or environment configuration in Node.js. Helps configure tsconfig.json for type stripping, set up package.json scripts, handle module resolution and import extensions, and apply robust patterns across the full Node.js stack.\nmetadata:\n  tags: node, nodejs, javascript, typescript, type-stripping, backend, server\n---\n\n## When to use\n\nUse this skill whenever you are dealing with Node.js code to obtain domain-specific knowledge for building robust, performant, and maintainable Node.js applications.\n\n## TypeScript with Type Stripping\n\nWhen writing TypeScript for Node.js, use **type stripping** (Node.js 22.6+) instead of build tools like ts-node or tsx. Type stripping runs TypeScript directly by removing type annotations at runtime without transpilation.\n\nKey requirements for type stripping compatibility:\n- Use `import type` for type-only imports\n- Use const objects instead of enums\n- Avoid namespaces and parameter properties\n- Use `.ts` extensions in imports\n\n**Minimal example** — a valid type-stripped TypeScript file:\n\n```ts\n// greet.ts\nimport type { IncomingMessage } from 'node:http';\n\nconst greet = (name: string): string => `Hello, ${name}!`;\nconsole.log(greet('world'));\n```\n\nRun directly with:\n```bash\nnode greet.ts\n```\n\nSee [rules/typescript.md](rules/typescript.md) for complete configuration and examples.\n\n## Common Workflows\n\nFor multi-step processes, follow these high-level sequences before consulting the relevant rule file:\n\n**Graceful shutdown**: Register signal handlers (SIGTERM/SIGINT) → stop accepting new work → drain in-flight requests → close external connections (DB, cache) → exit with appropriate code. See [rules/graceful-shutdown.md](rules/graceful-shutdown.md).\n\n**Error handling**: Define a shared error base class → classify errors (operational vs programmer) → add async boundary handlers (`process.on('unhandledRejection')`) → propagate typed errors through the call stack → log with context before responding or crashing. See [rules/error-handling.md](rules/error-handling.md).\n\n**Diagnosing flaky tests**: Isolate the test with `--test-only` → check for shared state or timer dependencies → inspect async teardown order → add retry logic as a temporary diagnostic step → fix root cause. See [rules/flaky-tests.md](rules/flaky-tests.md).\n\n**Diagnosing stuck processes/tests** (`node --test` hangs, \"process did not exit\", CI timeout, open handles): isolate file/test → run with explicit timeout/reporter → inspect handles via `why-is-node-running` (`SIGUSR1`) → patch deterministic teardown in resource-creation scope → rerun isolated + full suite until stable. See [rules/stuck-processes-and-tests.md](rules/stuck-processes-and-tests.md).\n\n**Profiling a slow path**: Reproduce under realistic load → capture a CPU profile with `--cpu-prof` → identify hot functions → check for stream backpressure or unnecessary serialisation → validate improvement with a benchmark. See [rules/profiling.md](rules/profiling.md) and [rules/performance.md](rules/performance.md).\n\n## High-priority activation checklist (streams + caching)\n\nWhen the task mentions **CSV**, **ETL**, **ingestion pipelines**, **large file processing**, **backpressure**, **repeated lookups**, or **deduplicating concurrent async calls**, explicitly apply this checklist:\n\n1. Use `await pipeline(...)` from `node:stream/promises` (prefer this over chained `.pipe()` in guidance/code).\n2. Include at least one explicit `async function*` transform when data is being transformed in-stream.\n3. Choose a cache strategy when repeated work appears:\n   - `lru-cache` for bounded in-memory reuse in a single process.\n   - `async-cache-dedupe` for async request deduplication / stale-while-revalidate behavior.\n4. Show where backpressure is handled (implicitly via `pipeline()` or explicitly via `drain`).\n\n### Integrated example pattern (CSV/ETL)\n\nFor CSV/ETL-style prompts, prefer an answer structure like:\n- `createReadStream(input)`\n- `async function*` parser/transform\n- optional cached enrichment lookup (`async-cache-dedupe` or `lru-cache`)\n- `await pipeline(...)` to a writable destination\n\nLink relevant rules directly in explanations so models can retrieve details:\n- [rules/streams.md](rules/streams.md)\n- [rules/caching.md](rules/caching.md)\n\n## How to use\n\nRead individual rule files for detailed explanations and code examples:\n\n- [rules/error-handling.md](rules/error-handling.md) - Error handling patterns in Node.js\n- [rules/async-patterns.md](rules/async-patterns.md) - Async/await and Promise patterns\n- [rules/streams.md](rules/streams.md) - Working with Node.js streams\n- [rules/modules.md](rules/modules.md) - ES Modules and CommonJS patterns\n- [rules/testing.md](rules/testing.md) - Testing strategies for Node.js applications\n- [rules/flaky-tests.md](rules/flaky-tests.md) - Identifying and diagnosing flaky tests with node:test\n- [rules/stuck-processes-and-tests.md](rules/stuck-processes-and-tests.md) - Diagnosing processes that do not exit and tests that get stuck\n- [rules/node-modules-exploration.md](rules/node-modules-exploration.md) - Navigating and analyzing node_modules directories\n- [rules/performance.md](rules/performance.md) - Performance optimization techniques\n- [rules/caching.md](rules/caching.md) - Caching patterns and libraries\n- [rules/profiling.md](rules/profiling.md) - Profiling and benchmarking tools\n- [rules/logging.md](rules/logging.md) - Logging and debugging patterns\n- [rules/environment.md](rules/environment.md) - Environment configuration and secrets management\n- [rules/graceful-shutdown.md](rules/graceful-shutdown.md) - Graceful shutdown and signal handling\n- [rules/typescript.md](rules/typescript.md) - TypeScript configuration and type stripping in Node.js"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to use
+
+
+    Use this skill whenever you are dealing with Node.js code to obtain domain-specific knowledge for building robust, performant, and maintainable Node.js applications.
+
+
+    ## TypeScript with Type Stripping
+
+
+    When writing TypeScript for Node.js, use **type stripping** (Node.js 22.6+) instead of build tools like ts-node or tsx. Type stripping runs TypeScript directly by removing type annotations at runtime without transpilation.
+
+
+    Key requirements for type stripping compatibility:
+
+    - Use `import type` for type-only imports
+
+    - Use const objects instead of enums
+
+    - Avoid namespaces and parameter properties
+
+    - Use `.ts` extensions in imports
+
+
+    **Minimal example** — a valid type-stripped TypeScript file:
+
+
+    ```ts
+
+    // greet.ts
+
+    import type { IncomingMessage } from ''node:http'';
+
+
+    const greet = (name: string): string => `Hello, ${name}!`;
+
+    console.log(greet(''world''));
+
+    ```
+
+
+    Run directly with:
+
+    ```bash
+
+    node greet.ts
+
+    ```
+
+
+    See [rules/typescript.md](rules/typescript.md) for complete configuration and examples.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Common Workflows\n\nFor multi-step processes, follow these high-level sequences before consulting the relevant rule file:\n\n**Graceful shutdown**: Register signal handlers (SIGTERM/SIGINT) → stop accepting new work → drain in-flight requests → close external connections (DB, cache) → exit with appropriate code. See [rules/graceful-shutdown.md](rules/graceful-shutdown.md).\n\n**Error handling**: Define a shared error base class → classify errors (operational vs programmer) → add async boundary handlers (`process.on('unhandledRejection')`) → propagate typed errors through the call stack → log with context before responding or crashing. See [rules/error-handling.md](rules/error-handling.md).\n\n**Diagnosing flaky tests**: Isolate the test with `--test-only` → check for shared state or timer dependencies → inspect async teardown order → add retry logic as a temporary diagnostic step → fix root cause. See [rules/flaky-tests.md](rules/flaky-tests.md).\n\n**Diagnosing stuck processes/tests** (`node --test` hangs, \"process did not exit\", CI timeout, open handles): isolate file/test → run with explicit timeout/reporter → inspect handles via `why-is-node-running` (`SIGUSR1`) → patch deterministic teardown in resource-creation scope → rerun isolated + full suite until stable. See [rules/stuck-processes-and-tests.md](rules/stuck-processes-and-tests.md).\n\n**Profiling a slow path**: Reproduce under realistic load → capture a CPU profile with `--cpu-prof` → identify hot functions → check for stream backpressure or unnecessary serialisation → validate improvement with a benchmark. See [rules/profiling.md](rules/profiling.md) and [rules/performance.md](rules/performance.md).\n\n## High-priority activation checklist (streams + caching)\n\nWhen the task mentions **CSV**, **ETL**, **ingestion pipelines**, **large file processing**, **backpressure**, **repeated lookups**, or **deduplicating concurrent async calls**, explicitly apply this checklist:\n\n1. Use `await pipeline(...)` from `node:stream/promises` (prefer this over chained `.pipe()` in guidance/code).\n2. Include at least one explicit `async function*` transform when data is being transformed in-stream.\n3. Choose a cache strategy when repeated work appears:\n   - `lru-cache` for bounded in-memory reuse in a single process.\n   - `async-cache-dedupe` for async request deduplication / stale-while-revalidate behavior.\n4. Show where backpressure is handled (implicitly via `pipeline()` or explicitly via `drain`).\n\n### Integrated example pattern (CSV/ETL)\n\nFor CSV/ETL-style prompts, prefer an answer structure like:\n- `createReadStream(input)`\n- `async function*` parser/transform\n- optional cached enrichment lookup (`async-cache-dedupe` or `lru-cache`)\n- `await pipeline(...)` to a writable destination\n\nLink relevant rules directly in explanations so models can retrieve details:\n- [rules/streams.md](rules/streams.md)\n- [rules/caching.md](rules/caching.md)"
+- sequence: 3
+  fragment_type: execution
+  content: '## How to use
+
+
+    Read individual rule files for detailed explanations and code examples:
+
+
+    - [rules/error-handling.md](rules/error-handling.md) - Error handling patterns in Node.js
+
+    - [rules/async-patterns.md](rules/async-patterns.md) - Async/await and Promise patterns
+
+    - [rules/streams.md](rules/streams.md) - Working with Node.js streams
+
+    - [rules/modules.md](rules/modules.md) - ES Modules and CommonJS patterns
+
+    - [rules/testing.md](rules/testing.md) - Testing strategies for Node.js applications
+
+    - [rules/flaky-tests.md](rules/flaky-tests.md) - Identifying and diagnosing flaky tests with node:test
+
+    - [rules/stuck-processes-and-tests.md](rules/stuck-processes-and-tests.md) - Diagnosing processes that do not exit and tests that get stuck
+
+    - [rules/node-modules-exploration.md](rules/node-modules-exploration.md) - Navigating and analyzing node_modules directories
+
+    - [rules/performance.md](rules/performance.md) - Performance optimization techniques
+
+    - [rules/caching.md](rules/caching.md) - Caching patterns and libraries
+
+    - [rules/profiling.md](rules/profiling.md) - Profiling and benchmarking tools
+
+    - [rules/logging.md](rules/logging.md) - Logging and debugging patterns
+
+    - [rules/environment.md](rules/environment.md) - Environment configuration and secrets management
+
+    - [rules/graceful-shutdown.md](rules/graceful-shutdown.md) - Graceful shutdown and signal handling
+
+    - [rules/typescript.md](rules/typescript.md) - TypeScript configuration and type stripping in Node.js'

@@ -1,0 +1,175 @@
+skill_type: domain
+skill_id: vercel-react-view-transitions
+canonical_name: React View Transitions
+category: design
+skill_class: domain
+domain_tags:
+- view-transitions
+- react-animation
+- nextjs-routing
+- shared-element
+- suspense-reveal
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from Vercel Labs source
+raw_prose: "# React View Transitions\n\nAnimate between UI states using the browser's native `document.startViewTransition`. Declare *what* with `<ViewTransition>`, trigger *when* with `startTransition` / `useDeferredValue` / `Suspense`, control *how* with CSS classes. Unsupported browsers skip animations gracefully.\n\n## When to Animate\n\nEvery `<ViewTransition>` should communicate a spatial relationship or continuity. If you can't articulate what it communicates, don't add it.\n\nImplement **all** applicable patterns from this list, in this order:\n\n| Priority | Pattern | What it communicates |\n|----------|---------|---------------------|\n| 1 | **Shared element** (`name`) | \"Same thing — going deeper\" |\n| 2 | **Suspense reveal** | \"Data loaded\" |\n| 3 | **List identity** (per-item `key`) | \"Same items, new arrangement\" |\n| 4 | **State change** (`enter`/`exit`) | \"Something appeared/disappeared\" |\n| 5 | **Route change** (layout-level) | \"Going to a new place\" |\n\nThis is an implementation order, not a \"pick one\" list. Implement every pattern that fits the app. Only skip a pattern if the app has no use case for it.\n\n### Choosing Animation Style\n\n| Context | Animation | Why |\n|---------|-----------|-----|\n| Hierarchical navigation (list → detail) | Type-keyed `nav-forward` / `nav-back` | Communicates spatial depth |\n| Lateral navigation (tab-to-tab) | Bare `<ViewTransition>` (fade) or `default=\"none\"` | No depth to communicate |\n| Suspense reveal | `enter`/`exit` string props | Content arriving |\n| Revalidation / background refresh | `default=\"none\"` | Silent — no animation needed |\n\nReserve directional slides for hierarchical navigation (list → detail) and ordered sequences (prev/next photo, carousel, paginated results). For ordered sequences, the direction communicates position: \"next\" slides from right, \"previous\" from left. Lateral/unordered navigation (tab-to-tab) should not use directional slides — it falsely implies spatial depth.\n\n## Availability\n\n- **Next.js:** Do **not** install `react@canary` — the App Router already bundles React canary internally. `ViewTransition` works out of the box. `npm ls react` may show a stable-looking version; this is expected.\n- **Without Next.js:** Install `react@canary react-dom@canary` (`ViewTransition` is not in stable React).\n- Browser support: Chromium 111+, Firefox 144+, Safari 18.2+. Graceful degradation on unsupported browsers.\n\n## Implementation Workflow\n\nWhen adding view transitions to an existing app, **follow `references/implementation.md` step by step.** Start with the audit — do not skip it. Copy the CSS recipes from `references/css-recipes.md` into the global stylesheet — do not write your own animation CSS.\n\n## Core Concepts\n\n### The `<ViewTransition>` Component\n\n```jsx\nimport { ViewTransition } from 'react';\n\n<ViewTransition>\n  <Component />\n</ViewTransition>\n```\n\nReact auto-assigns a unique `view-transition-name` and calls `document.startViewTransition` behind the scenes. Never call `startViewTransition` yourself.\n\n### Animation Triggers\n\n| Trigger | When it fires |\n|---------|--------------|\n| **enter** | `<ViewTransition>` first inserted during a Transition |\n| **exit** | `<ViewTransition>` first removed during a Transition |\n| **update** | DOM mutations inside a `<ViewTransition>`. With nested VTs, mutation applies to the innermost one |\n| **share** | Named VT unmounts and another with same `name` mounts in the same Transition |\n\nOnly `startTransition`, `useDeferredValue`, or `Suspense` activate VTs. Regular `setState` does not animate.\n\n### Critical Placement Rule\n\n`<ViewTransition>` only activates enter/exit if it appears **before any DOM nodes**:\n\n```jsx\n// Works\n<ViewTransition enter=\"auto\" exit=\"auto\">\n  <div>Content</div>\n</ViewTransition>\n\n// Broken — div wraps the VT, suppressing enter/exit\n<div>\n  <ViewTransition enter=\"auto\" exit=\"auto\">\n    <div>Content</div>\n  </ViewTransition>\n</div>\n```\n\n## Styling with View Transition Classes\n\nValues: `\"auto\"` (browser cross-fade), `\"none\"` (disabled), `\"class-name\"` (custom CSS), or `{ [type]: value }` for type-specific animations.\n\n```jsx\n<ViewTransition default=\"none\" enter=\"slide-in\" exit=\"slide-out\" share=\"morph\" />\n```\n\nIf `default` is `\"none\"`, all triggers are off unless explicitly listed.\n\n### CSS Pseudo-Elements\n\n- `::view-transition-old(.class)` — outgoing snapshot\n- `::view-transition-new(.class)` — incoming snapshot\n- `::view-transition-group(.class)` — container\n- `::view-transition-image-pair(.class)` — old + new pair\n\n## Transition Types\n\nTag transitions with `addTransitionType` so VTs can pick different animations based on context:\n\n```jsx\nstartTransition(() => {\n  addTransitionType('nav-forward');\n  router.push('/detail/1');\n});\n```\n\nPass an object to map types to CSS classes. Works on `enter`, `exit`, **and** `share`:\n\n```jsx\n<ViewTransition\n  enter={{ 'nav-forward': 'slide-from-right', 'nav-back': 'slide-from-left', default: 'none' }}\n  exit={{ 'nav-forward': 'slide-to-left', 'nav-back': 'slide-to-right', default: 'none' }}\n  share={{ 'nav-forward': 'morph-forward', 'nav-back': 'morph-back', default: 'morph' }}\n  default=\"none\"\n>\n  <Page />\n</ViewTransition>\n```\n\n**TypeScript:** `ViewTransitionClassPerType` requires a `default` key in the object.\n\n### `router.back()` and Browser Back Button\n\n`router.back()` and the browser's back/forward buttons do **not** trigger view transitions (`popstate` is synchronous, incompatible with `startViewTransition`). Use `router.push()` with an explicit URL instead.\n\n## Shared Element Transitions\n\nSame `name` on two VTs — one unmounting, one mounting — creates a shared element morph:\n\n```jsx\n<ViewTransition name=\"hero-image\">\n  <img src=\"/thumb.jpg\" onClick={() => startTransition(() => onSelect())} />\n</ViewTransition>\n\n// On the other view — same name\n<ViewTransition name=\"hero-image\">\n  <img src=\"/full.jpg\" />\n</ViewTransition>\n```\n\n- Only one VT with a given `name` can be mounted at a time — use unique names (`photo-${id}`).\n- `share` takes precedence over `enter`/`exit`.\n- Never use a fade-out exit on pages with shared morphs — use a directional slide instead.\n\n## Common Patterns\n\n### Enter/Exit\n\n```jsx\n{show && (\n  <ViewTransition enter=\"fade-in\" exit=\"fade-out\"><Panel /></ViewTransition>\n)}\n```\n\n### List Reorder\n\n```jsx\n{items.map(item => (\n  <ViewTransition key={item.id}><ItemCard item={item} /></ViewTransition>\n))}\n```\n\nTrigger inside `startTransition`. Avoid wrapper `<div>`s between list and VT.\n\n### Composing Shared Elements with List Identity\n\n```jsx\n{items.map(item => (\n  <ViewTransition key={item.id}>                                      {/* list identity */}\n    <Link href={`/items/${item.id}`}>\n      <ViewTransition name={`item-image-${item.id}`} share=\"morph\">   {/* shared element */}\n        <Image src={item.image} />\n      </ViewTransition>\n    </Link>\n  </ViewTransition>\n))}\n```\n\nThe outer VT handles list reorder; the inner handles cross-route shared element morph.\n\n### Suspense Fallback to Content\n\n```jsx\n<ViewTransition>\n  <Suspense fallback={<Skeleton />}><Content /></Suspense>\n</ViewTransition>\n```\n\n## How Multiple VTs Interact\n\nEvery VT matching the trigger fires simultaneously in a single `document.startViewTransition`.\n\n### Use `default=\"none\"` Liberally\n\nWithout it, every VT fires the browser cross-fade on **every** transition. Always use `default=\"none\"` and explicitly enable only desired triggers.\n\n### Nested VT Limitation\n\nWhen a parent VT exits, nested VTs inside it do **not** fire their own enter/exit — only the outermost VT animates. Per-item staggered animations during page navigation are not possible today."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# React View Transitions
+
+
+    Animate between UI states using the browser''s native `document.startViewTransition`. Declare *what* with `<ViewTransition>`, trigger *when* with `startTransition` / `useDeferredValue` / `Suspense`, control *how* with CSS classes. Unsupported browsers skip animations gracefully.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Animate
+
+
+    Every `<ViewTransition>` should communicate a spatial relationship or continuity. If you can''t articulate what it communicates, don''t add it.
+
+
+    Implement **all** applicable patterns from this list, in this order:
+
+
+    | Priority | Pattern | What it communicates |
+
+    |----------|---------|---------------------|
+
+    | 1 | **Shared element** (`name`) | "Same thing — going deeper" |
+
+    | 2 | **Suspense reveal** | "Data loaded" |
+
+    | 3 | **List identity** (per-item `key`) | "Same items, new arrangement" |
+
+    | 4 | **State change** (`enter`/`exit`) | "Something appeared/disappeared" |
+
+    | 5 | **Route change** (layout-level) | "Going to a new place" |
+
+
+    This is an implementation order, not a "pick one" list. Implement every pattern that fits the app.'
+- sequence: 3
+  fragment_type: execution
+  content: '### Choosing Animation Style
+
+
+    | Context | Animation | Why |
+
+    |---------|-----------|-----|
+
+    | Hierarchical navigation (list → detail) | Type-keyed `nav-forward` / `nav-back` | Communicates spatial depth |
+
+    | Lateral navigation (tab-to-tab) | Bare `<ViewTransition>` (fade) or `default="none"` | No depth to communicate |
+
+    | Suspense reveal | `enter`/`exit` string props | Content arriving |
+
+    | Revalidation / background refresh | `default="none"` | Silent — no animation needed |
+
+
+    Reserve directional slides for hierarchical navigation and ordered sequences (prev/next photo, carousel). Lateral/unordered navigation should not use directional slides — it falsely implies spatial depth.'
+- sequence: 4
+  fragment_type: setup
+  content: '## Availability
+
+
+    - **Next.js:** Do **not** install `react@canary` — the App Router already bundles React canary internally. `ViewTransition` works out of the box.
+
+    - **Without Next.js:** Install `react@canary react-dom@canary` (`ViewTransition` is not in stable React).
+
+    - Browser support: Chromium 111+, Firefox 144+, Safari 18.2+. Graceful degradation on unsupported browsers.'
+- sequence: 5
+  fragment_type: execution
+  content: '## Implementation Workflow
+
+
+    When adding view transitions to an existing app, **follow `references/implementation.md` step by step.** Start with the audit — do not skip it. Copy the CSS recipes from `references/css-recipes.md` into the global stylesheet — do not write your own animation CSS.'
+- sequence: 6
+  fragment_type: example
+  content: "### The `<ViewTransition>` Component\n\n```jsx\nimport { ViewTransition } from 'react';\n\n<ViewTransition>\n  <Component />\n</ViewTransition>\n```\n\nReact auto-assigns a unique `view-transition-name` and calls `document.startViewTransition` behind the scenes. Never call `startViewTransition` yourself."
+- sequence: 7
+  fragment_type: execution
+  content: '### Animation Triggers
+
+
+    | Trigger | When it fires |
+
+    |---------|--------------|
+
+    | **enter** | `<ViewTransition>` first inserted during a Transition |
+
+    | **exit** | `<ViewTransition>` first removed during a Transition |
+
+    | **update** | DOM mutations inside a `<ViewTransition>`. With nested VTs, mutation applies to the innermost one |
+
+    | **share** | Named VT unmounts and another with same `name` mounts in the same Transition |
+
+
+    Only `startTransition`, `useDeferredValue`, or `Suspense` activate VTs. Regular `setState` does not animate.'
+- sequence: 8
+  fragment_type: guardrail
+  content: "### Critical Placement Rule\n\n`<ViewTransition>` only activates enter/exit if it appears **before any DOM nodes**:\n\n```jsx\n// Works\n<ViewTransition enter=\"auto\" exit=\"auto\">\n  <div>Content</div>\n</ViewTransition>\n\n// Broken — div wraps the VT, suppressing enter/exit\n<div>\n  <ViewTransition enter=\"auto\" exit=\"auto\">\n    <div>Content</div>\n  </ViewTransition>\n</div>\n```"
+- sequence: 9
+  fragment_type: example
+  content: '## Styling with View Transition Classes
+
+
+    Values: `"auto"` (browser cross-fade), `"none"` (disabled), `"class-name"` (custom CSS), or `{ [type]: value }` for type-specific animations.
+
+
+    ```jsx
+
+    <ViewTransition default="none" enter="slide-in" exit="slide-out" share="morph" />
+
+    ```
+
+
+    If `default` is `"none"`, all triggers are off unless explicitly listed.
+
+
+    ### CSS Pseudo-Elements
+
+
+    - `::view-transition-old(.class)` — outgoing snapshot
+
+    - `::view-transition-new(.class)` — incoming snapshot
+
+    - `::view-transition-group(.class)` — container
+
+    - `::view-transition-image-pair(.class)` — old + new pair'
+- sequence: 10
+  fragment_type: example
+  content: "## Transition Types\n\nTag transitions with `addTransitionType` so VTs can pick different animations based on context:\n\n```jsx\nstartTransition(() => {\n  addTransitionType('nav-forward');\n  router.push('/detail/1');\n});\n```\n\nPass an object to map types to CSS classes. Works on `enter`, `exit`, **and** `share`:\n\n```jsx\n<ViewTransition\n  enter={{ 'nav-forward': 'slide-from-right', 'nav-back': 'slide-from-left', default: 'none' }}\n  exit={{ 'nav-forward': 'slide-to-left', 'nav-back': 'slide-to-right', default: 'none' }}\n  share={{ 'nav-forward': 'morph-forward', 'nav-back': 'morph-back', default: 'morph' }}\n  default=\"none\"\n>\n  <Page />\n</ViewTransition>\n```\n\n**TypeScript:** `ViewTransitionClassPerType` requires a `default` key in the object."
+- sequence: 11
+  fragment_type: guardrail
+  content: '### `router.back()` and Browser Back Button
+
+
+    `router.back()` and the browser''s back/forward buttons do **not** trigger view transitions (`popstate` is synchronous, incompatible with `startViewTransition`). Use `router.push()` with an explicit URL instead.'
+- sequence: 12
+  fragment_type: example
+  content: "## Shared Element Transitions\n\nSame `name` on two VTs — one unmounting, one mounting — creates a shared element morph:\n\n```jsx\n<ViewTransition name=\"hero-image\">\n  <img src=\"/thumb.jpg\" onClick={() => startTransition(() => onSelect())} />\n</ViewTransition>\n\n// On the other view — same name\n<ViewTransition name=\"hero-image\">\n  <img src=\"/full.jpg\" />\n</ViewTransition>\n```\n\n- Only one VT with a given `name` can be mounted at a time — use unique names (`photo-${id}`).\n- `share` takes precedence over `enter`/`exit`.\n- Never use a fade-out exit on pages with shared morphs — use a directional slide instead."
+- sequence: 13
+  fragment_type: example
+  content: "## Common Patterns\n\n### Enter/Exit\n```jsx\n{show && (\n  <ViewTransition enter=\"fade-in\" exit=\"fade-out\"><Panel /></ViewTransition>\n)}\n```\n\n### List Reorder\n```jsx\n{items.map(item => (\n  <ViewTransition key={item.id}><ItemCard item={item} /></ViewTransition>\n))}\n```\nTrigger inside `startTransition`. Avoid wrapper `<div>`s between list and VT.\n\n### Suspense Fallback to Content\n```jsx\n<ViewTransition>\n  <Suspense fallback={<Skeleton />}><Content /></Suspense>\n</ViewTransition>\n```"
+- sequence: 14
+  fragment_type: example
+  content: "### Composing Shared Elements with List Identity\n\nShared elements and list identity are independent concerns — don't confuse one for the other. When a list item contains a shared element (e.g., an image that morphs into a detail view), use two nested `<ViewTransition>` boundaries:\n\n```jsx\n{items.map(item => (\n  <ViewTransition key={item.id}>                                      {/* list identity */}\n    <Link href={`/items/${item.id}`}>\n      <ViewTransition name={`item-image-${item.id}`} share=\"morph\">   {/* shared element */}\n        <Image src={item.image} />\n      </ViewTransition>\n    </Link>\n  </ViewTransition>\n))}\n```\n\nThe outer VT handles list reorder/enter animations. The inner VT handles the cross-route shared element morph. Missing either layer means that animation silently doesn't happen."
+- sequence: 15
+  fragment_type: execution
+  content: '## How Multiple VTs Interact
+
+
+    Every VT matching the trigger fires simultaneously in a single `document.startViewTransition`.
+
+
+    ### Use `default="none"` Liberally
+
+
+    Without it, every VT fires the browser cross-fade on **every** transition — Suspense resolves, `useDeferredValue` updates, background revalidations. Always use `default="none"` and explicitly enable only desired triggers.'
+- sequence: 16
+  fragment_type: guardrail
+  content: '### Nested VT Limitation
+
+
+    When a parent VT exits, nested VTs inside it do **not** fire their own enter/exit — only the outermost VT animates. Per-item staggered animations during page navigation are not possible today. See [react#36135](https://github.com/facebook/react/pull/36135) for an experimental opt-in fix.'

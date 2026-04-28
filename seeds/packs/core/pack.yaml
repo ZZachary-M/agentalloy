@@ -1,0 +1,120 @@
+name: core
+version: 1.0.0
+description: Process & governance — TDD, code review, planning, debugging, git, brainstorming,
+  verification, dispatching, dependency management. Always installed.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: []
+skills:
+- skill_id: brainstorming
+  file: brainstorming.yaml
+  fragment_count: 10
+- skill_id: changelog-automation
+  file: changelog-automation.yaml
+  fragment_count: 6
+- skill_id: code-review-and-quality
+  file: code-review-and-quality.yaml
+  fragment_count: 11
+- skill_id: code-review-excellence
+  file: code-review-excellence.yaml
+  fragment_count: 14
+- skill_id: code-simplification
+  file: code-simplification.yaml
+  fragment_count: 8
+- skill_id: debugging-and-error-recovery
+  file: debugging-and-error-recovery.yaml
+  fragment_count: 6
+- skill_id: debugging-strategies
+  file: debugging-strategies.yaml
+  fragment_count: 15
+- skill_id: dependency-upgrade
+  file: dependency-upgrade.yaml
+  fragment_count: 14
+- skill_id: deprecation-and-migration
+  file: deprecation-and-migration.yaml
+  fragment_count: 13
+- skill_id: dispatching-parallel-agents
+  file: dispatching-parallel-agents.yaml
+  fragment_count: 6
+- skill_id: documentation-overview
+  file: documentation-overview.yaml
+  fragment_count: 2
+- skill_id: git-advanced-workflows
+  file: git-advanced-workflows.yaml
+  fragment_count: 14
+- skill_id: git-workflow-and-versioning
+  file: git-workflow-and-versioning.yaml
+  fragment_count: 6
+- skill_id: idea-refine
+  file: idea-refine.yaml
+  fragment_count: 8
+- skill_id: incident-runbook-templates
+  file: incident-runbook-templates.yaml
+  fragment_count: 13
+- skill_id: incremental-implementation
+  file: incremental-implementation.yaml
+  fragment_count: 15
+- skill_id: init-overview
+  file: init-overview.yaml
+  fragment_count: 2
+- skill_id: multi-reviewer-patterns
+  file: multi-reviewer-patterns.yaml
+  fragment_count: 6
+- skill_id: on-call-handoff-patterns
+  file: on-call-handoff-patterns.yaml
+  fragment_count: 10
+- skill_id: planning-and-task-breakdown
+  file: planning-and-task-breakdown.yaml
+  fragment_count: 13
+- skill_id: postmortem-writing
+  file: postmortem-writing.yaml
+  fragment_count: 11
+- skill_id: receiving-code-review
+  file: receiving-code-review.yaml
+  fragment_count: 9
+- skill_id: requesting-code-review
+  file: requesting-code-review.yaml
+  fragment_count: 6
+- skill_id: shipping-and-launch
+  file: shipping-and-launch.yaml
+  fragment_count: 19
+- skill_id: source-driven-development
+  file: source-driven-development.yaml
+  fragment_count: 9
+- skill_id: spec-driven-development
+  file: spec-driven-development.yaml
+  fragment_count: 14
+- skill_id: subagent-driven-development
+  file: subagent-driven-development.yaml
+  fragment_count: 7
+- skill_id: sys-skill-authoring-agent
+  file: sys-skill-authoring-agent.yaml
+  fragment_count: 0
+- skill_id: sys-skill-qa-agent
+  file: sys-skill-qa-agent.yaml
+  fragment_count: 0
+- skill_id: task-coordination-strategies
+  file: task-coordination-strategies.yaml
+  fragment_count: 8
+- skill_id: team-composition-patterns
+  file: team-composition-patterns.yaml
+  fragment_count: 9
+- skill_id: test-driven-development
+  file: test-driven-development.yaml
+  fragment_count: 7
+- skill_id: using-agent-skills
+  file: using-agent-skills.yaml
+  fragment_count: 10
+- skill_id: verification-before-completion
+  file: verification-before-completion.yaml
+  fragment_count: 9
+- skill_id: writing-plans
+  file: writing-plans.yaml
+  fragment_count: 9
+- skill_id: writing-skills
+  file: writing-skills.yaml
+  fragment_count: 11

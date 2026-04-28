@@ -1,0 +1,171 @@
+skill_type: domain
+skill_id: hybrid-cloud-networking
+canonical_name: Hybrid Cloud Networking
+category: ops
+skill_class: domain
+domain_tags:
+- hybrid-cloud
+- networking
+- vpn
+- direct-connect
+- transit-gateway
+- dns
+- peering
+- firewall
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Hybrid Cloud Networking\n\nConfigure secure, high-performance connectivity between on-premises and cloud environments using VPN, Direct Connect, ExpressRoute, Interconnect, and FastConnect.\n\n## Purpose\n\nEstablish secure, reliable network connectivity between on-premises data centers and cloud providers (AWS, Azure, GCP, OCI).\n\n## When to Use\n\n- Connect on-premises to cloud\n- Extend datacenter to cloud\n- Implement hybrid active-active setups\n- Meet compliance requirements\n- Migrate to cloud gradually\n\n## Connection Options\n\n### AWS Connectivity\n\n#### 1. Site-to-Site VPN\n\n- IPSec VPN over internet\n- Up to 1.25 Gbps per tunnel\n- Cost-effective for moderate bandwidth\n- Higher latency, internet-dependent\n\n```hcl\nresource \"aws_vpn_gateway\" \"main\" {\n  vpc_id = aws_vpc.main.id\n  tags = {\n    Name = \"main-vpn-gateway\"\n  }\n}\n\nresource \"aws_customer_gateway\" \"main\" {\n  bgp_asn    = 65000\n  ip_address = \"203.0.113.1\"\n  type       = \"ipsec.1\"\n}\n\nresource \"aws_vpn_connection\" \"main\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.main.id\n  type                = \"ipsec.1\"\n  static_routes_only  = false\n}\n```\n\n#### 2. AWS Direct Connect\n\n- Dedicated network connection\n- 1 Gbps to 100 Gbps\n- Lower latency, consistent bandwidth\n- More expensive, setup time required\n\n**Reference:** See `references/direct-connect.md`\n\n### Azure Connectivity\n\n#### 1. Site-to-Site VPN\n\n```hcl\nresource \"azurerm_virtual_network_gateway\" \"vpn\" {\n  name                = \"vpn-gateway\"\n  location            = azurerm_resource_group.main.location\n  resource_group_name = azurerm_resource_group.main.name\n\n  type     = \"Vpn\"\n  vpn_type = \"RouteBased\"\n  sku      = \"VpnGw1\"\n\n  ip_configuration {\n    name                          = \"vnetGatewayConfig\"\n    public_ip_address_id          = azurerm_public_ip.vpn.id\n    private_ip_address_allocation = \"Dynamic\"\n    subnet_id                     = azurerm_subnet.gateway.id\n  }\n}\n```\n\n#### 2. Azure ExpressRoute\n\n- Private connection via connectivity provider\n- Up to 100 Gbps\n- Low latency, high reliability\n- Premium for global connectivity\n\n### GCP Connectivity\n\n#### 1. Cloud VPN\n\n- IPSec VPN (Classic or HA VPN)\n- HA VPN: 99.99% SLA\n- Up to 3 Gbps per tunnel\n\n#### 2. Cloud Interconnect\n\n- Dedicated (10 Gbps, 100 Gbps)\n- Partner (50 Mbps to 50 Gbps)\n- Lower latency than VPN\n\n### OCI Connectivity\n\n#### 1. IPSec VPN Connect\n\n- IPSec VPN with redundant tunnels\n- Dynamic routing through DRG\n- Good fit for branch offices and migration phases\n\n#### 2. OCI FastConnect\n\n- Private dedicated connectivity through Oracle or partner edge\n- Suitable for predictable throughput and lower-latency hybrid traffic\n- Commonly paired with DRG for hub-and-spoke designs\n\n## Hybrid Network Patterns\n\n### Pattern 1: Hub-and-Spoke\n\n```\nOn-Premises Datacenter\n         ↓\n    VPN/Direct Connect\n         ↓\n    Transit Gateway (AWS) / vWAN (Azure)\n         ↓\n    ├─ Production VPC/VNet\n    ├─ Staging VPC/VNet\n    └─ Development VPC/VNet\n```\n\n### Pattern 2: Multi-Region Hybrid\n\n```\nOn-Premises\n    ├─ Direct Connect → us-east-1\n    └─ Direct Connect → us-west-2\n            ↓\n        Cross-Region Peering\n```\n\n### Pattern 3: Multi-Cloud Hybrid\n\n```\nOn-Premises Datacenter\n    ├─ Direct Connect → AWS\n    ├─ ExpressRoute → Azure\n    ├─ Interconnect → GCP\n    └─ FastConnect → OCI\n```\n\n## Routing Configuration\n\n### BGP Configuration\n\n```\nOn-Premises Router:\n- AS Number: 65000\n- Advertise: 10.0.0.0/8\n\nCloud Router:\n- AS Number: 64512 (AWS), 65515 (Azure), provider-assigned for GCP/OCI\n- Advertise: Cloud VPC/VNet CIDRs\n```\n\n### Route Propagation\n\n- Enable route propagation on route tables\n- Use BGP for dynamic routing\n- Implement route filtering\n- Monitor route advertisements\n\n## Security Best Practices\n\n1. **Use private connectivity** (Direct Connect/ExpressRoute/Interconnect/FastConnect)\n2. **Implement encryption** for VPN tunnels\n3. **Use VPC endpoints** to avoid internet routing\n4. **Configure network ACLs** and security groups\n5. **Enable VPC Flow Logs** for monitoring\n6. **Implement DDoS protection**\n7. **Use PrivateLink/Private Endpoints**\n8. **Monitor connections** with CloudWatch/Azure Monitor/Cloud Monitoring/OCI Monitoring\n9. **Implement redundancy** (dual tunnels)\n10. **Regular security audits**\n\n## High Availability\n\n### Dual VPN Tunnels\n\n```hcl\nresource \"aws_vpn_connection\" \"primary\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.primary.id\n  type                = \"ipsec.1\"\n}\n\nresource \"aws_vpn_connection\" \"secondary\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.secondary.id\n  type                = \"ipsec.1\"\n}\n```\n\n### Active-Active Configuration\n\n- Multiple connections from different locations\n- BGP for automatic failover\n- Equal-cost multi-path (ECMP) routing\n- Monitor health of all connections\n\n## Monitoring and Troubleshooting\n\n### Key Metrics\n\n- Tunnel status (up/down)\n- Bytes in/out\n- Packet loss\n- Latency\n- BGP session status\n\n### Troubleshooting\n\n```bash\n# AWS VPN\naws ec2 describe-vpn-connections\naws ec2 get-vpn-connection-telemetry\n\n# Azure VPN\naz network vpn-connection show\naz network vpn-connection show-device-config-script\n\n# OCI IPSec VPN\noci network ip-sec-connection list\noci network cpe list\n```\n\n## Cost Optimization\n\n1. **Right-size connections** based on traffic\n2. **Use VPN for low-bandwidth** workloads\n3. **Consolidate traffic** through fewer connections\n4. **Minimize data transfer** costs\n5. **Use dedicated private links** for high bandwidth\n6. **Implement caching** to reduce traffic\n\n\n## Related Skills\n\n- `multi-cloud-architecture` - For architecture decisions\n- `terraform-module-library` - For IaC implementation"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Hybrid Cloud Networking
+
+
+    Configure secure, high-performance connectivity between on-premises and cloud environments using VPN, Direct Connect, ExpressRoute, Interconnect, and FastConnect.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Connect on-premises to cloud
+
+    - Extend datacenter to cloud
+
+    - Implement hybrid active-active setups
+
+    - Meet compliance requirements
+
+    - Migrate to cloud gradually'
+- sequence: 3
+  fragment_type: execution
+  content: "## Connection Options\n\n### AWS Connectivity\n\n#### 1. Site-to-Site VPN\n\n- IPSec VPN over internet\n- Up to 1.25 Gbps per tunnel\n- Cost-effective for moderate bandwidth\n- Higher latency, internet-dependent\n\n```hcl\nresource \"aws_vpn_gateway\" \"main\" {\n  vpc_id = aws_vpc.main.id\n  tags = {\n    Name = \"main-vpn-gateway\"\n  }\n}\n\nresource \"aws_customer_gateway\" \"main\" {\n  bgp_asn    = 65000\n  ip_address = \"203.0.113.1\"\n  type       = \"ipsec.1\"\n}\n\nresource \"aws_vpn_connection\" \"main\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.main.id\n  type                = \"ipsec.1\"\n  static_routes_only  = false\n}\n```\n\n#### 2. AWS Direct Connect\n\n- Dedicated network connection\n- 1 Gbps to 100 Gbps\n- Lower latency, consistent bandwidth\n- More expensive, setup time required\n\n**Reference:** See `references/direct-connect.md`\n\n### Azure Connectivity\n\n#### 1. Site-to-Site VPN\n\n```hcl\nresource \"azurerm_virtual_network_gateway\" \"vpn\" {\n  name                = \"vpn-gateway\"\n  location            = azurerm_resource_group.main.location\n  resource_group_name = azurerm_resource_group.main.name\n\n  type     = \"Vpn\"\n  vpn_type = \"RouteBased\"\n  sku      = \"VpnGw1\"\n\n  ip_configuration {\n    name                          = \"vnetGatewayConfig\"\n    public_ip_address_id          = azurerm_public_ip.vpn.id\n    private_ip_address_allocation = \"Dynamic\"\n    subnet_id                     = azurerm_subnet.gateway.id\n  }\n}\n```\n\n#### 2. Azure ExpressRoute\n\n- Private connection via connectivity provider\n- Up to 100 Gbps\n- Low latency, high reliability\n- Premium for global connectivity\n\n### GCP Connectivity\n\n#### 1. Cloud VPN\n\n- IPSec VPN (Classic or HA VPN)\n- HA VPN: 99.99% SLA\n- Up to 3 Gbps per tunnel\n\n#### 2. Cloud Interconnect\n\n- Dedicated (10 Gbps, 100 Gbps)\n- Partner (50 Mbps to 50 Gbps)\n- Lower latency than VPN\n\n### OCI Connectivity\n\n#### 1. IPSec VPN Connect\n\n- IPSec VPN with redundant tunnels\n- Dynamic routing through DRG\n- Good fit for branch offices and migration phases\n\n#### 2. OCI FastConnect\n\n- Private dedicated connectivity through Oracle or partner edge\n- Suitable for predictable throughput and lower-latency hybrid traffic\n- Commonly paired with DRG for hub-and-spoke designs"
+- sequence: 4
+  fragment_type: execution
+  content: "## Hybrid Network Patterns\n\n### Pattern 1: Hub-and-Spoke\n\n```\nOn-Premises Datacenter\n         ↓\n    VPN/Direct Connect\n         ↓\n    Transit Gateway (AWS) / vWAN (Azure)\n         ↓\n    ├─ Production VPC/VNet\n    ├─ Staging VPC/VNet\n    └─ Development VPC/VNet\n```\n\n### Pattern 2: Multi-Region Hybrid\n\n```\nOn-Premises\n    ├─ Direct Connect → us-east-1\n    └─ Direct Connect → us-west-2\n            ↓\n        Cross-Region Peering\n```\n\n### Pattern 3: Multi-Cloud Hybrid\n\n```\nOn-Premises Datacenter\n    ├─ Direct Connect → AWS\n    ├─ ExpressRoute → Azure\n    ├─ Interconnect → GCP\n    └─ FastConnect → OCI\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Routing Configuration
+
+
+    ### BGP Configuration
+
+
+    ```
+
+    On-Premises Router:
+
+    - AS Number: 65000
+
+    - Advertise: 10.0.0.0/8
+
+
+    Cloud Router:
+
+    - AS Number: 64512 (AWS), 65515 (Azure), provider-assigned for GCP/OCI
+
+    - Advertise: Cloud VPC/VNet CIDRs
+
+    ```
+
+
+    ### Route Propagation
+
+
+    - Enable route propagation on route tables
+
+    - Use BGP for dynamic routing
+
+    - Implement route filtering
+
+    - Monitor route advertisements'
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Security Best Practices
+
+
+    1. **Use private connectivity** (Direct Connect/ExpressRoute/Interconnect/FastConnect)
+
+    2. **Implement encryption** for VPN tunnels
+
+    3. **Use VPC endpoints** to avoid internet routing
+
+    4. **Configure network ACLs** and security groups
+
+    5. **Enable VPC Flow Logs** for monitoring
+
+    6. **Implement DDoS protection**
+
+    7. **Use PrivateLink/Private Endpoints**
+
+    8. **Monitor connections** with CloudWatch/Azure Monitor/Cloud Monitoring/OCI Monitoring
+
+    9. **Implement redundancy** (dual tunnels)
+
+    10. **Regular security audits**'
+- sequence: 7
+  fragment_type: execution
+  content: "## High Availability\n\n### Dual VPN Tunnels\n\n```hcl\nresource \"aws_vpn_connection\" \"primary\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.primary.id\n  type                = \"ipsec.1\"\n}\n\nresource \"aws_vpn_connection\" \"secondary\" {\n  vpn_gateway_id      = aws_vpn_gateway.main.id\n  customer_gateway_id = aws_customer_gateway.secondary.id\n  type                = \"ipsec.1\"\n}\n```\n\n### Active-Active Configuration\n\n- Multiple connections from different locations\n- BGP for automatic failover\n- Equal-cost multi-path (ECMP) routing\n- Monitor health of all connections"
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Monitoring and Troubleshooting
+
+
+    ### Key Metrics
+
+
+    - Tunnel status (up/down)
+
+    - Bytes in/out
+
+    - Packet loss
+
+    - Latency
+
+    - BGP session status
+
+
+    ### Troubleshooting
+
+
+    ```bash
+
+    # AWS VPN
+
+    aws ec2 describe-vpn-connections
+
+    aws ec2 get-vpn-connection-telemetry
+
+
+    # Azure VPN
+
+    az network vpn-connection show
+
+    az network vpn-connection show-device-config-script
+
+
+    # OCI IPSec VPN
+
+    oci network ip-sec-connection list
+
+    oci network cpe list
+
+    ```'
+- sequence: 9
+  fragment_type: execution
+  content: '## Cost Optimization
+
+
+    1. **Right-size connections** based on traffic
+
+    2. **Use VPN for low-bandwidth** workloads
+
+    3. **Consolidate traffic** through fewer connections
+
+    4. **Minimize data transfer** costs
+
+    5. **Use dedicated private links** for high bandwidth
+
+    6. **Implement caching** to reduce traffic'

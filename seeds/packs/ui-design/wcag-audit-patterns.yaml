@@ -1,0 +1,472 @@
+skill_type: domain
+skill_id: wcag-audit-patterns
+canonical_name: WCAG Audit Patterns
+category: review
+skill_class: domain
+domain_tags:
+- accessibility
+- wcag
+- ada-compliance
+- audit
+- aria
+- color-contrast
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents accessibility-compliance plugin
+raw_prose: '# WCAG Audit Patterns
+
+
+  Comprehensive guide to auditing web content against WCAG 2.2 guidelines with actionable remediation strategies.
+
+
+  ## When to Use
+
+
+  - Conducting accessibility audits
+
+  - Fixing WCAG violations
+
+  - Implementing accessible components
+
+  - Preparing for accessibility lawsuits
+
+  - Meeting ADA / Section 508 requirements
+
+  - Achieving VPAT compliance
+
+
+  ## Core Concepts
+
+
+  ### WCAG Conformance Levels
+
+
+  | Level   | Description            | Required For      |
+
+  | ------- | ---------------------- | ----------------- |
+
+  | **A**   | Minimum accessibility  | Legal baseline    |
+
+  | **AA**  | Standard conformance   | Most regulations  |
+
+  | **AAA** | Enhanced accessibility | Specialized needs |
+
+
+  ### POUR Principles
+
+
+  - **Perceivable** — can users perceive the content?
+
+  - **Operable** — can users operate the interface?
+
+  - **Understandable** — can users understand the content?
+
+  - **Robust** — does it work with assistive tech?
+
+
+  ### Common Violations by Impact
+
+
+  Critical (blockers): missing alt text on functional images, no keyboard access, missing form labels, auto-playing media without controls.
+
+
+  Serious: insufficient color contrast, missing skip links, inaccessible custom widgets, missing page titles.
+
+
+  Moderate: missing language attribute, unclear link text, missing landmarks, improper heading hierarchy.
+
+
+  ## Principle 1 — Perceivable
+
+
+  - **1.1.1 Non-text Content (A)** — alt text on functional images, `alt=""` for decorative
+
+  - **1.2.x Time-based Media** — captions, audio descriptions
+
+  - **1.3.1 Info and Relationships (A)** — semantic markup, headings, lists, landmarks
+
+  - **1.3.2 Meaningful Sequence (A)** — DOM order matches reading order
+
+  - **1.4.1 Use of Color (A)** — never convey info by color alone
+
+  - **1.4.3 Contrast Minimum (AA)** — 4.5:1 for body text, 3:1 for large text
+
+  - **1.4.4 Resize Text (AA)** — usable up to 200% zoom
+
+  - **1.4.10 Reflow (AA)** — no horizontal scroll at 320px / 400% zoom
+
+  - **1.4.11 Non-text Contrast (AA)** — 3:1 for UI components and graphics
+
+  - **1.4.12 Text Spacing (AA)** — usable when line-height/spacing increased
+
+
+  ## Principle 2 — Operable
+
+
+  - **2.1.1 Keyboard (A)** — every action keyboard-reachable
+
+  - **2.1.2 No Keyboard Trap (A)** — Tab/Shift+Tab can leave any component
+
+  - **2.2.1 Timing Adjustable (A)** — turn off / extend / adjust time limits
+
+  - **2.2.2 Pause, Stop, Hide (A)** — moving content can be paused
+
+  - **2.3.1 Three Flashes (A)** — no content flashes >3x/sec
+
+  - **2.4.1 Bypass Blocks (A)** — skip links to main content
+
+  - **2.4.2 Page Titled (A)** — every page has a descriptive `<title>`
+
+  - **2.4.3 Focus Order (A)** — Tab order matches visual order
+
+  - **2.4.4 Link Purpose (A)** — link text or context conveys destination
+
+  - **2.4.7 Focus Visible (AA)** — visible focus indicator on focused element
+
+  - **2.4.11 Focus Not Obscured (AA, WCAG 2.2)** — sticky headers can''t fully cover focused element
+
+
+  ## Principle 3 — Understandable
+
+
+  - **3.1.1 Language of Page (A)** — `<html lang="en">`
+
+  - **3.1.2 Language of Parts (AA)** — `lang` on inline mismatched-language content
+
+  - **3.2.1 / 3.2.2 On Focus / On Input (A)** — focus or input doesn''t trigger context change
+
+  - **3.2.3 / 3.2.4 Consistent Navigation / Identification (AA)** — same nav, same labels
+
+  - **3.3.1 Error Identification (A)** — describe errors in text, not color alone
+
+  - **3.3.2 Labels or Instructions (A)** — explicit `<label>` for every input
+
+  - **3.3.3 Error Suggestion (AA)** — provide remediation when known
+
+  - **3.3.4 Error Prevention (AA)** — confirm/review on legal/financial submissions
+
+
+  ## Principle 4 — Robust
+
+
+  - **4.1.2 Name, Role, Value (A)** — every UI control has accessible name + role + state via DOM/ARIA
+
+  - **4.1.3 Status Messages (AA)** — programmatic announcements via `role="status"` / `role="alert"` / `aria-live`
+
+
+  ## Automated Testing
+
+
+  Tools: axe-core (Deque), Lighthouse Accessibility, Pa11y, WAVE.
+
+  Catch ~30% of issues automatically. Manual + screen reader testing required for the rest.
+
+
+  ## Remediation Patterns
+
+
+  - **Missing form labels** — wrap with `<label>` or use `for`/`id`; `aria-labelledby` for grouped controls
+
+  - **Insufficient color contrast** — use a contrast tool (WebAIM); switch to darker text or lighter background; verify both default and hover states
+
+  - **Keyboard navigation** — `tabindex="0"` on custom interactive elements; handle Enter/Space; trap focus in modals; restore focus on close
+
+
+  ## Best Practices
+
+
+  Do: test with real assistive tech, use semantic HTML, design for keyboard first, audit early and often.
+
+  Don''t: rely solely on automated tools, use ARIA when HTML works, hide focus indicators, build inaccessible custom widgets.'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# WCAG Audit Patterns
+
+
+    Comprehensive guide to auditing web content against WCAG 2.2 guidelines with actionable remediation strategies.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Conducting accessibility audits
+
+    - Fixing WCAG violations
+
+    - Implementing accessible components
+
+    - Preparing for accessibility lawsuits
+
+    - Meeting ADA / Section 508 requirements
+
+    - Achieving VPAT compliance'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Conformance Levels and POUR Principles
+
+
+    | Level   | Description            | Required For      |
+
+    | ------- | ---------------------- | ----------------- |
+
+    | **A**   | Minimum accessibility  | Legal baseline    |
+
+    | **AA**  | Standard conformance   | Most regulations  |
+
+    | **AAA** | Enhanced accessibility | Specialized needs |
+
+
+    **POUR principles:**
+
+    - **Perceivable** — can users perceive the content?
+
+    - **Operable** — can users operate the interface?
+
+    - **Understandable** — can users understand the content?
+
+    - **Robust** — does it work with assistive tech?'
+- sequence: 4
+  fragment_type: guardrail
+  content: '## Common Violations by Impact
+
+
+    **Critical (Blockers):**
+
+    - Missing alt text for functional images
+
+    - No keyboard access to interactive elements
+
+    - Missing form labels
+
+    - Auto-playing media without controls
+
+
+    **Serious:**
+
+    - Insufficient color contrast
+
+    - Missing skip links
+
+    - Inaccessible custom widgets
+
+    - Missing page titles
+
+
+    **Moderate:**
+
+    - Missing language attribute
+
+    - Unclear link text
+
+    - Missing landmarks
+
+    - Improper heading hierarchy'
+- sequence: 5
+  fragment_type: verification
+  content: '### Perceivable Checklist (Principle 1)
+
+
+    **1.1 Text Alternatives**
+
+    - [ ] All functional images have descriptive alt text
+
+    - [ ] Decorative images have `alt=""`
+
+    - [ ] Complex images have long descriptions
+
+    - [ ] Icons with meaning have accessible names
+
+    - [ ] CAPTCHAs have alternatives
+
+
+    **1.3 Adaptable**
+
+    - [ ] Semantic markup (headings, lists, landmarks)
+
+    - [ ] DOM order matches visual reading order
+
+    - [ ] Tables use `<th>` with `scope`
+
+
+    **1.4 Distinguishable**
+
+    - [ ] Color is never the only signal
+
+    - [ ] Contrast: ≥4.5:1 body text, ≥3:1 large text (AA)
+
+    - [ ] Usable at 200% zoom; no horizontal scroll at 400% / 320px width
+
+    - [ ] UI component contrast ≥3:1
+
+    - [ ] Text spacing override doesn''t break layout'
+- sequence: 6
+  fragment_type: verification
+  content: '### Operable Checklist (Principle 2)
+
+
+    **2.1 Keyboard Accessible**
+
+    - [ ] Every interactive element reachable by Tab
+
+    - [ ] No keyboard trap — Tab/Shift+Tab can always exit
+
+    - [ ] All actions activatable by keyboard (Enter / Space / Arrow keys)
+
+
+    **2.2 Enough Time**
+
+    - [ ] Time limits adjustable, extendable, or off
+
+    - [ ] Moving content can be paused/stopped/hidden
+
+
+    **2.3 Seizures**
+
+    - [ ] No content flashes more than 3 times per second
+
+
+    **2.4 Navigable**
+
+    - [ ] Skip-to-main link present
+
+    - [ ] Page has descriptive `<title>`
+
+    - [ ] Tab order matches visual order
+
+    - [ ] Link purpose clear from text or surrounding context
+
+    - [ ] Focus indicator always visible (AA)
+
+    - [ ] Focused element not obscured by sticky headers (AA, WCAG 2.2)'
+- sequence: 7
+  fragment_type: verification
+  content: '### Understandable Checklist (Principle 3)
+
+
+    **3.1 Readable**
+
+    - [ ] `<html lang="en">` on every page
+
+    - [ ] `lang` attribute on inline content in different languages
+
+
+    **3.2 Predictable**
+
+    - [ ] Focus alone doesn''t trigger context change (no auto-submit on focus)
+
+    - [ ] Input alone doesn''t trigger context change (no auto-submit on change)
+
+    - [ ] Navigation consistent across pages
+
+    - [ ] Same component labeled the same way everywhere
+
+
+    **3.3 Input Assistance**
+
+    - [ ] Errors identified in text, not by color alone
+
+    - [ ] Every input has an explicit `<label>` (or `aria-label` / `aria-labelledby`)
+
+    - [ ] Error messages suggest a fix when possible
+
+    - [ ] Legal/financial actions have a confirm step'
+- sequence: 8
+  fragment_type: verification
+  content: '### Robust Checklist (Principle 4)
+
+
+    **4.1 Compatible**
+
+    - [ ] Every UI control exposes name, role, and value to assistive tech
+
+    - [ ] Custom widgets use correct ARIA roles + states (`aria-expanded`, `aria-checked`, etc.)
+
+    - [ ] Status messages use `role="status"` / `role="alert"` / `aria-live`
+
+    - [ ] Form errors use `aria-invalid` + `aria-describedby` to associate error text'
+- sequence: 9
+  fragment_type: execution
+  content: '### Automated Testing
+
+
+    Tools (run as CI gates):
+
+    - **axe-core** (Deque) — `npm install -D @axe-core/react`, integrate into Jest/Cypress
+
+    - **Lighthouse Accessibility** — `lighthouse <url> --only-categories=accessibility`
+
+    - **Pa11y** — `pa11y https://example.com`
+
+    - **WAVE** — browser extension for visual debugging
+
+
+    Automated tools catch ~30% of accessibility issues. The rest require **manual keyboard testing** and **screen reader testing**.'
+- sequence: 10
+  fragment_type: example
+  content: "### Remediation: Missing Form Labels\n\n```html\n<!-- Bad -->\n<input type=\"email\" placeholder=\"Email\">\n\n<!-- Good — explicit label -->\n<label for=\"email\">Email</label>\n<input id=\"email\" type=\"email\">\n\n<!-- Or wrap -->\n<label>\n  Email\n  <input type=\"email\">\n</label>\n\n<!-- Grouped controls (e.g. radio set) -->\n<fieldset>\n  <legend>Contact preference</legend>\n  <label><input type=\"radio\" name=\"pref\" value=\"email\"> Email</label>\n  <label><input type=\"radio\" name=\"pref\" value=\"phone\"> Phone</label>\n</fieldset>\n```"
+- sequence: 11
+  fragment_type: example
+  content: '### Remediation: Insufficient Color Contrast
+
+
+    Check ratios with WebAIM contrast checker (or `axe-core`).
+
+    WCAG AA requires:
+
+    - **4.5:1** for body text
+
+    - **3:1** for large text (18pt regular, 14pt bold)
+
+    - **3:1** for UI components and graphics
+
+
+    ```css
+
+    /* Bad — 2.8:1 ratio */
+
+    .text-muted { color: #999; background: #fff; }
+
+
+    /* Good — 4.6:1 ratio */
+
+    .text-muted { color: #767676; background: #fff; }
+
+    ```
+
+
+    Also verify hover, focus, and active states meet contrast requirements.'
+- sequence: 12
+  fragment_type: example
+  content: "### Remediation: Keyboard Navigation for Custom Widgets\n\n```typescript\nfunction CustomButton({ onAction, children }) {\n  const handleKey = (e) => {\n    if (e.key === \"Enter\" || e.key === \" \") {\n      e.preventDefault();\n      onAction();\n    }\n  };\n  return (\n    <div\n      role=\"button\"\n      tabIndex={0}\n      onClick={onAction}\n      onKeyDown={handleKey}\n      aria-label=\"Custom action\"\n    >\n      {children}\n    </div>\n  );\n}\n```\n\nBetter: just use `<button>` whenever possible — it provides all this for free."
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    **Do:**
+
+    - Test with real assistive tech (screen readers, keyboard-only)
+
+    - Use semantic HTML before reaching for ARIA
+
+    - Design for keyboard navigation first
+
+    - Audit early and often — accessibility is cheaper to build in than retrofit
+
+    - Include accessibility in your CI pipeline (axe-core, Lighthouse)
+
+
+    **Don''t:**
+
+    - Rely solely on automated tools — they catch ~30% of issues
+
+    - Use ARIA when semantic HTML works
+
+    - Hide focus indicators ("ugly" outlines are still required)
+
+    - Build inaccessible custom widgets when a `<button>` / `<select>` / `<input>` would do
+
+    - Treat accessibility as a one-time audit — it''s continuous'

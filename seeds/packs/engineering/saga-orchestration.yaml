@@ -1,0 +1,115 @@
+skill_type: domain
+skill_id: saga-orchestration
+canonical_name: Saga Orchestration
+category: design
+skill_class: domain
+domain_tags:
+- saga
+- orchestration
+- choreography
+- compensation
+- distributed-transactions
+- state-machine
+- idempotency
+- event-driven
+- order-fulfillment
+- microservices
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin backend-development/saga-orchestration source
+raw_prose: "# Saga Orchestration\n\nImplement distributed transactions using saga patterns — either orchestration (central coordinator) or choreography (event-driven). Sagas break long-running transactions into a sequence of local transactions with compensating actions for rollback.\n\n## When to Use This Skill\n\n- Implementing distributed transactions across microservices\n- Building order fulfillment, payment, and inventory workflows\n- Designing compensation logic for failure recovery\n- Choosing between orchestration and choreography\n- Handling idempotent step execution\n- Troubleshooting stuck or duplicate sagas\n\n## Core Concepts\n\n### Orchestration vs Choreography\n\n**Orchestration**: A central coordinator (saga orchestrator) tells each participant what to do and when. The orchestrator maintains the saga state machine.\n\n**Choreography**: Each service publishes events and reacts to events from others. No central coordinator — services are loosely coupled but harder to reason about.\n\n### Saga States\n\nA saga progresses through states:\n- `STARTED` → executing steps forward\n- `COMPENSATING` → a step failed, running compensations in reverse\n- `COMPLETED` → all steps succeeded\n- `FAILED` → compensation completed (or compensation itself failed)\n\n### Compensation Rules\n\nEvery step that mutates state must have a compensating action:\n- `reserve_inventory` → `release_inventory`\n- `charge_payment` → `refund_payment`\n- `create_shipment` → `cancel_shipment`\n\nCompensations run in reverse order of the completed steps.\n\n## Fundamental Patterns\n\n### Pattern 1: Saga Orchestrator\n\n```python\nfrom dataclasses import dataclass, field\nfrom enum import Enum\nfrom typing import Any\n\nclass SagaState(Enum):\n    STARTED = \"started\"\n    COMPENSATING = \"compensating\"\n    COMPLETED = \"completed\"\n    FAILED = \"failed\"\n\n@dataclass\nclass SagaStep:\n    name: str\n    action: str  # callable reference\n    compensation: str  # callable reference\n    completed: bool = False\n\n@dataclass\nclass Saga:\n    id: str\n    state: SagaState = SagaState.STARTED\n    current_step: int = 0\n    steps: list[SagaStep] = field(default_factory=list)\n    context: dict[str, Any] = field(default_factory=dict)\n```\n\n### Pattern 2: Order Fulfillment Saga (Orchestration)\n\n```python\nclass OrderFulfillmentSaga:\n    def __init__(self, inventory_svc, payment_svc, shipping_svc, saga_repo):\n        self.inventory_svc = inventory_svc\n        self.payment_svc = payment_svc\n        self.shipping_svc = shipping_svc\n        self.saga_repo = saga_repo\n\n    async def execute(self, order: Order) -> SagaResult:\n        saga = Saga(\n            id=f\"order-{order.id}\",\n            steps=[\n                SagaStep(\"reserve_inventory\", \"reserve\", \"release\"),\n                SagaStep(\"charge_payment\", \"charge\", \"refund\"),\n                SagaStep(\"create_shipment\", \"ship\", \"cancel_shipment\"),\n            ],\n            context={\"order_id\": order.id, \"items\": order.items, \"total\": order.total},\n        )\n        await self.saga_repo.save(saga)\n\n        try:\n            # Step 1: Reserve inventory\n            await self.inventory_svc.reserve(order.items)\n            saga.steps[0].completed = True\n\n            # Step 2: Charge payment\n            payment = await self.payment_svc.charge(order.customer_id, order.total)\n            saga.context[\"payment_id\"] = payment.id\n            saga.steps[1].completed = True\n\n            # Step 3: Create shipment\n            shipment = await self.shipping_svc.create(order.id, order.shipping_address)\n            saga.context[\"shipment_id\"] = shipment.id\n            saga.steps[2].completed = True\n\n            saga.state = SagaState.COMPLETED\n            await self.saga_repo.save(saga)\n            return SagaResult(success=True, saga_id=saga.id)\n\n        except Exception as e:\n            saga.state = SagaState.COMPENSATING\n            await self._compensate(saga)\n            return SagaResult(success=False, saga_id=saga.id, error=str(e))\n\n    async def _compensate(self, saga: Saga):\n        for step in reversed(saga.steps):\n            if not step.completed:\n                continue\n            try:\n                if step.name == \"create_shipment\":\n                    await self.shipping_svc.cancel(saga.context[\"shipment_id\"])\n                elif step.name == \"charge_payment\":\n                    await self.payment_svc.refund(saga.context[\"payment_id\"])\n                elif step.name == \"reserve_inventory\":\n                    await self.inventory_svc.release(saga.context[\"order_id\"])\n            except Exception as comp_error:\n                # Log compensation failure — may need manual intervention\n                logger.error(f\"Compensation failed for {step.name}: {comp_error}\")\n        saga.state = SagaState.FAILED\n        await self.saga_repo.save(saga)\n```\n\n### Pattern 3: Choreography Saga\n\n```python\n# Each service publishes events and reacts to events from others.\n\nclass InventoryService:\n    async def handle_order_created(self, event: OrderCreated):\n        try:\n            await self.reserve(event.items)\n            await self.event_bus.publish(InventoryReserved(order_id=event.order_id))\n        except InsufficientStockError:\n            await self.event_bus.publish(InventoryReservationFailed(order_id=event.order_id))\n\nclass PaymentService:\n    async def handle_inventory_reserved(self, event: InventoryReserved):\n        try:\n            payment = await self.charge(event.order_id)\n            await self.event_bus.publish(PaymentCharged(order_id=event.order_id, payment_id=payment.id))\n        except PaymentFailedError:\n            await self.event_bus.publish(PaymentFailed(order_id=event.order_id))\n\n    async def handle_shipment_failed(self, event: ShipmentFailed):\n        await self.refund(event.order_id)\n\nclass ShippingService:\n    async def handle_payment_charged(self, event: PaymentCharged):\n        try:\n            await self.create_shipment(event.order_id)\n            await self.event_bus.publish(OrderFulfilled(order_id=event.order_id))\n        except ShippingError:\n            await self.event_bus.publish(ShipmentFailed(order_id=event.order_id))\n```\n\n### Pattern 4: Idempotent Step Guards\n\n```python\nclass IdempotentSagaStep:\n    def __init__(self, step_repo):\n        self.step_repo = step_repo\n\n    async def execute_once(self, saga_id: str, step_name: str, action):\n        key = f\"{saga_id}:{step_name}\"\n        existing = await self.step_repo.find(key)\n        if existing:\n            return existing.result  # Already executed\n        result = await action()\n        await self.step_repo.save(key, result)\n        return result\n```\n\n## Troubleshooting\n\n### Stuck Sagas\nImplement a timeout watchdog that queries for sagas in `STARTED` or `COMPENSATING` state beyond a threshold. Resume or force-fail them.\n\n### Duplicate Events\nUse idempotency keys on all saga steps. Check if the step has already been executed before re-executing.\n\n### Lost Events\nUse durable message queues (Kafka, RabbitMQ with persistence). Implement dead-letter queues for failed processing.\n\n### Timeout Handling\nSet per-step timeouts. If a step doesn't complete within the timeout, treat it as a failure and begin compensation."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Saga Orchestration
+
+
+    Implement distributed transactions using saga patterns — either orchestration (central coordinator) or choreography (event-driven). Sagas break long-running transactions into a sequence of local transactions with compensating actions for rollback.
+
+
+    ## Orchestration vs Choreography
+
+
+    **Orchestration**: A central coordinator tells each participant what to do. Maintains saga state machine. Easier to reason about, single point of control.
+
+
+    **Choreography**: Each service publishes events and reacts to others. No central coordinator — loosely coupled but harder to trace.
+
+
+    ## Saga States
+
+
+    `STARTED` → `COMPENSATING` (on failure) → `FAILED` (compensation done)
+
+    `STARTED` → `COMPLETED` (all steps succeed)
+
+
+    ## Compensation Rules
+
+
+    Every mutation must have a compensating action. Compensations run in reverse order: `reserve_inventory`/`release_inventory`, `charge_payment`/`refund_payment`, `create_shipment`/`cancel_shipment`.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Implementing distributed transactions across microservices
+
+    - Building order fulfillment, payment, and inventory workflows
+
+    - Designing compensation logic for failure recovery
+
+    - Choosing between orchestration and choreography
+
+    - Handling idempotent step execution
+
+    - Troubleshooting stuck or duplicate sagas'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Saga Orchestrator Data Model
+
+
+    Define `SagaState` enum (STARTED, COMPENSATING, COMPLETED, FAILED). Define `SagaStep` dataclass with name, action, compensation, and completed flag. Define `Saga` dataclass with id, state, current_step index, list of steps, and context dict.
+
+
+    ## Pattern 2: Order Fulfillment Saga (Orchestration)
+
+
+    The orchestrator executes steps sequentially: reserve inventory, charge payment, create shipment. Each step marks `completed=True` on success. On any exception, switch to `COMPENSATING` state and run compensations in reverse order of completed steps. Save saga state after each transition. Return `SagaResult` with success flag and saga_id.
+
+
+    ## Pattern 4: Idempotent Step Guards
+
+
+    Before executing a step, check if `{saga_id}:{step_name}` already exists in the step repository. If yes, return the cached result. If no, execute the action and persist the result. This prevents duplicate execution on retries.'
+- sequence: 4
+  fragment_type: example
+  content: "## Order Fulfillment Orchestration Example (Pattern 2)\n\n```python\nclass OrderFulfillmentSaga:\n    def __init__(self, inventory_svc, payment_svc, shipping_svc, saga_repo):\n        self.inventory_svc = inventory_svc\n        self.payment_svc = payment_svc\n        self.shipping_svc = shipping_svc\n        self.saga_repo = saga_repo\n\n    async def execute(self, order: Order) -> SagaResult:\n        saga = Saga(id=f\"order-{order.id}\", steps=[\n            SagaStep(\"reserve_inventory\", \"reserve\", \"release\"),\n            SagaStep(\"charge_payment\", \"charge\", \"refund\"),\n            SagaStep(\"create_shipment\", \"ship\", \"cancel_shipment\"),\n        ], context={\"order_id\": order.id, \"total\": order.total})\n\n        try:\n            await self.inventory_svc.reserve(order.items)\n            saga.steps[0].completed = True\n            payment = await self.payment_svc.charge(order.customer_id, order.total)\n            saga.context[\"payment_id\"] = payment.id\n            saga.steps[1].completed = True\n            shipment = await self.shipping_svc.create(order.id, order.shipping_address)\n            saga.steps[2].completed = True\n            saga.state = SagaState.COMPLETED\n        except Exception as e:\n            saga.state = SagaState.COMPENSATING\n            await self._compensate(saga)\n```"
+- sequence: 5
+  fragment_type: example
+  content: "## Choreography Saga Example (Pattern 3)\n\n```python\nclass InventoryService:\n    async def handle_order_created(self, event: OrderCreated):\n        try:\n            await self.reserve(event.items)\n            await self.event_bus.publish(InventoryReserved(order_id=event.order_id))\n        except InsufficientStockError:\n            await self.event_bus.publish(InventoryReservationFailed(order_id=event.order_id))\n\nclass PaymentService:\n    async def handle_inventory_reserved(self, event: InventoryReserved):\n        try:\n            payment = await self.charge(event.order_id)\n            await self.event_bus.publish(PaymentCharged(order_id=event.order_id))\n        except PaymentFailedError:\n            await self.event_bus.publish(PaymentFailed(order_id=event.order_id))\n\nclass ShippingService:\n    async def handle_payment_charged(self, event: PaymentCharged):\n        try:\n            await self.create_shipment(event.order_id)\n            await self.event_bus.publish(OrderFulfilled(order_id=event.order_id))\n        except ShippingError:\n            await self.event_bus.publish(ShipmentFailed(order_id=event.order_id))\n```"
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Troubleshooting
+
+
+    ### Stuck Sagas
+
+    Implement a timeout watchdog that queries for sagas in STARTED or COMPENSATING state beyond a threshold. Resume or force-fail them.
+
+
+    ### Duplicate Events
+
+    Use idempotency keys on all saga steps. Check if the step has already been executed before re-executing.
+
+
+    ### Lost Events
+
+    Use durable message queues (Kafka, RabbitMQ with persistence). Implement dead-letter queues for failed processing.
+
+
+    ### Timeout Handling
+
+    Set per-step timeouts. If a step doesn''t complete within the timeout, treat it as a failure and begin compensation.'

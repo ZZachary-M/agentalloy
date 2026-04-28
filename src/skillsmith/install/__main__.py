@@ -23,6 +23,7 @@ from skillsmith.install.subcommands import (
     doctor,
     enable_service,
     install_pack,
+    install_packs,
     pull_models,
     recommend_host_targets,
     recommend_models,
@@ -69,6 +70,7 @@ _SUBCOMMANDS = [
     reset_step,
     update,
     install_pack,
+    install_packs,
 ]
 
 

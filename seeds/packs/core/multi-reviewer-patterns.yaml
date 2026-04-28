@@ -1,0 +1,185 @@
+skill_type: domain
+skill_id: multi-reviewer-patterns
+canonical_name: Multi-Reviewer Patterns
+category: review
+skill_class: domain
+domain_tags:
+- code-review
+- multi-reviewer
+- consensus
+- parallel-review
+- merge-policy
+- approval-gates
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Multi-Reviewer Patterns\n\nPatterns for coordinating parallel code reviews across multiple quality dimensions, deduplicating findings, calibrating severity, and producing consolidated reports.\n\n## When to Use This Skill\n\n- Organizing a multi-dimensional code review\n- Deciding which review dimensions to assign\n- Deduplicating findings from multiple reviewers\n- Calibrating severity ratings consistently\n- Producing a consolidated review report\n\n## Review Dimension Allocation\n\n### Available Dimensions\n\n| Dimension         | Focus                                   | When to Include                             |\n| ----------------- | --------------------------------------- | ------------------------------------------- |\n| **Security**      | Vulnerabilities, auth, input validation | Always for code handling user input or auth |\n| **Performance**   | Query efficiency, memory, caching       | When changing data access or hot paths      |\n| **Architecture**  | SOLID, coupling, patterns               | For structural changes or new modules       |\n| **Testing**       | Coverage, quality, edge cases           | When adding new functionality               |\n| **Accessibility** | WCAG, ARIA, keyboard nav                | For UI/frontend changes                     |\n\n### Recommended Combinations\n\n| Scenario               | Dimensions                                   |\n| ---------------------- | -------------------------------------------- |\n| API endpoint changes   | Security, Performance, Architecture          |\n| Frontend component     | Architecture, Testing, Accessibility         |\n| Database migration     | Performance, Architecture                    |\n| Authentication changes | Security, Testing                            |\n| Full feature review    | Security, Performance, Architecture, Testing |\n\n## Finding Deduplication\n\nWhen multiple reviewers report issues at the same location:\n\n### Merge Rules\n\n1. **Same file:line, same issue** — Merge into one finding, credit all reviewers\n2. **Same file:line, different issues** — Keep as separate findings\n3. **Same issue, different locations** — Keep separate but cross-reference\n4. **Conflicting severity** — Use the higher severity rating\n5. **Conflicting recommendations** — Include both with reviewer attribution\n\n### Deduplication Process\n\n```\nFor each finding in all reviewer reports:\n  1. Check if another finding references the same file:line\n  2. If yes, check if they describe the same issue\n  3. If same issue: merge, keeping the more detailed description\n  4. If different issue: keep both, tag as \"co-located\"\n  5. Use highest severity among merged findings\n```\n\n## Severity Calibration\n\n### Severity Criteria\n\n| Severity     | Impact                                        | Likelihood             | Examples                                     |\n| ------------ | --------------------------------------------- | ---------------------- | -------------------------------------------- |\n| **Critical** | Data loss, security breach, complete failure  | Certain or very likely | SQL injection, auth bypass, data corruption  |\n| **High**     | Significant functionality impact, degradation | Likely                 | Memory leak, missing validation, broken flow |\n| **Medium**   | Partial impact, workaround exists             | Possible               | N+1 query, missing edge case, unclear error  |\n| **Low**      | Minimal impact, cosmetic                      | Unlikely               | Style issue, minor optimization, naming      |\n\n### Calibration Rules\n\n- Security vulnerabilities exploitable by external users: always Critical or High\n- Performance issues in hot paths: at least Medium\n- Missing tests for critical paths: at least Medium\n- Accessibility violations for core functionality: at least Medium\n- Code style issues with no functional impact: Low\n\n## Consolidated Report Template\n\n```markdown\n## Code Review Report\n\n**Target**: {files/PR/directory}\n**Reviewers**: {dimension-1}, {dimension-2}, {dimension-3}\n**Date**: {date}\n**Files Reviewed**: {count}\n\n### Critical Findings ({count})\n\n#### [CR-001] {Title}\n\n**Location**: `{file}:{line}`\n**Dimension**: {Security/Performance/etc.}\n**Description**: {what was found}\n**Impact**: {what could happen}\n**Fix**: {recommended remediation}\n\n### High Findings ({count})\n\n...\n\n### Medium Findings ({count})\n\n...\n\n### Low Findings ({count})\n\n...\n\n### Summary\n\n| Dimension    | Critical | High  | Medium | Low   | Total  |\n| ------------ | -------- | ----- | ------ | ----- | ------ |\n| Security     | 1        | 2     | 3      | 0     | 6      |\n| Performance  | 0        | 1     | 4      | 2     | 7      |\n| Architecture | 0        | 0     | 2      | 3     | 5      |\n| **Total**    | **1**    | **3** | **9**  | **5** | **18** |\n\n### Recommendation\n\n{Overall assessment and prioritized action items}\n```"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Multi-Reviewer Patterns
+
+
+    Patterns for coordinating parallel code reviews across multiple quality dimensions, deduplicating findings, calibrating severity, and producing consolidated reports.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Organizing a multi-dimensional code review
+
+    - Deciding which review dimensions to assign
+
+    - Deduplicating findings from multiple reviewers
+
+    - Calibrating severity ratings consistently
+
+    - Producing a consolidated review report'
+- sequence: 3
+  fragment_type: execution
+  content: '## Review Dimension Allocation
+
+
+    ### Available Dimensions
+
+
+    | Dimension         | Focus                                   | When to Include                             |
+
+    | ----------------- | --------------------------------------- | ------------------------------------------- |
+
+    | **Security**      | Vulnerabilities, auth, input validation | Always for code handling user input or auth |
+
+    | **Performance**   | Query efficiency, memory, caching       | When changing data access or hot paths      |
+
+    | **Architecture**  | SOLID, coupling, patterns               | For structural changes or new modules       |
+
+    | **Testing**       | Coverage, quality, edge cases           | When adding new functionality               |
+
+    | **Accessibility** | WCAG, ARIA, keyboard nav                | For UI/frontend changes                     |
+
+
+    ### Recommended Combinations
+
+
+    | Scenario               | Dimensions                                   |
+
+    | ---------------------- | -------------------------------------------- |
+
+    | API endpoint changes   | Security, Performance, Architecture          |
+
+    | Frontend component     | Architecture, Testing, Accessibility         |
+
+    | Database migration     | Performance, Architecture                    |
+
+    | Authentication changes | Security, Testing                            |
+
+    | Full feature review    | Security, Performance, Architecture, Testing |'
+- sequence: 4
+  fragment_type: execution
+  content: "## Finding Deduplication\n\nWhen multiple reviewers report issues at the same location:\n\n### Merge Rules\n\n1. **Same file:line, same issue** — Merge into one finding, credit all reviewers\n2. **Same file:line, different issues** — Keep as separate findings\n3. **Same issue, different locations** — Keep separate but cross-reference\n4. **Conflicting severity** — Use the higher severity rating\n5. **Conflicting recommendations** — Include both with reviewer attribution\n\n### Deduplication Process\n\n```\nFor each finding in all reviewer reports:\n  1. Check if another finding references the same file:line\n  2. If yes, check if they describe the same issue\n  3. If same issue: merge, keeping the more detailed description\n  4. If different issue: keep both, tag as \"co-located\"\n  5. Use highest severity among merged findings\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Severity Calibration
+
+
+    ### Severity Criteria
+
+
+    | Severity     | Impact                                        | Likelihood             | Examples                                     |
+
+    | ------------ | --------------------------------------------- | ---------------------- | -------------------------------------------- |
+
+    | **Critical** | Data loss, security breach, complete failure  | Certain or very likely | SQL injection, auth bypass, data corruption  |
+
+    | **High**     | Significant functionality impact, degradation | Likely                 | Memory leak, missing validation, broken flow |
+
+    | **Medium**   | Partial impact, workaround exists             | Possible               | N+1 query, missing edge case, unclear error  |
+
+    | **Low**      | Minimal impact, cosmetic                      | Unlikely               | Style issue, minor optimization, naming      |
+
+
+    ### Calibration Rules
+
+
+    - Security vulnerabilities exploitable by external users: always Critical or High
+
+    - Performance issues in hot paths: at least Medium
+
+    - Missing tests for critical paths: at least Medium
+
+    - Accessibility violations for core functionality: at least Medium
+
+    - Code style issues with no functional impact: Low'
+- sequence: 6
+  fragment_type: execution
+  content: '## Code Review Report
+
+
+    **Target**: {files/PR/directory}
+
+    **Reviewers**: {dimension-1}, {dimension-2}, {dimension-3}
+
+    **Date**: {date}
+
+    **Files Reviewed**: {count}
+
+
+    ### Critical Findings ({count})
+
+
+    #### [CR-001] {Title}
+
+
+    **Location**: `{file}:{line}`
+
+    **Dimension**: {Security/Performance/etc.}
+
+    **Description**: {what was found}
+
+    **Impact**: {what could happen}
+
+    **Fix**: {recommended remediation}
+
+
+    ### High Findings ({count})
+
+
+    ...
+
+
+    ### Medium Findings ({count})
+
+
+    ...
+
+
+    ### Low Findings ({count})
+
+
+    ...
+
+
+    ### Summary
+
+
+    | Dimension    | Critical | High  | Medium | Low   | Total  |
+
+    | ------------ | -------- | ----- | ------ | ----- | ------ |
+
+    | Security     | 1        | 2     | 3      | 0     | 6      |
+
+    | Performance  | 0        | 1     | 4      | 2     | 7      |
+
+    | Architecture | 0        | 0     | 2      | 3     | 5      |
+
+    | **Total**    | **1**    | **3** | **9**  | **5** | **18** |
+
+
+    ### Recommendation
+
+
+    {Overall assessment and prioritized action items}
+
+    ```'

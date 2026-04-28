@@ -1,0 +1,299 @@
+skill_type: domain
+skill_id: receiving-code-review
+canonical_name: Receiving Code Review
+category: review
+skill_class: domain
+domain_tags:
+- code-review
+- feedback-evaluation
+- technical-rigor
+- pushback
+- no-performative-agreement
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from local-workstation superpowers
+raw_prose: '# Receiving Code Review
+
+
+  Code review requires technical evaluation, not emotional performance.
+
+
+  **Core principle:** Verify before implementing. Ask before assuming. Technical correctness over social comfort.
+
+
+  ## The Response Pattern
+
+
+  1. **READ** — complete feedback without reacting
+
+  2. **UNDERSTAND** — restate requirement in own words (or ask)
+
+  3. **VERIFY** — check against codebase reality
+
+  4. **EVALUATE** — technically sound for THIS codebase?
+
+  5. **RESPOND** — technical acknowledgment or reasoned pushback
+
+  6. **IMPLEMENT** — one item at a time, test each
+
+
+  ## Forbidden Responses
+
+
+  Never:
+
+  - "You''re absolutely right!"
+
+  - "Great point!" / "Excellent feedback!"
+
+  - "Thanks for catching that!" / any gratitude expression
+
+  - "Let me implement that now" (before verification)
+
+
+  Instead:
+
+  - Restate the technical requirement
+
+  - Ask clarifying questions
+
+  - Push back with technical reasoning if wrong
+
+  - Just start working — actions > words
+
+
+  ## Handling Unclear Feedback
+
+
+  If any item is unclear: STOP. Don''t implement anything. Ask for clarification. Items may be related; partial understanding produces wrong implementation.
+
+
+  Example: "Fix items 1-6" but you only understand 1,2,3,6. Don''t implement 1,2,3,6 first and ask later. Say: "Understand 1,2,3,6. Need clarification on 4 and 5 before implementing."
+
+
+  ## External Feedback Discipline
+
+
+  Before implementing external suggestions, check:
+
+  1. Technically correct for THIS codebase?
+
+  2. Breaks existing functionality?
+
+  3. Reason for current implementation?
+
+  4. Works on all platforms/versions?
+
+  5. Does reviewer understand full context?
+
+
+  If suggestion seems wrong: push back with technical reasoning. If you can''t easily verify: say so, ask for direction. If conflicts with prior architectural decisions: stop and discuss.
+
+
+  ## YAGNI Check
+
+
+  If reviewer suggests "implementing properly", grep codebase for actual usage. If unused: "This isn''t called. Remove it (YAGNI)?" If used: implement properly.
+
+
+  ## When to Push Back
+
+
+  Push back when: suggestion breaks functionality, reviewer lacks context, violates YAGNI, technically incorrect for this stack, legacy/compat reasons exist, conflicts with architectural decisions.
+
+
+  How: technical reasoning, not defensiveness. Specific questions. Reference working tests/code. Involve human if architectural.
+
+
+  ## Acknowledging Correct Feedback
+
+
+  ✅ "Fixed. [brief description]"
+
+  ✅ "Good catch — [specific issue]. Fixed in [location]."
+
+  ✅ Just fix and show the code
+
+
+  ❌ "You''re absolutely right!"
+
+  ❌ "Thanks for catching that!"
+
+
+  ## The Bottom Line
+
+
+  External feedback = suggestions to evaluate, not orders to follow. Verify. Question. Then implement. No performative agreement. Technical rigor always.'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Receiving Code Review
+
+
+    Code review requires technical evaluation, not emotional performance.
+
+
+    **Core principle:** Verify before implementing. Ask before assuming. Technical correctness over social comfort.'
+- sequence: 2
+  fragment_type: execution
+  content: '## The Response Pattern
+
+
+    1. **READ** — complete feedback without reacting
+
+    2. **UNDERSTAND** — restate requirement in own words (or ask)
+
+    3. **VERIFY** — check against codebase reality
+
+    4. **EVALUATE** — technically sound for THIS codebase?
+
+    5. **RESPOND** — technical acknowledgment or reasoned pushback
+
+    6. **IMPLEMENT** — one item at a time, test each'
+- sequence: 3
+  fragment_type: guardrail
+  content: '## Forbidden Responses
+
+
+    **Never:**
+
+    - "You''re absolutely right!"
+
+    - "Great point!" / "Excellent feedback!"
+
+    - "Thanks for catching that!" / **any** gratitude expression
+
+    - "Let me implement that now" (before verification)
+
+
+    **Instead:**
+
+    - Restate the technical requirement
+
+    - Ask clarifying questions
+
+    - Push back with technical reasoning if wrong
+
+    - Just start working — actions > words
+
+
+    If you catch yourself about to write "Thanks": **DELETE IT.** State the fix instead.'
+- sequence: 4
+  fragment_type: execution
+  content: '## Handling Unclear Feedback
+
+
+    If **any** item is unclear: STOP. Do not implement anything. Ask for clarification on the unclear items.
+
+
+    Items may be related — partial understanding produces wrong implementation.
+
+
+    **Example:**
+
+    > Reviewer: "Fix items 1-6"
+
+    > You understand 1,2,3,6. Unclear on 4,5.
+
+
+    ❌ WRONG: Implement 1,2,3,6 now, ask about 4,5 later
+
+    ✅ RIGHT: "Understand 1,2,3,6. Need clarification on 4 and 5 before implementing."'
+- sequence: 5
+  fragment_type: execution
+  content: '## External Feedback Discipline
+
+
+    Before implementing external suggestions, check:
+
+
+    1. Technically correct for THIS codebase?
+
+    2. Breaks existing functionality?
+
+    3. Reason for current implementation?
+
+    4. Works on all platforms/versions?
+
+    5. Does reviewer understand full context?
+
+
+    **If suggestion seems wrong:** push back with technical reasoning.
+
+    **If you can''t easily verify:** say so — "I can''t verify this without [X]. Should I [investigate/ask/proceed]?"
+
+    **If it conflicts with prior architectural decisions:** stop and discuss before implementing.'
+- sequence: 6
+  fragment_type: execution
+  content: '## YAGNI Check for "Professional" Features
+
+
+    If reviewer suggests "implementing properly", grep codebase for actual usage first.
+
+
+    - **If unused:** "This endpoint isn''t called. Remove it (YAGNI)?"
+
+    - **If used:** then implement properly.
+
+
+    Don''t add features the codebase doesn''t need just because a reviewer asked for them.'
+- sequence: 7
+  fragment_type: example
+  content: '## Acknowledging Correct Feedback
+
+
+    ✅ "Fixed. [brief description of what changed]"
+
+    ✅ "Good catch — [specific issue]. Fixed in [location]."
+
+    ✅ Just fix it and show in the code
+
+
+    ❌ "You''re absolutely right!"
+
+    ❌ "Great point!"
+
+    ❌ "Thanks for catching that!"
+
+    ❌ ANY gratitude expression
+
+
+    Actions speak. The code itself shows you heard the feedback.'
+- sequence: 8
+  fragment_type: example
+  content: '## Real Examples
+
+
+    **Performative (Bad):**
+
+    > Reviewer: "Remove legacy code"
+
+    > ❌ "You''re absolutely right! Let me remove that..."
+
+
+    **Technical Verification (Good):**
+
+    > Reviewer: "Remove legacy code"
+
+    > ✅ "Checking... build target is 10.15+, this API needs 13+. Need legacy for backward compat. Current impl has wrong bundle ID — fix it or drop pre-13 support?"
+
+
+    **YAGNI (Good):**
+
+    > Reviewer: "Implement proper metrics with database, date filters, CSV export"
+
+    > ✅ "Grepped codebase — nothing calls this endpoint. Remove it (YAGNI)? Or is there usage I''m missing?"'
+- sequence: 9
+  fragment_type: rationale
+  content: '## The Bottom Line
+
+
+    **External feedback = suggestions to evaluate, not orders to follow.**
+
+
+    Verify. Question. Then implement.
+
+
+    No performative agreement. Technical rigor always.'

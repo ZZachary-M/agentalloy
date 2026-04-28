@@ -1,0 +1,27 @@
+name: react
+version: 1.0.0
+description: React (web) — modernization, state management, composition, view transitions.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- typescript
+skills:
+- skill_id: react-modernization
+  file: react-modernization.yaml
+  fragment_count: 15
+- skill_id: react-state-management
+  file: react-state-management.yaml
+  fragment_count: 11
+- skill_id: vercel-composition-patterns
+  file: vercel-composition-patterns.yaml
+  fragment_count: 8
+- skill_id: vercel-react-best-practices
+  file: vercel-react-best-practices.yaml
+  fragment_count: 12
+- skill_id: vercel-react-view-transitions
+  file: vercel-react-view-transitions.yaml
+  fragment_count: 16

@@ -1,0 +1,122 @@
+skill_type: domain
+skill_id: cqrs-implementation
+canonical_name: CQRS Implementation
+category: design
+skill_class: domain
+domain_tags:
+- cqrs
+- event-sourcing
+- command-bus
+- query-bus
+- read-model
+- write-model
+- eventual-consistency
+- domain-events
+- fastapi
+- projection
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin backend-development/cqrs-implementation source
+raw_prose: "# CQRS Implementation\n\nCommand Query Responsibility Segregation separates read and write models. Commands mutate state and return nothing (or an ID). Queries return data and have no side effects.\n\n## When to Use This Skill\n\n- Separating read and write models for different scaling needs\n- Building event-sourced systems\n- Implementing command and query buses\n- Optimizing read performance with denormalized views\n- Systems with complex domain logic and simple queries\n- High-read, low-write workloads\n\n## Architecture Overview\n\n```\nClient\n  ├── Commands → Command Bus → Command Handler → Write Model (DB) → Domain Events\n  └── Queries  → Query Bus  → Query Handler  → Read Model (DB/Cache)\n\nDomain Events → Event Handlers → Read Model Sync\n```\n\n## Core Concepts\n\n### 1. Commands\nRepresent intent to change state. Named as imperative verbs: `CreateOrder`, `UpdateProfile`, `CancelSubscription`. Validated before execution.\n\n### 2. Queries\nRepresent data retrieval. Named as questions: `GetOrderById`, `ListUserOrders`. Return DTOs, never domain entities.\n\n### 3. Command Bus\nRoutes commands to their handlers. Provides middleware (logging, validation, auth).\n\n### 4. Query Bus\nRoutes queries to handlers. Can add caching, logging, authorization.\n\n### 5. Read Model Synchronization\nDomain events update denormalized read models asynchronously for query optimization.\n\n## Fundamental Patterns\n\n### Pattern 1: Command Infrastructure\n\n```python\nfrom dataclasses import dataclass\nfrom abc import ABC, abstractmethod\nfrom typing import TypeVar, Generic, Any\n\n# Base command\n@dataclass(frozen=True)\nclass Command:\n    pass\n\n# Command result\n@dataclass\nclass CommandResult:\n    success: bool\n    data: Any = None\n    error: str | None = None\n\n# Command handler protocol\nT = TypeVar(\"T\", bound=Command)\n\nclass CommandHandler(ABC, Generic[T]):\n    @abstractmethod\n    async def handle(self, command: T) -> CommandResult:\n        ...\n```\n\n### Pattern 2: Concrete Commands and Handlers\n\n```python\n@dataclass(frozen=True)\nclass CreateOrder(Command):\n    customer_id: str\n    items: list[dict]\n    shipping_address: str\n\nclass CreateOrderHandler(CommandHandler[CreateOrder]):\n    def __init__(self, order_repo, event_bus):\n        self.order_repo = order_repo\n        self.event_bus = event_bus\n\n    async def handle(self, command: CreateOrder) -> CommandResult:\n        order = Order.create(\n            customer_id=command.customer_id,\n            items=[OrderItem(**item) for item in command.items],\n            shipping_address=command.shipping_address,\n        )\n        await self.order_repo.save(order)\n        await self.event_bus.publish(OrderCreated(\n            order_id=order.id,\n            customer_id=order.customer_id,\n            total=order.total,\n        ))\n        return CommandResult(success=True, data={\"order_id\": order.id})\n```\n\n### Pattern 3: Command Bus\n\n```python\nclass CommandBus:\n    def __init__(self):\n        self._handlers: dict[type[Command], CommandHandler] = {}\n\n    def register(self, command_type: type[Command], handler: CommandHandler) -> None:\n        self._handlers[command_type] = handler\n\n    async def dispatch(self, command: Command) -> CommandResult:\n        handler = self._handlers.get(type(command))\n        if not handler:\n            raise ValueError(f\"No handler for {type(command).__name__}\")\n        return await handler.handle(command)\n```\n\n### Pattern 4: Query Infrastructure\n\n```python\n@dataclass(frozen=True)\nclass Query:\n    pass\n\nQ = TypeVar(\"Q\", bound=Query)\nR = TypeVar(\"R\")\n\nclass QueryHandler(ABC, Generic[Q, R]):\n    @abstractmethod\n    async def handle(self, query: Q) -> R:\n        ...\n```\n\n### Pattern 5: Concrete Queries and Handlers\n\n```python\n@dataclass(frozen=True)\nclass GetOrderById(Query):\n    order_id: str\n\n@dataclass\nclass OrderDTO:\n    id: str\n    customer_id: str\n    status: str\n    total: float\n    items: list[dict]\n    created_at: str\n\nclass GetOrderByIdHandler(QueryHandler[GetOrderById, OrderDTO | None]):\n    def __init__(self, read_db):\n        self.read_db = read_db\n\n    async def handle(self, query: GetOrderById) -> OrderDTO | None:\n        row = await self.read_db.fetchrow(\n            \"SELECT * FROM order_read_model WHERE id = $1\",\n            query.order_id,\n        )\n        if not row:\n            return None\n        return OrderDTO(**row)\n```\n\n### Pattern 6: Query Bus\n\n```python\nclass QueryBus:\n    def __init__(self):\n        self._handlers: dict[type[Query], QueryHandler] = {}\n\n    def register(self, query_type: type[Query], handler: QueryHandler) -> None:\n        self._handlers[query_type] = handler\n\n    async def execute(self, query: Query) -> Any:\n        handler = self._handlers.get(type(query))\n        if not handler:\n            raise ValueError(f\"No handler for {type(query).__name__}\")\n        return await handler.handle(query)\n```\n\n### Pattern 7: FastAPI CQRS Application\n\n```python\nfrom fastapi import FastAPI, HTTPException\n\napp = FastAPI()\n\n@app.post(\"/orders\")\nasync def create_order(request: CreateOrderRequest):\n    command = CreateOrder(\n        customer_id=request.customer_id,\n        items=request.items,\n        shipping_address=request.shipping_address,\n    )\n    result = await command_bus.dispatch(command)\n    if not result.success:\n        raise HTTPException(status_code=400, detail=result.error)\n    return {\"order_id\": result.data[\"order_id\"]}\n\n@app.get(\"/orders/{order_id}\")\nasync def get_order(order_id: str):\n    query = GetOrderById(order_id=order_id)\n    order = await query_bus.execute(query)\n    if not order:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n    return order\n```\n\n### Pattern 8: Read Model Synchronization\n\n```python\nclass OrderReadModelProjection:\n    def __init__(self, read_db):\n        self.read_db = read_db\n\n    async def handle_order_created(self, event: OrderCreated):\n        await self.read_db.execute(\n            \"\"\"INSERT INTO order_read_model (id, customer_id, status, total, created_at)\n               VALUES ($1, $2, $3, $4, $5)\"\"\",\n            event.order_id, event.customer_id, \"pending\", event.total, event.created_at,\n        )\n\n    async def handle_order_shipped(self, event: OrderShipped):\n        await self.read_db.execute(\n            \"UPDATE order_read_model SET status = 'shipped', shipped_at = $2 WHERE id = $1\",\n            event.order_id, event.shipped_at,\n        )\n```\n\n### Eventual Consistency\n\nRead models may lag behind write models. Handle this by:\n- Polling with timeout: check projection version against expected version\n- Return stale data with a warning if timeout exceeded\n- Use `await asyncio.sleep(0.1)` between retries\n\n## Best Practices\n\n### Do's\n- **Separate command and query models** - Different needs\n- **Use eventual consistency** - Accept propagation delay\n- **Validate in command handlers** - Before state change\n- **Denormalize read models** - Optimize for queries\n- **Version your events** - For schema evolution\n\n### Don'ts\n- **Don't query in commands** - Use only for writes\n- **Don't couple read/write schemas** - Independent evolution\n- **Don't over-engineer** - Start simple\n- **Don't ignore consistency SLAs** - Define acceptable lag"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# CQRS Implementation
+
+
+    Command Query Responsibility Segregation separates read and write models. Commands mutate state and return nothing (or an ID). Queries return data and have no side effects.
+
+
+    ## Architecture Overview
+
+
+    Client sends Commands via Command Bus to Command Handlers which update the Write Model and publish Domain Events. Client sends Queries via Query Bus to Query Handlers which read from the Read Model. Domain Events flow through Event Handlers to synchronize the Read Model.
+
+
+    ## Core Concepts
+
+
+    1. **Commands** — Intent to change state. Named as imperative verbs: CreateOrder, UpdateProfile. Validated before execution.
+
+    2. **Queries** — Data retrieval. Named as questions: GetOrderById, ListUserOrders. Return DTOs, never domain entities.
+
+    3. **Command Bus** — Routes commands to handlers. Provides middleware (logging, validation, auth).
+
+    4. **Query Bus** — Routes queries to handlers. Can add caching, logging, authorization.
+
+    5. **Read Model Sync** — Domain events update denormalized read models asynchronously.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Separating read and write models for different scaling needs
+
+    - Building event-sourced systems
+
+    - Implementing command and query buses
+
+    - Optimizing read performance with denormalized views
+
+    - Systems with complex domain logic and simple queries
+
+    - High-read, low-write workloads'
+- sequence: 3
+  fragment_type: execution
+  content: '## Command Infrastructure (Patterns 1-3)
+
+
+    Define a frozen `@dataclass` base `Command`. Create `CommandResult` with success flag, optional data, and optional error. Implement `CommandHandler[T]` as an abstract generic class with `async handle(command: T) -> CommandResult`. Concrete handlers receive dependencies via constructor injection (repository, event bus). The `CommandBus` maps command types to handlers in a dict and dispatches via `await handler.handle(command)`.
+
+
+    ## Query Infrastructure (Patterns 4-6)
+
+
+    Define a frozen `@dataclass` base `Query`. Implement `QueryHandler[Q, R]` as an abstract generic class with `async handle(query: Q) -> R`. Query handlers read from the read database and return DTOs. The `QueryBus` maps query types to handlers and executes via `await handler.handle(query)`.'
+- sequence: 4
+  fragment_type: example
+  content: "## Command & Handler Example (Pattern 2)\n\n```python\n@dataclass(frozen=True)\nclass CreateOrder(Command):\n    customer_id: str\n    items: list[dict]\n    shipping_address: str\n\nclass CreateOrderHandler(CommandHandler[CreateOrder]):\n    def __init__(self, order_repo, event_bus):\n        self.order_repo = order_repo\n        self.event_bus = event_bus\n\n    async def handle(self, command: CreateOrder) -> CommandResult:\n        order = Order.create(\n            customer_id=command.customer_id,\n            items=[OrderItem(**item) for item in command.items],\n            shipping_address=command.shipping_address,\n        )\n        await self.order_repo.save(order)\n        await self.event_bus.publish(OrderCreated(\n            order_id=order.id, customer_id=order.customer_id, total=order.total,\n        ))\n        return CommandResult(success=True, data={\"order_id\": order.id})\n```"
+- sequence: 5
+  fragment_type: example
+  content: "## FastAPI CQRS Application (Pattern 7)\n\n```python\nfrom fastapi import FastAPI, HTTPException\n\napp = FastAPI()\n\n@app.post(\"/orders\")\nasync def create_order(request: CreateOrderRequest):\n    command = CreateOrder(\n        customer_id=request.customer_id,\n        items=request.items,\n        shipping_address=request.shipping_address,\n    )\n    result = await command_bus.dispatch(command)\n    if not result.success:\n        raise HTTPException(status_code=400, detail=result.error)\n    return {\"order_id\": result.data[\"order_id\"]}\n\n@app.get(\"/orders/{order_id}\")\nasync def get_order(order_id: str):\n    query = GetOrderById(order_id=order_id)\n    order = await query_bus.execute(query)\n    if not order:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n    return order\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Read Model Synchronization (Pattern 8)
+
+
+    Create projection classes that handle domain events and update read model tables. `OrderReadModelProjection` handles `OrderCreated` (INSERT) and `OrderShipped` (UPDATE status). Read models are denormalized — optimized for query patterns, not normalization.
+
+
+    ## Eventual Consistency
+
+
+    Read models may lag behind write models. Handle with polling: check projection version against expected version with a timeout. If timeout exceeded, return stale data with a `_warning` field. Use `asyncio.sleep(0.1)` between retries.'
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    ### Do''s
+
+    - **Separate command and query models** — Different needs, independent scaling
+
+    - **Use eventual consistency** — Accept propagation delay
+
+    - **Validate in command handlers** — Before state change
+
+    - **Denormalize read models** — Optimize for queries
+
+    - **Version your events** — For schema evolution
+
+
+    ### Don''ts
+
+    - **Don''t query in commands** — Commands are write-only
+
+    - **Don''t couple read/write schemas** — Independent evolution
+
+    - **Don''t over-engineer** — Start simple, add complexity as needed
+
+    - **Don''t ignore consistency SLAs** — Define acceptable lag'

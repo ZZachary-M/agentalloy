@@ -1,0 +1,320 @@
+skill_type: domain
+skill_id: shipping-and-launch
+canonical_name: Shipping and Launch
+category: ops
+skill_class: domain
+domain_tags:
+- deployment
+- feature-flags
+- staged-rollout
+- monitoring
+- rollback
+- pre-launch-checklist
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: re-author after needs-human verdict — split pre-launch checklist into per-category fragments, separate references/guardrails
+raw_prose: "# Shipping and Launch\n\n## Overview\n\nShip with confidence. The goal is not just to deploy — it's to deploy safely, with monitoring in place, a rollback plan ready, and a clear understanding of what success looks like. Every launch should be reversible, observable, and incremental.\n\n## When to Use\n\n- Deploying a feature to production for the first time\n- Releasing a significant change to users\n- Migrating data or infrastructure\n- Opening a beta or early access program\n- Any deployment that carries risk (all of them)\n\n## The Pre-Launch Checklist\n\n### Code Quality\n\n- [ ] All tests pass (unit, integration, e2e)\n- [ ] Build succeeds with no warnings\n- [ ] Lint and type checking pass\n- [ ] Code reviewed and approved\n- [ ] No TODO comments that should be resolved before launch\n- [ ] No `console.log` debugging statements in production code\n- [ ] Error handling covers expected failure modes\n\n### Security\n\n- [ ] No secrets in code or version control\n- [ ] `npm audit` shows no critical or high vulnerabilities\n- [ ] Input validation on all user-facing endpoints\n- [ ] Authentication and authorization checks in place\n- [ ] Security headers configured (CSP, HSTS, etc.)\n- [ ] Rate limiting on authentication endpoints\n- [ ] CORS configured to specific origins (not wildcard)\n\n### Performance\n\n- [ ] Core Web Vitals within \"Good\" thresholds\n- [ ] No N+1 queries in critical paths\n- [ ] Images optimized (compression, responsive sizes, lazy loading)\n- [ ] Bundle size within budget\n- [ ] Database queries have appropriate indexes\n- [ ] Caching configured for static assets and repeated queries\n\n### Accessibility\n\n- [ ] Keyboard navigation works for all interactive elements\n- [ ] Screen reader can convey page content and structure\n- [ ] Color contrast meets WCAG 2.1 AA (4.5:1 for text)\n- [ ] Focus management correct for modals and dynamic content\n- [ ] Error messages are descriptive and associated with form fields\n- [ ] No accessibility warnings in axe-core or Lighthouse\n\n### Infrastructure\n\n- [ ] Environment variables set in production\n- [ ] Database migrations applied (or ready to apply)\n- [ ] DNS and SSL configured\n- [ ] CDN configured for static assets\n- [ ] Logging and error reporting configured\n- [ ] Health check endpoint exists and responds\n\n### Documentation\n\n- [ ] README updated with any new setup requirements\n- [ ] API documentation current\n- [ ] ADRs written for any architectural decisions\n- [ ] Changelog updated\n- [ ] User-facing documentation updated (if applicable)\n\n## Feature Flag Strategy\n\nShip behind feature flags to decouple deployment from release:\n\n```typescript\n// Feature flag check\nconst flags = await getFeatureFlags(userId);\n\nif (flags.taskSharing) {\n  // New feature: task sharing\n  return <TaskSharingPanel task={task} />;\n}\n\n// Default: existing behavior\nreturn null;\n```\n\n**Feature flag lifecycle:**\n\n```\n1. DEPLOY with flag OFF     → Code is in production but inactive\n2. ENABLE for team/beta     → Internal testing in production environment\n3. GRADUAL ROLLOUT          → 5% → 25% → 50% → 100% of users\n4. MONITOR at each stage    → Watch error rates, performance, user feedback\n5. CLEAN UP                 → Remove flag and dead code path after full rollout\n```\n\n**Rules:**\n- Every feature flag has an owner and an expiration date\n- Clean up flags within 2 weeks of full rollout\n- Don't nest feature flags (creates exponential combinations)\n- Test both flag states (on and off) in CI\n\n## Staged Rollout\n\n### The Rollout Sequence\n\n```\n1. DEPLOY to staging\n   └── Full test suite in staging environment\n   └── Manual smoke test of critical flows\n\n2. DEPLOY to production (feature flag OFF)\n   └── Verify deployment succeeded (health check)\n   └── Check error monitoring (no new errors)\n\n3. ENABLE for team (flag ON for internal users)\n   └── Team uses the feature in production\n   └── 24-hour monitoring window\n\n4. CANARY rollout (flag ON for 5% of users)\n   └── Monitor error rates, latency, user behavior\n   └── Compare metrics: canary vs. baseline\n   └── 24-48 hour monitoring window\n   └── Advance only if all thresholds pass (see table below)\n\n5. GRADUAL increase (25% -> 50% -> 100%)\n   └── Same monitoring at each step\n   └── Ability to roll back to previous percentage at any point\n\n6. FULL rollout (flag ON for all users)\n   └── Monitor for 1 week\n   └── Clean up feature flag\n```\n\n### Rollout Decision Thresholds\n\nUse these thresholds to decide whether to advance, hold, or roll back at each stage:\n\n| Metric | Advance (green) | Hold and investigate (yellow) | Roll back (red) |\n|--------|-----------------|-------------------------------|-----------------|\n| Error rate | Within 10% of baseline | 10-100% above baseline | >2x baseline |\n| P95 latency | Within 20% of baseline | 20-50% above baseline | >50% above baseline |\n| Client JS errors | No new error types | New errors at <0.1% of sessions | New errors at >0.1% of sessions |\n| Business metrics | Neutral or positive | Decline <5% (may be noise) | Decline >5% |\n\n### When to Roll Back\n\nRoll back immediately if:\n- Error rate increases by more than 2x baseline\n- P95 latency increases by more than 50%\n- User-reported issues spike\n- Data integrity issues detected\n- Security vulnerability discovered\n\n## Monitoring and Observability\n\n### What to Monitor\n\n```\nApplication metrics:\n├── Error rate (total and by endpoint)\n├── Response time (p50, p95, p99)\n├── Request volume\n├── Active users\n└── Key business metrics (conversion, engagement)\n\nInfrastructure metrics:\n├── CPU and memory utilization\n├── Database connection pool usage\n├── Disk space\n├── Network latency\n└── Queue depth (if applicable)\n\nClient metrics:\n├── Core Web Vitals (LCP, INP, CLS)\n├── JavaScript errors\n├── API error rates from client perspective\n└── Page load time\n```\n\n### Error Reporting\n\n```typescript\n// Set up error boundary with reporting\nclass ErrorBoundary extends React.Component {\n  componentDidCatch(error: Error, info: React.ErrorInfo) {\n    // Report to error tracking service\n    reportError(error, {\n      componentStack: info.componentStack,\n      userId: getCurrentUser()?.id,\n      page: window.location.pathname,\n    });\n  }\n\n  render() {\n    if (this.state.hasError) {\n      return <ErrorFallback onRetry={() => this.setState({ hasError: false })} />;\n    }\n    return this.props.children;\n  }\n}\n\n// Server-side error reporting\napp.use((err: Error, req: Request, res: Response, next: NextFunction) => {\n  reportError(err, {\n    method: req.method,\n    url: req.url,\n    userId: req.user?.id,\n  });\n\n  // Don't expose internals to users\n  res.status(500).json({\n    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' },\n  });\n});\n```\n\n### Post-Launch Verification\n\nIn the first hour after launch:\n\n```\n1. Check health endpoint returns 200\n2. Check error monitoring dashboard (no new error types)\n3. Check latency dashboard (no regression)\n4. Test the critical user flow manually\n5. Verify logs are flowing and readable\n6. Confirm rollback mechanism works (dry run if possible)\n```\n\n## Rollback Strategy\n\nEvery deployment needs a rollback plan before it happens:\n\n```markdown\n## Rollback Plan for [Feature/Release]\n\n### Trigger Conditions\n- Error rate > 2x baseline\n- P95 latency > [X]ms\n- User reports of [specific issue]\n\n### Rollback Steps\n1. Disable feature flag (if applicable)\n   OR\n1. Deploy previous version: `git revert <commit> && git push`\n2. Verify rollback: health check, error monitoring\n3. Communicate: notify team of rollback\n\n### Database Considerations\n- Migration [X] has a rollback: `npx prisma migrate rollback`\n- Data inserted by new feature: [preserved / cleaned up]\n\n### Time to Rollback\n- Feature flag: < 1 minute\n- Redeploy previous version: < 5 minutes\n- Database rollback: < 15 minutes\n```\n\n## See Also\n\n- For security pre-launch checks, see `references/security-checklist.md`\n- For performance pre-launch checklist, see `references/performance-checklist.md`\n- For accessibility verification before launch, see `references/accessibility-checklist.md`\n\n## Common Rationalizations\n\n| Rationalization | Reality |\n|---|---|\n| \"It works in staging, it'll work in production\" | Production has different data, traffic patterns, and edge cases. Monitor after deploy. |\n| \"We don't need feature flags for this\" | Every feature benefits from a kill switch. Even \"simple\" changes can break things. |\n| \"Monitoring is overhead\" | Not having monitoring means you discover problems from user complaints instead of dashboards. |\n| \"We'll add monitoring later\" | Add it before launch. You can't debug what you can't see. |\n| \"Rolling back is admitting failure\" | Rolling back is responsible engineering. Shipping a broken feature is the failure. |\n\n## Red Flags\n\n- Deploying without a rollback plan\n- No monitoring or error reporting in production\n- Big-bang releases (everything at once, no staging)\n- Feature flags with no expiration or owner\n- No one monitoring the deploy for the first hour\n- Production environment configuration done by memory, not code\n- \"It's Friday afternoon, let's ship it\"\n\n## Verification\n\nBefore deploying:\n\n- [ ] Pre-launch checklist completed (all sections green)\n- [ ] Feature flag configured (if applicable)\n- [ ] Rollback plan documented\n- [ ] Monitoring dashboards set up\n- [ ] Team notified of deployment\n\nAfter deploying:\n\n- [ ] Health check returns 200\n- [ ] Error rate is normal\n- [ ] Latency is normal\n- [ ] Critical user flow works\n- [ ] Logs are flowing\n- [ ] Rollback tested or verified ready"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '## Overview
+
+
+    Ship with confidence. The goal is not just to deploy — it''s to deploy safely, with monitoring in place, a rollback plan ready, and a clear understanding of what success looks like. Every launch should be reversible, observable, and incremental.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Deploying a feature to production for the first time
+
+    - Releasing a significant change to users
+
+    - Migrating data or infrastructure
+
+    - Opening a beta or early access program
+
+    - Any deployment that carries risk (all of them)'
+- sequence: 3
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Code Quality
+
+
+    - [ ] All tests pass (unit, integration, e2e)
+
+    - [ ] Build succeeds with no warnings
+
+    - [ ] Lint and type checking pass
+
+    - [ ] Code reviewed and approved
+
+    - [ ] No TODO comments that should be resolved before launch
+
+    - [ ] No `console.log` debugging statements in production code
+
+    - [ ] Error handling covers expected failure modes'
+- sequence: 4
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Security
+
+
+    - [ ] No secrets in code or version control
+
+    - [ ] `npm audit` shows no critical or high vulnerabilities
+
+    - [ ] Input validation on all user-facing endpoints
+
+    - [ ] Authentication and authorization checks in place
+
+    - [ ] Security headers configured (CSP, HSTS, etc.)
+
+    - [ ] Rate limiting on authentication endpoints
+
+    - [ ] CORS configured to specific origins (not wildcard)'
+- sequence: 5
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Performance
+
+
+    - [ ] Core Web Vitals within "Good" thresholds
+
+    - [ ] No N+1 queries in critical paths
+
+    - [ ] Images optimized (compression, responsive sizes, lazy loading)
+
+    - [ ] Bundle size within budget
+
+    - [ ] Database queries have appropriate indexes
+
+    - [ ] Caching configured for static assets and repeated queries'
+- sequence: 6
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Accessibility
+
+
+    - [ ] Keyboard navigation works for all interactive elements
+
+    - [ ] Screen reader can convey page content and structure
+
+    - [ ] Color contrast meets WCAG 2.1 AA (4.5:1 for text)
+
+    - [ ] Focus management correct for modals and dynamic content
+
+    - [ ] Error messages are descriptive and associated with form fields
+
+    - [ ] No accessibility warnings in axe-core or Lighthouse'
+- sequence: 7
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Infrastructure
+
+
+    - [ ] Environment variables set in production
+
+    - [ ] Database migrations applied (or ready to apply)
+
+    - [ ] DNS and SSL configured
+
+    - [ ] CDN configured for static assets
+
+    - [ ] Logging and error reporting configured
+
+    - [ ] Health check endpoint exists and responds'
+- sequence: 8
+  fragment_type: verification
+  content: '## Pre-Launch Checklist: Documentation
+
+
+    - [ ] README updated with any new setup requirements
+
+    - [ ] API documentation current
+
+    - [ ] ADRs written for any architectural decisions
+
+    - [ ] Changelog updated
+
+    - [ ] User-facing documentation updated (if applicable)'
+- sequence: 9
+  fragment_type: execution
+  content: "## Feature Flag Strategy\n\nShip behind feature flags to decouple deployment from release:\n\n```typescript\nconst flags = await getFeatureFlags(userId);\n\nif (flags.taskSharing) {\n  return <TaskSharingPanel task={task} />;\n}\n\nreturn null; // Default: existing behavior\n```\n\n**Feature flag lifecycle:**\n\n```\n1. DEPLOY with flag OFF     → Code is in production but inactive\n2. ENABLE for team/beta     → Internal testing in production environment\n3. GRADUAL ROLLOUT          → 5% → 25% → 50% → 100% of users\n4. MONITOR at each stage    → Watch error rates, performance, user feedback\n5. CLEAN UP                 → Remove flag and dead code path after full rollout\n```\n\n**Rules:**\n- Every feature flag has an owner and an expiration date\n- Clean up flags within 2 weeks of full rollout\n- Don't nest feature flags (creates exponential combinations)\n- Test both flag states (on and off) in CI"
+- sequence: 10
+  fragment_type: execution
+  content: "## Staged Rollout: The Rollout Sequence\n\n```\n1. DEPLOY to staging\n   └── Full test suite in staging environment\n   └── Manual smoke test of critical flows\n\n2. DEPLOY to production (feature flag OFF)\n   └── Verify deployment succeeded (health check)\n   └── Check error monitoring (no new errors)\n\n3. ENABLE for team (flag ON for internal users)\n   └── Team uses the feature in production\n   └── 24-hour monitoring window\n\n4. CANARY rollout (flag ON for 5% of users)\n   └── Monitor error rates, latency, user behavior\n   └── Compare metrics: canary vs. baseline\n   └── 24-48 hour monitoring window\n   └── Advance only if all thresholds pass\n\n5. GRADUAL increase (25% -> 50% -> 100%)\n   └── Same monitoring at each step\n   └── Ability to roll back to previous percentage at any point\n\n6. FULL rollout (flag ON for all users)\n   └── Monitor for 1 week\n   └── Clean up feature flag\n```"
+- sequence: 11
+  fragment_type: execution
+  content: '## Staged Rollout: Decision Thresholds
+
+
+    Use these thresholds to decide whether to advance, hold, or roll back at each stage:
+
+
+    | Metric | Advance (green) | Hold and investigate (yellow) | Roll back (red) |
+
+    |--------|-----------------|-------------------------------|-----------------|
+
+    | Error rate | Within 10% of baseline | 10-100% above baseline | >2x baseline |
+
+    | P95 latency | Within 20% of baseline | 20-50% above baseline | >50% above baseline |
+
+    | Client JS errors | No new error types | New errors at <0.1% of sessions | New errors at >0.1% of sessions |
+
+    | Business metrics | Neutral or positive | Decline <5% (may be noise) | Decline >5% |'
+- sequence: 12
+  fragment_type: guardrail
+  content: '## When to Roll Back
+
+
+    Roll back immediately if:
+
+    - Error rate increases by more than 2x baseline
+
+    - P95 latency increases by more than 50%
+
+    - User-reported issues spike
+
+    - Data integrity issues detected
+
+    - Security vulnerability discovered'
+- sequence: 13
+  fragment_type: verification
+  content: '## Monitoring: What to Monitor
+
+
+    ```
+
+    Application metrics:
+
+    ├── Error rate (total and by endpoint)
+
+    ├── Response time (p50, p95, p99)
+
+    ├── Request volume
+
+    ├── Active users
+
+    └── Key business metrics (conversion, engagement)
+
+
+    Infrastructure metrics:
+
+    ├── CPU and memory utilization
+
+    ├── Database connection pool usage
+
+    ├── Disk space
+
+    ├── Network latency
+
+    └── Queue depth (if applicable)
+
+
+    Client metrics:
+
+    ├── Core Web Vitals (LCP, INP, CLS)
+
+    ├── JavaScript errors
+
+    ├── API error rates from client perspective
+
+    └── Page load time
+
+    ```'
+- sequence: 14
+  fragment_type: example
+  content: "## Monitoring: Error Reporting\n\n```typescript\n// Set up error boundary with reporting\nclass ErrorBoundary extends React.Component {\n  componentDidCatch(error: Error, info: React.ErrorInfo) {\n    reportError(error, {\n      componentStack: info.componentStack,\n      userId: getCurrentUser()?.id,\n      page: window.location.pathname,\n    });\n  }\n\n  render() {\n    if (this.state.hasError) {\n      return <ErrorFallback onRetry={() => this.setState({ hasError: false })} />;\n    }\n    return this.props.children;\n  }\n}\n\n// Server-side error reporting\napp.use((err: Error, req: Request, res: Response, next: NextFunction) => {\n  reportError(err, { method: req.method, url: req.url, userId: req.user?.id });\n\n  // Don't expose internals to users\n  res.status(500).json({\n    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' },\n  });\n});\n```"
+- sequence: 15
+  fragment_type: verification
+  content: '## Post-Launch Verification
+
+
+    In the first hour after launch:
+
+
+    ```
+
+    1. Check health endpoint returns 200
+
+    2. Check error monitoring dashboard (no new error types)
+
+    3. Check latency dashboard (no regression)
+
+    4. Test the critical user flow manually
+
+    5. Verify logs are flowing and readable
+
+    6. Confirm rollback mechanism works (dry run if possible)
+
+    ```'
+- sequence: 16
+  fragment_type: example
+  content: "## Rollback Strategy\n\nEvery deployment needs a rollback plan before it happens:\n\n```markdown\n## Rollback Plan for [Feature/Release]\n\n### Trigger Conditions\n- Error rate > 2x baseline\n- P95 latency > [X]ms\n- User reports of [specific issue]\n\n### Rollback Steps\n1. Disable feature flag (if applicable)\n   OR\n1. Deploy previous version: `git revert <commit> && git push`\n2. Verify rollback: health check, error monitoring\n3. Communicate: notify team of rollback\n\n### Database Considerations\n- Migration [X] has a rollback: `npx prisma migrate rollback`\n- Data inserted by new feature: [preserved / cleaned up]\n\n### Time to Rollback\n- Feature flag: < 1 minute\n- Redeploy previous version: < 5 minutes\n- Database rollback: < 15 minutes\n```"
+- sequence: 17
+  fragment_type: rationale
+  content: '## Common Rationalizations
+
+
+    | Rationalization | Reality |
+
+    |---|---|
+
+    | "It works in staging, it''ll work in production" | Production has different data, traffic patterns, and edge cases. Monitor after deploy. |
+
+    | "We don''t need feature flags for this" | Every feature benefits from a kill switch. Even "simple" changes can break things. |
+
+    | "Monitoring is overhead" | Not having monitoring means you discover problems from user complaints instead of dashboards. |
+
+    | "We''ll add monitoring later" | Add it before launch. You can''t debug what you can''t see. |
+
+    | "Rolling back is admitting failure" | Rolling back is responsible engineering. Shipping a broken feature is the failure. |'
+- sequence: 18
+  fragment_type: guardrail
+  content: '## Red Flags
+
+
+    - Deploying without a rollback plan
+
+    - No monitoring or error reporting in production
+
+    - Big-bang releases (everything at once, no staging)
+
+    - Feature flags with no expiration or owner
+
+    - No one monitoring the deploy for the first hour
+
+    - Production environment configuration done by memory, not code
+
+    - "It''s Friday afternoon, let''s ship it"'
+- sequence: 19
+  fragment_type: verification
+  content: '## Verification
+
+
+    Before deploying:
+
+
+    - [ ] Pre-launch checklist completed (all sections green)
+
+    - [ ] Feature flag configured (if applicable)
+
+    - [ ] Rollback plan documented
+
+    - [ ] Monitoring dashboards set up
+
+    - [ ] Team notified of deployment
+
+
+    After deploying:
+
+
+    - [ ] Health check returns 200
+
+    - [ ] Error rate is normal
+
+    - [ ] Latency is normal
+
+    - [ ] Critical user flow works
+
+    - [ ] Logs are flowing
+
+    - [ ] Rollback tested or verified ready'

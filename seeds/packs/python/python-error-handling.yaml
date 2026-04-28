@@ -1,0 +1,157 @@
+skill_type: domain
+skill_id: python-error-handling
+canonical_name: Python Error Handling
+category: engineering
+skill_class: domain
+domain_tags:
+- input-validation
+- exception-handling
+- error-messages
+- pydantic-validation
+- batch-processing
+- partial-failure
+- exception-chaining
+- fail-fast
+- custom-exceptions
+- api-error-handling
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents python-development plugin
+raw_prose: "# Python Error Handling\n\nBuild robust Python applications with proper input validation, meaningful exceptions, and graceful failure handling. Good error handling makes debugging easier and systems more reliable.\n\n## When to Use This Skill\n\n- Validating user input and API parameters\n- Designing exception hierarchies for applications\n- Handling partial failures in batch operations\n- Converting external data to domain types\n- Building user-friendly error messages\n- Implementing fail-fast validation patterns\n\n## Core Concepts\n\n### 1. Fail Fast\n\nValidate inputs early, before expensive operations. Report all validation errors at once when possible.\n\n### 2. Meaningful Exceptions\n\nUse appropriate exception types with context. Messages should explain what failed, why, and how to fix it.\n\n### 3. Partial Failures\n\nIn batch operations, don't let one failure abort everything. Track successes and failures separately.\n\n### 4. Preserve Context\n\nChain exceptions to maintain the full error trail for debugging.\n\n## Quick Start\n\n```python\ndef fetch_page(url: str, page_size: int) -> Page:\n    if not url:\n        raise ValueError(\"'url' is required\")\n    if not 1 <= page_size <= 100:\n        raise ValueError(f\"'page_size' must be 1-100, got {page_size}\")\n    # Now safe to proceed...\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Early Input Validation\n\nValidate all inputs at API boundaries before any processing begins.\n\n```python\ndef process_order(\n    order_id: str,\n    quantity: int,\n    discount_percent: float,\n) -> OrderResult:\n    \"\"\"Process an order with validation.\"\"\"\n    # Validate required fields\n    if not order_id:\n        raise ValueError(\"'order_id' is required\")\n\n    # Validate ranges\n    if quantity <= 0:\n        raise ValueError(f\"'quantity' must be positive, got {quantity}\")\n\n    if not 0 <= discount_percent <= 100:\n        raise ValueError(\n            f\"'discount_percent' must be 0-100, got {discount_percent}\"\n        )\n\n    # Validation passed, proceed with processing\n    return _process_validated_order(order_id, quantity, discount_percent)\n```\n\n### Pattern 2: Convert to Domain Types Early\n\nParse strings and external data into typed domain objects at system boundaries.\n\n```python\nfrom enum import Enum\n\nclass OutputFormat(Enum):\n    JSON = \"json\"\n    CSV = \"csv\"\n    PARQUET = \"parquet\"\n\ndef parse_output_format(value: str) -> OutputFormat:\n    \"\"\"Parse string to OutputFormat enum.\n\n    Args:\n        value: Format string from user input.\n\n    Returns:\n        Validated OutputFormat enum member.\n\n    Raises:\n        ValueError: If format is not recognized.\n    \"\"\"\n    try:\n        return OutputFormat(value.lower())\n    except ValueError:\n        valid_formats = [f.value for f in OutputFormat]\n        raise ValueError(\n            f\"Invalid format '{value}'. \"\n            f\"Valid options: {', '.join(valid_formats)}\"\n        )\n\n# Usage at API boundary\ndef export_data(data: list[dict], format_str: str) -> bytes:\n    output_format = parse_output_format(format_str)  # Fail fast\n    # Rest of function uses typed OutputFormat\n    ...\n```\n\n### Pattern 3: Pydantic for Complex Validation\n\nUse Pydantic models for structured input validation with automatic error messages.\n\n```python\nfrom pydantic import BaseModel, Field, field_validator\n\nclass CreateUserInput(BaseModel):\n    \"\"\"Input model for user creation.\"\"\"\n\n    email: str = Field(..., min_length=5, max_length=255)\n    name: str = Field(..., min_length=1, max_length=100)\n    age: int = Field(ge=0, le=150)\n\n    @field_validator(\"email\")\n    @classmethod\n    def validate_email_format(cls, v: str) -> str:\n        if \"@\" not in v or \".\" not in v.split(\"@\")[-1]:\n            raise ValueError(\"Invalid email format\")\n        return v.lower()\n\n    @field_validator(\"name\")\n    @classmethod\n    def normalize_name(cls, v: str) -> str:\n        return v.strip().title()\n\n# Usage\ntry:\n    user_input = CreateUserInput(\n        email=\"user@example.com\",\n        name=\"john doe\",\n        age=25,\n    )\nexcept ValidationError as e:\n    # Pydantic provides detailed error information\n    print(e.errors())\n```\n\n### Pattern 4: Map Errors to Standard Exceptions\n\nUse Python's built-in exception types appropriately, adding context as needed.\n\n| Failure Type | Exception | Example |\n|--------------|-----------|---------|\n| Invalid input | `ValueError` | Bad parameter values |\n| Wrong type | `TypeError` | Expected string, got int |\n| Missing item | `KeyError` | Dict key not found |\n| Operational failure | `RuntimeError` | Service unavailable |\n| Timeout | `TimeoutError` | Operation took too long |\n| File not found | `FileNotFoundError` | Path doesn't exist |\n| Permission denied | `PermissionError` | Access forbidden |\n\n```python\n# Good: Specific exception with context\nraise ValueError(f\"'page_size' must be 1-100, got {page_size}\")\n\n# Avoid: Generic exception, no context\nraise Exception(\"Invalid parameter\")\n```\n\n## Advanced Patterns\n\n### Pattern 5: Custom Exceptions with Context\n\nCreate domain-specific exceptions that carry structured information.\n\n```python\nclass ApiError(Exception):\n    \"\"\"Base exception for API errors.\"\"\"\n\n    def __init__(\n        self,\n        message: str,\n        status_code: int,\n        response_body: str | None = None,\n    ) -> None:\n        self.status_code = status_code\n        self.response_body = response_body\n        super().__init__(message)\n\nclass RateLimitError(ApiError):\n    \"\"\"Raised when rate limit is exceeded.\"\"\"\n\n    def __init__(self, retry_after: int) -> None:\n        self.retry_after = retry_after\n        super().__init__(\n            f\"Rate limit exceeded. Retry after {retry_after}s\",\n            status_code=429,\n        )\n\n# Usage\ndef handle_response(response: Response) -> dict:\n    match response.status_code:\n        case 200:\n            return response.json()\n        case 401:\n            raise ApiError(\"Invalid credentials\", 401)\n        case 404:\n            raise ApiError(f\"Resource not found: {response.url}\", 404)\n        case 429:\n            retry_after = int(response.headers.get(\"Retry-After\", 60))\n            raise RateLimitError(retry_after)\n        case code if 400 <= code < 500:\n            raise ApiError(f\"Client error: {response.text}\", code)\n        case code if code >= 500:\n            raise ApiError(f\"Server error: {response.text}\", code)\n```\n\n### Pattern 6: Exception Chaining\n\nPreserve the original exception when re-raising to maintain the debug trail.\n\n```python\nimport httpx\n\nclass ServiceError(Exception):\n    \"\"\"High-level service operation failed.\"\"\"\n    pass\n\ndef upload_file(path: str) -> str:\n    \"\"\"Upload file and return URL.\"\"\"\n    try:\n        with open(path, \"rb\") as f:\n            response = httpx.post(\"https://upload.example.com\", files={\"file\": f})\n            response.raise_for_status()\n            return response.json()[\"url\"]\n    except FileNotFoundError as e:\n        raise ServiceError(f\"Upload failed: file not found at '{path}'\") from e\n    except httpx.HTTPStatusError as e:\n        raise ServiceError(\n            f\"Upload failed: server returned {e.response.status_code}\"\n        ) from e\n    except httpx.RequestError as e:\n        raise ServiceError(f\"Upload failed: network error\") from e\n```\n\n### Pattern 7: Batch Processing with Partial Failures\n\nNever let one bad item abort an entire batch. Track results per item.\n\n```python\nfrom dataclasses import dataclass\n\n@dataclass\nclass BatchResult[T]:\n    \"\"\"Results from batch processing.\"\"\"\n\n    succeeded: dict[int, T]  # index -> result\n    failed: dict[int, Exception]  # index -> error\n\n    @property\n    def success_count(self) -> int:\n        return len(self.succeeded)\n\n    @property\n    def failure_count(self) -> int:\n        return len(self.failed)\n\n    @property\n    def all_succeeded(self) -> bool:\n        return len(self.failed) == 0\n\ndef process_batch(items: list[Item]) -> BatchResult[ProcessedItem]:\n    \"\"\"Process items, capturing individual failures.\n\n    Args:\n        items: Items to process.\n\n    Returns:\n        BatchResult with succeeded and failed items by index.\n    \"\"\"\n    succeeded: dict[int, ProcessedItem] = {}\n    failed: dict[int, Exception] = {}\n\n    for idx, item in enumerate(items):\n        try:\n            result = process_single_item(item)\n            succeeded[idx] = result\n        except Exception as e:\n            failed[idx] = e\n\n    return BatchResult(succeeded=succeeded, failed=failed)\n\n# Caller handles partial results\nresult = process_batch(items)\nif not result.all_succeeded:\n    logger.warning(\n        f\"Batch completed with {result.failure_count} failures\",\n        failed_indices=list(result.failed.keys()),\n    )\n```\n\n### Pattern 8: Progress Reporting for Long Operations\n\nProvide visibility into batch progress without coupling business logic to UI.\n\n```python\nfrom collections.abc import Callable\n\nProgressCallback = Callable[[int, int, str], None]  # current, total, status\n\ndef process_large_batch(\n    items: list[Item],\n    on_progress: ProgressCallback | None = None,\n) -> BatchResult:\n    \"\"\"Process batch with optional progress reporting.\n\n    Args:\n        items: Items to process.\n        on_progress: Optional callback receiving (current, total, status).\n    \"\"\"\n    total = len(items)\n    succeeded = {}\n    failed = {}\n\n    for idx, item in enumerate(items):\n        if on_progress:\n            on_progress(idx, total, f\"Processing {item.id}\")\n\n        try:\n            succeeded[idx] = process_single_item(item)\n        except Exception as e:\n            failed[idx] = e\n\n    if on_progress:\n\
+  \        on_progress(total, total, \"Complete\")\n\n    return BatchResult(succeeded=succeeded, failed=failed)\n```\n\n## Best Practices Summary\n\n1. **Validate early** - Check inputs before expensive operations\n2. **Use specific exceptions** - `ValueError`, `TypeError`, not generic `Exception`\n3. **Include context** - Messages should explain what, why, and how to fix\n4. **Convert types at boundaries** - Parse strings to enums/domain types early\n5. **Chain exceptions** - Use `raise ... from e` to preserve debug info\n6. **Handle partial failures** - Don't abort batches on single item errors\n7. **Use Pydantic** - For complex input validation with structured errors\n8. **Document failure modes** - Docstrings should list possible exceptions\n9. **Log with context** - Include IDs, counts, and other debugging info\n10. **Test error paths** - Verify exceptions are raised correctly"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Python Error Handling
+
+
+    Build robust Python applications with proper input validation, meaningful exceptions, and graceful failure handling. Good error handling makes debugging easier and systems more reliable.
+
+
+    ## When to Use This Skill
+
+
+    - Validating user input and API parameters
+
+    - Designing exception hierarchies for applications
+
+    - Handling partial failures in batch operations
+
+    - Converting external data to domain types
+
+    - Building user-friendly error messages
+
+    - Implementing fail-fast validation patterns'
+- sequence: 2
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Fail Fast
+
+
+    Validate inputs early, before expensive operations. Report all validation errors at once when possible.
+
+
+    ### 2. Meaningful Exceptions
+
+
+    Use appropriate exception types with context. Messages should explain what failed, why, and how to fix it.
+
+
+    ### 3. Partial Failures
+
+
+    In batch operations, don''t let one failure abort everything. Track successes and failures separately.
+
+
+    ### 4. Preserve Context
+
+
+    Chain exceptions to maintain the full error trail for debugging.'
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Start\n\n```python\ndef fetch_page(url: str, page_size: int) -> Page:\n    if not url:\n        raise ValueError(\"'url' is required\")\n    if not 1 <= page_size <= 100:\n        raise ValueError(f\"'page_size' must be 1-100, got {page_size}\")\n    # Now safe to proceed...\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Early Input Validation\n\nValidate all inputs at API boundaries before any processing begins.\n\n```python\ndef process_order(\n    order_id: str,\n    quantity: int,\n    discount_percent: float,\n) -> OrderResult:\n    \"\"\"Process an order with validation.\"\"\"\n    # Validate required fields\n    if not order_id:\n        raise ValueError(\"'order_id' is required\")\n\n    # Validate ranges\n    if quantity <= 0:\n        raise ValueError(f\"'quantity' must be positive, got {quantity}\")\n\n    if not 0 <= discount_percent <= 100:\n        raise ValueError(\n            f\"'discount_percent' must be 0-100, got {discount_percent}\"\n        )\n\n    # Validation passed, proceed with processing\n    return _process_validated_order(order_id, quantity, discount_percent)\n```"
+- sequence: 4
+  fragment_type: example
+  content: "### Pattern 2: Convert to Domain Types Early\n\nParse strings and external data into typed domain objects at system boundaries.\n\n```python\nfrom enum import Enum\n\nclass OutputFormat(Enum):\n    JSON = \"json\"\n    CSV = \"csv\"\n    PARQUET = \"parquet\"\n\ndef parse_output_format(value: str) -> OutputFormat:\n    \"\"\"Parse string to OutputFormat enum.\n\n    Args:\n        value: Format string from user input.\n\n    Returns:\n        Validated OutputFormat enum member.\n\n    Raises:\n        ValueError: If format is not recognized.\n    \"\"\"\n    try:\n        return OutputFormat(value.lower())\n    except ValueError:\n        valid_formats = [f.value for f in OutputFormat]\n        raise ValueError(\n            f\"Invalid format '{value}'. \"\n            f\"Valid options: {', '.join(valid_formats)}\"\n        )\n\n# Usage at API boundary\ndef export_data(data: list[dict], format_str: str) -> bytes:\n    output_format = parse_output_format(format_str)  # Fail fast\n    # Rest of function uses typed OutputFormat\n    ...\n```"
+- sequence: 5
+  fragment_type: example
+  content: "### Pattern 3: Pydantic for Complex Validation\n\nUse Pydantic models for structured input validation with automatic error messages.\n\n```python\nfrom pydantic import BaseModel, Field, field_validator\n\nclass CreateUserInput(BaseModel):\n    \"\"\"Input model for user creation.\"\"\"\n\n    email: str = Field(..., min_length=5, max_length=255)\n    name: str = Field(..., min_length=1, max_length=100)\n    age: int = Field(ge=0, le=150)\n\n    @field_validator(\"email\")\n    @classmethod\n    def validate_email_format(cls, v: str) -> str:\n        if \"@\" not in v or \".\" not in v.split(\"@\")[-1]:\n            raise ValueError(\"Invalid email format\")\n        return v.lower()\n\n    @field_validator(\"name\")\n    @classmethod\n    def normalize_name(cls, v: str) -> str:\n        return v.strip().title()\n\n# Usage\ntry:\n    user_input = CreateUserInput(\n        email=\"user@example.com\",\n        name=\"john doe\",\n        age=25,\n    )\nexcept ValidationError as e:\n    # Pydantic provides detailed error information\n    print(e.errors())\n```"
+- sequence: 6
+  fragment_type: example
+  content: '### Pattern 4: Map Errors to Standard Exceptions
+
+
+    Use Python''s built-in exception types appropriately, adding context as needed.
+
+
+    | Failure Type | Exception | Example |
+
+    |--------------|-----------|---------|
+
+    | Invalid input | `ValueError` | Bad parameter values |
+
+    | Wrong type | `TypeError` | Expected string, got int |
+
+    | Missing item | `KeyError` | Dict key not found |
+
+    | Operational failure | `RuntimeError` | Service unavailable |
+
+    | Timeout | `TimeoutError` | Operation took too long |
+
+    | File not found | `FileNotFoundError` | Path doesn''t exist |
+
+    | Permission denied | `PermissionError` | Access forbidden |
+
+
+    ```python
+
+    # Good: Specific exception with context
+
+    raise ValueError(f"''page_size'' must be 1-100, got {page_size}")
+
+
+    # Avoid: Generic exception, no context
+
+    raise Exception("Invalid parameter")
+
+    ```'
+- sequence: 7
+  fragment_type: example
+  content: "## Advanced Patterns\n\n### Pattern 5: Custom Exceptions with Context\n\nCreate domain-specific exceptions that carry structured information.\n\n```python\nclass ApiError(Exception):\n    \"\"\"Base exception for API errors.\"\"\"\n\n    def __init__(\n        self,\n        message: str,\n        status_code: int,\n        response_body: str | None = None,\n    ) -> None:\n        self.status_code = status_code\n        self.response_body = response_body\n        super().__init__(message)\n\nclass RateLimitError(ApiError):\n    \"\"\"Raised when rate limit is exceeded.\"\"\"\n\n    def __init__(self, retry_after: int) -> None:\n        self.retry_after = retry_after\n        super().__init__(\n            f\"Rate limit exceeded. Retry after {retry_after}s\",\n            status_code=429,\n        )\n\n# Usage\ndef handle_response(response: Response) -> dict:\n    match response.status_code:\n        case 200:\n            return response.json()\n        case 401:\n            raise ApiError(\"Invalid credentials\", 401)\n        case 404:\n            raise ApiError(f\"Resource not found: {response.url}\", 404)\n        case 429:\n            retry_after = int(response.headers.get(\"Retry-After\", 60))\n            raise RateLimitError(retry_after)\n        case code if 400 <= code < 500:\n            raise ApiError(f\"Client error: {response.text}\", code)\n        case code if code >= 500:\n            raise ApiError(f\"Server error: {response.text}\", code)\n```"
+- sequence: 8
+  fragment_type: example
+  content: "### Pattern 6: Exception Chaining\n\nPreserve the original exception when re-raising to maintain the debug trail.\n\n```python\nimport httpx\n\nclass ServiceError(Exception):\n    \"\"\"High-level service operation failed.\"\"\"\n    pass\n\ndef upload_file(path: str) -> str:\n    \"\"\"Upload file and return URL.\"\"\"\n    try:\n        with open(path, \"rb\") as f:\n            response = httpx.post(\"https://upload.example.com\", files={\"file\": f})\n            response.raise_for_status()\n            return response.json()[\"url\"]\n    except FileNotFoundError as e:\n        raise ServiceError(f\"Upload failed: file not found at '{path}'\") from e\n    except httpx.HTTPStatusError as e:\n        raise ServiceError(\n            f\"Upload failed: server returned {e.response.status_code}\"\n        ) from e\n    except httpx.RequestError as e:\n        raise ServiceError(f\"Upload failed: network error\") from e\n```"
+- sequence: 9
+  fragment_type: example
+  content: "### Pattern 7: Batch Processing with Partial Failures\n\nNever let one bad item abort an entire batch. Track results per item.\n\n```python\nfrom dataclasses import dataclass\n\n@dataclass\nclass BatchResult[T]:\n    \"\"\"Results from batch processing.\"\"\"\n\n    succeeded: dict[int, T]  # index -> result\n    failed: dict[int, Exception]  # index -> error\n\n    @property\n    def success_count(self) -> int:\n        return len(self.succeeded)\n\n    @property\n    def failure_count(self) -> int:\n        return len(self.failed)\n\n    @property\n    def all_succeeded(self) -> bool:\n        return len(self.failed) == 0\n\ndef process_batch(items: list[Item]) -> BatchResult[ProcessedItem]:\n    \"\"\"Process items, capturing individual failures.\n\n    Args:\n        items: Items to process.\n\n    Returns:\n        BatchResult with succeeded and failed items by index.\n    \"\"\"\n    succeeded: dict[int, ProcessedItem] = {}\n    failed: dict[int, Exception] = {}\n\n    for idx, item in enumerate(items):\n        try:\n            result = process_single_item(item)\n            succeeded[idx] = result\n        except Exception as e:\n            failed[idx] = e\n\n    return BatchResult(succeeded=succeeded, failed=failed)\n\n# Caller handles partial results\nresult = process_batch(items)\nif not result.all_succeeded:\n    logger.warning(\n        f\"Batch completed with {result.failure_count} failures\",\n        failed_indices=list(result.failed.keys()),\n    )\n```"
+- sequence: 10
+  fragment_type: example
+  content: "### Pattern 8: Progress Reporting for Long Operations\n\nProvide visibility into batch progress without coupling business logic to UI.\n\n```python\nfrom collections.abc import Callable\n\nProgressCallback = Callable[[int, int, str], None]  # current, total, status\n\ndef process_large_batch(\n    items: list[Item],\n    on_progress: ProgressCallback | None = None,\n) -> BatchResult:\n    \"\"\"Process batch with optional progress reporting.\n\n    Args:\n        items: Items to process.\n        on_progress: Optional callback receiving (current, total, status).\n    \"\"\"\n    total = len(items)\n    succeeded = {}\n    failed = {}\n\n    for idx, item in enumerate(items):\n        if on_progress:\n            on_progress(idx, total, f\"Processing {item.id}\")\n\n        try:\n            succeeded[idx] = process_single_item(item)\n        except Exception as e:\n            failed[idx] = e\n\n    if on_progress:\n        on_progress(total, total, \"Complete\")\n\n    return BatchResult(succeeded=succeeded, failed=failed)\n```"
+- sequence: 11
+  fragment_type: execution
+  content: '## Best Practices Summary
+
+
+    1. **Validate early** - Check inputs before expensive operations
+
+    2. **Use specific exceptions** - `ValueError`, `TypeError`, not generic `Exception`
+
+    3. **Include context** - Messages should explain what, why, and how to fix
+
+    4. **Convert types at boundaries** - Parse strings to enums/domain types early
+
+    5. **Chain exceptions** - Use `raise ... from e` to preserve debug info
+
+    6. **Handle partial failures** - Don''t abort batches on single item errors
+
+    7. **Use Pydantic** - For complex input validation with structured errors
+
+    8. **Document failure modes** - Docstrings should list possible exceptions
+
+    9. **Log with context** - Include IDs, counts, and other debugging info
+
+    10. **Test error paths** - Verify exceptions are raised correctly'

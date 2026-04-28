@@ -1,0 +1,23 @@
+name: monorepo
+version: 1.0.0
+description: Monorepo build tooling — Bazel, Nx, Turborepo, monorepo management patterns.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: bazel-build-optimization
+  file: bazel-build-optimization.yaml
+  fragment_count: 11
+- skill_id: monorepo-management
+  file: monorepo-management.yaml
+  fragment_count: 13
+- skill_id: nx-workspace-patterns
+  file: nx-workspace-patterns.yaml
+  fragment_count: 10
+- skill_id: turborepo-caching
+  file: turborepo-caching.yaml
+  fragment_count: 10

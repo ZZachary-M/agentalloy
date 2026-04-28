@@ -1,0 +1,309 @@
+skill_type: domain
+skill_id: react-modernization
+canonical_name: React Modernization
+category: engineering
+skill_class: domain
+domain_tags:
+- react
+- react-hooks
+- react18
+- class-to-functional
+- suspense
+- codemods
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents framework-migration plugin
+raw_prose: '# React Modernization
+
+
+  Master React version upgrades, class to hooks migration, concurrent features adoption, and codemods for automated transformation.
+
+
+  ## When to Use
+
+
+  - Upgrading React applications to latest versions
+
+  - Migrating class components to functional components with hooks
+
+  - Adopting concurrent React features (Suspense, transitions)
+
+  - Applying codemods for automated refactoring
+
+  - Modernizing state management patterns
+
+  - Updating to TypeScript
+
+  - Improving performance with React 18+ features
+
+
+  ## Version Upgrade Path
+
+
+  **React 17 breaking changes:** event delegation changes, no event pooling, effect cleanup timing, JSX transform (no React import needed).
+
+
+  **React 18 breaking changes:** automatic batching, concurrent rendering, StrictMode double-invocation, new root API, Suspense on server.
+
+
+  ## Class to Hooks Migration
+
+
+  - **State** — `this.state` / `setState` → `useState`
+
+  - **Lifecycle** — `componentDidMount` + `componentDidUpdate` + `componentWillUnmount` → `useEffect` with cleanup return + dependency array
+
+  - **Context** — `static contextType` / `<Context.Consumer>` → `useContext(Context)`
+
+  - **HOCs** → custom hooks (e.g. `withUser` → `useUser`)
+
+
+  ## React 18 Concurrent Features
+
+
+  - **New Root API** — `import { createRoot } from "react-dom/client"; createRoot(el).render(<App />)`
+
+  - **Automatic Batching** — multiple `setState` calls (even in setTimeout/promises) batched into one render. Opt out with `flushSync`.
+
+  - **Transitions** — `useTransition()` returns `[isPending, startTransition]`. Wrap non-urgent updates in `startTransition()` so they can be interrupted.
+
+  - **Suspense** — declarative loading boundaries. Resource-based data fetching: components throw promises, Suspense waits.
+
+
+  ## Codemods for Automation
+
+
+  - `rename-unsafe-lifecycles.js` — `componentWillMount` → `UNSAFE_componentWillMount`
+
+  - `update-react-imports.js` — strip default React import where unused
+
+  - `error-boundaries.js` — scaffold error boundary components
+
+  - `convert-class-to-function` — class to functional component conversion
+
+
+  Run with `npx jscodeshift -t <url> src/`. Use `--parser=tsx` for TypeScript. Use `--dry --print` to preview.
+
+
+  ## Performance Optimization
+
+
+  - `useMemo` for expensive derivations
+
+  - `useCallback` for stable callback identity (paired with `React.memo` children)
+
+  - `React.lazy` + `Suspense` for code splitting
+
+
+  ## TypeScript Migration
+
+
+  Add `interface` for component props, type generic components with `<T>`, prefer `React.ReactNode` over `React.ReactElement` for `children`.
+
+
+  ## Migration Checklist
+
+
+  Pre-migration: incremental dep updates, review release notes, set up tests, branch.
+
+  Class → hooks: leaf components first, useState/useEffect/useContext, extract custom hooks, test.
+
+  React 18: 17 first if needed, then 18 + types, createRoot, StrictMode double-invocation, address concurrent issues.
+
+  Performance: memo only where bottlenecks exist, code splitting, profile.
+
+  Testing: update React Testing Library, test concurrent features.'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# React Modernization
+
+
+    Master React version upgrades, class to hooks migration, concurrent features adoption, and codemods for automated transformation.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Upgrading React applications to latest versions
+
+    - Migrating class components to functional components with hooks
+
+    - Adopting concurrent React features (Suspense, transitions)
+
+    - Applying codemods for automated refactoring
+
+    - Modernizing state management patterns
+
+    - Updating to TypeScript
+
+    - Improving performance with React 18+ features'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Version Upgrade Path: 16 → 17 → 18
+
+
+    **React 17 breaking changes:**
+
+    - Event delegation changes (events attach to root, not document)
+
+    - No more event pooling
+
+    - Effect cleanup timing changed
+
+    - New JSX transform (no need to import React in scope)
+
+
+    **React 18 breaking changes:**
+
+    - Automatic batching (even in promises/setTimeout)
+
+    - Concurrent rendering enabled
+
+    - StrictMode double-invokes effects in dev
+
+    - New root API (`createRoot`)
+
+    - Suspense on server (SSR streaming)'
+- sequence: 4
+  fragment_type: execution
+  content: "### Class → Functional: State\n\n```javascript\n// Before\nclass Counter extends React.Component {\n  constructor(props) {\n    super(props);\n    this.state = { count: 0, name: \"\" };\n  }\n  increment = () => {\n    this.setState({ count: this.state.count + 1 });\n  };\n  render() {\n    return (\n      <div>\n        <p>Count: {this.state.count}</p>\n        <button onClick={this.increment}>Increment</button>\n      </div>\n    );\n  }\n}\n\n// After\nfunction Counter() {\n  const [count, setCount] = useState(0);\n  const [name, setName] = useState(\"\");\n  const increment = () => setCount(count + 1);\n  return (\n    <div>\n      <p>Count: {count}</p>\n      <button onClick={increment}>Increment</button>\n    </div>\n  );\n}\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Class → Functional: Lifecycle\n\n```javascript\n// Before — three lifecycle methods\nclass DataFetcher extends React.Component {\n  state = { data: null, loading: true };\n\n  componentDidMount() { this.fetchData(); }\n  componentDidUpdate(prevProps) {\n    if (prevProps.id !== this.props.id) this.fetchData();\n  }\n  componentWillUnmount() { this.cancelRequest(); }\n\n  fetchData = async () => { /* ... */ };\n}\n\n// After — one useEffect with cleanup + dependency array\nfunction DataFetcher({ id }) {\n  const [data, setData] = useState(null);\n  const [loading, setLoading] = useState(true);\n\n  useEffect(() => {\n    let cancelled = false;\n\n    (async () => {\n      try {\n        const response = await fetch(`/api/${id}`);\n        const result = await response.json();\n        if (!cancelled) {\n          setData(result);\n          setLoading(false);\n        }\n      } catch (error) {\n        if (!cancelled) console.error(error);\n      }\n    })();\n\n    return () => { cancelled = true; };\n  }, [id]);\n\n  if (loading) return <div>Loading...</div>;\n  return <div>{data}</div>;\n}\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Class → Functional: Context and HOCs\n\nContext becomes `useContext`:\n```javascript\n// Before\nclass ThemedButton extends React.Component {\n  static contextType = ThemeContext;\n  render() {\n    return <button style={{ background: this.context.theme }}>{this.props.children}</button>;\n  }\n}\n\n// After\nfunction ThemedButton({ children }) {\n  const { theme } = useContext(ThemeContext);\n  return <button style={{ background: theme }}>{children}</button>;\n}\n```\n\nHOCs become custom hooks:\n```javascript\n// Before — withUser HOC\nfunction withUser(Component) {\n  return class extends React.Component {\n    state = { user: null };\n    componentDidMount() { fetchUser().then(user => this.setState({ user })); }\n    render() { return <Component {...this.props} user={this.state.user} />; }\n  };\n}\n\n// After — useUser hook\nfunction useUser() {\n  const [user, setUser] = useState(null);\n  useEffect(() => { fetchUser().then(setUser); }, []);\n  return user;\n}\n\nfunction UserProfile() {\n  const user = useUser();\n  if (!user) return <div>Loading...</div>;\n  return <div>{user.name}</div>;\n}\n```"
+- sequence: 7
+  fragment_type: execution
+  content: '### React 18: New Root API
+
+
+    ```javascript
+
+    // Before — React 17
+
+    import ReactDOM from "react-dom";
+
+    ReactDOM.render(<App />, document.getElementById("root"));
+
+
+    // After — React 18
+
+    import { createRoot } from "react-dom/client";
+
+    const root = createRoot(document.getElementById("root"));
+
+    root.render(<App />);
+
+    ```'
+- sequence: 8
+  fragment_type: execution
+  content: "### React 18: Automatic Batching\n\n```javascript\n// All setState calls batched — even inside setTimeout / promises\nfunction handleClick() {\n  setCount(c => c + 1);\n  setFlag(f => !f);\n  // Only one re-render\n}\n\nsetTimeout(() => {\n  setCount(c => c + 1);\n  setFlag(f => !f);\n  // Still batched in React 18!\n}, 1000);\n\n// Opt out if needed\nimport { flushSync } from \"react-dom\";\nflushSync(() => { setCount(c => c + 1); });   // re-render immediately\nsetFlag(f => !f);                              // another re-render\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### React 18: Transitions\n\nMark non-urgent updates so they can be interrupted by user input.\n\n```javascript\nimport { useState, useTransition } from \"react\";\n\nfunction SearchResults() {\n  const [query, setQuery] = useState(\"\");\n  const [results, setResults] = useState([]);\n  const [isPending, startTransition] = useTransition();\n\n  const handleChange = (e) => {\n    // Urgent: keep input responsive\n    setQuery(e.target.value);\n\n    // Non-urgent: can be interrupted by next keypress\n    startTransition(() => {\n      setResults(searchResults(e.target.value));\n    });\n  };\n\n  return (\n    <>\n      <input value={query} onChange={handleChange} />\n      {isPending && <Spinner />}\n      <Results data={results} />\n    </>\n  );\n}\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### React 18: Suspense for Data Fetching\n\n```javascript\nimport { Suspense } from \"react\";\n\nconst resource = fetchProfileData();\n\nfunction ProfilePage() {\n  return (\n    <Suspense fallback={<Loading />}>\n      <ProfileDetails />\n      <Suspense fallback={<Loading />}>\n        <ProfileTimeline />\n      </Suspense>\n    </Suspense>\n  );\n}\n\nfunction ProfileDetails() {\n  const user = resource.user.read();   // suspends until ready\n  return <h1>{user.name}</h1>;\n}\n```\n\nNested boundaries let inner content stream while outer is ready."
+- sequence: 11
+  fragment_type: execution
+  content: '### Codemods for Automation
+
+
+    ```bash
+
+    # Rename unsafe lifecycle methods (React 17 prep)
+
+    npx jscodeshift -t https://raw.githubusercontent.com/reactjs/react-codemod/master/transforms/rename-unsafe-lifecycles.js src/
+
+
+    # Update React imports (React 17 JSX transform — strip unused React imports)
+
+    npx jscodeshift -t https://raw.githubusercontent.com/reactjs/react-codemod/master/transforms/update-react-imports.js src/
+
+
+    # Add error boundaries
+
+    npx jscodeshift -t https://raw.githubusercontent.com/reactjs/react-codemod/master/transforms/error-boundaries.js src/
+
+
+    # TypeScript files
+
+    npx jscodeshift -t <url> --parser=tsx src/
+
+
+    # Dry run
+
+    npx jscodeshift -t <url> --dry --print src/
+
+
+    # Class → function (third-party)
+
+    npx codemod react/hooks/convert-class-to-function src/
+
+    ```'
+- sequence: 12
+  fragment_type: example
+  content: "### Performance: useMemo, useCallback, React.memo\n\n```javascript\nfunction ExpensiveComponent({ items, filter }) {\n  // Memoize expensive derivation\n  const filteredItems = useMemo(\n    () => items.filter(item => item.category === filter),\n    [items, filter]\n  );\n\n  // Stable callback identity for memo'd children\n  const handleClick = useCallback((id) => {\n    console.log(\"Clicked:\", id);\n  }, []);\n\n  return <List items={filteredItems} onClick={handleClick} />;\n}\n\n// Child only re-renders when items or onClick change\nconst List = React.memo(({ items, onClick }) =>\n  items.map(item => <Item key={item.id} item={item} onClick={onClick} />)\n);\n```\n\nDon't memo everything — measure first. memo has overhead."
+- sequence: 13
+  fragment_type: example
+  content: "### Code Splitting with React.lazy\n\n```javascript\nimport { lazy, Suspense } from \"react\";\n\nconst Dashboard = lazy(() => import(\"./Dashboard\"));\nconst Settings = lazy(() => import(\"./Settings\"));\n\nfunction App() {\n  return (\n    <Suspense fallback={<Loading />}>\n      <Routes>\n        <Route path=\"/dashboard\" element={<Dashboard />} />\n        <Route path=\"/settings\" element={<Settings />} />\n      </Routes>\n    </Suspense>\n  );\n}\n```"
+- sequence: 14
+  fragment_type: example
+  content: "### TypeScript Migration\n\n```typescript\n// Add typed props\ninterface ButtonProps {\n  onClick: () => void;\n  children: React.ReactNode;\n}\n\nfunction Button({ onClick, children }: ButtonProps) {\n  return <button onClick={onClick}>{children}</button>;\n}\n\n// Generic components\ninterface ListProps<T> {\n  items: T[];\n  renderItem: (item: T) => React.ReactNode;\n}\n\nfunction List<T>({ items, renderItem }: ListProps<T>) {\n  return <>{items.map(renderItem)}</>;\n}\n```"
+- sequence: 15
+  fragment_type: verification
+  content: '## Migration Checklist
+
+
+    **Pre-migration**
+
+    - [ ] Update dependencies incrementally — not all at once
+
+    - [ ] Review breaking changes in release notes
+
+    - [ ] Set up testing suite if not already
+
+    - [ ] Create feature branch
+
+
+    **Class → Hooks**
+
+    - [ ] Identify class components to migrate (start with leaves — no children)
+
+    - [ ] Convert state to useState
+
+    - [ ] Convert lifecycle to useEffect with cleanup + deps
+
+    - [ ] Convert context to useContext
+
+    - [ ] Extract reusable logic into custom hooks
+
+    - [ ] Test thoroughly
+
+
+    **React 18 Upgrade**
+
+    - [ ] Update react + react-dom + @types/react
+
+    - [ ] Switch to createRoot API
+
+    - [ ] Test with StrictMode (effects double-invoke in dev)
+
+    - [ ] Address concurrent rendering issues (race conditions in effects)
+
+    - [ ] Adopt Suspense / Transitions where beneficial
+
+
+    **Performance & Testing**
+
+    - [ ] Profile before adding memo — only memo bottlenecks
+
+    - [ ] Add code splitting on routes
+
+    - [ ] Update React Testing Library
+
+    - [ ] Run with no console warnings'

@@ -1,0 +1,160 @@
+skill_type: domain
+skill_id: database-migration
+canonical_name: Database Migration
+category: engineering
+skill_class: domain
+domain_tags:
+- database-migration
+- schema-evolution
+- zero-downtime
+- orm
+- sequelize
+- prisma
+- typeorm
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents framework-migration plugin
+raw_prose: '# Database Migration
+
+
+  Master database schema and data migrations across ORMs (Sequelize, TypeORM, Prisma), including rollback strategies and zero-downtime deployments.
+
+
+  ## When to Use
+
+
+  - Migrating between different ORMs
+
+  - Performing schema transformations
+
+  - Moving data between databases
+
+  - Implementing rollback procedures
+
+  - Zero-downtime deployments
+
+  - Database version upgrades
+
+  - Data model refactoring
+
+
+  ## ORM Migrations
+
+
+  - **Sequelize** — `up`/`down` exports with `queryInterface.createTable`, `addColumn`, `removeColumn`. Run with `sequelize-cli db:migrate`.
+
+  - **TypeORM** — class implementing `MigrationInterface` with `up(queryRunner)` and `down(queryRunner)`. Run with `npm run typeorm migration:run`.
+
+  - **Prisma** — declarative `schema.prisma` model. Generate with `prisma migrate dev --name <name>`, deploy with `prisma migrate deploy`.
+
+
+  ## Schema Transformations
+
+
+  - **Adding columns with defaults** — safe; default fills existing rows
+
+  - **Renaming columns (zero-downtime)** — three deploys: add new col + copy data, switch app to new col, drop old col
+
+  - **Changing column types** — add new typed col, transform-copy, drop old, rename new
+
+
+  ## Data Transformations
+
+
+  Iterate rows in app code (Sequelize raw query → loop → UPDATE), drop the old column at the end. Down migration reconstructs original column from split fields.
+
+
+  ## Rollback Strategies
+
+
+  - **Transaction-based** — wrap migration in `sequelize.transaction()`, rollback on error
+
+  - **Checkpoint-based** — `CREATE TABLE users_backup AS SELECT * FROM users`, verify, restore from backup on failure
+
+
+  ## Zero-Downtime Migrations
+
+
+  Blue-green strategy: backward-compatible changes deployed in phases — add new column, double-write, backfill, switch reads, remove old column.
+
+
+  ## Cross-Database Migrations
+
+
+  Detect dialect (`queryInterface.sequelize.getDialect()`) and branch — Postgres uses JSONB, MySQL uses JSON, etc.'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Database Migration
+
+
+    Master database schema and data migrations across ORMs (Sequelize, TypeORM, Prisma), including rollback strategies and zero-downtime deployments.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Migrating between different ORMs
+
+    - Performing schema transformations
+
+    - Moving data between databases
+
+    - Implementing rollback procedures
+
+    - Zero-downtime deployments
+
+    - Database version upgrades
+
+    - Data model refactoring'
+- sequence: 3
+  fragment_type: execution
+  content: "### Sequelize Migrations\n\n```javascript\n// migrations/20231201-create-users.js\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    await queryInterface.createTable(\"users\", {\n      id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },\n      email: { type: Sequelize.STRING, unique: true, allowNull: false },\n      createdAt: Sequelize.DATE,\n      updatedAt: Sequelize.DATE,\n    });\n  },\n  down: async (queryInterface) => {\n    await queryInterface.dropTable(\"users\");\n  },\n};\n\n// Run: npx sequelize-cli db:migrate\n// Rollback: npx sequelize-cli db:migrate:undo\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "### TypeORM Migrations\n\n```typescript\nimport { MigrationInterface, QueryRunner, Table } from \"typeorm\";\n\nexport class CreateUsers1701234567 implements MigrationInterface {\n  public async up(queryRunner: QueryRunner): Promise<void> {\n    await queryRunner.createTable(new Table({\n      name: \"users\",\n      columns: [\n        { name: \"id\", type: \"int\", isPrimary: true, isGenerated: true, generationStrategy: \"increment\" },\n        { name: \"email\", type: \"varchar\", isUnique: true },\n        { name: \"created_at\", type: \"timestamp\", default: \"CURRENT_TIMESTAMP\" },\n      ],\n    }));\n  }\n\n  public async down(queryRunner: QueryRunner): Promise<void> {\n    await queryRunner.dropTable(\"users\");\n  }\n}\n\n// Run: npm run typeorm migration:run\n// Rollback: npm run typeorm migration:revert\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Prisma Migrations\n\nDeclarative schema, CLI generates and applies migrations:\n\n```prisma\n// schema.prisma\nmodel User {\n  id        Int      @id @default(autoincrement())\n  email     String   @unique\n  createdAt DateTime @default(now())\n}\n```\n\n```bash\n# Development: generate and apply\nnpx prisma migrate dev --name create_users\n\n# Production: apply pre-generated migrations\nnpx prisma migrate deploy\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Schema: Adding Columns with Defaults\n\n```javascript\n// Safe: existing rows get defaultValue\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    await queryInterface.addColumn(\"users\", \"status\", {\n      type: Sequelize.STRING,\n      defaultValue: \"active\",\n      allowNull: false,\n    });\n  },\n  down: async (queryInterface) => {\n    await queryInterface.removeColumn(\"users\", \"status\");\n  },\n};\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### Schema: Renaming Columns (Zero-Downtime, 3 phases)\n\nPhase 1 — add new column + copy:\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    await queryInterface.addColumn(\"users\", \"full_name\", { type: Sequelize.STRING });\n    await queryInterface.sequelize.query(\"UPDATE users SET full_name = name\");\n  },\n  down: async (queryInterface) => {\n    await queryInterface.removeColumn(\"users\", \"full_name\");\n  },\n};\n```\n\nPhase 2 — deploy app that reads/writes `full_name`.\n\nPhase 3 — drop old column:\n```javascript\nmodule.exports = {\n  up: async (queryInterface) => {\n    await queryInterface.removeColumn(\"users\", \"name\");\n  },\n  down: async (queryInterface, Sequelize) => {\n    await queryInterface.addColumn(\"users\", \"name\", { type: Sequelize.STRING });\n  },\n};\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### Schema: Changing Column Types (large tables)\n\nMulti-step approach to avoid table-wide rewrite:\n\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    // 1. Add new column with target type\n    await queryInterface.addColumn(\"users\", \"age_new\", { type: Sequelize.INTEGER });\n\n    // 2. Copy and transform data\n    await queryInterface.sequelize.query(`\n      UPDATE users\n      SET age_new = CAST(age AS INTEGER)\n      WHERE age IS NOT NULL\n    `);\n\n    // 3. Drop old column\n    await queryInterface.removeColumn(\"users\", \"age\");\n\n    // 4. Rename new column to original name\n    await queryInterface.renameColumn(\"users\", \"age_new\", \"age\");\n  },\n};\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Data Transformation: Splitting Columns\n\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    const [users] = await queryInterface.sequelize.query(\n      \"SELECT id, address_string FROM users\",\n    );\n\n    for (const user of users) {\n      const parts = user.address_string.split(\",\");\n      await queryInterface.sequelize.query(\n        `UPDATE users\n         SET street = :street, city = :city, state = :state\n         WHERE id = :id`,\n        {\n          replacements: {\n            id: user.id,\n            street: parts[0]?.trim(),\n            city: parts[1]?.trim(),\n            state: parts[2]?.trim(),\n          },\n        },\n      );\n    }\n\n    await queryInterface.removeColumn(\"users\", \"address_string\");\n  },\n};\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Rollback: Transaction-Based\n\nWrap multi-step migrations in a transaction so partial failures roll back:\n\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    const transaction = await queryInterface.sequelize.transaction();\n    try {\n      await queryInterface.addColumn(\"users\", \"verified\",\n        { type: Sequelize.BOOLEAN, defaultValue: false },\n        { transaction },\n      );\n      await queryInterface.sequelize.query(\n        \"UPDATE users SET verified = true WHERE email_verified_at IS NOT NULL\",\n        { transaction },\n      );\n      await transaction.commit();\n    } catch (error) {\n      await transaction.rollback();\n      throw error;\n    }\n  },\n};\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Rollback: Checkpoint-Based\n\nBackup table → verify → drop backup OR restore on failure:\n\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    await queryInterface.sequelize.query(\n      \"CREATE TABLE users_backup AS SELECT * FROM users\"\n    );\n    try {\n      await queryInterface.addColumn(\"users\", \"new_field\", { type: Sequelize.STRING });\n      const [result] = await queryInterface.sequelize.query(\n        \"SELECT COUNT(*) as count FROM users WHERE new_field IS NULL\"\n      );\n      if (result[0].count > 0) throw new Error(\"Migration verification failed\");\n      await queryInterface.dropTable(\"users_backup\");\n    } catch (error) {\n      await queryInterface.sequelize.query(\"DROP TABLE users\");\n      await queryInterface.sequelize.query(\n        \"CREATE TABLE users AS SELECT * FROM users_backup\"\n      );\n      await queryInterface.dropTable(\"users_backup\");\n      throw error;\n    }\n  },\n};\n```"
+- sequence: 12
+  fragment_type: execution
+  content: "### Zero-Downtime: Blue-Green Strategy\n\nBackward-compatible changes in phases:\n\n```javascript\n// Phase 1: Add new column (both old and new code can run)\nawait queryInterface.addColumn(\"users\", \"email_new\", { type: Sequelize.STRING });\n\n// Phase 2: Deploy code that writes to BOTH columns\n\n// Phase 3: Backfill data\nawait queryInterface.sequelize.query(`\n  UPDATE users\n  SET email_new = email\n  WHERE email_new IS NULL\n`);\n\n// Phase 4: Deploy code that READS from new column\n\n// Phase 5: Remove old column\nawait queryInterface.removeColumn(\"users\", \"email\");\n```"
+- sequence: 13
+  fragment_type: example
+  content: "### Cross-Database: Postgres vs MySQL\n\nBranch on dialect for type-system differences:\n\n```javascript\nmodule.exports = {\n  up: async (queryInterface, Sequelize) => {\n    const dialect = queryInterface.sequelize.getDialect();\n    const jsonType = dialect === \"postgres\" ? Sequelize.JSONB : Sequelize.JSON;\n\n    await queryInterface.createTable(\"users\", {\n      id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },\n      data: { type: jsonType },\n    });\n  },\n};\n```"
+- sequence: 14
+  fragment_type: guardrail
+  content: '## Migration Safety Rules
+
+
+    - **Always include a `down` migration** — even if it''s lossy, document the loss
+
+    - **Default values for NOT NULL columns** — adding NOT NULL without a default fails on existing rows
+
+    - **Rename via add/copy/drop**, not direct rename, on tables with active reads
+
+    - **Long-running data migrations** — batch in chunks; avoid table-wide locks
+
+    - **Verify before commit** — check row counts, NOT NULL invariants, FK integrity inside the transaction
+
+    - **Test against production-like data** — staging data shapes should match prod cardinality'

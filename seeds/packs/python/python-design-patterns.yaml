@@ -1,0 +1,159 @@
+skill_type: domain
+skill_id: python-design-patterns
+canonical_name: Python Design Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- kiss
+- solid
+- dependency-injection
+- composition
+- srp
+- layers
+- refactoring
+- testing
+- abstraction
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Python Design Patterns\n\nWrite maintainable Python code using fundamental design principles. These patterns help you build systems that are easy to understand, test, and modify.\n\n## When to Use This Skill\n\n- Designing new components or services\n- Refactoring complex or tangled code\n- Deciding whether to create an abstraction\n- Choosing between inheritance and composition\n- Evaluating code complexity and coupling\n- Planning modular architectures\n\n## Core Concepts\n\n### 1. KISS (Keep It Simple)\n\nChoose the simplest solution that works. Complexity must be justified by concrete requirements.\n\n### 2. Single Responsibility (SRP)\n\nEach unit should have one reason to change. Separate concerns into focused components.\n\n### 3. Composition Over Inheritance\n\nBuild behavior by combining objects, not extending classes.\n\n### 4. Rule of Three\n\nWait until you have three instances before abstracting. Duplication is often better than premature abstraction.\n\n## Quick Start\n\n```python\n# Simple beats clever\n# Instead of a factory/registry pattern:\nFORMATTERS = {\"json\": JsonFormatter, \"csv\": CsvFormatter}\n\ndef get_formatter(name: str) -> Formatter:\n    return FORMATTERS[name]()\n```\n\n## Fundamental Patterns\n\n### Pattern 1: KISS - Keep It Simple\n\nBefore adding complexity, ask: does a simpler solution work?\n\n```python\n# Over-engineered: Factory with registration\nclass OutputFormatterFactory:\n    _formatters: dict[str, type[Formatter]] = {}\n\n    @classmethod\n    def register(cls, name: str):\n        def decorator(formatter_cls):\n            cls._formatters[name] = formatter_cls\n            return formatter_cls\n        return decorator\n\n    @classmethod\n    def create(cls, name: str) -> Formatter:\n        return cls._formatters[name]()\n\n@OutputFormatterFactory.register(\"json\")\nclass JsonFormatter(Formatter):\n    ...\n\n# Simple: Just use a dictionary\nFORMATTERS = {\n    \"json\": JsonFormatter,\n    \"csv\": CsvFormatter,\n    \"xml\": XmlFormatter,\n}\n\ndef get_formatter(name: str) -> Formatter:\n    \"\"\"Get formatter by name.\"\"\"\n    if name not in FORMATTERS:\n        raise ValueError(f\"Unknown format: {name}\")\n    return FORMATTERS[name]()\n```\n\nThe factory pattern adds code without adding value here. Save patterns for when they solve real problems.\n\n### Pattern 2: Single Responsibility Principle\n\nEach class or function should have one reason to change.\n\n```python\n# BAD: Handler does everything\nclass UserHandler:\n    async def create_user(self, request: Request) -> Response:\n        # HTTP parsing\n        data = await request.json()\n\n        # Validation\n        if not data.get(\"email\"):\n            return Response({\"error\": \"email required\"}, status=400)\n\n        # Database access\n        user = await db.execute(\n            \"INSERT INTO users (email, name) VALUES ($1, $2) RETURNING *\",\n            data[\"email\"], data[\"name\"]\n        )\n\n        # Response formatting\n        return Response({\"id\": user.id, \"email\": user.email}, status=201)\n\n# GOOD: Separated concerns\nclass UserService:\n    \"\"\"Business logic only.\"\"\"\n\n    def __init__(self, repo: UserRepository) -> None:\n        self._repo = repo\n\n    async def create_user(self, data: CreateUserInput) -> User:\n        # Only business rules here\n        user = User(email=data.email, name=data.name)\n        return await self._repo.save(user)\n\nclass UserHandler:\n    \"\"\"HTTP concerns only.\"\"\"\n\n    def __init__(self, service: UserService) -> None:\n        self._service = service\n\n    async def create_user(self, request: Request) -> Response:\n        data = CreateUserInput(**(await request.json()))\n        user = await self._service.create_user(data)\n        return Response(user.to_dict(), status=201)\n```\n\nNow HTTP changes don't affect business logic, and vice versa.\n\n### Pattern 3: Separation of Concerns\n\nOrganize code into distinct layers with clear responsibilities.\n\n```\n┌─────────────────────────────────────────────────────┐\n│  API Layer (handlers)                                │\n│  - Parse requests                                    │\n│  - Call services                                     │\n│  - Format responses                                  │\n└─────────────────────────────────────────────────────┘\n                        │\n                        ▼\n┌─────────────────────────────────────────────────────┐\n│  Service Layer (business logic)                      │\n│  - Domain rules and validation                       │\n│  - Orchestrate operations                            │\n│  - Pure functions where possible                     │\n└─────────────────────────────────────────────────────┘\n                        │\n                        ▼\n┌─────────────────────────────────────────────────────┐\n│  Repository Layer (data access)                      │\n│  - SQL queries                                       │\n│  - External API calls                                │\n│  - Cache operations                                  │\n└─────────────────────────────────────────────────────┘\n```\n\nEach layer depends only on layers below it:\n\n```python\n# Repository: Data access\nclass UserRepository:\n    async def get_by_id(self, user_id: str) -> User | None:\n        row = await self._db.fetchrow(\n            \"SELECT * FROM users WHERE id = $1\", user_id\n        )\n        return User(**row) if row else None\n\n# Service: Business logic\nclass UserService:\n    def __init__(self, repo: UserRepository) -> None:\n        self._repo = repo\n\n    async def get_user(self, user_id: str) -> User:\n        user = await self._repo.get_by_id(user_id)\n        if user is None:\n            raise UserNotFoundError(user_id)\n        return user\n\n# Handler: HTTP concerns\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: str) -> UserResponse:\n    user = await user_service.get_user(user_id)\n    return UserResponse.from_user(user)\n```\n\n### Pattern 4: Composition Over Inheritance\n\nBuild behavior by combining objects rather than inheriting.\n\n```python\n# Inheritance: Rigid and hard to test\nclass EmailNotificationService(NotificationService):\n    def __init__(self):\n        super().__init__()\n        self._smtp = SmtpClient()  # Hard to mock\n\n    def notify(self, user: User, message: str) -> None:\n        self._smtp.send(user.email, message)\n\n# Composition: Flexible and testable\nclass NotificationService:\n    \"\"\"Send notifications via multiple channels.\"\"\"\n\n    def __init__(\n        self,\n        email_sender: EmailSender,\n        sms_sender: SmsSender | None = None,\n        push_sender: PushSender | None = None,\n    ) -> None:\n        self._email = email_sender\n        self._sms = sms_sender\n        self._push = push_sender\n\n    async def notify(\n        self,\n        user: User,\n        message: str,\n        channels: set[str] | None = None,\n    ) -> None:\n        channels = channels or {\"email\"}\n\n        if \"email\" in channels:\n            await self._email.send(user.email, message)\n\n        if \"sms\" in channels and self._sms and user.phone:\n            await self._sms.send(user.phone, message)\n\n        if \"push\" in channels and self._push and user.device_token:\n            await self._push.send(user.device_token, message)\n\n# Easy to test with fakes\nservice = NotificationService(\n    email_sender=FakeEmailSender(),\n    sms_sender=FakeSmsSender(),\n)\n```\n\n## Advanced Patterns\n\n### Pattern 5: Rule of Three\n\nWait until you have three instances before abstracting.\n\n```python\n# Two similar functions? Don't abstract yet\ndef process_orders(orders: list[Order]) -> list[Result]:\n    results = []\n    for order in orders:\n        validated = validate_order(order)\n        result = process_validated_order(validated)\n        results.append(result)\n    return results\n\ndef process_returns(returns: list[Return]) -> list[Result]:\n    results = []\n    for ret in returns:\n        validated = validate_return(ret)\n        result = process_validated_return(validated)\n        results.append(result)\n    return results\n\n# These look similar, but wait! Are they actually the same?\n# Different validation, different processing, different errors...\n# Duplication is often better than the wrong abstraction\n\n# Only after a third case, consider if there's a real pattern\n# But even then, sometimes explicit is better than abstract\n```\n\n### Pattern 6: Function Size Guidelines\n\nKeep functions focused. Extract when a function:\n\n- Exceeds 20-50 lines (varies by complexity)\n- Serves multiple distinct purposes\n- Has deeply nested logic (3+ levels)\n\n```python\n# Too long, multiple concerns mixed\ndef process_order(order: Order) -> Result:\n    # 50 lines of validation...\n    # 30 lines of inventory check...\n    # 40 lines of payment processing...\n    # 20 lines of notification...\n    pass\n\n# Better: Composed from focused functions\ndef process_order(order: Order) -> Result:\n    \"\"\"Process a customer order through the complete workflow.\"\"\"\n    validate_order(order)\n    reserve_inventory(order)\n    payment_result = charge_payment(order)\n    send_confirmation(order, payment_result)\n    return Result(success=True, order_id=order.id)\n```\n\n### Pattern 7: Dependency Injection\n\nPass dependencies through constructors for testability.\n\n```python\nfrom typing import Protocol\n\nclass Logger(Protocol):\n    def info(self, msg: str, **kwargs) -> None: ...\n    def error(self, msg: str, **kwargs) -> None: ...\n\nclass Cache(Protocol):\n    async def get(self, key: str) -> str | None: ...\n    async def set(self, key: str, value: str, ttl: int) -> None: ...\n\nclass UserService:\n    \"\"\"Service with injected dependencies.\"\"\"\n\n    def __init__(\n        self,\n        repository: UserRepository,\n        cache: Cache,\n  \
+  \      logger: Logger,\n    ) -> None:\n        self._repo = repository\n        self._cache = cache\n        self._logger = logger\n\n    async def get_user(self, user_id: str) -> User:\n        # Check cache first\n        cached = await self._cache.get(f\"user:{user_id}\")\n        if cached:\n            self._logger.info(\"Cache hit\", user_id=user_id)\n            return User.from_json(cached)\n\n        # Fetch from database\n        user = await self._repo.get_by_id(user_id)\n        if user:\n            await self._cache.set(f\"user:{user_id}\", user.to_json(), ttl=300)\n\n        return user\n\n# Production\nservice = UserService(\n    repository=PostgresUserRepository(db),\n    cache=RedisCache(redis),\n    logger=StructlogLogger(),\n)\n\n# Testing\nservice = UserService(\n    repository=InMemoryUserRepository(),\n    cache=FakeCache(),\n    logger=NullLogger(),\n)\n```\n\n### Pattern 8: Avoiding Common Anti-Patterns\n\n**Don't expose internal types:**\n\n```python\n# BAD: Leaking ORM model to API\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserModel:  # SQLAlchemy model\n    return db.query(UserModel).get(id)\n\n# GOOD: Use response schemas\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserResponse:\n    user = db.query(UserModel).get(id)\n    return UserResponse.from_orm(user)\n```\n\n**Don't mix I/O with business logic:**\n\n```python\n# BAD: SQL embedded in business logic\ndef calculate_discount(user_id: str) -> float:\n    user = db.query(\"SELECT * FROM users WHERE id = ?\", user_id)\n    orders = db.query(\"SELECT * FROM orders WHERE user_id = ?\", user_id)\n    # Business logic mixed with data access\n\n# GOOD: Repository pattern\ndef calculate_discount(user: User, order_history: list[Order]) -> float:\n    # Pure business logic, easily testable\n    if len(order_history) > 10:\n        return 0.15\n    return 0.0\n```\n\n## Best Practices Summary\n\n1. **Keep it simple** - Choose the simplest solution that works\n2. **Single responsibility** - Each unit has one reason to change\n3. **Separate concerns** - Distinct layers with clear purposes\n4. **Compose, don't inherit** - Combine objects for flexibility\n5. **Rule of three** - Wait before abstracting\n6. **Keep functions small** - 20-50 lines (varies by complexity), one purpose\n7. **Inject dependencies** - Constructor injection for testability\n8. **Delete before abstracting** - Remove dead code, then consider patterns\n9. **Test each layer** - Isolated tests for each concern\n10. **Explicit over clever** - Readable code beats elegant code\n\n## Troubleshooting\n\n**A class is growing and seems to have multiple responsibilities, but splitting it feels wrong.**\nApply the \"reason to change\" test: list every change that could require editing this class. If the list has items from different domains (e.g., HTTP parsing AND business rules AND formatting), split it. If all changes stem from the same domain concern, the class may be appropriately sized.\n\n**Injecting all dependencies through the constructor is producing constructors with 7+ parameters.**\nThis is a sign of too many responsibilities in one class, not a problem with dependency injection. Split the class into smaller units first, then each constructor naturally becomes smaller.\n\n**Composition is producing deeply nested wrapper objects that are hard to trace.**\nKeep the composition shallow (2-3 levels). If wrapping is the only mechanism, consider whether a Protocol-based approach or simple function composition would be cleaner than a chain of decorator objects.\n\n**The rule of three says not to abstract yet, but the duplication is causing bugs when one copy is updated but not the other.**\nDuplication that diverges in dangerous ways should be abstracted sooner. The rule of three is a heuristic, not a law. If the copies are already diverging incorrectly, extract immediately and add a test that exercises the shared behavior.\n\n**A service layer is importing from the API layer, breaking the dependency direction.**\nThis is a layering violation. The service layer must not import from handlers. Introduce a shared types/models layer that both can import from, keeping the dependency arrow pointing downward (API → Service → Repository).\n\n## Related Skills\n\n- [python-testing-patterns](../python-testing-patterns/SKILL.md) — Test each layer in isolation using the dependency injection structure established here\n- [python-project-setup](../python-project-setup/SKILL.md) — Set up project structure and tooling that enforces layer boundaries from the start"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Design Patterns
+
+
+    Write maintainable Python code using fundamental design principles. These patterns help you build systems that are easy to understand, test, and modify.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Designing new components or services
+
+    - Refactoring complex or tangled code
+
+    - Deciding whether to create an abstraction
+
+    - Choosing between inheritance and composition
+
+    - Evaluating code complexity and coupling
+
+    - Planning modular architectures'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. KISS (Keep It Simple)
+
+
+    Choose the simplest solution that works. Complexity must be justified by concrete requirements.
+
+
+    ### 2. Single Responsibility (SRP)
+
+
+    Each unit should have one reason to change. Separate concerns into focused components.
+
+
+    ### 3. Composition Over Inheritance
+
+
+    Build behavior by combining objects, not extending classes.
+
+
+    ### 4. Rule of Three
+
+
+    Wait until you have three instances before abstracting. Duplication is often better than premature abstraction.'
+- sequence: 4
+  fragment_type: example
+  content: "## Quick Start\n\n```python\n# Simple beats clever\n# Instead of a factory/registry pattern:\nFORMATTERS = {\"json\": JsonFormatter, \"csv\": CsvFormatter}\n\ndef get_formatter(name: str) -> Formatter:\n    return FORMATTERS[name]()\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Pattern 1: KISS - Keep It Simple\n\nBefore adding complexity, ask: does a simpler solution work?\n\n```python\n# Over-engineered: Factory with registration\nclass OutputFormatterFactory:\n    _formatters: dict[str, type[Formatter]] = {}\n\n    @classmethod\n    def register(cls, name: str):\n        def decorator(formatter_cls):\n            cls._formatters[name] = formatter_cls\n            return formatter_cls\n        return decorator\n\n    @classmethod\n    def create(cls, name: str) -> Formatter:\n        return cls._formatters[name]()\n\n@OutputFormatterFactory.register(\"json\")\nclass JsonFormatter(Formatter):\n    ...\n\n# Simple: Just use a dictionary\nFORMATTERS = {\n    \"json\": JsonFormatter,\n    \"csv\": CsvFormatter,\n    \"xml\": XmlFormatter,\n}\n\ndef get_formatter(name: str) -> Formatter:\n    \"\"\"Get formatter by name.\"\"\"\n    if name not in FORMATTERS:\n        raise ValueError(f\"Unknown format: {name}\")\n    return FORMATTERS[name]()\n```\n\nThe factory pattern adds code without adding value here. Save patterns for when they solve real problems."
+- sequence: 6
+  fragment_type: execution
+  content: "### Pattern 2: Single Responsibility Principle\n\nEach class or function should have one reason to change.\n\n```python\n# BAD: Handler does everything\nclass UserHandler:\n    async def create_user(self, request: Request) -> Response:\n        # HTTP parsing\n        data = await request.json()\n\n        # Validation\n        if not data.get(\"email\"):\n            return Response({\"error\": \"email required\"}, status=400)\n\n        # Database access\n        user = await db.execute(\n            \"INSERT INTO users (email, name) VALUES ($1, $2) RETURNING *\",\n            data[\"email\"], data[\"name\"]\n        )\n\n        # Response formatting\n        return Response({\"id\": user.id, \"email\": user.email}, status=201)\n\n# GOOD: Separated concerns\nclass UserService:\n    \"\"\"Business logic only.\"\"\"\n\n    def __init__(self, repo: UserRepository) -> None:\n        self._repo = repo\n\n    async def create_user(self, data: CreateUserInput) -> User:\n        # Only business rules here\n        user = User(email=data.email, name=data.name)\n        return await self._repo.save(user)\n\nclass UserHandler:\n    \"\"\"HTTP concerns only.\"\"\"\n\n    def __init__(self, service: UserService) -> None:\n        self._service = service\n\n    async def create_user(self, request: Request) -> Response:\n        data = CreateUserInput(**(await request.json()))\n        user = await self._service.create_user(data)\n        return Response(user.to_dict(), status=201)\n```\n\nNow HTTP changes don't affect business logic, and vice versa."
+- sequence: 7
+  fragment_type: execution
+  content: "### Pattern 3: Separation of Concerns\n\nOrganize code into distinct layers with clear responsibilities.\n\n```\n┌─────────────────────────────────────────────────────┐\n│  API Layer (handlers)                                │\n│  - Parse requests                                    │\n│  - Call services                                     │\n│  - Format responses                                  │\n└─────────────────────────────────────────────────────┘\n                        │\n                        ▼\n┌─────────────────────────────────────────────────────┐\n│  Service Layer (business logic)                      │\n│  - Domain rules and validation                       │\n│  - Orchestrate operations                            │\n│  - Pure functions where possible                     │\n└─────────────────────────────────────────────────────┘\n                        │\n                        ▼\n┌─────────────────────────────────────────────────────┐\n│  Repository Layer (data access)                      │\n│  - SQL queries                                       │\n│  - External API calls                                │\n│  - Cache operations                                  │\n└─────────────────────────────────────────────────────┘\n```\n\nEach layer depends only on layers below it:\n\n```python\n# Repository: Data access\nclass UserRepository:\n    async def get_by_id(self, user_id: str) -> User | None:\n        row = await self._db.fetchrow(\n            \"SELECT * FROM users WHERE id = $1\", user_id\n        )\n        return User(**row) if row else None\n\n# Service: Business logic\nclass UserService:\n    def __init__(self, repo: UserRepository) -> None:\n        self._repo = repo\n\n    async def get_user(self, user_id: str) -> User:\n        user = await self._repo.get_by_id(user_id)\n        if user is None:\n            raise UserNotFoundError(user_id)\n        return user\n\n# Handler: HTTP concerns\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: str) -> UserResponse:\n    user = await user_service.get_user(user_id)\n    return UserResponse.from_user(user)\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### Pattern 4: Composition Over Inheritance\n\nBuild behavior by combining objects rather than inheriting.\n\n```python\n# Inheritance: Rigid and hard to test\nclass EmailNotificationService(NotificationService):\n    def __init__(self):\n        super().__init__()\n        self._smtp = SmtpClient()  # Hard to mock\n\n    def notify(self, user: User, message: str) -> None:\n        self._smtp.send(user.email, message)\n\n# Composition: Flexible and testable\nclass NotificationService:\n    \"\"\"Send notifications via multiple channels.\"\"\"\n\n    def __init__(\n        self,\n        email_sender: EmailSender,\n        sms_sender: SmsSender | None = None,\n        push_sender: PushSender | None = None,\n    ) -> None:\n        self._email = email_sender\n        self._sms = sms_sender\n        self._push = push_sender\n\n    async def notify(\n        self,\n        user: User,\n        message: str,\n        channels: set[str] | None = None,\n    ) -> None:\n        channels = channels or {\"email\"}\n\n        if \"email\" in channels:\n            await self._email.send(user.email, message)\n\n        if \"sms\" in channels and self._sms and user.phone:\n            await self._sms.send(user.phone, message)\n\n        if \"push\" in channels and self._push and user.device_token:\n            await self._push.send(user.device_token, message)\n\n# Easy to test with fakes\nservice = NotificationService(\n    email_sender=FakeEmailSender(),\n    sms_sender=FakeSmsSender(),\n)\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Pattern 5: Rule of Three\n\nWait until you have three instances before abstracting.\n\n```python\n# Two similar functions? Don't abstract yet\ndef process_orders(orders: list[Order]) -> list[Result]:\n    results = []\n    for order in orders:\n        validated = validate_order(order)\n        result = process_validated_order(validated)\n        results.append(result)\n    return results\n\ndef process_returns(returns: list[Return]) -> list[Result]:\n    results = []\n    for ret in returns:\n        validated = validate_return(ret)\n        result = process_validated_return(validated)\n        results.append(result)\n    return results\n\n# These look similar, but wait! Are they actually the same?\n# Different validation, different processing, different errors...\n# Duplication is often better than the wrong abstraction\n\n# Only after a third case, consider if there's a real pattern\n# But even then, sometimes explicit is better than abstract\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Pattern 6: Function Size Guidelines\n\nKeep functions focused. Extract when a function:\n\n- Exceeds 20-50 lines (varies by complexity)\n- Serves multiple distinct purposes\n- Has deeply nested logic (3+ levels)\n\n```python\n# Too long, multiple concerns mixed\ndef process_order(order: Order) -> Result:\n    # 50 lines of validation...\n    # 30 lines of inventory check...\n    # 40 lines of payment processing...\n    # 20 lines of notification...\n    pass\n\n# Better: Composed from focused functions\ndef process_order(order: Order) -> Result:\n    \"\"\"Process a customer order through the complete workflow.\"\"\"\n    validate_order(order)\n    reserve_inventory(order)\n    payment_result = charge_payment(order)\n    send_confirmation(order, payment_result)\n    return Result(success=True, order_id=order.id)\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Pattern 7: Dependency Injection\n\nPass dependencies through constructors for testability.\n\n```python\nfrom typing import Protocol\n\nclass Logger(Protocol):\n    def info(self, msg: str, **kwargs) -> None: ...\n    def error(self, msg: str, **kwargs) -> None: ...\n\nclass Cache(Protocol):\n    async def get(self, key: str) -> str | None: ...\n    async def set(self, key: str, value: str, ttl: int) -> None: ...\n\nclass UserService:\n    \"\"\"Service with injected dependencies.\"\"\"\n\n    def __init__(\n        self,\n        repository: UserRepository,\n        cache: Cache,\n        logger: Logger,\n    ) -> None:\n        self._repo = repository\n        self._cache = cache\n        self._logger = logger\n\n    async def get_user(self, user_id: str) -> User:\n        # Check cache first\n        cached = await self._cache.get(f\"user:{user_id}\")\n        if cached:\n            self._logger.info(\"Cache hit\", user_id=user_id)\n            return User.from_json(cached)\n\n        # Fetch from database\n        user = await self._repo.get_by_id(user_id)\n        if user:\n            await self._cache.set(f\"user:{user_id}\", user.to_json(), ttl=300)\n\n        return user\n\n# Production\nservice = UserService(\n    repository=PostgresUserRepository(db),\n    cache=RedisCache(redis),\n    logger=StructlogLogger(),\n)\n\n# Testing\nservice = UserService(\n    repository=InMemoryUserRepository(),\n    cache=FakeCache(),\n    logger=NullLogger(),\n)\n```"
+- sequence: 12
+  fragment_type: execution
+  content: "### Pattern 8: Avoiding Common Anti-Patterns\n\n**Don't expose internal types:**\n\n```python\n# BAD: Leaking ORM model to API\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserModel:  # SQLAlchemy model\n    return db.query(UserModel).get(id)\n\n# GOOD: Use response schemas\n@app.get(\"/users/{id}\")\ndef get_user(id: str) -> UserResponse:\n    user = db.query(UserModel).get(id)\n    return UserResponse.from_orm(user)\n```\n\n**Don't mix I/O with business logic:**\n\n```python\n# BAD: SQL embedded in business logic\ndef calculate_discount(user_id: str) -> float:\n    user = db.query(\"SELECT * FROM users WHERE id = ?\", user_id)\n    orders = db.query(\"SELECT * FROM orders WHERE user_id = ?\", user_id)\n    # Business logic mixed with data access\n\n# GOOD: Repository pattern\ndef calculate_discount(user: User, order_history: list[Order]) -> float:\n    # Pure business logic, easily testable\n    if len(order_history) > 10:\n        return 0.15\n    return 0.0\n```"
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Keep it simple** - Choose the simplest solution that works
+
+    2. **Single responsibility** - Each unit has one reason to change
+
+    3. **Separate concerns** - Distinct layers with clear purposes
+
+    4. **Compose, don''t inherit** - Combine objects for flexibility
+
+    5. **Rule of three** - Wait before abstracting
+
+    6. **Keep functions small** - 20-50 lines (varies by complexity), one purpose
+
+    7. **Inject dependencies** - Constructor injection for testability
+
+    8. **Delete before abstracting** - Remove dead code, then consider patterns
+
+    9. **Test each layer** - Isolated tests for each concern
+
+    10. **Explicit over clever** - Readable code beats elegant code'
+- sequence: 14
+  fragment_type: verification
+  content: '## Troubleshooting
+
+
+    **A class is growing and seems to have multiple responsibilities, but splitting it feels wrong.**
+
+    Apply the "reason to change" test: list every change that could require editing this class. If the list has items from different domains (e.g., HTTP parsing AND business rules AND formatting), split it. If all changes stem from the same domain concern, the class may be appropriately sized.
+
+
+    **Injecting all dependencies through the constructor is producing constructors with 7+ parameters.**
+
+    This is a sign of too many responsibilities in one class, not a problem with dependency injection. Split the class into smaller units first, then each constructor naturally becomes smaller.
+
+
+    **Composition is producing deeply nested wrapper objects that are hard to trace.**
+
+    Keep the composition shallow (2-3 levels). If wrapping is the only mechanism, consider whether a Protocol-based approach or simple function composition would be cleaner than a chain of decorator objects.
+
+
+    **The rule of three says not to abstract yet, but the duplication is causing bugs when one copy is updated but not the other.**
+
+    Duplication that diverges in dangerous ways should be abstracted sooner. The rule of three is a heuristic, not a law. If the copies are already diverging incorrectly, extract immediately and add a test that exercises the shared behavior.
+
+
+    **A service layer is importing from the API layer, breaking the dependency direction.**
+
+    This is a layering violation. The service layer must not import from handlers. Introduce a shared types/models layer that both can import from, keeping the dependency arrow pointing downward (API → Service → Repository).'
+- sequence: 15
+  fragment_type: rationale
+  content: '## Related Skills
+
+
+    - [python-testing-patterns](../python-testing-patterns/SKILL.md) — Test each layer in isolation using the dependency injection structure established here
+
+    - [python-project-setup](../python-project-setup/SKILL.md) — Set up project structure and tooling that enforces layer boundaries from the start'

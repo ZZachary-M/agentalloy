@@ -1,0 +1,159 @@
+skill_type: domain
+skill_id: responsive-design
+canonical_name: Responsive Design
+category: design
+skill_class: domain
+domain_tags:
+- responsive
+- mobile-first
+- breakpoints
+- fluid-typography
+- container-queries
+- media-queries
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Responsive Design\n\nMaster modern responsive design techniques to create interfaces that adapt seamlessly across all screen sizes and device contexts.\n\n## When to Use This Skill\n\n- Implementing mobile-first responsive layouts\n- Using container queries for component-based responsiveness\n- Creating fluid typography and spacing scales\n- Building complex layouts with CSS Grid and Flexbox\n- Designing breakpoint strategies for design systems\n- Implementing responsive images and media\n- Creating adaptive navigation patterns\n- Building responsive tables and data displays\n\n## Core Capabilities\n\n### 1. Container Queries\n\n- Component-level responsiveness independent of viewport\n- Container query units (cqi, cqw, cqh)\n- Style queries for conditional styling\n- Fallbacks for browser support\n\n### 2. Fluid Typography & Spacing\n\n- CSS clamp() for fluid scaling\n- Viewport-relative units (vw, vh, dvh)\n- Fluid type scales with min/max bounds\n- Responsive spacing systems\n\n### 3. Layout Patterns\n\n- CSS Grid for 2D layouts\n- Flexbox for 1D distribution\n- Intrinsic layouts (content-based sizing)\n- Subgrid for nested grid alignment\n\n### 4. Breakpoint Strategy\n\n- Mobile-first media queries\n- Content-based breakpoints\n- Design token integration\n- Feature queries (@supports)\n\n## Quick Reference\n\n### Modern Breakpoint Scale\n\n```css\n/* Mobile-first breakpoints */\n/* Base: Mobile (< 640px) */\n@media (min-width: 640px) {\n  /* sm: Landscape phones, small tablets */\n}\n@media (min-width: 768px) {\n  /* md: Tablets */\n}\n@media (min-width: 1024px) {\n  /* lg: Laptops, small desktops */\n}\n@media (min-width: 1280px) {\n  /* xl: Desktops */\n}\n@media (min-width: 1536px) {\n  /* 2xl: Large desktops */\n}\n\n/* Tailwind CSS equivalent */\n/* sm:  @media (min-width: 640px) */\n/* md:  @media (min-width: 768px) */\n/* lg:  @media (min-width: 1024px) */\n/* xl:  @media (min-width: 1280px) */\n/* 2xl: @media (min-width: 1536px) */\n```\n\n## Key Patterns\n\n### Pattern 1: Container Queries\n\n```css\n/* Define a containment context */\n.card-container {\n  container-type: inline-size;\n  container-name: card;\n}\n\n/* Query the container, not the viewport */\n@container card (min-width: 400px) {\n  .card {\n    display: grid;\n    grid-template-columns: 200px 1fr;\n    gap: 1rem;\n  }\n\n  .card-image {\n    aspect-ratio: 1;\n  }\n}\n\n@container card (min-width: 600px) {\n  .card {\n    grid-template-columns: 250px 1fr;\n  }\n\n  .card-title {\n    font-size: 1.5rem;\n  }\n}\n\n/* Container query units */\n.card-title {\n  /* 5% of container width, clamped between 1rem and 2rem */\n  font-size: clamp(1rem, 5cqi, 2rem);\n}\n```\n\n```tsx\n// React component with container queries\nfunction ResponsiveCard({ title, image, description }) {\n  return (\n    <div className=\"@container\">\n      <article className=\"flex flex-col @md:flex-row @md:gap-4\">\n        <img\n          src={image}\n          alt=\"\"\n          className=\"w-full @md:w-48 @lg:w-64 aspect-video @md:aspect-square object-cover\"\n        />\n        <div className=\"p-4 @md:p-0\">\n          <h2 className=\"text-lg @md:text-xl @lg:text-2xl font-semibold\">\n            {title}\n          </h2>\n          <p className=\"mt-2 text-muted-foreground @md:line-clamp-3\">\n            {description}\n          </p>\n        </div>\n      </article>\n    </div>\n  );\n}\n```\n\n### Pattern 2: Fluid Typography\n\n```css\n/* Fluid type scale using clamp() */\n:root {\n  /* Min size, preferred (fluid), max size */\n  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);\n  --text-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);\n  --text-base: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);\n  --text-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);\n  --text-xl: clamp(1.25rem, 1rem + 1.25vw, 1.5rem);\n  --text-2xl: clamp(1.5rem, 1.25rem + 1.25vw, 2rem);\n  --text-3xl: clamp(1.875rem, 1.5rem + 1.875vw, 2.5rem);\n  --text-4xl: clamp(2.25rem, 1.75rem + 2.5vw, 3.5rem);\n}\n\n/* Usage */\nh1 {\n  font-size: var(--text-4xl);\n}\nh2 {\n  font-size: var(--text-3xl);\n}\nh3 {\n  font-size: var(--text-2xl);\n}\np {\n  font-size: var(--text-base);\n}\n\n/* Fluid spacing scale */\n:root {\n  --space-xs: clamp(0.25rem, 0.2rem + 0.25vw, 0.5rem);\n  --space-sm: clamp(0.5rem, 0.4rem + 0.5vw, 0.75rem);\n  --space-md: clamp(1rem, 0.8rem + 1vw, 1.5rem);\n  --space-lg: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem);\n  --space-xl: clamp(2rem, 1.5rem + 2.5vw, 4rem);\n}\n```\n\n```tsx\n// Utility function for fluid values\nfunction fluidValue(\n  minSize: number,\n  maxSize: number,\n  minWidth = 320,\n  maxWidth = 1280,\n) {\n  const slope = (maxSize - minSize) / (maxWidth - minWidth);\n  const yAxisIntersection = -minWidth * slope + minSize;\n\n  return `clamp(${minSize}rem, ${yAxisIntersection.toFixed(4)}rem + ${(slope * 100).toFixed(4)}vw, ${maxSize}rem)`;\n}\n\n// Generate fluid type scale\nconst fluidTypeScale = {\n  sm: fluidValue(0.875, 1),\n  base: fluidValue(1, 1.125),\n  lg: fluidValue(1.25, 1.5),\n  xl: fluidValue(1.5, 2),\n  \"2xl\": fluidValue(2, 3),\n};\n```\n\n### Pattern 3: CSS Grid Responsive Layout\n\n```css\n/* Auto-fit grid - items wrap automatically */\n.grid-auto {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));\n  gap: 1.5rem;\n}\n\n/* Auto-fill grid - maintains empty columns */\n.grid-auto-fill {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));\n  gap: 1rem;\n}\n\n/* Responsive grid with named areas */\n.page-layout {\n  display: grid;\n  grid-template-areas:\n    \"header\"\n    \"main\"\n    \"sidebar\"\n    \"footer\";\n  gap: 1rem;\n}\n\n@media (min-width: 768px) {\n  .page-layout {\n    grid-template-columns: 1fr 300px;\n    grid-template-areas:\n      \"header header\"\n      \"main sidebar\"\n      \"footer footer\";\n  }\n}\n\n@media (min-width: 1024px) {\n  .page-layout {\n    grid-template-columns: 250px 1fr 300px;\n    grid-template-areas:\n      \"header header header\"\n      \"nav main sidebar\"\n      \"footer footer footer\";\n  }\n}\n\n.header {\n  grid-area: header;\n}\n.main {\n  grid-area: main;\n}\n.sidebar {\n  grid-area: sidebar;\n}\n.footer {\n  grid-area: footer;\n}\n```\n\n```tsx\n// Responsive grid component\nfunction ResponsiveGrid({ children, minItemWidth = \"250px\", gap = \"1.5rem\" }) {\n  return (\n    <div\n      className=\"grid\"\n      style={{\n        gridTemplateColumns: `repeat(auto-fit, minmax(min(${minItemWidth}, 100%), 1fr))`,\n        gap,\n      }}\n    >\n      {children}\n    </div>\n  );\n}\n\n// Usage with Tailwind\nfunction ProductGrid({ products }) {\n  return (\n    <div className=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6\">\n      {products.map((product) => (\n        <ProductCard key={product.id} product={product} />\n      ))}\n    </div>\n  );\n}\n```\n\n### Pattern 4: Responsive Navigation\n\n```tsx\nfunction ResponsiveNav({ items }) {\n  const [isOpen, setIsOpen] = useState(false);\n\n  return (\n    <nav className=\"relative\">\n      {/* Mobile menu button */}\n      <button\n        className=\"lg:hidden p-2\"\n        onClick={() => setIsOpen(!isOpen)}\n        aria-expanded={isOpen}\n        aria-controls=\"nav-menu\"\n      >\n        <span className=\"sr-only\">Toggle navigation</span>\n        {isOpen ? <X /> : <Menu />}\n      </button>\n\n      {/* Navigation links */}\n      <ul\n        id=\"nav-menu\"\n        className={cn(\n          // Base: hidden on mobile\n          \"absolute top-full left-0 right-0 bg-background border-b\",\n          \"flex flex-col\",\n          // Mobile: slide down\n          isOpen ? \"flex\" : \"hidden\",\n          // Desktop: always visible, horizontal\n          \"lg:static lg:flex lg:flex-row lg:border-0 lg:bg-transparent\",\n        )}\n      >\n        {items.map((item) => (\n          <li key={item.href}>\n            <a\n              href={item.href}\n              className={cn(\n                \"block px-4 py-3\",\n                \"lg:px-3 lg:py-2\",\n                \"hover:bg-muted lg:hover:bg-transparent lg:hover:text-primary\",\n              )}\n            >\n              {item.label}\n            </a>\n          </li>\n        ))}\n      </ul>\n    </nav>\n  );\n}\n```\n\n### Pattern 5: Responsive Images\n\n```tsx\n// Responsive image with art direction\nfunction ResponsiveHero() {\n  return (\n    <picture>\n      {/* Art direction: different crops for different screens */}\n      <source\n        media=\"(min-width: 1024px)\"\n        srcSet=\"/hero-wide.webp\"\n        type=\"image/webp\"\n      />\n      <source\n        media=\"(min-width: 768px)\"\n        srcSet=\"/hero-medium.webp\"\n        type=\"image/webp\"\n      />\n      <source srcSet=\"/hero-mobile.webp\" type=\"image/webp\" />\n\n      {/* Fallback */}\n      <img\n        src=\"/hero-mobile.jpg\"\n        alt=\"Hero image description\"\n        className=\"w-full h-auto\"\n        loading=\"eager\"\n        fetchpriority=\"high\"\n      />\n    </picture>\n  );\n}\n\n// Responsive image with srcset for resolution switching\nfunction ProductImage({ product }) {\n  return (\n    <img\n      src={product.image}\n      srcSet={`\n        ${product.image}?w=400 400w,\n        ${product.image}?w=800 800w,\n        ${product.image}?w=1200 1200w\n      `}\n      sizes=\"(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw\"\n      alt={product.name}\n      className=\"w-full h-auto object-cover\"\n      loading=\"lazy\"\n    />\n  );\n}\n```\n\n### Pattern 6: Responsive Tables\n\n```tsx\n// Responsive table with horizontal scroll\nfunction ResponsiveTable({ data, columns }) {\n  return (\n    <div className=\"w-full overflow-x-auto\">\n      <table className=\"w-full min-w-[600px]\">\n        <thead>\n          <tr>\n            {columns.map((col) => (\n              <th key={col.key} className=\"text-left p-3\">\n                {col.label}\n    \
+  \          </th>\n            ))}\n          </tr>\n        </thead>\n        <tbody>\n          {data.map((row, i) => (\n            <tr key={i} className=\"border-t\">\n              {columns.map((col) => (\n                <td key={col.key} className=\"p-3\">\n                  {row[col.key]}\n                </td>\n              ))}\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}\n\n// Card-based table for mobile\nfunction ResponsiveDataTable({ data, columns }) {\n  return (\n    <>\n      {/* Desktop table */}\n      <table className=\"hidden md:table w-full\">\n        {/* ... standard table */}\n      </table>\n\n      {/* Mobile cards */}\n      <div className=\"md:hidden space-y-4\">\n        {data.map((row, i) => (\n          <div key={i} className=\"border rounded-lg p-4 space-y-2\">\n            {columns.map((col) => (\n              <div key={col.key} className=\"flex justify-between\">\n                <span className=\"font-medium text-muted-foreground\">\n                  {col.label}\n                </span>\n                <span>{row[col.key]}</span>\n              </div>\n            ))}\n          </div>\n        ))}\n      </div>\n    </>\n  );\n}\n```\n\n## Viewport Units\n\n```css\n/* Standard viewport units */\n.full-height {\n  height: 100vh; /* May cause issues on mobile */\n}\n\n/* Dynamic viewport units (recommended for mobile) */\n.full-height-dynamic {\n  height: 100dvh; /* Accounts for mobile browser UI */\n}\n\n/* Small viewport (minimum) */\n.min-full-height {\n  min-height: 100svh;\n}\n\n/* Large viewport (maximum) */\n.max-full-height {\n  max-height: 100lvh;\n}\n\n/* Viewport-relative font sizing */\n.hero-title {\n  /* 5vw with min/max bounds */\n  font-size: clamp(2rem, 5vw, 4rem);\n}\n```\n\n## Best Practices\n\n1. **Mobile-First**: Start with mobile styles, enhance for larger screens\n2. **Content Breakpoints**: Set breakpoints based on content, not devices\n3. **Fluid Over Fixed**: Use fluid values for typography and spacing\n4. **Container Queries**: Use for component-level responsiveness\n5. **Test Real Devices**: Simulators don't catch all issues\n6. **Performance**: Optimize images, lazy load off-screen content\n7. **Touch Targets**: Maintain 44x44px minimum on mobile\n8. **Logical Properties**: Use inline/block for internationalization\n\n## Common Issues\n\n- **Horizontal Overflow**: Content breaking out of viewport\n- **Fixed Widths**: Using px instead of relative units\n- **Viewport Height**: 100vh issues on mobile browsers\n- **Font Size**: Text too small on mobile\n- **Touch Targets**: Buttons too small to tap accurately\n- **Aspect Ratio**: Images squishing or stretching\n- **Z-Index Stacking**: Overlays breaking on different screens"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Responsive Design
+
+
+    Master modern responsive design techniques to create interfaces that adapt seamlessly across all screen sizes and device contexts.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Implementing mobile-first responsive layouts
+
+    - Using container queries for component-based responsiveness
+
+    - Creating fluid typography and spacing scales
+
+    - Building complex layouts with CSS Grid and Flexbox
+
+    - Designing breakpoint strategies for design systems
+
+    - Implementing responsive images and media
+
+    - Creating adaptive navigation patterns
+
+    - Building responsive tables and data displays'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Capabilities
+
+
+    ### 1. Container Queries
+
+
+    - Component-level responsiveness independent of viewport
+
+    - Container query units (cqi, cqw, cqh)
+
+    - Style queries for conditional styling
+
+    - Fallbacks for browser support
+
+
+    ### 2. Fluid Typography & Spacing
+
+
+    - CSS clamp() for fluid scaling
+
+    - Viewport-relative units (vw, vh, dvh)
+
+    - Fluid type scales with min/max bounds
+
+    - Responsive spacing systems
+
+
+    ### 3. Layout Patterns
+
+
+    - CSS Grid for 2D layouts
+
+    - Flexbox for 1D distribution
+
+    - Intrinsic layouts (content-based sizing)
+
+    - Subgrid for nested grid alignment
+
+
+    ### 4. Breakpoint Strategy
+
+
+    - Mobile-first media queries
+
+    - Content-based breakpoints
+
+    - Design token integration
+
+    - Feature queries (@supports)'
+- sequence: 4
+  fragment_type: rationale
+  content: "## Quick Reference\n\n### Modern Breakpoint Scale\n\n```css\n/* Mobile-first breakpoints */\n/* Base: Mobile (< 640px) */\n@media (min-width: 640px) {\n  /* sm: Landscape phones, small tablets */\n}\n@media (min-width: 768px) {\n  /* md: Tablets */\n}\n@media (min-width: 1024px) {\n  /* lg: Laptops, small desktops */\n}\n@media (min-width: 1280px) {\n  /* xl: Desktops */\n}\n@media (min-width: 1536px) {\n  /* 2xl: Large desktops */\n}\n\n/* Tailwind CSS equivalent */\n/* sm:  @media (min-width: 640px) */\n/* md:  @media (min-width: 768px) */\n/* lg:  @media (min-width: 1024px) */\n/* xl:  @media (min-width: 1280px) */\n/* 2xl: @media (min-width: 1536px) */\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Pattern 1: Container Queries\n\n```css\n/* Define a containment context */\n.card-container {\n  container-type: inline-size;\n  container-name: card;\n}\n\n/* Query the container, not the viewport */\n@container card (min-width: 400px) {\n  .card {\n    display: grid;\n    grid-template-columns: 200px 1fr;\n    gap: 1rem;\n  }\n\n  .card-image {\n    aspect-ratio: 1;\n  }\n}\n\n@container card (min-width: 600px) {\n  .card {\n    grid-template-columns: 250px 1fr;\n  }\n\n  .card-title {\n    font-size: 1.5rem;\n  }\n}\n\n/* Container query units */\n.card-title {\n  /* 5% of container width, clamped between 1rem and 2rem */\n  font-size: clamp(1rem, 5cqi, 2rem);\n}\n```\n\n```tsx\n// React component with container queries\nfunction ResponsiveCard({ title, image, description }) {\n  return (\n    <div className=\"@container\">\n      <article className=\"flex flex-col @md:flex-row @md:gap-4\">\n        <img\n          src={image}\n          alt=\"\"\n          className=\"w-full @md:w-48 @lg:w-64 aspect-video @md:aspect-square object-cover\"\n        />\n        <div className=\"p-4 @md:p-0\">\n          <h2 className=\"text-lg @md:text-xl @lg:text-2xl font-semibold\">\n            {title}\n          </h2>\n          <p className=\"mt-2 text-muted-foreground @md:line-clamp-3\">\n            {description}\n          </p>\n        </div>\n      </article>\n    </div>\n  );\n}\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Pattern 2: Fluid Typography\n\n```css\n/* Fluid type scale using clamp() */\n:root {\n  /* Min size, preferred (fluid), max size */\n  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);\n  --text-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);\n  --text-base: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);\n  --text-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);\n  --text-xl: clamp(1.25rem, 1rem + 1.25vw, 1.5rem);\n  --text-2xl: clamp(1.5rem, 1.25rem + 1.25vw, 2rem);\n  --text-3xl: clamp(1.875rem, 1.5rem + 1.875vw, 2.5rem);\n  --text-4xl: clamp(2.25rem, 1.75rem + 2.5vw, 3.5rem);\n}\n\n/* Usage */\nh1 {\n  font-size: var(--text-4xl);\n}\nh2 {\n  font-size: var(--text-3xl);\n}\nh3 {\n  font-size: var(--text-2xl);\n}\np {\n  font-size: var(--text-base);\n}\n\n/* Fluid spacing scale */\n:root {\n  --space-xs: clamp(0.25rem, 0.2rem + 0.25vw, 0.5rem);\n  --space-sm: clamp(0.5rem, 0.4rem + 0.5vw, 0.75rem);\n  --space-md: clamp(1rem, 0.8rem + 1vw, 1.5rem);\n  --space-lg: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem);\n  --space-xl: clamp(2rem, 1.5rem + 2.5vw, 4rem);\n}\n```\n\n```tsx\n// Utility function for fluid values\nfunction fluidValue(\n  minSize: number,\n  maxSize: number,\n  minWidth = 320,\n  maxWidth = 1280,\n) {\n  const slope = (maxSize - minSize) / (maxWidth - minWidth);\n  const yAxisIntersection = -minWidth * slope + minSize;\n\n  return `clamp(${minSize}rem, ${yAxisIntersection.toFixed(4)}rem + ${(slope * 100).toFixed(4)}vw, ${maxSize}rem)`;\n}\n\n// Generate fluid type scale\nconst fluidTypeScale = {\n  sm: fluidValue(0.875, 1),\n  base: fluidValue(1, 1.125),\n  lg: fluidValue(1.25, 1.5),\n  xl: fluidValue(1.5, 2),\n  \"2xl\": fluidValue(2, 3),\n};\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### Pattern 3: CSS Grid Responsive Layout\n\n```css\n/* Auto-fit grid - items wrap automatically */\n.grid-auto {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));\n  gap: 1.5rem;\n}\n\n/* Auto-fill grid - maintains empty columns */\n.grid-auto-fill {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));\n  gap: 1rem;\n}\n\n/* Responsive grid with named areas */\n.page-layout {\n  display: grid;\n  grid-template-areas:\n    \"header\"\n    \"main\"\n    \"sidebar\"\n    \"footer\";\n  gap: 1rem;\n}\n\n@media (min-width: 768px) {\n  .page-layout {\n    grid-template-columns: 1fr 300px;\n    grid-template-areas:\n      \"header header\"\n      \"main sidebar\"\n      \"footer footer\";\n  }\n}\n\n@media (min-width: 1024px) {\n  .page-layout {\n    grid-template-columns: 250px 1fr 300px;\n    grid-template-areas:\n      \"header header header\"\n      \"nav main sidebar\"\n      \"footer footer footer\";\n  }\n}\n\n.header {\n  grid-area: header;\n}\n.main {\n  grid-area: main;\n}\n.sidebar {\n  grid-area: sidebar;\n}\n.footer {\n  grid-area: footer;\n}\n```\n\n```tsx\n// Responsive grid component\nfunction ResponsiveGrid({ children, minItemWidth = \"250px\", gap = \"1.5rem\" }) {\n  return (\n    <div\n      className=\"grid\"\n      style={{\n        gridTemplateColumns: `repeat(auto-fit, minmax(min(${minItemWidth}, 100%), 1fr))`,\n        gap,\n      }}\n    >\n      {children}\n    </div>\n  );\n}\n\n// Usage with Tailwind\nfunction ProductGrid({ products }) {\n  return (\n    <div className=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6\">\n      {products.map((product) => (\n        <ProductCard key={product.id} product={product} />\n      ))}\n    </div>\n  );\n}\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### Pattern 4: Responsive Navigation\n\n```tsx\nfunction ResponsiveNav({ items }) {\n  const [isOpen, setIsOpen] = useState(false);\n\n  return (\n    <nav className=\"relative\">\n      {/* Mobile menu button */}\n      <button\n        className=\"lg:hidden p-2\"\n        onClick={() => setIsOpen(!isOpen)}\n        aria-expanded={isOpen}\n        aria-controls=\"nav-menu\"\n      >\n        <span className=\"sr-only\">Toggle navigation</span>\n        {isOpen ? <X /> : <Menu />}\n      </button>\n\n      {/* Navigation links */}\n      <ul\n        id=\"nav-menu\"\n        className={cn(\n          // Base: hidden on mobile\n          \"absolute top-full left-0 right-0 bg-background border-b\",\n          \"flex flex-col\",\n          // Mobile: slide down\n          isOpen ? \"flex\" : \"hidden\",\n          // Desktop: always visible, horizontal\n          \"lg:static lg:flex lg:flex-row lg:border-0 lg:bg-transparent\",\n        )}\n      >\n        {items.map((item) => (\n          <li key={item.href}>\n            <a\n              href={item.href}\n              className={cn(\n                \"block px-4 py-3\",\n                \"lg:px-3 lg:py-2\",\n                \"hover:bg-muted lg:hover:bg-transparent lg:hover:text-primary\",\n              )}\n            >\n              {item.label}\n            </a>\n          </li>\n        ))}\n      </ul>\n    </nav>\n  );\n}\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Pattern 5: Responsive Images\n\n```tsx\n// Responsive image with art direction\nfunction ResponsiveHero() {\n  return (\n    <picture>\n      {/* Art direction: different crops for different screens */}\n      <source\n        media=\"(min-width: 1024px)\"\n        srcSet=\"/hero-wide.webp\"\n        type=\"image/webp\"\n      />\n      <source\n        media=\"(min-width: 768px)\"\n        srcSet=\"/hero-medium.webp\"\n        type=\"image/webp\"\n      />\n      <source srcSet=\"/hero-mobile.webp\" type=\"image/webp\" />\n\n      {/* Fallback */}\n      <img\n        src=\"/hero-mobile.jpg\"\n        alt=\"Hero image description\"\n        className=\"w-full h-auto\"\n        loading=\"eager\"\n        fetchpriority=\"high\"\n      />\n    </picture>\n  );\n}\n\n// Responsive image with srcset for resolution switching\nfunction ProductImage({ product }) {\n  return (\n    <img\n      src={product.image}\n      srcSet={`\n        ${product.image}?w=400 400w,\n        ${product.image}?w=800 800w,\n        ${product.image}?w=1200 1200w\n      `}\n      sizes=\"(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw\"\n      alt={product.name}\n      className=\"w-full h-auto object-cover\"\n      loading=\"lazy\"\n    />\n  );\n}\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Pattern 6: Responsive Tables\n\n```tsx\n// Responsive table with horizontal scroll\nfunction ResponsiveTable({ data, columns }) {\n  return (\n    <div className=\"w-full overflow-x-auto\">\n      <table className=\"w-full min-w-[600px]\">\n        <thead>\n          <tr>\n            {columns.map((col) => (\n              <th key={col.key} className=\"text-left p-3\">\n                {col.label}\n              </th>\n            ))}\n          </tr>\n        </thead>\n        <tbody>\n          {data.map((row, i) => (\n            <tr key={i} className=\"border-t\">\n              {columns.map((col) => (\n                <td key={col.key} className=\"p-3\">\n                  {row[col.key]}\n                </td>\n              ))}\n            </tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}\n\n// Card-based table for mobile\nfunction ResponsiveDataTable({ data, columns }) {\n  return (\n    <>\n      {/* Desktop table */}\n      <table className=\"hidden md:table w-full\">\n        {/* ... standard table */}\n      </table>\n\n      {/* Mobile cards */}\n      <div className=\"md:hidden space-y-4\">\n        {data.map((row, i) => (\n          <div key={i} className=\"border rounded-lg p-4 space-y-2\">\n            {columns.map((col) => (\n              <div key={col.key} className=\"flex justify-between\">\n                <span className=\"font-medium text-muted-foreground\">\n                  {col.label}\n                </span>\n                <span>{row[col.key]}</span>\n              </div>\n            ))}\n          </div>\n        ))}\n      </div>\n    </>\n  );\n}\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "## Viewport Units\n\n```css\n/* Standard viewport units */\n.full-height {\n  height: 100vh; /* May cause issues on mobile */\n}\n\n/* Dynamic viewport units (recommended for mobile) */\n.full-height-dynamic {\n  height: 100dvh; /* Accounts for mobile browser UI */\n}\n\n/* Small viewport (minimum) */\n.min-full-height {\n  min-height: 100svh;\n}\n\n/* Large viewport (maximum) */\n.max-full-height {\n  max-height: 100lvh;\n}\n\n/* Viewport-relative font sizing */\n.hero-title {\n  /* 5vw with min/max bounds */\n  font-size: clamp(2rem, 5vw, 4rem);\n}\n```"
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Mobile-First**: Start with mobile styles, enhance for larger screens
+
+    2. **Content Breakpoints**: Set breakpoints based on content, not devices
+
+    3. **Fluid Over Fixed**: Use fluid values for typography and spacing
+
+    4. **Container Queries**: Use for component-level responsiveness
+
+    5. **Test Real Devices**: Simulators don''t catch all issues
+
+    6. **Performance**: Optimize images, lazy load off-screen content
+
+    7. **Touch Targets**: Maintain 44x44px minimum on mobile
+
+    8. **Logical Properties**: Use inline/block for internationalization'
+- sequence: 13
+  fragment_type: verification
+  content: '## Common Issues
+
+
+    - **Horizontal Overflow**: Content breaking out of viewport
+
+    - **Fixed Widths**: Using px instead of relative units
+
+    - **Viewport Height**: 100vh issues on mobile browsers
+
+    - **Font Size**: Text too small on mobile
+
+    - **Touch Targets**: Buttons too small to tap accurately
+
+    - **Aspect Ratio**: Images squishing or stretching
+
+    - **Z-Index Stacking**: Overlays breaking on different screens'

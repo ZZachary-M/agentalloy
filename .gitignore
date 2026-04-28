@@ -5,6 +5,15 @@
 .aider.conf.yml
 .clinerules
 
+# Bundled-corpus binaries are no longer committed (pack-based distribution).
+# They're generated locally when packs are installed.
+src/skillsmith/_corpus/ladybug
+src/skillsmith/_corpus/skills.duck
+src/skillsmith/_corpus/skills.duck.wal
+src/skillsmith/_corpus/skills.duck.tmp
+*.duck.wal
+*.duck.tmp
+
 __pycache__/
 *.py[cod]
 *$py.class

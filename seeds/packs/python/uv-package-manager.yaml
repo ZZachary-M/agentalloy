@@ -1,0 +1,495 @@
+skill_type: domain
+skill_id: uv-package-manager
+canonical_name: UV Package Manager
+category: engineering
+skill_class: domain
+domain_tags:
+- uv
+- python-package-manager
+- dependency-resolution
+- lockfile
+- virtual-environments
+- performance
+- ci-cd
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# UV Package Manager\n\nComprehensive guide to using uv, an extremely fast Python package installer and resolver written in Rust, for modern Python project management and dependency workflows.\n\n## When to Use This Skill\n\n- Setting up new Python projects quickly\n- Managing Python dependencies faster than pip\n- Creating and managing virtual environments\n- Installing Python interpreters\n- Resolving dependency conflicts efficiently\n- Migrating from pip/pip-tools/poetry\n- Speeding up CI/CD pipelines\n- Managing monorepo Python projects\n- Working with lockfiles for reproducible builds\n- Optimizing Docker builds with Python dependencies\n\n## Core Concepts\n\n### 1. What is uv?\n\n- **Ultra-fast package installer**: 10-100x faster than pip\n- **Written in Rust**: Leverages Rust's performance\n- **Drop-in pip replacement**: Compatible with pip workflows\n- **Virtual environment manager**: Create and manage venvs\n- **Python installer**: Download and manage Python versions\n- **Resolver**: Advanced dependency resolution\n- **Lockfile support**: Reproducible installations\n\n### 2. Key Features\n\n- Blazing fast installation speeds\n- Disk space efficient with global cache\n- Compatible with pip, pip-tools, poetry\n- Comprehensive dependency resolution\n- Cross-platform support (Linux, macOS, Windows)\n- No Python required for installation\n- Built-in virtual environment support\n\n### 3. UV vs Traditional Tools\n\n- **vs pip**: 10-100x faster, better resolver\n- **vs pip-tools**: Faster, simpler, better UX\n- **vs poetry**: Faster, less opinionated, lighter\n- **vs conda**: Faster, Python-focused\n\n## Installation\n\n### Quick Install\n\n```bash\n# macOS/Linux\ncurl -LsSf https://astral.sh/uv/install.sh | sh\n\n# Windows (PowerShell)\npowershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"\n\n# Using pip (if you already have Python)\npip install uv\n\n# Using Homebrew (macOS)\nbrew install uv\n\n# Using cargo (if you have Rust)\ncargo install --git https://github.com/astral-sh/uv uv\n```\n\n### Verify Installation\n\n```bash\nuv --version\n# uv 0.x.x\n```\n\n## Quick Start\n\n### Create a New Project\n\n```bash\n# Create new project with virtual environment\nuv init my-project\ncd my-project\n\n# Or create in current directory\nuv init .\n\n# Initialize creates:\n# - .python-version (Python version)\n# - pyproject.toml (project config)\n# - README.md\n# - .gitignore\n```\n\n### Install Dependencies\n\n```bash\n# Install packages (creates venv if needed)\nuv add requests pandas\n\n# Install dev dependencies\nuv add --dev pytest black ruff\n\n# Install from requirements.txt\nuv pip install -r requirements.txt\n\n# Install from pyproject.toml\nuv sync\n```\n\n## Virtual Environment Management\n\n### Pattern 1: Creating Virtual Environments\n\n```bash\n# Create virtual environment with uv\nuv venv\n\n# Create with specific Python version\nuv venv --python 3.12\n\n# Create with custom name\nuv venv my-env\n\n# Create with system site packages\nuv venv --system-site-packages\n\n# Specify location\nuv venv /path/to/venv\n```\n\n### Pattern 2: Activating Virtual Environments\n\n```bash\n# Linux/macOS\nsource .venv/bin/activate\n\n# Windows (Command Prompt)\n.venv\\Scripts\\activate.bat\n\n# Windows (PowerShell)\n.venv\\Scripts\\Activate.ps1\n\n# Or use uv run (no activation needed)\nuv run python script.py\nuv run pytest\n```\n\n### Pattern 3: Using uv run\n\n```bash\n# Run Python script (auto-activates venv)\nuv run python app.py\n\n# Run installed CLI tool\nuv run black .\nuv run pytest\n\n# Run with specific Python version\nuv run --python 3.11 python script.py\n\n# Pass arguments\nuv run python script.py --arg value\n```\n\n## Package Management\n\n### Pattern 4: Adding Dependencies\n\n```bash\n# Add package (adds to pyproject.toml)\nuv add requests\n\n# Add with version constraint\nuv add \"django>=4.0,<5.0\"\n\n# Add multiple packages\nuv add numpy pandas matplotlib\n\n# Add dev dependency\nuv add --dev pytest pytest-cov\n\n# Add optional dependency group\nuv add --optional docs sphinx\n\n# Add from git\nuv add git+https://github.com/user/repo.git\n\n# Add from git with specific ref\nuv add git+https://github.com/user/repo.git@v1.0.0\n\n# Add from local path\nuv add ./local-package\n\n# Add editable local package\nuv add -e ./local-package\n```\n\n### Pattern 5: Removing Dependencies\n\n```bash\n# Remove package\nuv remove requests\n\n# Remove dev dependency\nuv remove --dev pytest\n\n# Remove multiple packages\nuv remove numpy pandas matplotlib\n```\n\n### Pattern 6: Upgrading Dependencies\n\n```bash\n# Upgrade specific package\nuv add --upgrade requests\n\n# Upgrade all packages\nuv sync --upgrade\n\n# Upgrade package to latest\nuv add --upgrade requests\n\n# Show what would be upgraded\nuv tree --outdated\n```\n\n### Pattern 7: Locking Dependencies\n\n```bash\n# Generate uv.lock file\nuv lock\n\n# Update lock file\nuv lock --upgrade\n\n# Lock without installing\nuv lock --no-install\n\n# Lock specific package\nuv lock --upgrade-package requests\n```\n\n## Python Version Management\n\n### Pattern 8: Installing Python Versions\n\n```bash\n# Install Python version\nuv python install 3.12\n\n# Install multiple versions\nuv python install 3.11 3.12 3.13\n\n# Install latest version\nuv python install\n\n# List installed versions\nuv python list\n\n# Find available versions\nuv python list --all-versions\n```\n\n### Pattern 9: Setting Python Version\n\n```bash\n# Set Python version for project\nuv python pin 3.12\n\n# This creates/updates .python-version file\n\n# Use specific Python version for command\nuv --python 3.11 run python script.py\n\n# Create venv with specific version\nuv venv --python 3.12\n```\n\n## Project Configuration\n\n### Pattern 10: pyproject.toml with uv\n\n```toml\n[project]\nname = \"my-project\"\nversion = \"0.1.0\"\ndescription = \"My awesome project\"\nreadme = \"README.md\"\nrequires-python = \">=3.8\"\ndependencies = [\n    \"requests>=2.31.0\",\n    \"pydantic>=2.0.0\",\n    \"click>=8.1.0\",\n]\n\n[project.optional-dependencies]\ndev = [\n    \"pytest>=7.4.0\",\n    \"pytest-cov>=4.1.0\",\n    \"black>=23.0.0\",\n    \"ruff>=0.1.0\",\n    \"mypy>=1.5.0\",\n]\ndocs = [\n    \"sphinx>=7.0.0\",\n    \"sphinx-rtd-theme>=1.3.0\",\n]\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n\n[tool.uv]\ndev-dependencies = [\n    # Additional dev dependencies managed by uv\n]\n\n[tool.uv.sources]\n# Custom package sources\nmy-package = { git = \"https://github.com/user/repo.git\" }\n```\n\n### Pattern 11: Using uv with Existing Projects\n\n```bash\n# Migrate from requirements.txt\nuv add -r requirements.txt\n\n# Migrate from poetry\n# Already have pyproject.toml, just use:\nuv sync\n\n# Export to requirements.txt\nuv pip freeze > requirements.txt\n\n# Export with hashes\nuv pip freeze --require-hashes > requirements.txt\n```\n\nFor advanced workflows including Docker integration, lockfile management, performance optimization, tool comparison, common workflows, tool integration, troubleshooting, best practices, migration guides, and command reference, see [references/advanced-patterns.md](references/advanced-patterns.md)"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# UV Package Manager
+
+
+    Comprehensive guide to using uv, an extremely fast Python package installer and resolver written in Rust, for modern Python project management and dependency workflows.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Setting up new Python projects quickly
+
+    - Managing Python dependencies faster than pip
+
+    - Creating and managing virtual environments
+
+    - Installing Python interpreters
+
+    - Resolving dependency conflicts efficiently
+
+    - Migrating from pip/pip-tools/poetry
+
+    - Speeding up CI/CD pipelines
+
+    - Managing monorepo Python projects
+
+    - Working with lockfiles for reproducible builds
+
+    - Optimizing Docker builds with Python dependencies'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. What is uv?
+
+
+    - **Ultra-fast package installer**: 10-100x faster than pip
+
+    - **Written in Rust**: Leverages Rust''s performance
+
+    - **Drop-in pip replacement**: Compatible with pip workflows
+
+    - **Virtual environment manager**: Create and manage venvs
+
+    - **Python installer**: Download and manage Python versions
+
+    - **Resolver**: Advanced dependency resolution
+
+    - **Lockfile support**: Reproducible installations
+
+
+    ### 2. Key Features
+
+
+    - Blazing fast installation speeds
+
+    - Disk space efficient with global cache
+
+    - Compatible with pip, pip-tools, poetry
+
+    - Comprehensive dependency resolution
+
+    - Cross-platform support (Linux, macOS, Windows)
+
+    - No Python required for installation
+
+    - Built-in virtual environment support
+
+
+    ### 3. UV vs Traditional Tools
+
+
+    - **vs pip**: 10-100x faster, better resolver
+
+    - **vs pip-tools**: Faster, simpler, better UX
+
+    - **vs poetry**: Faster, less opinionated, lighter
+
+    - **vs conda**: Faster, Python-focused'
+- sequence: 4
+  fragment_type: setup
+  content: '## Installation
+
+
+    ### Quick Install
+
+
+    ```bash
+
+    # macOS/Linux
+
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+
+    # Windows (PowerShell)
+
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+
+    # Using pip (if you already have Python)
+
+    pip install uv
+
+
+    # Using Homebrew (macOS)
+
+    brew install uv
+
+
+    # Using cargo (if you have Rust)
+
+    cargo install --git https://github.com/astral-sh/uv uv
+
+    ```
+
+
+    ### Verify Installation
+
+
+    ```bash
+
+    uv --version
+
+    # uv 0.x.x
+
+    ```'
+- sequence: 5
+  fragment_type: example
+  content: '## Quick Start
+
+
+    ### Create a New Project
+
+
+    ```bash
+
+    # Create new project with virtual environment
+
+    uv init my-project
+
+    cd my-project
+
+
+    # Or create in current directory
+
+    uv init .
+
+
+    # Initialize creates:
+
+    # - .python-version (Python version)
+
+    # - pyproject.toml (project config)
+
+    # - README.md
+
+    # - .gitignore
+
+    ```
+
+
+    ### Install Dependencies
+
+
+    ```bash
+
+    # Install packages (creates venv if needed)
+
+    uv add requests pandas
+
+
+    # Install dev dependencies
+
+    uv add --dev pytest black ruff
+
+
+    # Install from requirements.txt
+
+    uv pip install -r requirements.txt
+
+
+    # Install from pyproject.toml
+
+    uv sync
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: '## Virtual Environment Management
+
+
+    ### Pattern 1: Creating Virtual Environments
+
+
+    ```bash
+
+    # Create virtual environment with uv
+
+    uv venv
+
+
+    # Create with specific Python version
+
+    uv venv --python 3.12
+
+
+    # Create with custom name
+
+    uv venv my-env
+
+
+    # Create with system site packages
+
+    uv venv --system-site-packages
+
+
+    # Specify location
+
+    uv venv /path/to/venv
+
+    ```
+
+
+    ### Pattern 2: Activating Virtual Environments
+
+
+    ```bash
+
+    # Linux/macOS
+
+    source .venv/bin/activate
+
+
+    # Windows (Command Prompt)
+
+    .venv\Scripts\activate.bat
+
+
+    # Windows (PowerShell)
+
+    .venv\Scripts\Activate.ps1
+
+
+    # Or use uv run (no activation needed)
+
+    uv run python script.py
+
+    uv run pytest
+
+    ```
+
+
+    ### Pattern 3: Using uv run
+
+
+    ```bash
+
+    # Run Python script (auto-activates venv)
+
+    uv run python app.py
+
+
+    # Run installed CLI tool
+
+    uv run black .
+
+    uv run pytest
+
+
+    # Run with specific Python version
+
+    uv run --python 3.11 python script.py
+
+
+    # Pass arguments
+
+    uv run python script.py --arg value
+
+    ```'
+- sequence: 7
+  fragment_type: execution
+  content: '## Package Management
+
+
+    ### Pattern 4: Adding Dependencies
+
+
+    ```bash
+
+    # Add package (adds to pyproject.toml)
+
+    uv add requests
+
+
+    # Add with version constraint
+
+    uv add "django>=4.0,<5.0"
+
+
+    # Add multiple packages
+
+    uv add numpy pandas matplotlib
+
+
+    # Add dev dependency
+
+    uv add --dev pytest pytest-cov
+
+
+    # Add optional dependency group
+
+    uv add --optional docs sphinx
+
+
+    # Add from git
+
+    uv add git+https://github.com/user/repo.git
+
+
+    # Add from git with specific ref
+
+    uv add git+https://github.com/user/repo.git@v1.0.0
+
+
+    # Add from local path
+
+    uv add ./local-package
+
+
+    # Add editable local package
+
+    uv add -e ./local-package
+
+    ```
+
+
+    ### Pattern 5: Removing Dependencies
+
+
+    ```bash
+
+    # Remove package
+
+    uv remove requests
+
+
+    # Remove dev dependency
+
+    uv remove --dev pytest
+
+
+    # Remove multiple packages
+
+    uv remove numpy pandas matplotlib
+
+    ```
+
+
+    ### Pattern 6: Upgrading Dependencies
+
+
+    ```bash
+
+    # Upgrade specific package
+
+    uv add --upgrade requests
+
+
+    # Upgrade all packages
+
+    uv sync --upgrade
+
+
+    # Upgrade package to latest
+
+    uv add --upgrade requests
+
+
+    # Show what would be upgraded
+
+    uv tree --outdated
+
+    ```
+
+
+    ### Pattern 7: Locking Dependencies
+
+
+    ```bash
+
+    # Generate uv.lock file
+
+    uv lock
+
+
+    # Update lock file
+
+    uv lock --upgrade
+
+
+    # Lock without installing
+
+    uv lock --no-install
+
+
+    # Lock specific package
+
+    uv lock --upgrade-package requests
+
+    ```'
+- sequence: 8
+  fragment_type: execution
+  content: '## Python Version Management
+
+
+    ### Pattern 8: Installing Python Versions
+
+
+    ```bash
+
+    # Install Python version
+
+    uv python install 3.12
+
+
+    # Install multiple versions
+
+    uv python install 3.11 3.12 3.13
+
+
+    # Install latest version
+
+    uv python install
+
+
+    # List installed versions
+
+    uv python list
+
+
+    # Find available versions
+
+    uv python list --all-versions
+
+    ```
+
+
+    ### Pattern 9: Setting Python Version
+
+
+    ```bash
+
+    # Set Python version for project
+
+    uv python pin 3.12
+
+
+    # This creates/updates .python-version file
+
+
+    # Use specific Python version for command
+
+    uv --python 3.11 run python script.py
+
+
+    # Create venv with specific version
+
+    uv venv --python 3.12
+
+    ```'
+- sequence: 9
+  fragment_type: execution
+  content: "## Project Configuration\n\n### Pattern 10: pyproject.toml with uv\n\n```toml\n[project]\nname = \"my-project\"\nversion = \"0.1.0\"\ndescription = \"My awesome project\"\nreadme = \"README.md\"\nrequires-python = \">=3.8\"\ndependencies = [\n    \"requests>=2.31.0\",\n    \"pydantic>=2.0.0\",\n    \"click>=8.1.0\",\n]\n\n[project.optional-dependencies]\ndev = [\n    \"pytest>=7.4.0\",\n    \"pytest-cov>=4.1.0\",\n    \"black>=23.0.0\",\n    \"ruff>=0.1.0\",\n    \"mypy>=1.5.0\",\n]\ndocs = [\n    \"sphinx>=7.0.0\",\n    \"sphinx-rtd-theme>=1.3.0\",\n]\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n\n[tool.uv]\ndev-dependencies = [\n    # Additional dev dependencies managed by uv\n]\n\n[tool.uv.sources]\n# Custom package sources\nmy-package = { git = \"https://github.com/user/repo.git\" }\n```\n\n### Pattern 11: Using uv with Existing Projects\n\n```bash\n# Migrate from requirements.txt\nuv add -r requirements.txt\n\n# Migrate from poetry\n# Already have pyproject.toml, just use:\nuv sync\n\n# Export to requirements.txt\nuv pip freeze > requirements.txt\n\n# Export with hashes\nuv pip freeze --require-hashes > requirements.txt\n```\n\nFor advanced workflows including Docker integration, lockfile management, performance optimization, tool comparison, common workflows, tool integration, troubleshooting, best practices, migration guides, and command reference, see [references/advanced-patterns.md](references/advanced-patterns.md)"

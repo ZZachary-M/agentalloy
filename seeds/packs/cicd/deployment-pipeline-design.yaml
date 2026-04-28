@@ -1,0 +1,338 @@
+skill_type: domain
+skill_id: deployment-pipeline-design
+canonical_name: Deployment Pipeline Design
+category: ops
+skill_class: domain
+domain_tags:
+- cicd-pipeline
+- deployment-strategy
+- canary-rollout
+- approval-gates
+- rollback
+- health-check
+- dora-metrics
+- argo-rollouts
+- blue-green
+- kubernetes
+- database-migration
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin cicd-automation/deployment-pipeline-design
+raw_prose: '# Deployment Pipeline Design
+
+
+  Architecture patterns for multi-stage CI/CD pipelines: stage organization, automated gates, progressive delivery strategies, rollback automation.
+
+
+  ## When to Use
+
+
+  - Designing CI/CD architecture for a new service or platform migration
+
+  - Implementing deployment gates between environments
+
+  - Configuring multi-environment pipelines with mandatory security scanning
+
+  - Establishing progressive delivery (canary, blue-green)
+
+  - Debugging pipelines where stages succeed but production is wrong
+
+  - Reducing MTTR by automating rollback on metric degradation
+
+
+  ## Standard Pipeline Stages
+
+
+  Source -> Build -> Test -> Staging Deploy -> Integration Tests -> Approval Gate -> Production Deploy -> Verification -> Rollback (on failure).
+
+
+  Each stage''s output gates the next. Build once, promote the same artifact through environments.
+
+
+  ## Approval Gate Patterns
+
+
+  - Manual approval — environment protection rules with required reviewers
+
+  - Time-based — `when: delayed; start_in: 30 minutes` for cooling-off windows
+
+  - Multi-approver — explicit approval task before deployment
+
+  - Automated metric gate — block promotion when error rate exceeds threshold (Argo Rollouts AnalysisTemplate, custom gate scripts)
+
+
+  ## Deployment Strategies
+
+
+  | Strategy | Downtime | Rollback Speed | Cost | Best For |
+
+  |---|---|---|---|---|
+
+  | Rolling | None | ~minutes | None | Most stateless services |
+
+  | Blue-Green | None | Instant | 2x infra (temp) | High-risk or DB migrations |
+
+  | Canary | None | Instant | Minimal | High-traffic, metric-driven |
+
+  | Recreate | Yes | Fast | None | Dev/test, batch jobs |
+
+  | Feature Flag | None | Instant | None | Gradual feature exposure |
+
+
+  ## Health Checks
+
+
+  Shallow `/ping` returns 200 even when dependencies are broken. Use a deep `/health/ready` endpoint that verifies database, cache, queue, downstream APIs before promoting traffic.
+
+
+  ## Rollback Strategies
+
+
+  Automated: `if: failure()` step runs `kubectl rollout undo`. Verify metric thresholds (error rate, latency) post-deploy and roll back if exceeded.
+
+
+  Database migration rollback: keep migrations backward-compatible (additive only) for at least one release cycle. Versioned undo scripts. Never run destructive migrations until old code is fully retired.
+
+
+  ## DORA Metrics
+
+
+  | Metric | Elite Target |
+
+  |---|---|
+
+  | Deployment Frequency | Multiple/day |
+
+  | Lead Time for Changes | < 1 hour |
+
+  | Change Failure Rate | < 5% |
+
+  | Mean Time to Recovery | < 1 hour |'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Deployment Pipeline Design
+
+
+    Architecture patterns for multi-stage CI/CD pipelines: stage organization, automated gates, progressive delivery, rollback automation.
+
+
+    **Why pipelines need design, not just plumbing.** A deployment pipeline encodes a tradeoff between speed (how fast a commit reaches users) and safety (how confidently bad changes are stopped). Big-bang deploys optimize for speed and pay catastrophically on failure: a single bad release hits 100% of traffic with no graceful path back. Heavily gated waterfalls optimize for safety but starve teams of feedback, push batch sizes up, and ironically increase change failure rate because each release contains more risk.
+
+
+    **Blast-radius reduction via gates.** The pipeline''s job is to shrink the blast radius of any single bad change. Each automated gate (lint, unit test, integration test, security scan, staging smoke, production canary analysis) acts as a filter that catches a class of failure before it reaches more users. Gates are placed in cost order — cheap, fast checks first; expensive, slow checks last — so the pipeline fails fast on the common cases and only spends real money on changes that have already cleared the cheap filters.
+
+
+    **Progressive delivery beats big-bang.** Canary, blue-green, and feature-flag rollouts decouple "deployed" from "released to all users." A 10% canary lets real production traffic validate a change against real metrics before the other 90% sees it; if error rate spikes, automated analysis aborts the rollout and only 10% of users were affected. This converts deployment from a binary event into a controlled experiment with a kill switch.
+
+
+    **Core principle:** balance speed with safety through stage organization, automated quality gates, and progressive delivery. Every design choice in this skill exists to move the speed-vs-safety frontier outward — faster *and* safer, not one at the expense of the other.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Designing CI/CD for a new service or platform migration
+
+    - Implementing deployment gates between environments
+
+    - Configuring multi-environment pipelines with mandatory security scanning
+
+    - Establishing progressive delivery (canary, blue-green)
+
+    - Debugging pipelines where stages pass but production is wrong
+
+    - Reducing MTTR by automating rollback on metric degradation
+
+
+    **Inputs you should have before designing:** application type (language/runtime, containerized vs bare-metal, monolith vs microservices), deployment target (Kubernetes, ECS, VMs, serverless), environment topology (dev/staging/prod count, regions, air-gap requirements), rollout requirements (acceptable downtime, rollback SLA, traffic-splitting needs), gate constraints (approval teams, coverage thresholds, SAST/DAST/SCA scans), and monitoring stack (Prometheus, Datadog, CloudWatch) used for automated promotion decisions.
+
+
+    **Outputs the design produces:** pipeline configuration (stage definitions, job dependencies, parallelism, caching), deployment strategy with annotated config, health check setup (shallow vs deep readiness probes, post-deploy smoke scripts), gate definitions (metric thresholds, approval workflows), and a rollback plan (automated triggers and manual runbook).'
+- sequence: 3
+  fragment_type: execution
+  content: '## Standard Pipeline Stages
+
+
+    Source -> Build -> Test -> Staging Deploy -> Integration Tests -> Approval Gate -> Production Deploy -> Verification -> Rollback (on failure).
+
+
+    Detailed:
+
+    1. **Source** — code checkout, dependency resolution
+
+    2. **Build** — compile, package, containerize, sign artifacts
+
+    3. **Test** — unit, integration, SAST/SCA security scans
+
+    4. **Staging Deploy** — deploy + smoke tests
+
+    5. **Integration Tests** — E2E, contract tests, performance baselines
+
+    6. **Approval Gate** — manual or automated metric-based
+
+    7. **Production Deploy** — canary, blue-green, or rolling
+
+    8. **Verification** — deep health checks, synthetic monitoring
+
+    9. **Rollback** — automated trigger on failure signals
+
+
+    Build once, promote the same artifact through all environments. Never rebuild between staging and production — image digests must match.'
+- sequence: 4
+  fragment_type: execution
+  content: '## Deployment Strategies — Decision Table
+
+
+    | Strategy | Downtime | Rollback Speed | Cost Impact | Best For |
+
+    |---|---|---|---|---|
+
+    | Rolling | None | ~minutes | None | Most stateless services |
+
+    | Blue-Green | None | Instant | 2x infra (temp) | High-risk or DB migrations |
+
+    | Canary | None | Instant | Minimal | High-traffic, metric-driven |
+
+    | Recreate | Yes | Fast | None | Dev/test, batch jobs |
+
+    | Feature Flag | None | Instant | None | Gradual feature exposure |
+
+
+    Canary requires Argo Rollouts or service mesh for traffic splitting + analysis. Blue-green doubles infra cost during cutover.'
+- sequence: 5
+  fragment_type: execution
+  content: "## Approval Gates and Automated Metric Gates\n\n**Manual approval** — environment protection rules with required reviewers (GitHub Actions Environments, GitLab Environments, Azure ManualValidation).\n\n**Automated metric gate** — block promotion when error rate exceeds threshold:\n\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: AnalysisTemplate\nmetadata:\n  name: success-rate\nspec:\n  metrics:\n  - name: success-rate\n    interval: 60s\n    successCondition: \"result[0] >= 0.95\"\n    failureCondition: \"result[0] < 0.90\"\n    inconclusiveLimit: 3\n    provider:\n      prometheus:\n        query: |\n          sum(rate(http_requests_total{status!~\"5..\",job=\"my-app\"}[2m]))\n          / sum(rate(http_requests_total{job=\"my-app\"}[2m]))\n```\n\nAlways set `inconclusiveLimit` so rollouts fail fast instead of hanging when Prometheus returns no data."
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Health Check Discipline — Never Gate on Shallow Endpoints
+
+
+    **Rule:** never gate promotion or post-deploy verification on a shallow `/ping` endpoint. A shallow endpoint that returns 200 as long as the HTTP server is up will report "healthy" while the database is unreachable, the cache is down, or downstream APIs are timing out. The pipeline gate then promotes a service that is broken in production.
+
+
+    **Required:** every pipeline health gate must hit a *deep* readiness endpoint (conventionally `/health/ready`) that actively probes each runtime dependency the service requires to serve real traffic — database connection, cache, message queue, critical downstream APIs — and returns non-200 if any are unhealthy.
+
+
+    **Failure mode this prevents:** "health check passed in pipeline, service unhealthy in production." If you cannot tell whether your readiness check actually hits dependencies, treat it as shallow and fix it before relying on it as a gate.'
+- sequence: 7
+  fragment_type: example
+  content: "## Deep Readiness Endpoint (FastAPI)\n\nConcrete implementation of a deep `/health/ready` endpoint that verifies real dependencies and is safe to use as a pipeline gate:\n\n```python\nfrom fastapi import FastAPI\nfrom fastapi.responses import JSONResponse\n\napp = FastAPI()\n\n@app.get(\"/health/ready\")\nasync def readiness():\n    checks = {\n        \"database\": await check_db_connection(),\n        \"cache\":    await check_redis_connection(),\n        \"queue\":    await check_queue_connection(),\n    }\n    status = \"ok\" if all(checks.values()) else \"degraded\"\n    code = 200 if status == \"ok\" else 503\n    return JSONResponse({\"status\": status, \"checks\": checks}, status_code=code)\n```\n\nPair with a post-deploy verification script that polls the endpoint with backoff and exits nonzero on timeout, so a stuck-in-degraded service triggers automated rollback rather than silently sitting broken:\n\n```bash\n#!/usr/bin/env bash\nset -euo pipefail\nENDPOINT=\"${1:?usage: verify-deployment.sh <base-url>}\"\nfor i in $(seq 1 12); do\n  STATUS=$(curl -sf \"$ENDPOINT/health/ready\" | jq -r '.status' 2>/dev/null || echo \"unreachable\")\n  [ \"$STATUS\" = \"ok\" ] && { echo \"Healthy after $((i * 10))s\"; exit 0; }\n  echo \"Attempt $i/12: status=$STATUS\"\n  sleep 10\ndone\nexit 1\n```"
+- sequence: 8
+  fragment_type: example
+  content: "## Multi-Stage GitHub Actions Pipeline\n\nEnd-to-end production pipeline: build -> test -> deploy-staging -> integration-test -> deploy-production (with environment protection) -> verify with deep health check.\n\n```yaml\nname: Production Pipeline\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    outputs:\n      image: ${{ steps.build.outputs.image }}\n    steps:\n      - uses: actions/checkout@v4\n      - id: build\n        run: |\n          IMAGE=myapp:${{ github.sha }}\n          docker build -t $IMAGE .\n          docker push $IMAGE\n          echo \"image=$IMAGE\" >> $GITHUB_OUTPUT\n\n  test:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test\n      - run: trivy image ${{ needs.build.outputs.image }}\n\n  deploy-staging:\n    needs: test\n    environment: { name: staging }\n    runs-on: ubuntu-latest\n    steps:\n      - run: kubectl apply -f k8s/staging/\n\n  integration-test:\n    needs: deploy-staging\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run test:e2e\n\n  deploy-production:\n    needs: integration-test\n    environment: { name: production }   # blocks for required reviewers\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          kubectl apply -f k8s/production/\n          kubectl argo rollouts promote my-app\n\n  verify:\n    needs: deploy-production\n    runs-on: ubuntu-latest\n    steps:\n      - name: Deep health check\n        run: |\n          for i in {1..12}; do\n            STATUS=$(curl -sf https://app.example.com/health/ready | jq -r '.status')\n            [ \"$STATUS\" = \"ok\" ] && exit 0\n            sleep 10\n          done\n          exit 1\n```\n\nThe `environment: production` block enforces required-reviewer protection rules; the `verify` job hits the deep readiness endpoint and fails the pipeline if the service is not actually serving."
+- sequence: 9
+  fragment_type: example
+  content: "## Deployment Strategy Configurations\n\nConcrete configs for the three most common zero-downtime strategies.\n\n**Rolling (Kubernetes Deployment):** gradual pod replacement with surge/unavailable bounds.\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: my-app\nspec:\n  replicas: 10\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 2         # at most 12 pods during rollout\n      maxUnavailable: 1   # at least 9 pods always serving\n```\n\n**Blue-Green (service selector flip):** both versions run in parallel; cut over by repointing the Service selector. Rollback is the same patch in reverse.\n\n```bash\nkubectl apply -f k8s/green-deployment.yaml\nkubectl rollout status deployment/my-app-green\n\n# Cut traffic from blue to green\nkubectl patch service my-app -p '{\"spec\":{\"selector\":{\"version\":\"green\"}}}'\n\n# Instant rollback\nkubectl patch service my-app -p '{\"spec\":{\"selector\":{\"version\":\"blue\"}}}'\n```\n\n**Canary (Argo Rollouts setWeight ladder):** progressive traffic shift with metric analysis between steps.\n\n```yaml\napiVersion: argoproj.io/v1alpha1\nkind: Rollout\nmetadata:\n  name: my-app\nspec:\n  replicas: 10\n  strategy:\n    canary:\n      analysis:\n        templates:\n          - templateName: success-rate\n        startingStep: 2\n      steps:\n        - setWeight: 10\n        - pause: { duration: 5m }\n        - setWeight: 25\n        - pause: { duration: 5m }\n        - setWeight: 50\n        - pause: { duration: 10m }\n        - setWeight: 100\n```\n\nPause durations give the AnalysisTemplate time to evaluate real-traffic metrics before the next weight bump; a failed analysis aborts the rollout and reverts to the stable version automatically."
+- sequence: 10
+  fragment_type: example
+  content: '## Dockerfile Cache Ordering
+
+
+    The single most common cause of slow pipeline builds is a Dockerfile that invalidates the dependency-install layer on every source change. The fix is layer ordering: copy dependency manifests and install *before* copying source.
+
+
+    ```dockerfile
+
+    # Bad — every source edit re-runs `npm ci`
+
+    COPY . .
+
+    RUN npm ci
+
+    RUN npm run build
+
+    ```
+
+
+    ```dockerfile
+
+    # Good — dependency layer cached separately from source
+
+    COPY package*.json ./
+
+    RUN npm ci
+
+    COPY . .
+
+    RUN npm run build
+
+    ```
+
+
+    With the corrected ordering, the `npm ci` layer only re-runs when `package.json` or `package-lock.json` actually change. Source-only edits reuse the cached dependency layer, cutting CI build time from minutes to seconds. The same pattern applies to `pip install -r requirements.txt`, `go mod download`, `bundle install`, `cargo fetch`, and any other dependency-resolution step — install dependencies first, copy source second.'
+- sequence: 11
+  fragment_type: execution
+  content: "## Rollback Strategies\n\n**Automated in pipeline:**\n```yaml\n- name: Deploy new version\n  run: kubectl apply -f k8s/\n- name: Wait for rollout\n  run: kubectl rollout status deployment/my-app --timeout=5m\n- name: Post-deployment health check\n  run: ./scripts/verify-deployment.sh https://app.example.com\n- name: Rollback on failure\n  if: failure()\n  run: kubectl rollout undo deployment/my-app\n```\n\n**Manual:**\n```bash\nkubectl rollout history deployment/my-app\nkubectl rollout undo deployment/my-app --to-revision=3\nkubectl rollout status deployment/my-app\n```\n\n**Post-deploy metric verification:**\n```bash\nERROR_RATE=$(curl -sf \"$PROMETHEUS_URL/api/v1/query\" \\\n  --data-urlencode 'query=sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))' \\\n  | jq '.data.result[0].value[1]')\nif (( $(echo \"$ERROR_RATE > 0.01\" | bc -l) )); then exit 1; fi\n```"
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Database Migrations Must Be Backward-Compatible
+
+
+    **Rule:** never run destructive migrations (`DROP COLUMN`, `ALTER ... NOT NULL`, table renames, type narrowings) until the old code version is fully retired from every environment that could be rolled back to.
+
+
+    **Why:** a service rollback rolls back only the application, not the schema. If the new release ran a destructive migration and the rollback restores the old binary, the old code now talks to a schema it does not understand — typically producing 500s on every request that touches the affected table.
+
+
+    **Required pattern:** additive migrations only for at least one full release cycle. Add the new column nullable, dual-write or backfill, ship the code that reads the new column, wait until rollback to the prior version is no longer a possibility, *then* run the destructive cleanup migration in a later release. Keep versioned undo scripts (`V20240315__add_column.sql` and `V20240315__add_column.undo.sql`) for every forward migration so manual rollback is always possible.'
+- sequence: 13
+  fragment_type: verification
+  content: '## Common Pipeline Failures — Diagnostic Table
+
+
+    Use this table when a pipeline behaves unexpectedly. Match the observed symptom to the cause and apply the fix.
+
+
+    | Failure | Cause | Fix |
+
+    |---|---|---|
+
+    | Health check passes in pipeline, service unhealthy in prod | Shallow `/ping` instead of deep `/health/ready` | Verify actual dependencies in readiness check |
+
+    | Canary never promotes to 100% | `AnalysisTemplate` inconclusive forever (no Prometheus data) | Add `inconclusiveLimit: 2` so rollout fails fast |
+
+    | Staging deploy succeeds, production never starts | Missing reviewer assignment in environment protection | Configure `Required reviewers` in environment settings |
+
+    | Docker layer cache busted every run | `COPY . .` before dependency install | Copy dependency manifests first, then `COPY . .` |
+
+    | Service rollback leaves DB migrations applied | Migration not backward-compatible | Additive migrations only; versioned undo scripts; defer destructive migrations until old code retired |
+
+    | Error rate spikes post-deploy but no rollback | No automated metric gate after deploy | Add post-deploy Prometheus query + `exit 1` on threshold breach |
+
+    | Production gets a different image than staging | Rebuilt artifact between environments | Build once, promote by digest; never rebuild |
+
+
+    For each row: confirm the cause empirically (inspect the readiness endpoint, check `kubectl describe rollout`, view environment settings, read the Dockerfile, run `kubectl rollout history`) before applying the fix.'
+- sequence: 14
+  fragment_type: execution
+  content: '## Pipeline Best Practices — Operational Checklist
+
+
+    Apply these to every pipeline you design or review:
+
+
+    1. **Fail fast** — run quick checks (lint, unit tests) before slow ones (E2E, security scans) so common failures cost seconds, not minutes.
+
+    2. **Parallel execution** — run independent jobs concurrently; serialize only on real data dependencies.
+
+    3. **Cache aggressively** — dependency layers and build artifacts between runs; key caches on lockfile hashes.
+
+    4. **Artifact promotion** — build once, promote the same image digest through all environments; never rebuild between staging and prod.
+
+    5. **Environment parity** — keep staging infrastructure as close to production as possible (same Kubernetes version, same instance types, same managed-service tiers).
+
+    6. **Secrets management** — use a secret store (Vault, AWS Secrets Manager, GitHub encrypted secrets); never hardcode, never echo secrets to logs.
+
+    7. **Deployment windows** — prefer low-traffic windows; enforce change freeze periods via gate policies, not tribal knowledge.
+
+    8. **Idempotent deploys** — re-running a deploy must produce the same result; no implicit ordering or one-shot side effects.
+
+    9. **Rollback automation** — auto-trigger on health check or metric threshold failure; do not require human reaction time for known failure signals.
+
+    10. **Annotate deployments** — send markers to Datadog, Grafana, or your APM so incident responders can correlate spikes to specific deploys.
+
+
+    **DORA elite targets to aim for:** deployment frequency multiple/day, lead time < 1h, change failure rate < 5%, MTTR < 1h. Treat these as a scoreboard for the pipeline design, not a vanity metric — each one is improvable by a specific structural change in the pipeline.'

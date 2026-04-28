@@ -1,0 +1,31 @@
+name: nextjs
+version: 1.0.0
+description: Next.js — App Router, Cache Components (16+), upgrade workflows, Vercel
+  deployment.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- react
+skills:
+- skill_id: deploy-to-vercel
+  file: deploy-to-vercel.yaml
+  fragment_count: 14
+- skill_id: next-best-practices-overview
+  file: next-best-practices-overview.yaml
+  fragment_count: 3
+- skill_id: nextjs-app-router-patterns
+  file: nextjs-app-router-patterns.yaml
+  fragment_count: 14
+- skill_id: nextjs-cache-components-patterns
+  file: nextjs-cache-components-patterns.yaml
+  fragment_count: 3
+- skill_id: nextjs-upgrade-patterns
+  file: nextjs-upgrade-patterns.yaml
+  fragment_count: 3
+- skill_id: vercel-cli-with-tokens
+  file: vercel-cli-with-tokens.yaml
+  fragment_count: 16

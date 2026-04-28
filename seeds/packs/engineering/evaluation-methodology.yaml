@@ -1,0 +1,615 @@
+skill_type: domain
+skill_id: evaluation-methodology
+canonical_name: Evaluation Methodology
+category: quality
+skill_class: domain
+domain_tags:
+- evaluation
+- metrics
+- benchmarks
+- scoring
+- agent-skills
+- quality-assurance
+- rubric
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Evaluation Methodology\n\nThis document is the authoritative reference for how PluginEval measures plugin and skill quality.\nIt covers the three evaluation layers, all ten scoring dimensions, the composite formula, badge\nthresholds, anti-pattern flags, Elo ranking, and actionable improvement tips.\n\nRelated: [Full rubric anchors](references/rubrics.md)\n\n---\n\n## The Three Evaluation Layers\n\nPluginEval stacks three complementary layers. Each layer produces a score between 0.0 and 1.0 for\neach applicable dimension, and later layers override or blend with earlier ones according to\nper-dimension blend weights.\n\n### Layer 1 — Static Analysis\n\n**Speed:** < 2 seconds. No LLM calls. Deterministic.\n\nThe static analyzer (`layers/static.py`) runs six sub-checks directly against the parsed SKILL.md:\n\n| Sub-check | What it measures |\n|---|---|\n| `frontmatter_quality` | Name presence, description length, trigger-phrase quality |\n| `orchestration_wiring` | Output/input documentation, code block count, orchestrator anti-pattern |\n| `progressive_disclosure` | Line count vs. sweet-spot (200–600 lines), references/ and assets/ bonuses |\n| `structural_completeness` | Heading density, code blocks, examples section, troubleshooting section |\n| `token_efficiency` | MUST/NEVER/ALWAYS density, duplicate-line repetition ratio |\n| `ecosystem_coherence` | Cross-references to other skills/agents, \"related\"/\"see also\" mentions |\n\nThese six sub-checks feed directly into six of the ten final dimensions (via `STATIC_TO_DIMENSION`\nmapping). The remaining four dimensions — `output_quality`, `scope_calibration`,\n`robustness`, and part of `triggering_accuracy` — receive no static contribution and rely\nentirely on Layer 2 and/or Layer 3.\n\n**Anti-pattern penalty** is applied multiplicatively to the Layer 1 score:\n\n```\npenalty = max(0.5, 1.0 − 0.05 × anti_pattern_count)\n```\n\nEach additional detected anti-pattern reduces the score by 5%, flooring at 50%.\n\n### Layer 2 — LLM Judge\n\n**Speed:** 30–90 seconds. One or more LLM calls (Sonnet by default). Non-deterministic.\n\nThe `eval-judge` agent reads the SKILL.md and any `references/` files, then scores four\ndimensions using anchored rubrics (see [references/rubrics.md](references/rubrics.md)):\n\n1. **Triggering accuracy** — F1 score derived from 10 mental test prompts\n2. **Orchestration fitness** — Worker purity assessment (0–1 rubric)\n3. **Output quality** — Simulates 3 realistic tasks; assesses instruction quality\n4. **Scope calibration** — Judges depth and breadth relative to the skill's category\n\nThe judge returns a structured JSON object (no markdown fences) that the eval engine merges\ninto the composite. When `judges > 1`, scores are averaged and Cohen's kappa is reported as\nan inter-judge agreement metric.\n\n### Layer 3 — Monte Carlo Simulation\n\n**Speed:** 5–20 minutes. N=50 simulated Agent SDK invocations (default). Statistical.\n\nMonte Carlo runs `N` real prompts through the skill and records:\n\n- **Activation rate** — Fraction of prompts that triggered the skill\n- **Output consistency** — Coefficient of variation (CV) across quality scores\n- **Failure rate** — Error/crash fraction with Clopper-Pearson exact CIs\n- **Token efficiency** — Median token count, IQR, outlier count\n\nThe Layer 3 composite formula:\n\n```\nmc_score = 0.40 × activation_rate\n         + 0.30 × (1 − min(1.0, CV))\n         + 0.20 × (1 − failure_rate)\n         + 0.10 × efficiency_norm\n```\n\nwhere `efficiency_norm = max(0, 1 − median_tokens / 8000)`.\n\n---\n\n## Composite Scoring Formula\n\nThe final score is a weighted blend across all three layers for each dimension, then summed:\n\n```\ncomposite = Σ(dimension_weight × blended_dimension_score) × 100 × anti_pattern_penalty\n```\n\n### Dimension Weights\n\n| Dimension | Weight | Why it matters |\n|---|---|---|\n| `triggering_accuracy` | 0.25 | A skill that never fires — or fires incorrectly — has no value |\n| `orchestration_fitness` | 0.20 | Skills must be pure workers; supervisor logic belongs in agents |\n| `output_quality` | 0.15 | Correct, complete output is the primary deliverable |\n| `scope_calibration` | 0.12 | Neither a stub nor a bloated monster |\n| `progressive_disclosure` | 0.10 | SKILL.md is lean; detail lives in references/ |\n| `token_efficiency` | 0.06 | Minimal context waste per invocation |\n| `robustness` | 0.05 | Handles edge cases without crashing |\n| `structural_completeness` | 0.03 | Correct sections in the right order |\n| `code_template_quality` | 0.02 | Working, copy-paste-ready examples |\n| `ecosystem_coherence` | 0.02 | Cross-references; no duplication with siblings |\n\n### Layer Blend Weights\n\nEach dimension draws from different layers at different ratios. With all three layers active\n(`--depth deep` or `certify`):\n\n| Dimension | Static | Judge | Monte Carlo |\n|---|---|---|---|\n| `triggering_accuracy` | 0.15 | 0.25 | 0.60 |\n| `orchestration_fitness` | 0.10 | 0.70 | 0.20 |\n| `output_quality` | 0.00 | 0.40 | 0.60 |\n| `scope_calibration` | 0.30 | 0.55 | 0.15 |\n| `progressive_disclosure` | 0.80 | 0.20 | 0.00 |\n| `token_efficiency` | 0.40 | 0.10 | 0.50 |\n| `robustness` | 0.00 | 0.20 | 0.80 |\n| `structural_completeness` | 0.90 | 0.10 | 0.00 |\n| `code_template_quality` | 0.30 | 0.70 | 0.00 |\n| `ecosystem_coherence` | 0.85 | 0.15 | 0.00 |\n\nAt `--depth standard` (static + judge only), blends are renormalized to drop the Monte Carlo\ncolumn. At `--depth quick` (static only), all weight falls on Layer 1.\n\n### Blended Score Calculation\n\nFor a given depth, the blended score for dimension `d` is:\n\n```\nblended[d] = Σ( layer_weight[d][layer] × layer_score[d][layer] )\n             ─────────────────────────────────────────────────────\n             Σ( layer_weight[d][layer] for available layers )\n```\n\nThis normalization ensures that skipping Monte Carlo at standard depth doesn't artificially\ndeflate scores.\n\n---\n\n## Interpreting Dimension Scores\n\nEach dimension score is a float in `[0.0, 1.0]`. The CLI converts it to a letter grade:\n\n| Grade | Score range | Meaning |\n|---|---|---|\n| A | 0.90 – 1.00 | Excellent — no meaningful improvement needed |\n| B | 0.80 – 0.89 | Good — minor gaps only |\n| C | 0.70 – 0.79 | Adequate — one or two clear improvement areas |\n| D | 0.60 – 0.69 | Marginal — needs targeted work |\n| F | < 0.60 | Failing — significant remediation required |\n\nWhen reading a report, focus first on the lowest-graded dimension that has the highest weight.\nA D in `triggering_accuracy` (weight 0.25) costs far more than a D in `ecosystem_coherence`\n(weight 0.02).\n\n**Confidence intervals** appear in the report when Layer 2 or Layer 3 ran. Narrow CIs (± < 5\npoints) indicate stable scores. Wide CIs suggest inconsistency — often caused by an ambiguous\ndescription or instructions that work for some prompt styles but not others.\n\n---\n\n## Quality Badges\n\nBadges require both a composite score threshold AND an Elo threshold (when Elo is available).\nThe `Badge.from_scores()` logic checks composite first, then Elo if provided:\n\n| Badge | Composite | Elo | Meaning |\n|---|---|---|---|\n| Platinum ★★★★★ | ≥ 90 | ≥ 1600 | Reference quality — suitable for gold corpus |\n| Gold ★★★★ | ≥ 80 | ≥ 1500 | Production ready |\n| Silver ★★★ | ≥ 70 | ≥ 1400 | Functional, has improvement opportunities |\n| Bronze ★★ | ≥ 60 | ≥ 1300 | Minimum viable — not yet recommended for users |\n| — | < 60 | any | Does not meet minimum bar |\n\nThe Elo threshold is skipped when Elo has not been computed (i.e., at quick or standard depth\nwithout `certify`). A skill can earn a badge on composite score alone in those cases.\n\n---\n\n## Anti-Pattern Flags\n\nThe static analyzer detects five anti-patterns. Each carries a severity multiplier that feeds\ninto the penalty formula.\n\n### OVER_CONSTRAINED\n\n**Trigger:** More than 15 occurrences of MUST, ALWAYS, or NEVER in the SKILL.md.\n\n**Problem:** Overly prescriptive instructions reduce model flexibility, increase token overhead,\nand signal that the author is trying to micromanage every output rather than providing\nprincipled guidance.\n\n**Fix:** Audit every MUST/ALWAYS/NEVER. Replace directive language with explanatory framing\nwhere possible. Reserve hard constraints for genuine safety or correctness requirements. Target\nfewer than 10 such directives per 100 lines.\n\n### EMPTY_DESCRIPTION\n\n**Trigger:** The frontmatter `description` field is fewer than 20 characters after stripping.\n\n**Problem:** Without a meaningful description, the Claude Code plugin system cannot determine\nwhen to invoke the skill. The skill becomes invisible to autonomous invocation.\n\n**Fix:** Write a description of at least 60–120 characters that includes:\n- A \"Use this skill when...\" or \"Use when...\" trigger clause\n- Two or more concrete contexts separated by commas or \"or\"\n\n### MISSING_TRIGGER\n\n**Trigger:** The description does not contain \"use when\", \"use this skill when\",\n\"use proactively\", or \"trigger when\" (case-insensitive).\n\n**Problem:** Even a long description is useless for autonomous invocation if it doesn't\ninclude a clear trigger signal. The system's routing model needs an explicit cue.\n\n**Fix:** Prepend \"Use this skill when...\" to the description, followed by specific scenarios.\nExample: \"Use this skill when measuring plugin quality, interpreting score reports, or\nexplaining badge thresholds to a team.\"\n\n### BLOATED_SKILL\n\n**Trigger:** SKILL.md exceeds 800 lines AND the skill has no `references/` directory.\n\n**Problem:** A monolithic SKILL.md forces the entire document into context on every invocation,\nwasting tokens on content only needed in edge cases.\n\n**Fix:** Create a `references/` directory and move supporting material there:\n- Detailed rubrics → `references/rubrics.md`\n- Extended examples → `references/examples.md`\n- Configuration reference → `references/config.md`\n\
+  \nThe SKILL.md should link to these files with `[text](references/filename.md)` so the model\ncan fetch them on demand.\n\n### ORPHAN_REFERENCE\n\n**Trigger:** SKILL.md contains a markdown link `[text](references/filename)` where\n`filename` does not exist in the `references/` directory.\n\n**Problem:** Dead links waste tokens on context that will never resolve and confuse the model.\n\n**Fix:** Either create the missing reference file or remove the dead link.\n\n### DEAD_CROSS_REF\n\n**Trigger:** SKILL.md references another skill or agent by relative path and that path\ncannot be resolved from the skills/ directory.\n\n**Problem:** Broken ecosystem links undermine the plugin's coherence score and may cause\nthe model to attempt navigation to non-existent files.\n\n**Fix:** Verify the referenced skill exists. Update the path or remove the reference.\n\n---\n\n## Elo Ranking\n\nPluginEval uses an Elo/Bradley-Terry rating system to rank a skill against the gold corpus.\n\n**Starting rating:** 1500 (the corpus median by convention).\n\n**K-factor:** 32 (standard for moderate-stakes ratings).\n\n**Expected score formula** (standard Elo):\n\n```\nE(A vs B) = 1 / (1 + 10^((B_rating − A_rating) / 400))\n```\n\n**Rating update after each matchup:**\n\n```\nnew_rating = old_rating + 32 × (actual_score − expected_score)\n```\n\nwhere `actual_score` is 1.0 for a win, 0.5 for a draw, 0.0 for a loss.\n\n**Confidence intervals** are computed via 500-sample bootstrap, reported as 95% CI.\n**Corpus percentile** reflects pairwise win rate against the gold corpus.\n**Position bias check:** Pairs are evaluated in both orders; disagreements are flagged.\n\nThe `plugin-eval init` command builds the corpus index from a plugins directory:\n\n```bash\nplugin-eval init ./plugins --corpus-dir ~/.plugineval/corpus\n```\n\n---\n\n## CLI Reference\n\n### Score a skill (quick static analysis only)\n\n```bash\nplugin-eval score ./path/to/skill --depth quick\n```\n\nReturns Layer 1 results in < 2 seconds. Useful for fast feedback during authoring.\n\n### Score with LLM judge (default)\n\n```bash\nplugin-eval score ./path/to/skill\n```\n\nRuns static + LLM judge (standard depth). Takes 30–90 seconds.\n\n### Score with full output as JSON\n\n```bash\nplugin-eval score ./path/to/skill --output json\n```\n\nEmits structured JSON including `composite.score`, `composite.dimensions`, and\n`layers[0].anti_patterns`. Suitable for CI integration:\n\n```bash\nplugin-eval score ./path/to/skill --depth quick --output json --threshold 70\n# exits with code 1 if score < 70\n```\n\n### Full certification (all three layers + Elo)\n\n```bash\nplugin-eval certify ./path/to/skill\n```\n\nRuns static + LLM judge + Monte Carlo (50 simulations) + Elo ranking. Takes 15–20 minutes.\nAssigns a quality badge. Use before publishing a skill to the marketplace.\n\n### Head-to-head comparison\n\n```bash\nplugin-eval compare ./skill-a ./skill-b\n```\n\nEvaluates both skills at quick depth and prints a dimension-by-dimension comparison table.\nUseful for deciding between two implementations or measuring improvement before/after a\nrewrite.\n\n### Initialize corpus for Elo\n\n```bash\nplugin-eval init ./plugins\n```\n\nBuilds the local corpus index at `~/.plugineval/corpus`. Required before Elo ranking works.\n\n### Scripting the Composite Formula\n\nReproduce the composite score offline (pre-commit hook, CI gate):\n\n```python\ndef composite_score(dimension_scores: dict, anti_pattern_count: int = 0) -> float:\n    \"\"\"Replicate the PluginEval composite formula.\"\"\"\n    WEIGHTS = {\n        \"triggering_accuracy\":    0.25,\n        \"orchestration_fitness\":  0.20,\n        \"output_quality\":         0.15,\n        \"scope_calibration\":      0.12,\n        \"progressive_disclosure\": 0.10,\n        \"token_efficiency\":       0.06,\n        \"robustness\":             0.05,\n        \"structural_completeness\":0.03,\n        \"code_template_quality\":  0.02,\n        \"ecosystem_coherence\":    0.02,\n    }\n    raw = sum(WEIGHTS[d] * s for d, s in dimension_scores.items())\n    penalty = max(0.5, 1.0 - 0.05 * anti_pattern_count)\n    return round(raw * 100 * penalty, 2)\n\n# Example: a skill with a weak triggering score\nscores = {\n    \"triggering_accuracy\":    0.65,  # D — needs description work\n    \"orchestration_fitness\":  0.85,\n    \"output_quality\":         0.80,\n    # … fill in remaining 7 dimensions …\n}\n# composite_score(scores, anti_pattern_count=1) → ~76.5\n```\n\n### JSON Output Format\n\nTop-level shape of `--output json`:\n\n```json\n{\n  \"composite\": { \"score\": 76.5, \"badge\": \"Silver\", \"elo\": null },\n  \"dimensions\": {\n    \"triggering_accuracy\": { \"score\": 0.65, \"grade\": \"D\", \"ci_low\": 0.60, \"ci_high\": 0.70 },\n    \"orchestration_fitness\": { \"score\": 0.85, \"grade\": \"B\", \"ci_low\": 0.80, \"ci_high\": 0.90 }\n  },\n  \"layers\": [\n    { \"name\": \"static\", \"duration_ms\": 1243, \"anti_patterns\": [\"OVER_CONSTRAINED\"] },\n    { \"name\": \"judge\", \"duration_ms\": 48200, \"judges\": 1, \"kappa\": null }\n  ]\n}\n```\n\nParse `composite.score` in CI to gate deployments:\n\n```bash\nscore=$(plugin-eval score ./my-skill --output json | python3 -c \"import sys,json; print(json.load(sys.stdin)['composite']['score'])\")\nif (( $(echo \"$score < 70\" | bc -l) )); then\n  echo \"Quality gate failed: score $score < 70\"\n  exit 1\nfi\n```\n\n---\n\n## Tips for Improving a Skill's Score\n\nWork through dimensions in weight order. The largest gains come from fixing the top-weighted\ndimensions first.\n\n### Which Dimension to Improve First\n\nUse this table when a score report shows multiple D/F grades and you need to prioritize effort.\n\n| Dimension | Weight | Typical fix effort | Score impact / hour | Fix first if… |\n|---|---|---|---|---|\n| `triggering_accuracy` | 0.25 | Low — description rewrite | High | Score < 70 overall |\n| `orchestration_fitness` | 0.20 | Medium — restructure sections | High | Skill mixes worker + supervisor logic |\n| `output_quality` | 0.15 | Medium — add examples | Medium | Judge score < 0.70 |\n| `scope_calibration` | 0.12 | Low — move content to references/ | Medium | File is < 100 or > 800 lines |\n| `progressive_disclosure` | 0.10 | Low — create references/ dir | Medium | No references/ directory exists |\n| `token_efficiency` | 0.06 | Low — reduce MUST/ALWAYS/NEVER | Low | Anti-pattern count ≥ 3 |\n| `robustness` | 0.05 | Low — add Troubleshooting section | Low | No edge-case handling documented |\n| `structural_completeness` | 0.03 | Very low — add headings/code blocks | Low | Fewer than 4 H2 headings |\n| `code_template_quality` | 0.02 | Very low — add language tags | Very low | Code blocks missing language tags |\n| `ecosystem_coherence` | 0.02 | Very low — add Related section | Very low | No cross-references at all |\n\n**Rule of thumb:** Fix `triggering_accuracy` before anything else — at weight 0.25 it delivers\nmore composite-score gain per hour than all low-weight dimensions combined.\n\n### Triggering Accuracy (weight 0.25)\n\n- Include \"Use this skill when...\" followed by 3–4 comma-separated specific contexts.\n- Add \"proactively\" if the skill should auto-activate without an explicit user request.\n- Mental test: write 5 prompts that should trigger it and 5 that should not — does\n  your description discriminate? If not, add or tighten the context phrases.\n\n### Orchestration Fitness (weight 0.20)\n\n- Document what the skill *receives* and what it *returns* — not what it orchestrates.\n- Avoid \"orchestrate\", \"coordinate\", \"dispatch\", \"manage workflow\" in SKILL.md.\n- Include an \"Output format\" section and 2+ code blocks showing concrete worker behavior.\n\n### Output Quality (weight 0.15)\n\n- Give specific, actionable instructions — not just goals.\n- Cover at least one edge case explicitly (empty input, malformed data, etc.).\n- Include an examples section showing representative inputs and expected outputs.\n- The more concrete the instructions, the higher the judge will score this dimension.\n\n### Scope Calibration (weight 0.12)\n\n- Target 200–600 lines. Below 100 is a stub; above 800 without `references/` is bloat.\n- Move background reading, extended examples, and reference tables to `references/`.\n- Very narrow skills should be merged with a sibling; very broad ones should be split.\n\n### Progressive Disclosure (weight 0.10)\n\n- Add a `references/` directory (earns 0.15–0.25 bonus) and keep SKILL.md focused on\n  the execution path. An `assets/` directory adds a further bonus.\n\n### Token Efficiency (weight 0.06)\n\n- Audit MUST/ALWAYS/NEVER count. Target < 1 per 10 lines.\n- Consolidate near-duplicate bullet points and repeated-structure tables.\n\n### Robustness (weight 0.05)\n\n- Add a \"Troubleshooting\" or \"Edge Cases\" section covering at least 3 failure modes.\n- State what the skill returns when it cannot complete its task.\n\n### Structural Completeness (weight 0.03)\n\n- Ensure at least 4 H2/H3 headings, 3 code blocks, an Examples section, and a Troubleshooting section.\n\n### Code Template Quality (weight 0.02)\n\n- All code blocks must be syntactically valid and copy-paste ready with language tags.\n\n### Ecosystem Coherence (weight 0.02)\n\n- Add a \"## Related\" section listing sibling skills or agents with relative paths.\n- Avoid duplicating content that already exists in another skill — link to it instead.\n\n---\n\n## Troubleshooting\n\n### \"Score is much lower than expected after adding content\"\n\nThe anti-pattern penalty compounds. Run with `--output json` and inspect\n`layers[0].anti_patterns`. If you have 5+ anti-patterns, the multiplier can reduce your\nscore to 75% of its raw value regardless of how good the content is. Fix the flags first.\n\n### \"triggering_accuracy is low despite a detailed description\"\n\nThe `_description_pushiness` scorer looks for specific syntactic patterns, not just length.\nVerify your\
+  \ description contains the phrase \"Use this skill when\" or \"Use when\" (exact\nphrasing matters — it's a regex match). Also check that you have multiple use cases separated\nby commas or \"or\" to earn the specificity bonus.\n\n### \"LLM judge scores vary significantly between runs\"\n\nThis is expected for ambiguous skills. The judge generates 10 mental test prompts\nnon-deterministically. Improve score stability by tightening the description and adding\nconcrete examples. When `judges > 1`, averaged scores will be more stable. Use\n`--depth deep` with `certify` which runs Monte Carlo to get statistically-bounded scores.\n\n### \"progressive_disclosure score is low even though the file is the right length\"\n\nCheck whether the file is in the 200–600 line sweet spot. Files shorter than 100 lines\nscore only 0.20 on this sub-check. Also confirm that `references/` files are not empty —\nthe scorer checks for non-empty reference files, not just the directory.\n\n### \"compare shows my rewrite scores lower than the original\"\n\nQuick depth (`--depth quick`) only runs static analysis. If the rewrite moved content to\n`references/` and shortened SKILL.md significantly, static scores for structural completeness\nmay drop even though overall quality improved. Run `--depth standard` for a fairer comparison\nthat includes the LLM judge's assessment of content quality.\n\n---\n\n## References\n\n- [Full Rubric Anchors — all 4 judge dimensions](references/rubrics.md)\n\n### Related Agents\n\n- **eval-judge** (`../../agents/eval-judge.md`) — the LLM judge that scores Layer 2 dimensions\n  (`triggering_accuracy`, `orchestration_fitness`, `output_quality`, `scope_calibration`).\n  Invoke directly when you need to re-run only the judge layer or inspect its reasoning.\n- **eval-orchestrator** (`../../agents/eval-orchestrator.md`) — the top-level orchestrator that\n  sequences all three layers, merges results, assigns badges, and writes the final report.\n  Invoke when running a full certification pass or comparing two skills head-to-head."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Evaluation Methodology
+
+
+    This document is the authoritative reference for how PluginEval measures plugin and skill quality.
+
+    It covers the three evaluation layers, all ten scoring dimensions, the composite formula, badge
+
+    thresholds, anti-pattern flags, Elo ranking, and actionable improvement tips.
+
+
+    Related: [Full rubric anchors](references/rubrics.md)
+
+
+    ---'
+- sequence: 2
+  fragment_type: execution
+  content: '## The Three Evaluation Layers
+
+
+    PluginEval stacks three complementary layers. Each layer produces a score between 0.0 and 1.0 for
+
+    each applicable dimension, and later layers override or blend with earlier ones according to
+
+    per-dimension blend weights.
+
+
+    ### Layer 1 — Static Analysis
+
+
+    **Speed:** < 2 seconds. No LLM calls. Deterministic.
+
+
+    The static analyzer (`layers/static.py`) runs six sub-checks directly against the parsed SKILL.md:
+
+
+    | Sub-check | What it measures |
+
+    |---|---|
+
+    | `frontmatter_quality` | Name presence, description length, trigger-phrase quality |
+
+    | `orchestration_wiring` | Output/input documentation, code block count, orchestrator anti-pattern |
+
+    | `progressive_disclosure` | Line count vs. sweet-spot (200–600 lines), references/ and assets/ bonuses |
+
+    | `structural_completeness` | Heading density, code blocks, examples section, troubleshooting section |
+
+    | `token_efficiency` | MUST/NEVER/ALWAYS density, duplicate-line repetition ratio |
+
+    | `ecosystem_coherence` | Cross-references to other skills/agents, "related"/"see also" mentions |
+
+
+    These six sub-checks feed directly into six of the ten final dimensions (via `STATIC_TO_DIMENSION`
+
+    mapping). The remaining four dimensions — `output_quality`, `scope_calibration`,
+
+    `robustness`, and part of `triggering_accuracy` — receive no static contribution and rely
+
+    entirely on Layer 2 and/or Layer 3.
+
+
+    **Anti-pattern penalty** is applied multiplicatively to the Layer 1 score:
+
+
+    ```
+
+    penalty = max(0.5, 1.0 − 0.05 × anti_pattern_count)
+
+    ```
+
+
+    Each additional detected anti-pattern reduces the score by 5%, flooring at 50%.'
+- sequence: 3
+  fragment_type: execution
+  content: '### Layer 2 — LLM Judge
+
+
+    **Speed:** 30–90 seconds. One or more LLM calls (Sonnet by default). Non-deterministic.
+
+
+    The `eval-judge` agent reads the SKILL.md and any `references/` files, then scores four
+
+    dimensions using anchored rubrics (see [references/rubrics.md](references/rubrics.md)):
+
+
+    1. **Triggering accuracy** — F1 score derived from 10 mental test prompts
+
+    2. **Orchestration fitness** — Worker purity assessment (0–1 rubric)
+
+    3. **Output quality** — Simulates 3 realistic tasks; assesses instruction quality
+
+    4. **Scope calibration** — Judges depth and breadth relative to the skill''s category
+
+
+    The judge returns a structured JSON object (no markdown fences) that the eval engine merges
+
+    into the composite. When `judges > 1`, scores are averaged and Cohen''s kappa is reported as
+
+    an inter-judge agreement metric.'
+- sequence: 4
+  fragment_type: execution
+  content: "### Layer 3 — Monte Carlo Simulation\n\n**Speed:** 5–20 minutes. N=50 simulated Agent SDK invocations (default). Statistical.\n\nMonte Carlo runs `N` real prompts through the skill and records:\n\n- **Activation rate** — Fraction of prompts that triggered the skill\n- **Output consistency** — Coefficient of variation (CV) across quality scores\n- **Failure rate** — Error/crash fraction with Clopper-Pearson exact CIs\n- **Token efficiency** — Median token count, IQR, outlier count\n\nThe Layer 3 composite formula:\n\n```\nmc_score = 0.40 × activation_rate\n         + 0.30 × (1 − min(1.0, CV))\n         + 0.20 × (1 − failure_rate)\n         + 0.10 × efficiency_norm\n```\n\nwhere `efficiency_norm = max(0, 1 − median_tokens / 8000)`.\n\n---"
+- sequence: 5
+  fragment_type: execution
+  content: "## Composite Scoring Formula\n\nThe final score is a weighted blend across all three layers for each dimension, then summed:\n\n```\ncomposite = Σ(dimension_weight × blended_dimension_score) × 100 × anti_pattern_penalty\n```\n\n### Dimension Weights\n\n| Dimension | Weight | Why it matters |\n|---|---|---|\n| `triggering_accuracy` | 0.25 | A skill that never fires — or fires incorrectly — has no value |\n| `orchestration_fitness` | 0.20 | Skills must be pure workers; supervisor logic belongs in agents |\n| `output_quality` | 0.15 | Correct, complete output is the primary deliverable |\n| `scope_calibration` | 0.12 | Neither a stub nor a bloated monster |\n| `progressive_disclosure` | 0.10 | SKILL.md is lean; detail lives in references/ |\n| `token_efficiency` | 0.06 | Minimal context waste per invocation |\n| `robustness` | 0.05 | Handles edge cases without crashing |\n| `structural_completeness` | 0.03 | Correct sections in the right order |\n| `code_template_quality` | 0.02 | Working, copy-paste-ready examples |\n| `ecosystem_coherence` | 0.02 | Cross-references; no duplication with siblings |\n\n### Layer Blend Weights\n\nEach dimension draws from different layers at different ratios. With all three layers active\n(`--depth deep` or `certify`):\n\n| Dimension | Static | Judge | Monte Carlo |\n|---|---|---|---|\n| `triggering_accuracy` | 0.15 | 0.25 | 0.60 |\n| `orchestration_fitness` | 0.10 | 0.70 | 0.20 |\n| `output_quality` | 0.00 | 0.40 | 0.60 |\n| `scope_calibration` | 0.30 | 0.55 | 0.15 |\n| `progressive_disclosure` | 0.80 | 0.20 | 0.00 |\n| `token_efficiency` | 0.40 | 0.10 | 0.50 |\n| `robustness` | 0.00 | 0.20 | 0.80 |\n| `structural_completeness` | 0.90 | 0.10 | 0.00 |\n| `code_template_quality` | 0.30 | 0.70 | 0.00 |\n| `ecosystem_coherence` | 0.85 | 0.15 | 0.00 |\n\nAt `--depth standard` (static + judge only), blends are renormalized to drop the Monte Carlo\ncolumn. At `--depth quick` (static only), all weight falls on Layer 1.\n\n### Blended Score Calculation\n\nFor a given depth, the blended score for dimension `d` is:\n\n```\nblended[d] = Σ( layer_weight[d][layer] × layer_score[d][layer] )\n             ─────────────────────────────────────────────────────\n             Σ( layer_weight[d][layer] for available layers )\n```\n\nThis normalization ensures that skipping Monte Carlo at standard depth doesn't artificially\ndeflate scores.\n\n---"
+- sequence: 6
+  fragment_type: execution
+  content: '## Interpreting Dimension Scores
+
+
+    Each dimension score is a float in `[0.0, 1.0]`. The CLI converts it to a letter grade:
+
+
+    | Grade | Score range | Meaning |
+
+    |---|---|---|
+
+    | A | 0.90 – 1.00 | Excellent — no meaningful improvement needed |
+
+    | B | 0.80 – 0.89 | Good — minor gaps only |
+
+    | C | 0.70 – 0.79 | Adequate — one or two clear improvement areas |
+
+    | D | 0.60 – 0.69 | Marginal — needs targeted work |
+
+    | F | < 0.60 | Failing — significant remediation required |
+
+
+    When reading a report, focus first on the lowest-graded dimension that has the highest weight.
+
+    A D in `triggering_accuracy` (weight 0.25) costs far more than a D in `ecosystem_coherence`
+
+    (weight 0.02).
+
+
+    **Confidence intervals** appear in the report when Layer 2 or Layer 3 ran. Narrow CIs (± < 5
+
+    points) indicate stable scores. Wide CIs suggest inconsistency — often caused by an ambiguous
+
+    description or instructions that work for some prompt styles but not others.
+
+
+    ---'
+- sequence: 7
+  fragment_type: execution
+  content: '## Quality Badges
+
+
+    Badges require both a composite score threshold AND an Elo threshold (when Elo is available).
+
+    The `Badge.from_scores()` logic checks composite first, then Elo if provided:
+
+
+    | Badge | Composite | Elo | Meaning |
+
+    |---|---|---|---|
+
+    | Platinum ★★★★★ | ≥ 90 | ≥ 1600 | Reference quality — suitable for gold corpus |
+
+    | Gold ★★★★ | ≥ 80 | ≥ 1500 | Production ready |
+
+    | Silver ★★★ | ≥ 70 | ≥ 1400 | Functional, has improvement opportunities |
+
+    | Bronze ★★ | ≥ 60 | ≥ 1300 | Minimum viable — not yet recommended for users |
+
+    | — | < 60 | any | Does not meet minimum bar |
+
+
+    The Elo threshold is skipped when Elo has not been computed (i.e., at quick or standard depth
+
+    without `certify`). A skill can earn a badge on composite score alone in those cases.
+
+
+    ---'
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Anti-Pattern Flags
+
+
+    The static analyzer detects five anti-patterns. Each carries a severity multiplier that feeds
+
+    into the penalty formula.
+
+
+    ### OVER_CONSTRAINED
+
+
+    **Trigger:** More than 15 occurrences of MUST, ALWAYS, or NEVER in the SKILL.md.
+
+
+    **Problem:** Overly prescriptive instructions reduce model flexibility, increase token overhead,
+
+    and signal that the author is trying to micromanage every output rather than providing
+
+    principled guidance.
+
+
+    **Fix:** Audit every MUST/ALWAYS/NEVER. Replace directive language with explanatory framing
+
+    where possible. Reserve hard constraints for genuine safety or correctness requirements. Target
+
+    fewer than 10 such directives per 100 lines.'
+- sequence: 9
+  fragment_type: guardrail
+  content: '### EMPTY_DESCRIPTION
+
+
+    **Trigger:** The frontmatter `description` field is fewer than 20 characters after stripping.
+
+
+    **Problem:** Without a meaningful description, the Claude Code plugin system cannot determine
+
+    when to invoke the skill. The skill becomes invisible to autonomous invocation.
+
+
+    **Fix:** Write a description of at least 60–120 characters that includes:
+
+    - A "Use this skill when..." or "Use when..." trigger clause
+
+    - Two or more concrete contexts separated by commas or "or"'
+- sequence: 10
+  fragment_type: guardrail
+  content: '### MISSING_TRIGGER
+
+
+    **Trigger:** The description does not contain "use when", "use this skill when",
+
+    "use proactively", or "trigger when" (case-insensitive).
+
+
+    **Problem:** Even a long description is useless for autonomous invocation if it doesn''t
+
+    include a clear trigger signal. The system''s routing model needs an explicit cue.
+
+
+    **Fix:** Prepend "Use this skill when..." to the description, followed by specific scenarios.
+
+    Example: "Use this skill when measuring plugin quality, interpreting score reports, or
+
+    explaining badge thresholds to a team."'
+- sequence: 11
+  fragment_type: guardrail
+  content: '### BLOATED_SKILL
+
+
+    **Trigger:** SKILL.md exceeds 800 lines AND the skill has no `references/` directory.
+
+
+    **Problem:** A monolithic SKILL.md forces the entire document into context on every invocation,
+
+    wasting tokens on content only needed in edge cases.
+
+
+    **Fix:** Create a `references/` directory and move supporting material there:
+
+    - Detailed rubrics → `references/rubrics.md`
+
+    - Extended examples → `references/examples.md`
+
+    - Configuration reference → `references/config.md`
+
+
+    The SKILL.md should link to these files with `[text](references/filename.md)` so the model
+
+    can fetch them on demand.'
+- sequence: 12
+  fragment_type: guardrail
+  content: '### ORPHAN_REFERENCE
+
+
+    **Trigger:** SKILL.md contains a markdown link `[text](references/filename)` where
+
+    `filename` does not exist in the `references/` directory.
+
+
+    **Problem:** Dead links waste tokens on context that will never resolve and confuse the model.
+
+
+    **Fix:** Either create the missing reference file or remove the dead link.'
+- sequence: 13
+  fragment_type: guardrail
+  content: '### DEAD_CROSS_REF
+
+
+    **Trigger:** SKILL.md references another skill or agent by relative path and that path
+
+    cannot be resolved from the skills/ directory.
+
+
+    **Problem:** Broken ecosystem links undermine the plugin''s coherence score and may cause
+
+    the model to attempt navigation to non-existent files.
+
+
+    **Fix:** Verify the referenced skill exists. Update the path or remove the reference.
+
+
+    ---'
+- sequence: 14
+  fragment_type: execution
+  content: '## Elo Ranking
+
+
+    PluginEval uses an Elo/Bradley-Terry rating system to rank a skill against the gold corpus.
+
+
+    **Starting rating:** 1500 (the corpus median by convention).
+
+
+    **K-factor:** 32 (standard for moderate-stakes ratings).
+
+
+    **Expected score formula** (standard Elo):
+
+
+    ```
+
+    E(A vs B) = 1 / (1 + 10^((B_rating − A_rating) / 400))
+
+    ```
+
+
+    **Rating update after each matchup:**
+
+
+    ```
+
+    new_rating = old_rating + 32 × (actual_score − expected_score)
+
+    ```
+
+
+    where `actual_score` is 1.0 for a win, 0.5 for a draw, 0.0 for a loss.
+
+
+    **Confidence intervals** are computed via 500-sample bootstrap, reported as 95% CI.
+
+    **Corpus percentile** reflects pairwise win rate against the gold corpus.
+
+    **Position bias check:** Pairs are evaluated in both orders; disagreements are flagged.
+
+
+    The `plugin-eval init` command builds the corpus index from a plugins directory:
+
+
+    ```bash
+
+    plugin-eval init ./plugins --corpus-dir ~/.plugineval/corpus
+
+    ```
+
+
+    ---'
+- sequence: 15
+  fragment_type: rationale
+  content: '### Score a skill (quick static analysis only)
+
+
+    ```bash
+
+    plugin-eval score ./path/to/skill --depth quick
+
+    ```
+
+
+    Returns Layer 1 results in < 2 seconds. Useful for fast feedback during authoring.
+
+
+    ### Score with LLM judge (default)
+
+
+    ```bash
+
+    plugin-eval score ./path/to/skill
+
+    ```
+
+
+    Runs static + LLM judge (standard depth). Takes 30–90 seconds.'
+- sequence: 16
+  fragment_type: rationale
+  content: '### Score with full output as JSON
+
+
+    ```bash
+
+    plugin-eval score ./path/to/skill --output json
+
+    ```
+
+
+    Emits structured JSON including `composite.score`, `composite.dimensions`, and
+
+    `layers[0].anti_patterns`. Suitable for CI integration:
+
+
+    ```bash
+
+    plugin-eval score ./path/to/skill --depth quick --output json --threshold 70
+
+    # exits with code 1 if score < 70
+
+    ```'
+- sequence: 17
+  fragment_type: rationale
+  content: '### Full certification (all three layers + Elo)
+
+
+    ```bash
+
+    plugin-eval certify ./path/to/skill
+
+    ```
+
+
+    Runs static + LLM judge + Monte Carlo (50 simulations) + Elo ranking. Takes 15–20 minutes.
+
+    Assigns a quality badge. Use before publishing a skill to the marketplace.
+
+
+    ### Head-to-head comparison
+
+
+    ```bash
+
+    plugin-eval compare ./skill-a ./skill-b
+
+    ```
+
+
+    Evaluates both skills at quick depth and prints a dimension-by-dimension comparison table.
+
+    Useful for deciding between two implementations or measuring improvement before/after a
+
+    rewrite.
+
+
+    ### Initialize corpus for Elo
+
+
+    ```bash
+
+    plugin-eval init ./plugins
+
+    ```
+
+
+    Builds the local corpus index at `~/.plugineval/corpus`. Required before Elo ranking works.'
+- sequence: 18
+  fragment_type: rationale
+  content: "### Scripting the Composite Formula\n\nReproduce the composite score offline (pre-commit hook, CI gate):\n\n```python\ndef composite_score(dimension_scores: dict, anti_pattern_count: int = 0) -> float:\n    \"\"\"Replicate the PluginEval composite formula.\"\"\"\n    WEIGHTS = {\n        \"triggering_accuracy\":    0.25,\n        \"orchestration_fitness\":  0.20,\n        \"output_quality\":         0.15,\n        \"scope_calibration\":      0.12,\n        \"progressive_disclosure\": 0.10,\n        \"token_efficiency\":       0.06,\n        \"robustness\":             0.05,\n        \"structural_completeness\":0.03,\n        \"code_template_quality\":  0.02,\n        \"ecosystem_coherence\":    0.02,\n    }\n    raw = sum(WEIGHTS[d] * s for d, s in dimension_scores.items())\n    penalty = max(0.5, 1.0 - 0.05 * anti_pattern_count)\n    return round(raw * 100 * penalty, 2)\n\n# Example: a skill with a weak triggering score\nscores = {\n    \"triggering_accuracy\":    0.65,  # D — needs description work\n    \"orchestration_fitness\":  0.85,\n    \"output_quality\":         0.80,\n    # … fill in remaining 7 dimensions …\n}\n# composite_score(scores, anti_pattern_count=1) → ~76.5\n```"
+- sequence: 19
+  fragment_type: rationale
+  content: "### JSON Output Format\n\nTop-level shape of `--output json`:\n\n```json\n{\n  \"composite\": { \"score\": 76.5, \"badge\": \"Silver\", \"elo\": null },\n  \"dimensions\": {\n    \"triggering_accuracy\": { \"score\": 0.65, \"grade\": \"D\", \"ci_low\": 0.60, \"ci_high\": 0.70 },\n    \"orchestration_fitness\": { \"score\": 0.85, \"grade\": \"B\", \"ci_low\": 0.80, \"ci_high\": 0.90 }\n  },\n  \"layers\": [\n    { \"name\": \"static\", \"duration_ms\": 1243, \"anti_patterns\": [\"OVER_CONSTRAINED\"] },\n    { \"name\": \"judge\", \"duration_ms\": 48200, \"judges\": 1, \"kappa\": null }\n  ]\n}\n```\n\nParse `composite.score` in CI to gate deployments:\n\n```bash\nscore=$(plugin-eval score ./my-skill --output json | python3 -c \"import sys,json; print(json.load(sys.stdin)['composite']['score'])\")\nif (( $(echo \"$score < 70\" | bc -l) )); then\n  echo \"Quality gate failed: score $score < 70\"\n  exit 1\nfi\n```\n\n---"
+- sequence: 20
+  fragment_type: execution
+  content: '## Tips for Improving a Skill''s Score
+
+
+    Work through dimensions in weight order. The largest gains come from fixing the top-weighted
+
+    dimensions first.
+
+
+    ### Which Dimension to Improve First
+
+
+    Use this table when a score report shows multiple D/F grades and you need to prioritize effort.
+
+
+    | Dimension | Weight | Typical fix effort | Score impact / hour | Fix first if… |
+
+    |---|---|---|---|---|
+
+    | `triggering_accuracy` | 0.25 | Low — description rewrite | High | Score < 70 overall |
+
+    | `orchestration_fitness` | 0.20 | Medium — restructure sections | High | Skill mixes worker + supervisor logic |
+
+    | `output_quality` | 0.15 | Medium — add examples | Medium | Judge score < 0.70 |
+
+    | `scope_calibration` | 0.12 | Low — move content to references/ | Medium | File is < 100 or > 800 lines |
+
+    | `progressive_disclosure` | 0.10 | Low — create references/ dir | Medium | No references/ directory exists |
+
+    | `token_efficiency` | 0.06 | Low — reduce MUST/ALWAYS/NEVER | Low | Anti-pattern count ≥ 3 |
+
+    | `robustness` | 0.05 | Low — add Troubleshooting section | Low | No edge-case handling documented |
+
+    | `structural_completeness` | 0.03 | Very low — add headings/code blocks | Low | Fewer than 4 H2 headings |
+
+    | `code_template_quality` | 0.02 | Very low — add language tags | Very low | Code blocks missing language tags |
+
+    | `ecosystem_coherence` | 0.02 | Very low — add Related section | Very low | No cross-references at all |
+
+
+    **Rule of thumb:** Fix `triggering_accuracy` before anything else — at weight 0.25 it delivers
+
+    more composite-score gain per hour than all low-weight dimensions combined.'
+- sequence: 21
+  fragment_type: execution
+  content: "### Triggering Accuracy (weight 0.25)\n\n- Include \"Use this skill when...\" followed by 3–4 comma-separated specific contexts.\n- Add \"proactively\" if the skill should auto-activate without an explicit user request.\n- Mental test: write 5 prompts that should trigger it and 5 that should not — does\n  your description discriminate? If not, add or tighten the context phrases."
+- sequence: 22
+  fragment_type: execution
+  content: '### Orchestration Fitness (weight 0.20)
+
+
+    - Document what the skill *receives* and what it *returns* — not what it orchestrates.
+
+    - Avoid "orchestrate", "coordinate", "dispatch", "manage workflow" in SKILL.md.
+
+    - Include an "Output format" section and 2+ code blocks showing concrete worker behavior.'
+- sequence: 23
+  fragment_type: execution
+  content: '### Output Quality (weight 0.15)
+
+
+    - Give specific, actionable instructions — not just goals.
+
+    - Cover at least one edge case explicitly (empty input, malformed data, etc.).
+
+    - Include an examples section showing representative inputs and expected outputs.
+
+    - The more concrete the instructions, the higher the judge will score this dimension.'
+- sequence: 24
+  fragment_type: execution
+  content: "### Scope Calibration (weight 0.12)\n\n- Target 200–600 lines. Below 100 is a stub; above 800 without `references/` is bloat.\n- Move background reading, extended examples, and reference tables to `references/`.\n- Very narrow skills should be merged with a sibling; very broad ones should be split.\n\n### Progressive Disclosure (weight 0.10)\n\n- Add a `references/` directory (earns 0.15–0.25 bonus) and keep SKILL.md focused on\n  the execution path. An `assets/` directory adds a further bonus.\n\n### Token Efficiency (weight 0.06)\n\n- Audit MUST/ALWAYS/NEVER count. Target < 1 per 10 lines.\n- Consolidate near-duplicate bullet points and repeated-structure tables.\n\n### Robustness (weight 0.05)\n\n- Add a \"Troubleshooting\" or \"Edge Cases\" section covering at least 3 failure modes.\n- State what the skill returns when it cannot complete its task.\n\n### Structural Completeness (weight 0.03)\n\n- Ensure at least 4 H2/H3 headings, 3 code blocks, an Examples section, and a Troubleshooting section.\n\n### Code Template Quality (weight 0.02)\n\n- All code blocks must be syntactically valid and copy-paste ready with language tags.\n\n### Ecosystem Coherence (weight 0.02)\n\n- Add a \"## Related\" section listing sibling skills or agents with relative paths.\n- Avoid duplicating content that already exists in another skill — link to it instead.\n\n---"
+- sequence: 25
+  fragment_type: verification
+  content: '## Troubleshooting
+
+
+    ### "Score is much lower than expected after adding content"
+
+
+    The anti-pattern penalty compounds. Run with `--output json` and inspect
+
+    `layers[0].anti_patterns`. If you have 5+ anti-patterns, the multiplier can reduce your
+
+    score to 75% of its raw value regardless of how good the content is. Fix the flags first.
+
+
+    ### "triggering_accuracy is low despite a detailed description"
+
+
+    The `_description_pushiness` scorer looks for specific syntactic patterns, not just length.
+
+    Verify your description contains the phrase "Use this skill when" or "Use when" (exact
+
+    phrasing matters — it''s a regex match). Also check that you have multiple use cases separated
+
+    by commas or "or" to earn the specificity bonus.
+
+
+    ### "LLM judge scores vary significantly between runs"
+
+
+    This is expected for ambiguous skills. The judge generates 10 mental test prompts
+
+    non-deterministically. Improve score stability by tightening the description and adding
+
+    concrete examples. When `judges > 1`, averaged scores will be more stable. Use
+
+    `--depth deep` with `certify` which runs Monte Carlo to get statistically-bounded scores.
+
+
+    ### "progressive_disclosure score is low even though the file is the right length"
+
+
+    Check whether the file is in the 200–600 line sweet spot. Files shorter than 100 lines
+
+    score only 0.20 on this sub-check. Also confirm that `references/` files are not empty —
+
+    the scorer checks for non-empty reference files, not just the directory.
+
+
+    ### "compare shows my rewrite scores lower than the original"
+
+
+    Quick depth (`--depth quick`) only runs static analysis. If the rewrite moved content to
+
+    `references/` and shortened SKILL.md significantly, static scores for structural completeness
+
+    may drop even though overall quality improved. Run `--depth standard` for a fairer comparison
+
+    that includes the LLM judge''s assessment of content quality.
+
+
+    ---'
+- sequence: 26
+  fragment_type: rationale
+  content: "## References\n\n- [Full Rubric Anchors — all 4 judge dimensions](references/rubrics.md)\n\n### Related Agents\n\n- **eval-judge** (`../../agents/eval-judge.md`) — the LLM judge that scores Layer 2 dimensions\n  (`triggering_accuracy`, `orchestration_fitness`, `output_quality`, `scope_calibration`).\n  Invoke directly when you need to re-run only the judge layer or inspect its reasoning.\n- **eval-orchestrator** (`../../agents/eval-orchestrator.md`) — the top-level orchestrator that\n  sequences all three layers, merges results, assigns badges, and writes the final report.\n  Invoke when running a full certification pass or comparing two skills head-to-head."

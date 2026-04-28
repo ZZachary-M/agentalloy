@@ -1,0 +1,79 @@
+skill_type: domain
+skill_id: web-component-design
+canonical_name: Web Component Design
+category: design
+skill_class: domain
+domain_tags:
+- web-components
+- shadow-dom
+- custom-elements
+- lit
+- stencil
+- framework-agnostic
+- slots
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Web Component Design\n\nBuild reusable, maintainable UI components using modern frameworks with clean composition patterns and styling approaches.\n\n## When to Use This Skill\n\n- Designing reusable component libraries or design systems\n- Implementing complex component composition patterns\n- Choosing and applying CSS-in-JS solutions\n- Building accessible, responsive UI components\n- Creating consistent component APIs across a codebase\n- Refactoring legacy components into modern patterns\n- Implementing compound components or render props\n\n## Core Concepts\n\n### 1. Component Composition Patterns\n\n**Compound Components**: Related components that work together\n\n```tsx\n// Usage\n<Select value={value} onChange={setValue}>\n  <Select.Trigger>Choose option</Select.Trigger>\n  <Select.Options>\n    <Select.Option value=\"a\">Option A</Select.Option>\n    <Select.Option value=\"b\">Option B</Select.Option>\n  </Select.Options>\n</Select>\n```\n\n**Render Props**: Delegate rendering to parent\n\n```tsx\n<DataFetcher url=\"/api/users\">\n  {({ data, loading, error }) =>\n    loading ? <Spinner /> : <UserList users={data} />\n  }\n</DataFetcher>\n```\n\n**Slots (Vue/Svelte)**: Named content injection points\n\n```vue\n<template>\n  <Card>\n    <template #header>Title</template>\n    <template #content>Body text</template>\n    <template #footer><Button>Action</Button></template>\n  </Card>\n</template>\n```\n\n### 2. CSS-in-JS Approaches\n\n| Solution              | Approach               | Best For                          |\n| --------------------- | ---------------------- | --------------------------------- |\n| **Tailwind CSS**      | Utility classes        | Rapid prototyping, design systems |\n| **CSS Modules**       | Scoped CSS files       | Existing CSS, gradual adoption    |\n| **styled-components** | Template literals      | React, dynamic styling            |\n| **Emotion**           | Object/template styles | Flexible, SSR-friendly            |\n| **Vanilla Extract**   | Zero-runtime           | Performance-critical apps         |\n\n### 3. Component API Design\n\n```tsx\ninterface ButtonProps {\n  variant?: \"primary\" | \"secondary\" | \"ghost\";\n  size?: \"sm\" | \"md\" | \"lg\";\n  isLoading?: boolean;\n  isDisabled?: boolean;\n  leftIcon?: React.ReactNode;\n  rightIcon?: React.ReactNode;\n  children: React.ReactNode;\n  onClick?: () => void;\n}\n```\n\n**Principles**:\n\n- Use semantic prop names (`isLoading` vs `loading`)\n- Provide sensible defaults\n- Support composition via `children`\n- Allow style overrides via `className` or `style`\n\n## Quick Start: React Component with Tailwind\n\n```tsx\nimport { forwardRef, type ComponentPropsWithoutRef } from \"react\";\nimport { cva, type VariantProps } from \"class-variance-authority\";\nimport { cn } from \"@/lib/utils\";\n\nconst buttonVariants = cva(\n  \"inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50\",\n  {\n    variants: {\n      variant: {\n        primary: \"bg-blue-600 text-white hover:bg-blue-700\",\n        secondary: \"bg-gray-100 text-gray-900 hover:bg-gray-200\",\n        ghost: \"hover:bg-gray-100 hover:text-gray-900\",\n      },\n      size: {\n        sm: \"h-8 px-3 text-sm\",\n        md: \"h-10 px-4 text-sm\",\n        lg: \"h-12 px-6 text-base\",\n      },\n    },\n    defaultVariants: {\n      variant: \"primary\",\n      size: \"md\",\n    },\n  },\n);\n\ninterface ButtonProps\n  extends\n    ComponentPropsWithoutRef<\"button\">,\n    VariantProps<typeof buttonVariants> {\n  isLoading?: boolean;\n}\n\nexport const Button = forwardRef<HTMLButtonElement, ButtonProps>(\n  ({ className, variant, size, isLoading, children, ...props }, ref) => (\n    <button\n      ref={ref}\n      className={cn(buttonVariants({ variant, size }), className)}\n      disabled={isLoading || props.disabled}\n      {...props}\n    >\n      {isLoading && <Spinner className=\"mr-2 h-4 w-4\" />}\n      {children}\n    </button>\n  ),\n);\nButton.displayName = \"Button\";\n```\n\n## Framework Patterns\n\n### React: Compound Components\n\n```tsx\nimport { createContext, useContext, useState, type ReactNode } from \"react\";\n\ninterface AccordionContextValue {\n  openItems: Set<string>;\n  toggle: (id: string) => void;\n}\n\nconst AccordionContext = createContext<AccordionContextValue | null>(null);\n\nfunction useAccordion() {\n  const context = useContext(AccordionContext);\n  if (!context) throw new Error(\"Must be used within Accordion\");\n  return context;\n}\n\nexport function Accordion({ children }: { children: ReactNode }) {\n  const [openItems, setOpenItems] = useState<Set<string>>(new Set());\n\n  const toggle = (id: string) => {\n    setOpenItems((prev) => {\n      const next = new Set(prev);\n      next.has(id) ? next.delete(id) : next.add(id);\n      return next;\n    });\n  };\n\n  return (\n    <AccordionContext.Provider value={{ openItems, toggle }}>\n      <div className=\"divide-y\">{children}</div>\n    </AccordionContext.Provider>\n  );\n}\n\nAccordion.Item = function AccordionItem({\n  id,\n  title,\n  children,\n}: {\n  id: string;\n  title: string;\n  children: ReactNode;\n}) {\n  const { openItems, toggle } = useAccordion();\n  const isOpen = openItems.has(id);\n\n  return (\n    <div>\n      <button onClick={() => toggle(id)} className=\"w-full text-left py-3\">\n        {title}\n      </button>\n      {isOpen && <div className=\"pb-3\">{children}</div>}\n    </div>\n  );\n};\n```\n\n### Vue 3: Composables\n\n```vue\n<script setup lang=\"ts\">\nimport { ref, computed, provide, inject, type InjectionKey } from \"vue\";\n\ninterface TabsContext {\n  activeTab: Ref<string>;\n  setActive: (id: string) => void;\n}\n\nconst TabsKey: InjectionKey<TabsContext> = Symbol(\"tabs\");\n\n// Parent component\nconst activeTab = ref(\"tab-1\");\nprovide(TabsKey, {\n  activeTab,\n  setActive: (id: string) => {\n    activeTab.value = id;\n  },\n});\n\n// Child component usage\nconst tabs = inject(TabsKey);\nconst isActive = computed(() => tabs?.activeTab.value === props.id);\n</script>\n```\n\n### Svelte 5: Runes\n\n```svelte\n<script lang=\"ts\">\n  interface Props {\n    variant?: 'primary' | 'secondary';\n    size?: 'sm' | 'md' | 'lg';\n    onclick?: () => void;\n    children: import('svelte').Snippet;\n  }\n\n  let { variant = 'primary', size = 'md', onclick, children }: Props = $props();\n\n  const classes = $derived(\n    `btn btn-${variant} btn-${size}`\n  );\n</script>\n\n<button class={classes} {onclick}>\n  {@render children()}\n</button>\n```\n\n## Best Practices\n\n1. **Single Responsibility**: Each component does one thing well\n2. **Prop Drilling Prevention**: Use context for deeply nested data\n3. **Accessible by Default**: Include ARIA attributes, keyboard support\n4. **Controlled vs Uncontrolled**: Support both patterns when appropriate\n5. **Forward Refs**: Allow parent access to DOM nodes\n6. **Memoization**: Use `React.memo`, `useMemo` for expensive renders\n7. **Error Boundaries**: Wrap components that may fail\n\n## Common Issues\n\n- **Prop Explosion**: Too many props - consider composition instead\n- **Style Conflicts**: Use scoped styles or CSS Modules\n- **Re-render Cascades**: Profile with React DevTools, memo appropriately\n- **Accessibility Gaps**: Test with screen readers and keyboard navigation\n- **Bundle Size**: Tree-shake unused component variants"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Designing reusable component libraries or design systems
+
+    - Implementing complex component composition patterns
+
+    - Choosing and applying CSS-in-JS solutions
+
+    - Building accessible, responsive UI components
+
+    - Creating consistent component APIs across a codebase
+
+    - Refactoring legacy components into modern patterns
+
+    - Implementing compound components or render props'
+- sequence: 2
+  fragment_type: rationale
+  content: "## Core Concepts\n\n### 1. Component Composition Patterns\n\n**Compound Components**: Related components that work together\n\n```tsx\n// Usage\n<Select value={value} onChange={setValue}>\n  <Select.Trigger>Choose option</Select.Trigger>\n  <Select.Options>\n    <Select.Option value=\"a\">Option A</Select.Option>\n    <Select.Option value=\"b\">Option B</Select.Option>\n  </Select.Options>\n</Select>\n```\n\n**Render Props**: Delegate rendering to parent\n\n```tsx\n<DataFetcher url=\"/api/users\">\n  {({ data, loading, error }) =>\n    loading ? <Spinner /> : <UserList users={data} />\n  }\n</DataFetcher>\n```\n\n**Slots (Vue/Svelte)**: Named content injection points\n\n```vue\n<template>\n  <Card>\n    <template #header>Title</template>\n    <template #content>Body text</template>\n    <template #footer><Button>Action</Button></template>\n  </Card>\n</template>\n```\n\n### 2. CSS-in-JS Approaches\n\n| Solution              | Approach               | Best For                          |\n| --------------------- | ---------------------- | --------------------------------- |\n| **Tailwind CSS**      | Utility classes        | Rapid prototyping, design systems |\n| **CSS Modules**       | Scoped CSS files       | Existing CSS, gradual adoption    |\n| **styled-components** | Template literals      | React, dynamic styling            |\n| **Emotion**           | Object/template styles | Flexible, SSR-friendly            |\n| **Vanilla Extract**   | Zero-runtime           | Performance-critical apps         |\n\n### 3. Component API Design\n\n```tsx\ninterface ButtonProps {\n  variant?: \"primary\" | \"secondary\" | \"ghost\";\n  size?: \"sm\" | \"md\" | \"lg\";\n  isLoading?: boolean;\n  isDisabled?: boolean;\n  leftIcon?: React.ReactNode;\n  rightIcon?: React.ReactNode;\n  children: React.ReactNode;\n  onClick?: () => void;\n}\n```\n\n**Principles**:\n\n- Use semantic prop names (`isLoading` vs `loading`)\n- Provide sensible defaults\n- Support composition via `children`\n- Allow style overrides via `className` or `style`"
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Start: React Component with Tailwind\n\n```tsx\nimport { forwardRef, type ComponentPropsWithoutRef } from \"react\";\nimport { cva, type VariantProps } from \"class-variance-authority\";\nimport { cn } from \"@/lib/utils\";\n\nconst buttonVariants = cva(\n  \"inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50\",\n  {\n    variants: {\n      variant: {\n        primary: \"bg-blue-600 text-white hover:bg-blue-700\",\n        secondary: \"bg-gray-100 text-gray-900 hover:bg-gray-200\",\n        ghost: \"hover:bg-gray-100 hover:text-gray-900\",\n      },\n      size: {\n        sm: \"h-8 px-3 text-sm\",\n        md: \"h-10 px-4 text-sm\",\n        lg: \"h-12 px-6 text-base\",\n      },\n    },\n    defaultVariants: {\n      variant: \"primary\",\n      size: \"md\",\n    },\n  },\n);\n\ninterface ButtonProps\n  extends\n    ComponentPropsWithoutRef<\"button\">,\n    VariantProps<typeof buttonVariants> {\n  isLoading?: boolean;\n}\n\nexport const Button = forwardRef<HTMLButtonElement, ButtonProps>(\n  ({ className, variant, size, isLoading, children, ...props }, ref) => (\n    <button\n      ref={ref}\n      className={cn(buttonVariants({ variant, size }), className)}\n      disabled={isLoading || props.disabled}\n      {...props}\n    >\n      {isLoading && <Spinner className=\"mr-2 h-4 w-4\" />}\n      {children}\n    </button>\n  ),\n);\nButton.displayName = \"Button\";\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Framework Patterns\n\n### React: Compound Components\n\n```tsx\nimport { createContext, useContext, useState, type ReactNode } from \"react\";\n\ninterface AccordionContextValue {\n  openItems: Set<string>;\n  toggle: (id: string) => void;\n}\n\nconst AccordionContext = createContext<AccordionContextValue | null>(null);\n\nfunction useAccordion() {\n  const context = useContext(AccordionContext);\n  if (!context) throw new Error(\"Must be used within Accordion\");\n  return context;\n}\n\nexport function Accordion({ children }: { children: ReactNode }) {\n  const [openItems, setOpenItems] = useState<Set<string>>(new Set());\n\n  const toggle = (id: string) => {\n    setOpenItems((prev) => {\n      const next = new Set(prev);\n      next.has(id) ? next.delete(id) : next.add(id);\n      return next;\n    });\n  };\n\n  return (\n    <AccordionContext.Provider value={{ openItems, toggle }}>\n      <div className=\"divide-y\">{children}</div>\n    </AccordionContext.Provider>\n  );\n}\n\nAccordion.Item = function AccordionItem({\n  id,\n  title,\n  children,\n}: {\n  id: string;\n  title: string;\n  children: ReactNode;\n}) {\n  const { openItems, toggle } = useAccordion();\n  const isOpen = openItems.has(id);\n\n  return (\n    <div>\n      <button onClick={() => toggle(id)} className=\"w-full text-left py-3\">\n        {title}\n      </button>\n      {isOpen && <div className=\"pb-3\">{children}</div>}\n    </div>\n  );\n};\n```\n\n### Vue 3: Composables\n\n```vue\n<script setup lang=\"ts\">\nimport { ref, computed, provide, inject, type InjectionKey } from \"vue\";\n\ninterface TabsContext {\n  activeTab: Ref<string>;\n  setActive: (id: string) => void;\n}\n\nconst TabsKey: InjectionKey<TabsContext> = Symbol(\"tabs\");\n\n// Parent component\nconst activeTab = ref(\"tab-1\");\nprovide(TabsKey, {\n  activeTab,\n  setActive: (id: string) => {\n    activeTab.value = id;\n  },\n});\n\n// Child component usage\nconst tabs = inject(TabsKey);\nconst isActive = computed(() => tabs?.activeTab.value === props.id);\n</script>\n```\n\n### Svelte 5: Runes\n\n```svelte\n<script lang=\"ts\">\n  interface Props {\n    variant?: 'primary' | 'secondary';\n    size?: 'sm' | 'md' | 'lg';\n    onclick?: () => void;\n    children: import('svelte').Snippet;\n  }\n\n  let { variant = 'primary', size = 'md', onclick, children }: Props = $props();\n\n  const classes = $derived(\n    `btn btn-${variant} btn-${size}`\n  );\n</script>\n\n<button class={classes} {onclick}>\n  {@render children()}\n</button>\n```"
+- sequence: 5
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Single Responsibility**: Each component does one thing well
+
+    2. **Prop Drilling Prevention**: Use context for deeply nested data
+
+    3. **Accessible by Default**: Include ARIA attributes, keyboard support
+
+    4. **Controlled vs Uncontrolled**: Support both patterns when appropriate
+
+    5. **Forward Refs**: Allow parent access to DOM nodes
+
+    6. **Memoization**: Use `React.memo`, `useMemo` for expensive renders
+
+    7. **Error Boundaries**: Wrap components that may fail'
+- sequence: 6
+  fragment_type: verification
+  content: '## Common Issues
+
+
+    - **Prop Explosion**: Too many props - consider composition instead
+
+    - **Style Conflicts**: Use scoped styles or CSS Modules
+
+    - **Re-render Cascades**: Profile with React DevTools, memo appropriately
+
+    - **Accessibility Gaps**: Test with screen readers and keyboard navigation
+
+    - **Bundle Size**: Tree-shake unused component variants'

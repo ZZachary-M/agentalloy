@@ -1,0 +1,160 @@
+skill_type: domain
+skill_id: temporal-python-testing
+canonical_name: Temporal Python Testing Strategies
+category: engineering
+skill_class: domain
+domain_tags:
+- temporal
+- workflow
+- testing
+- python
+- activity
+- replay
+- determinism
+- orchestration
+- workflow-environment
+- activity-environment
+- time-skipping
+- pytest
+- docker-compose
+- mocking
+- signals
+- queries
+- coverage
+- ci-cd
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: 'Folded progressive-disclosure resources/ content (unit-testing, integration-testing,
+
+  replay-testing, local-setup) into raw_prose and fragments. Expanded from 8 to 16
+
+  fragments covering WorkflowEnvironment time-skipping, ActivityEnvironment, activity
+
+  mocking, error injection, signals/queries, multi-activity orchestration, replay
+
+  determinism, production history replay, CI/CD wiring, and docker-compose +
+
+  pytest/coverage local setup. Added domain tags for workflow-environment,
+
+  activity-environment, time-skipping, pytest, docker-compose, mocking, signals,
+
+  queries, coverage, and ci-cd.'
+raw_prose: "# Temporal Python Testing Strategies\n\nComprehensive testing approaches for Temporal workflows using pytest, with\npatterns for unit testing, integration testing, replay testing, and local\ndevelopment setup.\n\n## Testing Philosophy\n\nSource: docs.temporal.io/develop/python/testing-suite. Write the majority of\ntests as integration tests (workflow + worker + mocked activities). Use pytest\nwith async fixtures. Time-skipping enables fast feedback (month-long workflows\nfinish in milliseconds). Mock activities to isolate workflow logic. Validate\ndeterminism with replay testing before deploying workflow code changes.\n\nThree test types:\n\n1. Unit: workflows with `WorkflowEnvironment.start_time_skipping()`, activities\n   with `ActivityEnvironment`.\n2. Integration: workers running real workflow code against mocked activities.\n3. End-to-end: full Temporal server with real activities (use sparingly).\n\nCoverage targets: workflows >=80% logic coverage; activities >=80% logic\ncoverage; replay tests across all workflow versions before deployment.\n\n## Unit Testing Workflows with Time-Skipping\n\n`WorkflowEnvironment.start_time_skipping()` advances workflow time instantly\non `workflow.sleep`, `workflow.wait_condition`, and timer-driven logic. Set\nit up as an async pytest fixture, then run a `Worker` inside an `async with`\nblock to register workflows and activities under a task queue.\n\n```python\nimport pytest\nfrom temporalio.testing import WorkflowEnvironment\nfrom temporalio.worker import Worker\n\n@pytest.fixture\nasync def workflow_env():\n    env = await WorkflowEnvironment.start_time_skipping()\n    yield env\n    await env.shutdown()\n\n@pytest.mark.asyncio\nasync def test_workflow_execution(workflow_env):\n    async with Worker(\n        workflow_env.client,\n        task_queue=\"test-queue\",\n        workflows=[YourWorkflow],\n        activities=[your_activity],\n    ):\n        result = await workflow_env.client.execute_workflow(\n            YourWorkflow.run, \"test-input\",\n            id=\"test-wf-id\", task_queue=\"test-queue\",\n        )\n        assert result == \"expected-output\"\n```\n\nManual time advancement uses `await workflow_env.sleep(timedelta(...))`\nbetween query/signal calls so you can inspect intermediate state via\n`handle.query(...)` before advancing further.\n\n## Unit Testing Activities with ActivityEnvironment\n\n`ActivityEnvironment` runs activities outside any workflow context for fast,\nisolated tests. It supports heartbeats, cancellation injection, and exception\npropagation.\n\n```python\nfrom temporalio.testing import ActivityEnvironment\n\nasync def test_activity_basic():\n    env = ActivityEnvironment()\n    result = await env.run(process_data, \"test\")\n    assert result == \"TEST\"\n\nasync def test_activity_cancellation():\n    env = ActivityEnvironment(cancellation_reason=\"test-cancel\")\n    result = await env.run(cancellable_activity)\n    assert result == \"cancelled\"\n```\n\nUse `pytest.raises(ApplicationError)` to assert non-retryable failures\nsurface correctly.\n\n## pytest Fixtures and Parametrization\n\nModule- or session-scoped `WorkflowEnvironment` fixtures amortize startup\ncost across many tests. Function-scoped `ActivityEnvironment` keeps each\ntest isolated. `@pytest.mark.parametrize` covers multiple input scenarios\nwith one test body.\n\n```python\n@pytest.fixture(scope=\"module\")\nasync def workflow_env():\n    env = await WorkflowEnvironment.start_time_skipping()\n    yield env\n    await env.shutdown()\n\n@pytest.mark.parametrize(\"input,expected\", [\n    (\"test\", \"TEST\"), (\"hello\", \"HELLO\"), (\"123\", \"123\"),\n])\nasync def test_activity_parameterized(activity_env, input, expected):\n    result = await activity_env.run(process_data, input)\n    assert result == expected\n```\n\n## Integration Testing: Activity Mocking\n\nReplace real activities with `unittest.mock.Mock` instances or simple\n`@activity.defn` stubs registered on the test `Worker`. Assert workflow\noutput AND mock invocation counts/args.\n\n```python\nmock_activity = Mock(return_value=\"mocked-result\")\nasync with Worker(\n    workflow_env.client, task_queue=\"test\",\n    workflows=[WorkflowWithActivity], activities=[mock_activity],\n):\n    result = await workflow_env.client.execute_workflow(...)\n    mock_activity.assert_called_once()\n```\n\nDynamic mocks branch on input to exercise success and error paths in one\nfixture.\n\n## Integration Testing: Error Injection and Retries\n\nTest transient failures with a counter that succeeds on the Nth attempt;\nuse `RetryPolicy(initial_interval=timedelta(milliseconds=10),\nmaximum_attempts=5)` for fast retries. Test non-retryable errors by raising\n`ApplicationError(\"...\", non_retryable=True)` from the activity and\nasserting the workflow's compensation/error branch.\n\n## Integration Testing: Multi-Activity Workflows\n\nSequential workflows: assert both the final result AND the order of recorded\nactivity calls (e.g., `activity_calls == [\"step_1\", \"step_2\", \"step_3\"]`).\nParallel workflows use `asyncio.gather(*[workflow.execute_activity(...) ...])`;\nassert the gathered list contents.\n\n## Signal and Query Testing\n\nStart the workflow with `client.start_workflow(...)` (not `execute_workflow`)\nto get a handle. Use `handle.signal(...)` to drive state transitions and\n`handle.query(...)` to inspect intermediate state. End with\n`await handle.result()` to assert the final return value.\n\n## Replay Testing for Determinism\n\nTemporal records every workflow decision in Event History. The `Replayer`\nre-executes current workflow code against recorded history; if decisions\nmatch, the change is backward-compatible. Mismatches throw\n`WorkflowNonDeterministicError`.\n\n```python\nfrom temporalio.worker import Replayer\n\nreplayer = Replayer(workflows=[OrderWorkflow, PaymentWorkflow])\nhistory = await client.get_workflow_handle(\"order-123\").fetch_history()\nawait replayer.replay_workflow(history)\n```\n\nCommon non-determinism sources: `random.randint` (use `workflow.random()`),\n`datetime.now()` (use `workflow.now()`), direct HTTP calls (move to\nactivities). For backward-compatible logic changes, gate behavior with\n`workflow.get_version(\"flag\", 1, 2)`.\n\n## Production History Replay and CI/CD\n\nExport production histories with `handle.fetch_history()` and\n`history.SerializeToString()`. In CI, load all `.pb` files, replay each\nagainst current code, and fail the job on any non-determinism. A typical\nGitHub Actions job installs deps, downloads recent histories, runs\n`pytest tests/replay/`, and uploads failures as artifacts.\n\n## Local Development Setup\n\nRun Temporal server locally via docker-compose with `temporalio/auto-setup`,\nPostgres, and `temporalio/ui`. Expose 7233 (gRPC), 8080 (Web UI). Verify\nwith a health-check script that connects via `Client.connect(\"localhost:7233\")`\nand runs a trivial workflow.\n\npytest config (`pytest.ini`) sets `asyncio_mode = auto`, declares markers\n(`unit`, `integration`, `replay`, `slow`), and wires coverage with\n`--cov=src --cov-report=term-missing --cov-fail-under=80`. Use\n`pytest-xdist` (`pytest -n auto`) for parallel runs. `.coveragerc` excludes\n`TYPE_CHECKING` blocks, `__repr__`, and abstract methods.\n\nDaily flow: `docker-compose up -d`, health check, `pytest tests/unit/`\nduring dev, full suite + coverage before commit, `docker-compose down`."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: "# Why Temporal Workflows Need Specialized Testing\n\nTemporal workflows are durable, long-running, deterministic state\nmachines whose execution is recorded as Event History. Standard unit\ntests cannot exercise them meaningfully because real workflows may\nsleep for days, retry across worker restarts, and must replay\nidentically against recorded history forever.\n\nThe Temporal Python SDK provides three testing primitives that\naddress these constraints:\n\n1. **WorkflowEnvironment.start_time_skipping()** collapses\n   `workflow.sleep(timedelta(days=30))` into milliseconds, turning\n   month-long workflows into fast tests.\n2. **ActivityEnvironment** runs activities outside a workflow,\n   enabling pure unit tests of activity logic including heartbeat\n   and cancellation paths.\n3. **Replayer** validates that current workflow code makes the same\n   decisions against historical Event History a running workflow\n   already produced - the only way to guarantee deploy safety.\n\nThe recommended split (per docs.temporal.io/develop/python/testing-suite):\nmajority integration tests (real workflow code + mocked activities),\na thin unit layer for activity logic, replay tests gating deployment,\nand end-to-end tests used sparingly. Coverage target: >=80% for both\nworkflows and activities."
+- sequence: 2
+  fragment_type: setup
+  content: '# When to Use This Skill and Required Dependencies
+
+
+    Use this skill when:
+
+
+    - Implementing pytest tests for Temporal Python workflows or activities
+
+    - Setting up a local Temporal dev environment for testing
+
+    - Debugging non-determinism errors during deploy
+
+    - Adding replay testing to a CI/CD pipeline
+
+    - Achieving >=80% coverage on workflow/activity code
+
+
+    Required dependencies (`requirements.txt`):
+
+
+    ```
+
+    temporalio>=1.5.0
+
+    pytest>=7.4.0
+
+    pytest-asyncio>=0.21.0
+
+    pytest-cov>=4.1.0
+
+    pytest-xdist>=3.3.0
+
+    ```
+
+
+    Project layout:
+
+
+    ```
+
+    project/
+
+    |- docker-compose.yml
+
+    |- pytest.ini
+
+    |- src/{workflows,activities}/
+
+    |- tests/
+
+    |  |- conftest.py
+
+    |  |- unit/
+
+    |  |- integration/
+
+    |  |- replay/
+
+    |- scripts/{health_check.py,export_histories.py}
+
+    ```
+
+
+    Integration and replay tests require a running Temporal server (via
+
+    docker-compose). Unit tests using `WorkflowEnvironment.start_time_skipping()`
+
+    do not - the SDK ships an in-process test server.'
+- sequence: 3
+  fragment_type: execution
+  content: "# WorkflowEnvironment with Time-Skipping: Canonical Pattern\n\n`WorkflowEnvironment.start_time_skipping()` runs an in-process Temporal\nserver that advances time instantly on `workflow.sleep` and timer logic.\nSet it up as a pytest fixture and run a `Worker` inside `async with`.\n\n```python\nimport pytest\nfrom datetime import timedelta\nfrom temporalio.testing import WorkflowEnvironment\nfrom temporalio.worker import Worker\nfrom temporalio import workflow\n\n@pytest.fixture\nasync def workflow_env():\n    env = await WorkflowEnvironment.start_time_skipping()\n    yield env\n    await env.shutdown()\n\n@pytest.mark.asyncio\nasync def test_workflow_with_delays(workflow_env):\n    @workflow.defn\n    class DelayedWorkflow:\n        @workflow.run\n        async def run(self) -> str:\n            await workflow.sleep(timedelta(hours=24))  # instant\n            return \"completed\"\n\n    async with Worker(\n        workflow_env.client,\n        task_queue=\"test\",\n        workflows=[DelayedWorkflow],\n    ):\n        result = await workflow_env.client.execute_workflow(\n            DelayedWorkflow.run,\n            id=\"delayed-wf\",\n            task_queue=\"test\",\n        )\n        assert result == \"completed\"\n```\n\nThe 24-hour sleep returns in milliseconds. The same pattern handles\nmulti-day cron workflows, retry backoffs, and timer-driven branching."
+- sequence: 4
+  fragment_type: example
+  content: "# Manual Time Advancement and Mid-Workflow State Inspection\n\nFor workflows whose intermediate state matters, use\n`client.start_workflow` (not `execute_workflow`) to get a handle, then\ndrive time forward in chunks with `workflow_env.sleep(timedelta(...))`\nand inspect via queries.\n\n```python\n@pytest.mark.asyncio\nasync def test_workflow_manual_time(workflow_env):\n    handle = await workflow_env.client.start_workflow(\n        TimeBasedWorkflow.run,\n        id=\"time-wf\",\n        task_queue=\"test\",\n    )\n\n    # Advance 1 hour, check intermediate state\n    await workflow_env.sleep(timedelta(hours=1))\n    state = await handle.query(TimeBasedWorkflow.get_state)\n    assert state == \"processing\"\n\n    # Advance to completion\n    await workflow_env.sleep(timedelta(hours=23))\n    result = await handle.result()\n    assert result == \"completed\"\n```\n\nThis pattern is essential for testing workflows with phased behavior\n(e.g., \"after 1h send reminder; after 24h cancel\")."
+- sequence: 5
+  fragment_type: example
+  content: "# ActivityEnvironment: Isolated Activity Unit Tests\n\n`ActivityEnvironment` runs an activity outside a workflow with no\nTemporal server required. It supports heartbeats, cancellation\ninjection, and exception assertions.\n\n```python\nfrom temporalio.testing import ActivityEnvironment\nfrom temporalio import activity\nfrom temporalio.exceptions import ApplicationError\nimport pytest\n\n@activity.defn\nasync def process_data(input: str) -> str:\n    return input.upper()\n\nasync def test_activity_basic():\n    env = ActivityEnvironment()\n    result = await env.run(process_data, \"test\")\n    assert result == \"TEST\"\n\nasync def test_activity_cancellation():\n    @activity.defn\n    async def cancellable_activity() -> str:\n        try:\n            while True:\n                if activity.is_cancelled():\n                    return \"cancelled\"\n                await asyncio.sleep(0.1)\n        except asyncio.CancelledError:\n            return \"cancelled\"\n\n    env = ActivityEnvironment(cancellation_reason=\"test-cancel\")\n    result = await env.run(cancellable_activity)\n    assert result == \"cancelled\"\n\nasync def test_activity_error():\n    @activity.defn\n    async def failing_activity() -> str:\n        raise ApplicationError(\"Validation failed\", non_retryable=True)\n\n    env = ActivityEnvironment()\n    with pytest.raises(ApplicationError) as exc_info:\n        await env.run(failing_activity)\n    assert \"Validation failed\" in str(exc_info.value)\n```"
+- sequence: 6
+  fragment_type: example
+  content: "# pytest Fixtures and Parametrization for Temporal Tests\n\nUse scoped fixtures to amortize `WorkflowEnvironment` startup across\na test module/session, and `@pytest.mark.parametrize` to fan input\ncoverage with one test body.\n\n```python\n# conftest.py\nimport pytest\nfrom temporalio.testing import WorkflowEnvironment, ActivityEnvironment\n\n@pytest.fixture(scope=\"module\")\nasync def workflow_env():\n    \"\"\"Module-scoped: reused across tests, fast.\"\"\"\n    env = await WorkflowEnvironment.start_time_skipping()\n    yield env\n    await env.shutdown()\n\n@pytest.fixture\ndef activity_env():\n    \"\"\"Function-scoped: fresh per test.\"\"\"\n    return ActivityEnvironment()\n```\n\nParametrize edge cases:\n\n```python\n@pytest.mark.parametrize(\"input,expected\", [\n    (\"valid\", \"success\"),\n    (\"\", \"empty-input-error\"),\n    (None, \"null-input-error\"),\n])\nasync def test_activity_edge_cases(activity_env, input, expected):\n    result = await activity_env.run(my_activity, input)\n    assert result == expected\n\n@pytest.mark.parametrize(\"condition,expected\", [\n    (True, \"branch-a\"),\n    (False, \"branch-b\"),\n])\n@pytest.mark.asyncio\nasync def test_workflow_branches(workflow_env, condition, expected):\n    # Drives both decision paths through one test body\n    ...\n```\n\nMatch fixture scope to cost: `start_time_skipping()` is the expensive\none - prefer module/session scope. `ActivityEnvironment` is cheap -\nfunction scope keeps tests independent."
+- sequence: 7
+  fragment_type: example
+  content: "# Activity Mocking for Integration Tests\n\nReplace real activities with `unittest.mock.Mock` or simple\n`@activity.defn` stubs registered on the test `Worker`. The workflow\ncode under test is real; only external boundaries are mocked.\n\n```python\nfrom unittest.mock import Mock\n\n@pytest.mark.asyncio\nasync def test_workflow_with_mocked_activity(workflow_env):\n    mock_activity = Mock(return_value=\"mocked-result\")\n\n    async with Worker(\n        workflow_env.client,\n        task_queue=\"test\",\n        workflows=[WorkflowWithActivity],\n        activities=[mock_activity],\n    ):\n        result = await workflow_env.client.execute_workflow(\n            WorkflowWithActivity.run, \"test-input\",\n            id=\"wf-mock\", task_queue=\"test\",\n        )\n        assert result == \"processed: mocked-result\"\n        mock_activity.assert_called_once()\n```\n\nDynamic mocks branch on input to exercise multiple paths in one\nfixture:\n\n```python\n@activity.defn\nasync def dynamic_activity(input: str) -> str:\n    if input == \"error-case\":\n        raise ApplicationError(\"Validation failed\", non_retryable=True)\n    return f\"processed-{input}\"\n```\n\nAlways assert both the workflow output AND the mock interactions\n(`assert_called_once`, `assert_called_with(...)`)."
+- sequence: 8
+  fragment_type: example
+  content: "# Error Injection: Retries and Non-Retryable Failures\n\nDrive retry policy by raising from a counter-backed activity until\nthe Nth attempt succeeds. Use a tiny `initial_interval` so retries\ndon't slow the test.\n\n```python\n@pytest.mark.asyncio\nasync def test_workflow_transient_errors(workflow_env):\n    attempt_count = 0\n\n    @activity.defn\n    async def transient_activity() -> str:\n        nonlocal attempt_count\n        attempt_count += 1\n        if attempt_count < 3:\n            raise Exception(f\"Transient error {attempt_count}\")\n        return \"success-after-retries\"\n\n    @workflow.defn\n    class RetryWorkflow:\n        @workflow.run\n        async def run(self) -> str:\n            return await workflow.execute_activity(\n                transient_activity,\n                start_to_close_timeout=timedelta(seconds=10),\n                retry_policy=RetryPolicy(\n                    initial_interval=timedelta(milliseconds=10),\n                    maximum_attempts=5,\n                    backoff_coefficient=1.0,\n                ),\n            )\n\n    async with Worker(\n        workflow_env.client, task_queue=\"test\",\n        workflows=[RetryWorkflow], activities=[transient_activity],\n    ):\n        result = await workflow_env.client.execute_workflow(\n            RetryWorkflow.run, id=\"retry-wf\", task_queue=\"test\",\n        )\n        assert result == \"success-after-retries\"\n        assert attempt_count == 3\n```\n\nFor permanent failures, raise `ApplicationError(\"...\",\nnon_retryable=True)` and assert the workflow's compensation branch\nruns."
+- sequence: 9
+  fragment_type: example
+  content: "# Multi-Activity Workflows: Sequential and Parallel\n\nSequential pattern: assert both the final result AND the order of\nactivity calls via a shared list:\n\n```python\nactivity_calls = []\n\n@activity.defn\nasync def step_1(input: str) -> str:\n    activity_calls.append(\"step_1\")\n    return f\"{input}-step1\"\n# step_2, step_3 similar...\n\n@workflow.defn\nclass SequentialWorkflow:\n    @workflow.run\n    async def run(self, input: str) -> str:\n        r1 = await workflow.execute_activity(step_1, input,\n            start_to_close_timeout=timedelta(seconds=10))\n        r2 = await workflow.execute_activity(step_2, r1,\n            start_to_close_timeout=timedelta(seconds=10))\n        return await workflow.execute_activity(step_3, r2,\n            start_to_close_timeout=timedelta(seconds=10))\n\n# In test:\nassert result == \"start-step1-step2-step3\"\nassert activity_calls == [\"step_1\", \"step_2\", \"step_3\"]\n```\n\nParallel pattern: `asyncio.gather` over `workflow.execute_activity`\ncoroutines:\n\n```python\n@workflow.defn\nclass ParallelWorkflow:\n    @workflow.run\n    async def run(self, task_count: int) -> list[str]:\n        tasks = [\n            workflow.execute_activity(parallel_task, i,\n                start_to_close_timeout=timedelta(seconds=10))\n            for i in range(task_count)\n        ]\n        return await asyncio.gather(*tasks)\n```\n\nAssert the gathered list contents to verify all activities ran."
+- sequence: 10
+  fragment_type: example
+  content: "# Signal and Query Testing\n\nUse `client.start_workflow(...)` (not `execute_workflow`) to obtain\na handle. Drive state transitions with `handle.signal(...)` and\ninspect intermediate state with `handle.query(...)`.\n\n```python\n@workflow.defn\nclass SignalWorkflow:\n    def __init__(self) -> None:\n        self._status = \"initialized\"\n\n    @workflow.run\n    async def run(self) -> str:\n        await workflow.wait_condition(lambda: self._status == \"completed\")\n        return self._status\n\n    @workflow.signal\n    async def update_status(self, new_status: str) -> None:\n        self._status = new_status\n\n    @workflow.query\n    def get_status(self) -> str:\n        return self._status\n\n@pytest.mark.asyncio\nasync def test_workflow_signals(workflow_env):\n    async with Worker(\n        workflow_env.client, task_queue=\"test\",\n        workflows=[SignalWorkflow],\n    ):\n        handle = await workflow_env.client.start_workflow(\n            SignalWorkflow.run, id=\"signal-wf\", task_queue=\"test\",\n        )\n\n        assert await handle.query(SignalWorkflow.get_status) == \"initialized\"\n\n        await handle.signal(SignalWorkflow.update_status, \"processing\")\n        assert await handle.query(SignalWorkflow.get_status) == \"processing\"\n\n        await handle.signal(SignalWorkflow.update_status, \"completed\")\n        assert await handle.result() == \"completed\"\n```\n\nThe `wait_condition` blocks the workflow until the signal flips state -\na clean pattern for testing event-driven workflow logic."
+- sequence: 11
+  fragment_type: rationale
+  content: "# Why Replay Testing Is the Only Real Deploy Safety Net\n\nTemporal records every workflow decision (activity scheduled, timer\nstarted, signal received) as Event History. When a worker resumes a\nworkflow, it re-executes the workflow code from the start and matches\neach new decision against history. If they diverge, Temporal throws\n`WorkflowNonDeterministicError` and the workflow is permanently\nstuck.\n\nCommon non-determinism sources:\n\n- `random.randint(...)` - different value on replay. Use\n  `workflow.random()`.\n- `datetime.now()` - different timestamp on replay. Use\n  `workflow.now()`.\n- Direct HTTP/DB calls from workflow code - move to activities.\n- Iterating `dict` or `set` (pre-3.7 ordering) - use sorted\n  sequences.\n- Reordering `workflow.execute_activity` calls between releases.\n\nThe `Replayer` re-runs current workflow code against recorded\nhistory. If decisions match, the change is deploy-safe. If not, the\nchange is breaking and must be gated with `workflow.get_version(...)`.\n\nReplay testing is the only way to catch breaking changes before\nproduction - unit and integration tests cannot, because they don't\nreplay against historical event sequences from real running\nworkflows."
+- sequence: 12
+  fragment_type: example
+  content: "# Replay Testing: Production Histories in CI\n\nExport production histories with `handle.fetch_history()` and serialize\nto disk. In CI, load each `.pb` file and replay against current code;\nany non-determinism fails the build.\n\nExport script:\n\n```python\n# scripts/export_histories.py\nimport asyncio\nfrom temporalio.client import Client\n\nasync def export_recent_histories():\n    client = await Client.connect(\"production.temporal.io:7233\")\n    workflows = client.list_workflows(\n        query=\"WorkflowType='OrderWorkflow' AND CloseTime > '7 days ago'\"\n    )\n    count = 0\n    async for wf in workflows:\n        history = await wf.fetch_history()\n        with open(f\"workflow_histories/{wf.id}.pb\", \"wb\") as f:\n            f.write(history.SerializeToString())\n        count += 1\n        if count >= 100:\n            break\n```\n\nReplay test suite:\n\n```python\n# tests/replay/test_workflow_replay.py\nimport glob\nimport pytest\nfrom temporalio.worker import Replayer\nfrom temporalio.api.history.v1 import History\nfrom workflows import OrderWorkflow, PaymentWorkflow\n\n@pytest.mark.asyncio\nasync def test_replay_all_histories():\n    replayer = Replayer(workflows=[OrderWorkflow, PaymentWorkflow])\n    failures = []\n    for path in glob.glob(\"workflow_histories/*.pb\"):\n        try:\n            with open(path, \"rb\") as f:\n                history = History.FromString(f.read())\n            await replayer.replay_workflow(history)\n        except Exception as e:\n            failures.append((path, str(e)))\n    if failures:\n        pytest.fail(f\"Replay failed for {len(failures)} workflows:\\n\"\n            + \"\\n\".join(f\"  {p}: {e}\" for p, e in failures))\n```\n\nWire it into a GitHub Actions PR check: install deps, fetch\nhistories, run `pytest tests/replay/`, upload failures as artifacts."
+- sequence: 13
+  fragment_type: guardrail
+  content: "# Determinism Anti-Patterns: Do and Don't\n\nWorkflow code must be deterministic on replay. The following lists\ncover the most common breakage sources.\n\nDON'T (breaks replay):\n\n- `random.randint(1, 100)` inside workflow code\n- `datetime.now()`, `time.time()`, `uuid.uuid4()` inside workflow code\n- Direct HTTP, DB, or filesystem calls from workflow code\n- Iterating non-deterministic collections (Python `set`, dict views\n  on older Python)\n- Reading environment variables inside workflow code\n- Spawning threads or `asyncio.create_task` outside Temporal APIs\n- Reordering `workflow.execute_activity` calls between deploys\n  without `workflow.get_version()`\n\nDO (replay-safe):\n\n- `workflow.random().randint(1, 100)` for random values\n- `workflow.now()` for current time\n- `workflow.uuid4()` for IDs\n- All I/O via `workflow.execute_activity(...)`\n- Pass env config in as workflow args\n- `await workflow.wait_condition(...)` for waiting on state\n- `workflow.get_version(\"flag\", 1, 2)` to gate logic changes\n  backward-compatibly\n\nBackward-compatible migration:\n\n```python\nversion = workflow.get_version(\"new-logic\", 1, 2)\nif version == 1:\n    return await self._old_implementation()  # existing workflows\nelse:\n    return await self._new_implementation()  # new workflows\n```\n\nAfter all v1 workflows complete, the v1 branch can be removed."
+- sequence: 14
+  fragment_type: setup
+  content: "# Local Temporal Server via docker-compose\n\nRun Temporal locally with `temporalio/auto-setup` plus Postgres and\nthe Web UI. Expose 7233 (gRPC) and 8080 (UI).\n\n```yaml\n# docker-compose.yml\nversion: \"3.8\"\nservices:\n  temporal:\n    image: temporalio/auto-setup:1.26\n    container_name: temporal-dev\n    ports:\n      - \"7233:7233\"\n      - \"8233:8233\"\n    environment:\n      - DB=postgresql\n      - POSTGRES_USER=temporal\n      - POSTGRES_PWD=temporal\n      - POSTGRES_SEEDS=postgresql\n    depends_on: [postgresql]\n  postgresql:\n    image: postgres:14-alpine\n    environment:\n      - POSTGRES_USER=temporal\n      - POSTGRES_PASSWORD=temporal\n      - POSTGRES_DB=temporal\n    ports: [\"5432:5432\"]\n    volumes: [postgres_data:/var/lib/postgresql/data]\n  temporal-ui:\n    image: temporalio/ui:2.33\n    environment:\n      - TEMPORAL_ADDRESS=temporal:7233\n    ports: [\"8080:8080\"]\n    depends_on: [temporal]\nvolumes:\n  postgres_data:\n```\n\nLifecycle:\n\n```bash\ndocker-compose up -d           # start\ndocker-compose ps              # verify\ndocker-compose logs -f temporal\nopen http://localhost:8080     # Web UI\ndocker-compose down            # stop\ndocker-compose down -v         # reset all data\n```\n\nNote: project conventions may require `podman-compose` instead of\n`docker-compose`. Substitute as appropriate."
+- sequence: 15
+  fragment_type: setup
+  content: "# pytest Configuration and Coverage Tooling\n\n`pytest.ini` declares async mode, markers, and coverage gates:\n\n```ini\n[pytest]\nasyncio_mode = auto\ntestpaths = tests\npython_files = test_*.py\nmarkers =\n    unit: Unit tests (fast, isolated)\n    integration: Integration tests (require Temporal server)\n    replay: Replay tests (require production histories)\n    slow: Slow running tests\naddopts =\n    --verbose\n    --strict-markers\n    --cov=src\n    --cov-report=term-missing\n    --cov-report=html\n    --cov-fail-under=80\nasyncio_default_fixture_loop_scope = function\n```\n\n`.coveragerc` excludes typing-only and abstract scaffolding:\n\n```ini\n[run]\nsource = src\nomit = */tests/*, */venv/*, */__pycache__/*\n\n[report]\nexclude_lines =\n    if TYPE_CHECKING:\n    def __repr__\n    @abstractmethod\n    pass\n\n[html]\ndirectory = htmlcov\n```\n\nCommon invocations:\n\n```bash\npytest -m unit                              # fast inner loop\npytest -m integration                       # needs server\npytest -m \"not slow\"\npytest -n auto --cov=src                    # parallel via xdist\npytest --cov=src --cov-fail-under=80        # gate\n```\n\nShared `conftest.py` provides session-scoped `temporal_client`,\nmodule-scoped `workflow_env`, and function-scoped `activity_env`\nfixtures so tests don't pay startup cost per function."
+- sequence: 16
+  fragment_type: verification
+  content: "# Verifying Tests Pass and Coverage Hits Target\n\nLocal verification flow before commit:\n\n```bash\n# 1. Server up\ndocker-compose up -d\npython scripts/health_check.py    # connects, runs trivial workflow\n\n# 2. Run by category\npytest -m unit --verbose          # ms-scale, no server needed\npytest -m integration --verbose   # uses local server\npytest -m replay --verbose        # uses exported histories\n\n# 3. Full suite with coverage gate\npytest --cov=src --cov-report=term-missing --cov-fail-under=80\n```\n\nExpected coverage report shape:\n\n```\nName                              Stmts   Miss  Cover   Missing\n----------------------------------------------------------------\nsrc/activities/inventory.py          45      3    93%   78-80\nsrc/workflows/order_workflow.py      67      5    93%   45-49\n----------------------------------------------------------------\nTOTAL                               206      8    96%\n```\n\nCI verification adds:\n\n- `pytest --cov=src --cov-report=xml` and upload to coverage service\n- Replay job: download histories, `pytest tests/replay/`, upload\n  failures on red\n- `--cov-fail-under=80` is a hard gate, not advisory\n\nPass criteria:\n\n1. All `unit`, `integration`, `replay` marker suites green.\n2. Total coverage >=80% across `src/`.\n3. Replay tests pass against last 7 days of production histories.\n4. No `WorkflowNonDeterministicError` raised by `Replayer`.\n\nIf replay fails, do NOT deploy. Either revert the workflow change or\ngate it with `workflow.get_version(...)` and re-run."

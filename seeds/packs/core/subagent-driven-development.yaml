@@ -1,0 +1,134 @@
+skill_type: domain
+skill_id: subagent-driven-development
+canonical_name: Subagent-Driven Development
+category: tooling
+skill_class: domain
+domain_tags:
+- subagent-execution
+- plan-execution
+- two-stage-review
+- fresh-context-per-task
+- model-selection
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from local-workstation superpowers
+raw_prose: "# Subagent-Driven Development\n\nExecute a plan by dispatching a fresh subagent per task, with two-stage review after each: spec compliance review first, then code quality review.\n\n**Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions, you keep them focused. They should never inherit your session's history — you construct exactly what they need. This preserves your own context for coordination.\n\n**Core principle:** Fresh subagent per task + two-stage review (spec then quality) = high quality, fast iteration.\n\n## When to Use\n\nUse when you have an implementation plan with mostly independent tasks and want to stay in the current session.\n\n- Tasks tightly coupled? Manual execution or brainstorm first.\n- Want a parallel session instead? Use `executing-plans`.\n\n## The Process\n\n1. Read plan once, extract all tasks with full text and context, create a TodoWrite list.\n2. **Per task:**\n   - Dispatch implementer subagent with full task text + scene-setting context.\n   - If implementer asks questions, answer fully before letting them proceed.\n   - Implementer implements, tests, commits, self-reviews.\n   - Dispatch **spec reviewer** subagent. If gaps found, implementer fixes, re-review.\n   - Once spec ✅, dispatch **code quality reviewer** subagent. If issues found, implementer fixes, re-review.\n   - Mark task complete in TodoWrite.\n3. After all tasks: dispatch a final code reviewer for the entire implementation, then proceed to branch finishing.\n\n## Model Selection\n\nUse the least powerful model that can handle each role.\n\n- **Mechanical tasks** (1-2 files, complete spec): cheap/fast model\n- **Integration tasks** (multi-file, pattern matching, debugging): standard model\n- **Architecture, design, review**: most capable model\n\n## Handling Implementer Status\n\nImplementers report one of four statuses:\n\n- **DONE** — proceed to spec review\n- **DONE_WITH_CONCERNS** — read concerns; address correctness/scope issues before review; note observations and proceed\n- **NEEDS_CONTEXT** — provide missing context, re-dispatch\n- **BLOCKED** — assess: context problem (provide more), needs reasoning (more capable model), too large (break up), plan wrong (escalate to human). Never ignore or force the same model to retry without changes.\n\n## Red Flags — Never\n\n- Start implementation on main/master without explicit consent\n- Skip reviews (spec compliance OR code quality)\n- Proceed with unfixed issues\n- Dispatch multiple implementer subagents in parallel for the same plan (conflicts)\n- Make subagent read the plan file (provide full text instead)\n- Skip scene-setting context\n- Ignore subagent questions\n- Accept \"close enough\" on spec compliance\n- Start code quality review before spec compliance is ✅\n- Move to next task while either review has open issues"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Subagent-Driven Development
+
+
+    Execute a plan by dispatching a fresh subagent per task, with two-stage review after each: spec compliance first, then code quality.
+
+
+    **Why subagents:** You delegate tasks to specialized agents with isolated context. They should never inherit your session''s history — you construct exactly what they need. This keeps them focused and preserves your own context for coordination.
+
+
+    **Core principle:** Fresh subagent per task + two-stage review = high quality, fast iteration.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    Use when you have an implementation plan with **mostly independent tasks** and want to **stay in the current session**.
+
+
+    - Tasks tightly coupled? → Manual execution or brainstorm first.
+
+    - Want a parallel session instead? → Use `executing-plans`.
+
+
+    vs. Executing Plans: same session (no context switch), fresh subagent per task (no pollution), two-stage review automatic, faster iteration (no human-in-loop between tasks).'
+- sequence: 3
+  fragment_type: execution
+  content: '## The Process
+
+
+    **Once at start:** Read plan, extract all tasks with full text + context, create TodoWrite.
+
+
+    **Per task:**
+
+    1. Dispatch implementer subagent with full task text + scene-setting context
+
+    2. If implementer asks questions → answer fully → re-dispatch
+
+    3. Implementer implements, tests, commits, self-reviews
+
+    4. Dispatch spec reviewer → if gaps, implementer fixes, re-review
+
+    5. Once spec ✅, dispatch code quality reviewer → if issues, fix, re-review
+
+    6. Mark task complete in TodoWrite
+
+
+    **After all tasks:** Dispatch final code reviewer for entire implementation, then proceed to branch finishing.'
+- sequence: 4
+  fragment_type: execution
+  content: '## Model Selection
+
+
+    Use the **least powerful model** that can handle each role.
+
+
+    - **Mechanical implementation** (1-2 files, complete spec) → cheap/fast model
+
+    - **Integration tasks** (multi-file, pattern matching, debugging) → standard model
+
+    - **Architecture, design, review** → most capable model
+
+
+    Signals: 1-2 files + complete spec → cheap. Multi-file integration → standard. Design judgment or broad codebase understanding → most capable.'
+- sequence: 5
+  fragment_type: execution
+  content: "## Handling Implementer Status\n\nImplementers report one of four statuses:\n\n- **DONE** — proceed to spec review\n- **DONE_WITH_CONCERNS** — read concerns first. Correctness/scope issues → address before review. Observations (\"this file is getting large\") → note and proceed.\n- **NEEDS_CONTEXT** — provide missing info, re-dispatch\n- **BLOCKED** — assess the blocker:\n  1. Context problem → provide more, re-dispatch with same model\n  2. Reasoning required → re-dispatch with more capable model\n  3. Task too large → break into pieces\n  4. Plan wrong → escalate to human\n\n**Never** ignore an escalation or force the same model to retry without changes."
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Red Flags — Never
+
+
+    - Start implementation on main/master without explicit user consent
+
+    - Skip either review (spec compliance OR code quality)
+
+    - Proceed with unfixed issues
+
+    - Dispatch multiple implementer subagents in parallel for the same plan (conflicts)
+
+    - Make subagent read the plan file (provide full text instead)
+
+    - Skip scene-setting context (subagent needs to know where the task fits)
+
+    - Ignore subagent questions
+
+    - Accept "close enough" on spec compliance
+
+    - Skip review loops (reviewer found issues = implementer fixes = review again)
+
+    - Let implementer self-review replace actual review (both needed)
+
+    - **Start code quality review before spec compliance is ✅** (wrong order)
+
+    - Move to next task while either review has open issues'
+- sequence: 7
+  fragment_type: verification
+  content: '## Quality Gates
+
+
+    - **Self-review** catches issues before handoff
+
+    - **Two-stage review:** spec compliance first, then code quality
+
+    - **Review loops** ensure fixes actually work
+
+    - **Spec compliance** prevents over/under-building
+
+    - **Code quality** ensures the implementation is well-built
+
+    - **Final review** at end-of-plan catches integration issues
+
+
+    If a reviewer finds issues: implementer (same subagent) fixes them, reviewer reviews again, repeat until approved. Don''t skip the re-review.'

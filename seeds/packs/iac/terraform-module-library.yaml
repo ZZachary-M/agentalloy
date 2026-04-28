@@ -1,0 +1,111 @@
+skill_type: domain
+skill_id: terraform-module-library
+canonical_name: Terraform Module Library
+category: engineering
+skill_class: domain
+domain_tags:
+- terraform
+- infrastructure-as-code
+- modules
+- aws
+- vpc
+- best-practices
+- terratest
+- composition
+- variables
+- outputs
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin cloud-infrastructure/terraform-module-library source
+raw_prose: "# Terraform Module Library\n\nBuild reusable, composable Terraform modules following best practices. Modules encapsulate infrastructure patterns into versioned, testable units with clear inputs (variables), outputs, and documentation.\n\n## When to Use This Skill\n\n- Creating reusable infrastructure modules\n- Setting up AWS VPC, ECS, RDS, or similar resources\n- Standardizing infrastructure patterns across teams\n- Composing modules for complete environments\n- Writing Terratest tests for infrastructure\n- Versioning and publishing modules\n\n## Core Concepts\n\n### Module Structure\n\nEvery module follows a standard layout:\n\n```\nmodules/\n└── vpc/\n    ├── main.tf          # Resource definitions\n    ├── variables.tf     # Input variables\n    ├── outputs.tf       # Output values\n    ├── versions.tf      # Provider version constraints\n    ├── README.md        # Usage documentation\n    └── examples/\n        └── complete/\n            └── main.tf  # Example usage\n```\n\n### Best Practices\n\n- One concern per module (VPC, ECS cluster, RDS)\n- All inputs via variables, all outputs explicit\n- Version pin providers and modules\n- Include examples and documentation\n- Tag all resources consistently\n\n## Fundamental Patterns\n\n### Pattern 1: AWS VPC Module\n\n```hcl\n# modules/vpc/main.tf\nresource \"aws_vpc\" \"main\" {\n  cidr_block           = var.cidr_block\n  enable_dns_hostnames = true\n  enable_dns_support   = true\n\n  tags = merge(var.tags, {\n    Name = \"${var.name}-vpc\"\n  })\n}\n\nresource \"aws_subnet\" \"public\" {\n  count                   = length(var.public_subnet_cidrs)\n  vpc_id                  = aws_vpc.main.id\n  cidr_block              = var.public_subnet_cidrs[count.index]\n  availability_zone       = var.availability_zones[count.index]\n  map_public_ip_on_launch = true\n\n  tags = merge(var.tags, {\n    Name = \"${var.name}-public-${count.index + 1}\"\n    Tier = \"public\"\n  })\n}\n\nresource \"aws_subnet\" \"private\" {\n  count             = length(var.private_subnet_cidrs)\n  vpc_id            = aws_vpc.main.id\n  cidr_block        = var.private_subnet_cidrs[count.index]\n  availability_zone = var.availability_zones[count.index]\n\n  tags = merge(var.tags, {\n    Name = \"${var.name}-private-${count.index + 1}\"\n    Tier = \"private\"\n  })\n}\n\nresource \"aws_internet_gateway\" \"main\" {\n  vpc_id = aws_vpc.main.id\n  tags = merge(var.tags, { Name = \"${var.name}-igw\" })\n}\n\nresource \"aws_nat_gateway\" \"main\" {\n  count         = var.enable_nat_gateway ? 1 : 0\n  allocation_id = aws_eip.nat[0].id\n  subnet_id     = aws_subnet.public[0].id\n  tags = merge(var.tags, { Name = \"${var.name}-nat\" })\n}\n\nresource \"aws_eip\" \"nat\" {\n  count  = var.enable_nat_gateway ? 1 : 0\n  domain = \"vpc\"\n  tags   = merge(var.tags, { Name = \"${var.name}-nat-eip\" })\n}\n```\n\n### Pattern 2: Variables\n\n```hcl\n# modules/vpc/variables.tf\nvariable \"name\" {\n  description = \"Name prefix for all resources\"\n  type        = string\n}\n\nvariable \"cidr_block\" {\n  description = \"CIDR block for the VPC\"\n  type        = string\n  default     = \"10.0.0.0/16\"\n\n  validation {\n    condition     = can(cidrhost(var.cidr_block, 0))\n    error_message = \"Must be a valid CIDR block.\"\n  }\n}\n\nvariable \"public_subnet_cidrs\" {\n  description = \"CIDR blocks for public subnets\"\n  type        = list(string)\n  default     = [\"10.0.1.0/24\", \"10.0.2.0/24\"]\n}\n\nvariable \"private_subnet_cidrs\" {\n  description = \"CIDR blocks for private subnets\"\n  type        = list(string)\n  default     = [\"10.0.10.0/24\", \"10.0.11.0/24\"]\n}\n\nvariable \"availability_zones\" {\n  description = \"Availability zones for subnets\"\n  type        = list(string)\n}\n\nvariable \"enable_nat_gateway\" {\n  description = \"Enable NAT gateway for private subnets\"\n  type        = bool\n  default     = true\n}\n\nvariable \"tags\" {\n  description = \"Tags to apply to all resources\"\n  type        = map(string)\n  default     = {}\n}\n```\n\n### Pattern 3: Outputs\n\n```hcl\n# modules/vpc/outputs.tf\noutput \"vpc_id\" {\n  description = \"ID of the VPC\"\n  value       = aws_vpc.main.id\n}\n\noutput \"public_subnet_ids\" {\n  description = \"IDs of public subnets\"\n  value       = aws_subnet.public[*].id\n}\n\noutput \"private_subnet_ids\" {\n  description = \"IDs of private subnets\"\n  value       = aws_subnet.private[*].id\n}\n\noutput \"nat_gateway_ip\" {\n  description = \"Public IP of the NAT gateway\"\n  value       = var.enable_nat_gateway ? aws_eip.nat[0].public_ip : null\n}\n```\n\n### Pattern 4: Module Composition\n\n```hcl\n# environments/production/main.tf\nmodule \"vpc\" {\n  source = \"../../modules/vpc\"\n\n  name               = \"production\"\n  cidr_block         = \"10.0.0.0/16\"\n  availability_zones = [\"us-east-1a\", \"us-east-1b\", \"us-east-1c\"]\n  enable_nat_gateway = true\n\n  tags = {\n    Environment = \"production\"\n    Team        = \"platform\"\n    ManagedBy   = \"terraform\"\n  }\n}\n\nmodule \"ecs_cluster\" {\n  source = \"../../modules/ecs-cluster\"\n\n  name              = \"production\"\n  vpc_id            = module.vpc.vpc_id\n  private_subnet_ids = module.vpc.private_subnet_ids\n\n  tags = {\n    Environment = \"production\"\n    Team        = \"platform\"\n  }\n}\n```\n\n### Pattern 5: Testing with Terratest\n\n```go\npackage test\n\nimport (\n  \"testing\"\n  \"github.com/gruntwork-io/terratest/modules/terraform\"\n  \"github.com/stretchr/testify/assert\"\n)\n\nfunc TestVpcModule(t *testing.T) {\n  t.Parallel()\n\n  terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{\n    TerraformDir: \"../modules/vpc\",\n    Vars: map[string]interface{}{\n      \"name\":               \"test\",\n      \"cidr_block\":         \"10.99.0.0/16\",\n      \"availability_zones\": []string{\"us-east-1a\", \"us-east-1b\"},\n      \"enable_nat_gateway\": false,\n      \"tags\":               map[string]string{\"Environment\": \"test\"},\n    },\n  })\n\n  defer terraform.Destroy(t, terraformOptions)\n  terraform.InitAndApply(t, terraformOptions)\n\n  vpcId := terraform.Output(t, terraformOptions, \"vpc_id\")\n  assert.NotEmpty(t, vpcId)\n\n  publicSubnets := terraform.OutputList(t, terraformOptions, \"public_subnet_ids\")\n  assert.Equal(t, 2, len(publicSubnets))\n}\n```\n\n## Best Practices\n\n1. **One concern per module** — VPC, ECS, RDS as separate modules\n2. **All inputs via variables** — No hardcoded values in modules\n3. **All outputs explicit** — Expose what consumers need\n4. **Version pin providers** — `required_providers` block with version constraints\n5. **Include validation** — Use `validation` blocks on variables\n6. **Tag everything** — Consistent tagging via `var.tags` merged with resource-specific tags\n7. **Document with examples** — `examples/` directory with complete usage\n8. **Test with Terratest** — Automated infrastructure testing\n9. **Use `count` or `for_each`** — For optional or multiple resources\n10. **Compose modules** — Build environments by wiring module outputs to inputs"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Terraform Module Library
+
+
+    Build reusable, composable Terraform modules following best practices. Modules encapsulate infrastructure patterns into versioned, testable units with clear inputs (variables), outputs, and documentation.
+
+
+    ## Module Structure
+
+
+    Standard layout: `main.tf` (resources), `variables.tf` (inputs), `outputs.tf` (outputs), `versions.tf` (provider constraints), `README.md`, and `examples/` directory. One concern per module (VPC, ECS cluster, RDS).'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Creating reusable infrastructure modules
+
+    - Setting up AWS VPC, ECS, RDS, or similar resources
+
+    - Standardizing infrastructure patterns across teams
+
+    - Composing modules for complete environments
+
+    - Writing Terratest tests for infrastructure
+
+    - Versioning and publishing modules'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: AWS VPC Module
+
+
+    Define `aws_vpc` with `cidr_block` variable, DNS support enabled. Create public subnets with `map_public_ip_on_launch = true` and private subnets without it. Use `count = length(var.subnet_cidrs)` for multiple subnets across availability zones. Add internet gateway for public traffic and optional NAT gateway (controlled by `var.enable_nat_gateway` boolean) for private subnet outbound.
+
+
+    ## Pattern 2: Variables with Validation
+
+
+    Use `variable` blocks with `description`, `type`, `default`, and `validation` blocks. Example: validate CIDR with `can(cidrhost(var.cidr_block, 0))`. All module inputs must be via variables — no hardcoded values.
+
+
+    ## Pattern 3: Explicit Outputs
+
+
+    Output `vpc_id`, `public_subnet_ids`, `private_subnet_ids`, `nat_gateway_ip` (conditional on NAT enabled). Use splat expressions (`[*].id`) for lists.'
+- sequence: 4
+  fragment_type: example
+  content: "## VPC Module Example (Patterns 1-3)\n\n```hcl\n# main.tf\nresource \"aws_vpc\" \"main\" {\n  cidr_block           = var.cidr_block\n  enable_dns_hostnames = true\n  enable_dns_support   = true\n  tags = merge(var.tags, { Name = \"${var.name}-vpc\" })\n}\n\nresource \"aws_subnet\" \"public\" {\n  count                   = length(var.public_subnet_cidrs)\n  vpc_id                  = aws_vpc.main.id\n  cidr_block              = var.public_subnet_cidrs[count.index]\n  availability_zone       = var.availability_zones[count.index]\n  map_public_ip_on_launch = true\n  tags = merge(var.tags, { Name = \"${var.name}-public-${count.index + 1}\" })\n}\n\n# variables.tf\nvariable \"cidr_block\" {\n  type    = string\n  default = \"10.0.0.0/16\"\n  validation {\n    condition     = can(cidrhost(var.cidr_block, 0))\n    error_message = \"Must be a valid CIDR block.\"\n  }\n}\n\n# outputs.tf\noutput \"vpc_id\" { value = aws_vpc.main.id }\noutput \"public_subnet_ids\" { value = aws_subnet.public[*].id }\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 4: Module Composition
+
+
+    Wire module outputs to inputs. Example: `module.vpc.vpc_id` feeds into `module.ecs_cluster.vpc_id`. Each environment (production, staging) composes the same modules with different variable values. Use consistent tags across all modules.
+
+
+    ## Pattern 5: Testing with Terratest
+
+
+    Write Go tests using `terratest/modules/terraform`. Set `TerraformDir` to module path, provide test `Vars`, call `terraform.InitAndApply()`, assert on outputs with `terraform.Output()` and `terraform.OutputList()`. Always `defer terraform.Destroy()` for cleanup. Run tests in parallel with `t.Parallel()`.'
+- sequence: 6
+  fragment_type: example
+  content: "## Module Composition Example (Pattern 4)\n\n```hcl\nmodule \"vpc\" {\n  source             = \"../../modules/vpc\"\n  name               = \"production\"\n  cidr_block         = \"10.0.0.0/16\"\n  availability_zones = [\"us-east-1a\", \"us-east-1b\", \"us-east-1c\"]\n  enable_nat_gateway = true\n  tags = { Environment = \"production\", Team = \"platform\", ManagedBy = \"terraform\" }\n}\n\nmodule \"ecs_cluster\" {\n  source             = \"../../modules/ecs-cluster\"\n  name               = \"production\"\n  vpc_id             = module.vpc.vpc_id\n  private_subnet_ids = module.vpc.private_subnet_ids\n  tags = { Environment = \"production\", Team = \"platform\" }\n}\n```"
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **One concern per module** — VPC, ECS, RDS as separate modules
+
+    2. **All inputs via variables** — No hardcoded values
+
+    3. **All outputs explicit** — Expose what consumers need
+
+    4. **Version pin providers** — `required_providers` with version constraints
+
+    5. **Include validation** — `validation` blocks on variables
+
+    6. **Tag everything** — `var.tags` merged with resource-specific tags
+
+    7. **Document with examples** — `examples/` directory with complete usage
+
+    8. **Test with Terratest** — Automated infrastructure testing
+
+    9. **Use `count` or `for_each`** — For optional or multiple resources
+
+    10. **Compose modules** — Wire outputs to inputs for complete environments'

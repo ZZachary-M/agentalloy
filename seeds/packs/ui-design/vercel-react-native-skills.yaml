@@ -1,0 +1,278 @@
+skill_type: domain
+skill_id: vercel-react-native-skills
+canonical_name: React Native Skills
+category: engineering
+skill_class: domain
+domain_tags:
+- react-native
+- expo
+- mobile-performance
+- list-performance
+- native-modules
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from Vercel Labs source
+raw_prose: '# React Native Skills
+
+
+  Comprehensive best practices for React Native and Expo applications. Contains
+
+  rules across multiple categories covering performance, animations, UI patterns,
+
+  and platform-specific optimizations.
+
+
+  ## When to Apply
+
+
+  Reference these guidelines when:
+
+
+  - Building React Native or Expo apps
+
+  - Optimizing list and scroll performance
+
+  - Implementing animations with Reanimated
+
+  - Working with images and media
+
+  - Configuring native modules or fonts
+
+  - Structuring monorepo projects with native dependencies
+
+
+  ## Rule Categories by Priority
+
+
+  | Priority | Category         | Impact   | Prefix               |
+
+  | -------- | ---------------- | -------- | -------------------- |
+
+  | 1        | List Performance | CRITICAL | `list-performance-`  |
+
+  | 2        | Animation        | HIGH     | `animation-`         |
+
+  | 3        | Navigation       | HIGH     | `navigation-`        |
+
+  | 4        | UI Patterns      | HIGH     | `ui-`                |
+
+  | 5        | State Management | MEDIUM   | `react-state-`       |
+
+  | 6        | Rendering        | MEDIUM   | `rendering-`         |
+
+  | 7        | Monorepo         | MEDIUM   | `monorepo-`          |
+
+  | 8        | Configuration    | LOW      | `fonts-`, `imports-` |
+
+
+  ## How to Use
+
+
+  Read individual rule files for detailed explanations and code examples:
+
+
+  ```
+
+  rules/list-performance-virtualize.md
+
+  rules/animation-gpu-properties.md
+
+  ```
+
+
+  Each rule file contains:
+
+
+  - Brief explanation of why it matters
+
+  - Incorrect code example with explanation
+
+  - Correct code example with explanation
+
+  - Additional context and references
+
+
+  ## Full Compiled Document
+
+
+  For the complete guide with all rules expanded: `AGENTS.md`'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# React Native Skills
+
+
+    Comprehensive best practices for React Native and Expo applications. Contains rules across multiple categories covering performance, animations, UI patterns, and platform-specific optimizations.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Apply
+
+
+    Reference these guidelines when:
+
+
+    - Building React Native or Expo apps
+
+    - Optimizing list and scroll performance
+
+    - Implementing animations with Reanimated
+
+    - Working with images and media
+
+    - Configuring native modules or fonts
+
+    - Structuring monorepo projects with native dependencies'
+- sequence: 3
+  fragment_type: execution
+  content: '## Rule Categories by Priority
+
+
+    | Priority | Category         | Impact   | Prefix               |
+
+    | -------- | ---------------- | -------- | -------------------- |
+
+    | 1        | List Performance | CRITICAL | `list-performance-`  |
+
+    | 2        | Animation        | HIGH     | `animation-`         |
+
+    | 3        | Navigation       | HIGH     | `navigation-`        |
+
+    | 4        | UI Patterns      | HIGH     | `ui-`                |
+
+    | 5        | State Management | MEDIUM   | `react-state-`       |
+
+    | 6        | Rendering        | MEDIUM   | `rendering-`         |
+
+    | 7        | Monorepo         | MEDIUM   | `monorepo-`          |
+
+    | 8        | Configuration    | LOW      | `fonts-`, `imports-` |'
+- sequence: 4
+  fragment_type: execution
+  content: '### 1. List Performance (CRITICAL)
+
+
+    - `list-performance-virtualize` — Use FlashList for large lists
+
+    - `list-performance-item-memo` — Memoize list item components
+
+    - `list-performance-callbacks` — Stabilize callback references
+
+    - `list-performance-inline-objects` — Avoid inline style objects
+
+    - `list-performance-function-references` — Extract functions outside render
+
+    - `list-performance-images` — Optimize images in lists
+
+    - `list-performance-item-expensive` — Move expensive work outside items
+
+    - `list-performance-item-types` — Use item types for heterogeneous lists'
+- sequence: 5
+  fragment_type: execution
+  content: '### 2. Animation (HIGH)
+
+
+    - `animation-gpu-properties` — Animate only transform and opacity
+
+    - `animation-derived-value` — Use useDerivedValue for computed animations
+
+    - `animation-gesture-detector-press` — Use Gesture.Tap instead of Pressable'
+- sequence: 6
+  fragment_type: execution
+  content: '### 3. Navigation (HIGH)
+
+
+    - `navigation-native-navigators` — Use native stack and native tabs over JS navigators'
+- sequence: 7
+  fragment_type: execution
+  content: '### 4. UI Patterns (HIGH)
+
+
+    - `ui-expo-image` — Use expo-image for all images
+
+    - `ui-image-gallery` — Use Galeria for image lightboxes
+
+    - `ui-pressable` — Use Pressable over TouchableOpacity
+
+    - `ui-safe-area-scroll` — Handle safe areas in ScrollViews
+
+    - `ui-scrollview-content-inset` — Use contentInset for headers
+
+    - `ui-menus` — Use native context menus
+
+    - `ui-native-modals` — Use native modals when possible
+
+    - `ui-measure-views` — Use onLayout, not measure()
+
+    - `ui-styling` — Use StyleSheet.create or Nativewind'
+- sequence: 8
+  fragment_type: execution
+  content: '### 5. State Management (MEDIUM)
+
+
+    - `react-state-minimize` — Minimize state subscriptions
+
+    - `react-state-dispatcher` — Use dispatcher pattern for callbacks
+
+    - `react-state-fallback` — Show fallback on first render
+
+    - `react-compiler-destructure-functions` — Destructure for React Compiler
+
+    - `react-compiler-reanimated-shared-values` — Handle shared values with compiler'
+- sequence: 9
+  fragment_type: execution
+  content: '### 6. Rendering (MEDIUM)
+
+
+    - `rendering-text-in-text-component` — Wrap text in Text components
+
+    - `rendering-no-falsy-and` — Avoid falsy && for conditional rendering'
+- sequence: 10
+  fragment_type: execution
+  content: '### 7. Monorepo (MEDIUM)
+
+
+    - `monorepo-native-deps-in-app` — Keep native dependencies in app package
+
+    - `monorepo-single-dependency-versions` — Use single versions across packages'
+- sequence: 11
+  fragment_type: execution
+  content: '### 8. Configuration (LOW)
+
+
+    - `fonts-config-plugin` — Use config plugins for custom fonts
+
+    - `imports-design-system-folder` — Organize design system imports
+
+    - `js-hoist-intl` — Hoist Intl object creation'
+- sequence: 12
+  fragment_type: example
+  content: '## How to Use
+
+
+    Read individual rule files for detailed explanations and code examples:
+
+
+    ```
+
+    rules/list-performance-virtualize.md
+
+    rules/animation-gpu-properties.md
+
+    ```
+
+
+    Each rule file contains:
+
+
+    - Brief explanation of why it matters
+
+    - Incorrect code example with explanation
+
+    - Correct code example with explanation
+
+    - Additional context and references
+
+
+    For the complete guide with all rules expanded: `AGENTS.md`'

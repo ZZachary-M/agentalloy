@@ -1,0 +1,184 @@
+skill_type: domain
+skill_id: python-packaging
+canonical_name: Python Packaging
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- packaging
+- pyproject-toml
+- pypi
+- setuptools
+- wheel
+- cli
+- click
+- argparse
+- distribution
+- build
+- twine
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin python-development/python-packaging source
+raw_prose: "# Python Packaging\n\nComprehensive guide to creating, structuring, and distributing Python packages using modern packaging tools, pyproject.toml, and publishing to PyPI.\n\n## When to Use This Skill\n\n- Creating Python libraries for distribution\n- Building command-line tools with entry points\n- Publishing packages to PyPI or private repositories\n- Setting up Python project structure\n- Creating installable packages with dependencies\n- Building wheels and source distributions\n- Versioning and releasing Python packages\n- Creating namespace packages\n- Implementing package metadata and classifiers\n\n## Core Concepts\n\n### 1. Package Structure\n- **Source layout**: `src/package_name/` (recommended)\n- **Flat layout**: `package_name/` (simpler but less flexible)\n- **Package metadata**: pyproject.toml, setup.py, or setup.cfg\n- **Distribution formats**: wheel (.whl) and source distribution (.tar.gz)\n\n### 2. Modern Packaging Standards\n- **PEP 517/518**: Build system requirements\n- **PEP 621**: Metadata in pyproject.toml\n- **PEP 660**: Editable installs\n- **pyproject.toml**: Single source of configuration\n\n### 3. Build Backends\n- **setuptools**: Traditional, widely used\n- **hatchling**: Modern, opinionated\n- **flit**: Lightweight, for pure Python\n- **poetry**: Dependency management + packaging\n\n### 4. Distribution\n- **PyPI**: Python Package Index (public)\n- **TestPyPI**: Testing before production\n- **Private repositories**: JFrog, AWS CodeArtifact, etc.\n\n## Quick Start\n\n### Minimal Package Structure\n\n```\nmy-package/\n├── pyproject.toml\n├── README.md\n├── LICENSE\n├── src/\n│   └── my_package/\n│       ├── __init__.py\n│       └── module.py\n└── tests/\n    └── test_module.py\n```\n\n### Minimal pyproject.toml\n\n```toml\n[build-system]\nrequires = [\"setuptools>=61.0\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"my-package\"\nversion = \"0.1.0\"\ndescription = \"A short description\"\nauthors = [{name = \"Your Name\", email = \"you@example.com\"}]\nreadme = \"README.md\"\nrequires-python = \">=3.8\"\ndependencies = [\n    \"requests>=2.28.0\",\n]\n\n[project.optional-dependencies]\ndev = [\n    \"pytest>=7.0\",\n    \"black>=22.0\",\n]\n```\n\n## Package Structure Patterns\n\n### Pattern 1: Source Layout (Recommended)\n\n```\nmy-package/\n├── pyproject.toml\n├── README.md\n├── LICENSE\n├── .gitignore\n├── src/\n│   └── my_package/\n│       ├── __init__.py\n│       ├── core.py\n│       ├── utils.py\n│       └── py.typed\n├── tests/\n│   ├── __init__.py\n│   ├── test_core.py\n│   └── test_utils.py\n└── docs/\n    └── index.md\n```\n\nAdvantages: prevents accidentally importing from source, cleaner test imports, better isolation.\n\n```toml\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\n```\n\n### Pattern 2: Flat Layout\n\nSimpler but less professional for libraries. Can import package without installing.\n\n### Pattern 3: Multi-Package Project\n\nPlace packages under `packages/` directory, each with its own `src/` layout.\n\n## Complete pyproject.toml Examples\n\n### Pattern 4: Full-Featured pyproject.toml\n\n```toml\n[build-system]\nrequires = [\"setuptools>=61.0\", \"wheel\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"my-awesome-package\"\nversion = \"1.0.0\"\ndescription = \"An awesome Python package\"\nreadme = \"README.md\"\nrequires-python = \">=3.8\"\nlicense = {text = \"MIT\"}\nauthors = [{name = \"Your Name\", email = \"you@example.com\"}]\nkeywords = [\"example\", \"package\", \"awesome\"]\nclassifiers = [\n    \"Development Status :: 4 - Beta\",\n    \"Intended Audience :: Developers\",\n    \"License :: OSI Approved :: MIT License\",\n    \"Programming Language :: Python :: 3\",\n    \"Programming Language :: Python :: 3.8\",\n    \"Programming Language :: Python :: 3.9\",\n    \"Programming Language :: Python :: 3.10\",\n    \"Programming Language :: Python :: 3.11\",\n    \"Programming Language :: Python :: 3.12\",\n]\n\ndependencies = [\n    \"requests>=2.28.0,<3.0.0\",\n    \"click>=8.0.0\",\n    \"pydantic>=2.0.0\",\n]\n\n[project.optional-dependencies]\ndev = [\"pytest>=7.0.0\", \"pytest-cov>=4.0.0\", \"black>=23.0.0\", \"ruff>=0.1.0\", \"mypy>=1.0.0\"]\ndocs = [\"sphinx>=5.0.0\", \"sphinx-rtd-theme>=1.0.0\"]\nall = [\"my-awesome-package[dev,docs]\"]\n\n[project.urls]\nHomepage = \"https://github.com/username/my-awesome-package\"\nDocumentation = \"https://my-awesome-package.readthedocs.io\"\nRepository = \"https://github.com/username/my-awesome-package\"\n\n[project.scripts]\nmy-cli = \"my_package.cli:main\"\n```\n\n### Pattern 5: Dynamic Versioning\n\n```toml\n[project]\ndynamic = [\"version\"]\n\n[tool.setuptools.dynamic]\nversion = {attr = \"my_package.__version__\"}\n\n# Or use setuptools-scm for git-based versioning\n[tool.setuptools_scm]\nwrite_to = \"src/my_package/_version.py\"\n```\n\n## Command-Line Interface (CLI) Patterns\n\n### Pattern 6: CLI with Click\n\n```python\nimport click\n\n@click.group()\n@click.version_option()\ndef cli():\n    \"\"\"My awesome CLI tool.\"\"\"\n    pass\n\n@cli.command()\n@click.argument(\"name\")\n@click.option(\"--greeting\", default=\"Hello\", help=\"Greeting to use\")\ndef greet(name: str, greeting: str):\n    click.echo(f\"{greeting}, {name}!\")\n\ndef main():\n    cli()\n```\n\nRegister in pyproject.toml: `[project.scripts] my-tool = \"my_package.cli:main\"`\n\n### Pattern 7: CLI with argparse\n\n```python\nimport argparse, sys\n\ndef main():\n    parser = argparse.ArgumentParser(description=\"My awesome tool\", prog=\"my-tool\")\n    parser.add_argument(\"--version\", action=\"version\", version=\"%(prog)s 1.0.0\")\n    subparsers = parser.add_subparsers(dest=\"command\", help=\"Commands\")\n    process_parser = subparsers.add_parser(\"process\", help=\"Process data\")\n    process_parser.add_argument(\"input_file\", help=\"Input file path\")\n    process_parser.add_argument(\"--output\", \"-o\", default=\"output.txt\")\n    args = parser.parse_args()\n    if args.command == \"process\":\n        process_data(args.input_file, args.output)\n    else:\n        parser.print_help()\n        sys.exit(1)\n```\n\n## Building and Publishing\n\n### Pattern 8: Build Package Locally\n\n```bash\npip install build twine\npython -m build\ntwine check dist/*\n```\n\n### Pattern 9: Publishing to PyPI\n\n```bash\ntwine upload --repository testpypi dist/*\npip install --index-url https://test.pypi.org/simple/ my-package\ntwine upload dist/*\n```\n\nUse API tokens via `~/.pypirc` with `username = __token__`.\n\n### Pattern 10: Automated Publishing with GitHub Actions\n\n```yaml\nname: Publish to PyPI\non:\n  release:\n    types: [created]\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.11\"\n      - run: pip install build twine\n      - run: python -m build\n      - run: twine check dist/*\n      - run: twine upload dist/*\n        env:\n          TWINE_USERNAME: __token__\n          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}\n```"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Packaging
+
+
+    Comprehensive guide to creating, structuring, and distributing Python packages using modern packaging tools, pyproject.toml, and publishing to PyPI.
+
+
+    ## Core Concepts
+
+
+    1. **Package Structure** — Source layout (`src/package_name/`) is recommended. Flat layout is simpler but less flexible. Distribution formats: wheel (.whl) and sdist (.tar.gz).
+
+    2. **Modern Standards** — PEP 517/518 (build system), PEP 621 (metadata in pyproject.toml), PEP 660 (editable installs).
+
+    3. **Build Backends** — setuptools (traditional), hatchling (modern), flit (lightweight pure Python), poetry (deps + packaging).
+
+    4. **Distribution** — PyPI (public), TestPyPI (testing), private repositories (JFrog, AWS CodeArtifact).'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Creating Python libraries for distribution
+
+    - Building command-line tools with entry points
+
+    - Publishing packages to PyPI or private repositories
+
+    - Setting up Python project structure
+
+    - Creating installable packages with dependencies
+
+    - Building wheels and source distributions
+
+    - Versioning and releasing Python packages'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Source Layout (Recommended)
+
+
+    Place package code under `src/package_name/`. Include `py.typed` marker for type hint support. Configure with `[tool.setuptools.packages.find] where = ["src"]`. Advantages: prevents accidentally importing from source, cleaner test imports, better isolation.
+
+
+    ## Pattern 2: Flat Layout
+
+
+    Place `package_name/` at project root. Simpler but can import package without installing — less professional for libraries.
+
+
+    ## Pattern 3: Multi-Package Project
+
+
+    For monorepos, place packages under `packages/` directory, each with its own `src/` layout.'
+- sequence: 4
+  fragment_type: example
+  content: '## Minimal pyproject.toml
+
+
+    ```toml
+
+    [build-system]
+
+    requires = ["setuptools>=61.0"]
+
+    build-backend = "setuptools.build_meta"
+
+
+    [project]
+
+    name = "my-package"
+
+    version = "0.1.0"
+
+    description = "A short description"
+
+    authors = [{name = "Your Name", email = "you@example.com"}]
+
+    readme = "README.md"
+
+    requires-python = ">=3.8"
+
+    dependencies = ["requests>=2.28.0"]
+
+
+    [project.optional-dependencies]
+
+    dev = ["pytest>=7.0", "black>=22.0"]
+
+    ```'
+- sequence: 5
+  fragment_type: example
+  content: "## Full-Featured pyproject.toml (Pattern 4)\n\n```toml\n[build-system]\nrequires = [\"setuptools>=61.0\", \"wheel\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"my-awesome-package\"\nversion = \"1.0.0\"\ndescription = \"An awesome Python package\"\nreadme = \"README.md\"\nrequires-python = \">=3.8\"\nlicense = {text = \"MIT\"}\nauthors = [{name = \"Your Name\", email = \"you@example.com\"}]\nkeywords = [\"example\", \"package\"]\nclassifiers = [\n    \"Development Status :: 4 - Beta\",\n    \"License :: OSI Approved :: MIT License\",\n    \"Programming Language :: Python :: 3\",\n]\ndependencies = [\"requests>=2.28.0,<3.0.0\", \"click>=8.0.0\", \"pydantic>=2.0.0\"]\n\n[project.optional-dependencies]\ndev = [\"pytest>=7.0.0\", \"ruff>=0.1.0\", \"mypy>=1.0.0\"]\n\n[project.scripts]\nmy-cli = \"my_package.cli:main\"\n\n[tool.setuptools.packages.find]\nwhere = [\"src\"]\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Pattern 5: Dynamic Versioning
+
+
+    Use `dynamic = ["version"]` in `[project]` with either `[tool.setuptools.dynamic] version = {attr = "my_package.__version__"}` or `setuptools-scm` for git-tag-based versioning. With setuptools-scm, add `[tool.setuptools_scm] write_to = "src/my_package/_version.py"` and use `importlib.metadata.version("my-package")` in `__init__.py`.
+
+
+    ## Pattern 6: CLI with Click
+
+
+    Define a `@click.group()` with `@click.version_option()`, add commands with `@cli.command()`, and register the entry point via `[project.scripts]` in pyproject.toml.
+
+
+    ## Pattern 7: CLI with argparse
+
+
+    Use `argparse.ArgumentParser` with `subparsers` for subcommands. Register via `[project.scripts]` in pyproject.toml. Use `sys.exit(1)` for unknown commands.'
+- sequence: 7
+  fragment_type: example
+  content: "## CLI with Click Example (Pattern 6)\n\n```python\nimport click\n\n@click.group()\n@click.version_option()\ndef cli():\n    \"\"\"My awesome CLI tool.\"\"\"\n    pass\n\n@cli.command()\n@click.argument(\"name\")\n@click.option(\"--greeting\", default=\"Hello\", help=\"Greeting to use\")\ndef greet(name: str, greeting: str):\n    click.echo(f\"{greeting}, {name}!\")\n\ndef main():\n    cli()\n```\n\nRegister: `[project.scripts] my-tool = \"my_package.cli:main\"`\n\n```bash\npip install -e .\nmy-tool greet World\nmy-tool greet Alice --greeting=\"Hi\"\n```"
+- sequence: 8
+  fragment_type: execution
+  content: '## Pattern 8: Build Package Locally
+
+
+    Install `build` and `twine`, then run `python -m build` to create both sdist (.tar.gz) and wheel (.whl) in `dist/`. Use `twine check dist/*` to validate.
+
+
+    ## Pattern 9: Publishing to PyPI
+
+
+    First test on TestPyPI: `twine upload --repository testpypi dist/*`. Install from TestPyPI to verify. Then publish to PyPI: `twine upload dist/*`. Use API tokens via `~/.pypirc` with `username = __token__` — never use password auth.
+
+
+    ## Pattern 10: Automated Publishing with GitHub Actions
+
+
+    Trigger on `release: types: [created]`. Steps: checkout, setup Python, install build+twine, `python -m build`, `twine check dist/*`, `twine upload dist/*` with `TWINE_PASSWORD` from GitHub secrets.'
+- sequence: 9
+  fragment_type: example
+  content: "## Automated Publishing GitHub Actions (Pattern 10)\n\n```yaml\nname: Publish to PyPI\non:\n  release:\n    types: [created]\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.11\"\n      - run: pip install build twine\n      - run: python -m build\n      - run: twine check dist/*\n      - run: twine upload dist/*\n        env:\n          TWINE_USERNAME: __token__\n          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}\n```"
+- sequence: 10
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Use source layout** — `src/package_name/` prevents accidental imports
+
+    2. **Use pyproject.toml** — Single source of configuration (PEP 621)
+
+    3. **Pin dependency ranges** — `>=2.28.0,<3.0.0` not `==2.28.0`
+
+    4. **Include py.typed marker** — For type hint support in consumers
+
+    5. **Test on TestPyPI first** — Before publishing to production PyPI
+
+    6. **Use API tokens** — Never use password auth for PyPI
+
+    7. **Automate publishing** — GitHub Actions triggered on release creation
+
+    8. **Include classifiers** — Help users find your package on PyPI
+
+    9. **Separate dev dependencies** — Use `[project.optional-dependencies]`
+
+    10. **Dynamic versioning** — Use setuptools-scm for git-tag-based versions'

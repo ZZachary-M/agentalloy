@@ -1,0 +1,27 @@
+name: cicd
+version: 1.0.0
+description: CI/CD pipelines — GitHub Actions, GitLab CI, GitOps, deployment pipeline
+  design.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: ci-cd-and-automation
+  file: ci-cd-and-automation.yaml
+  fragment_count: 15
+- skill_id: deployment-pipeline-design
+  file: deployment-pipeline-design.yaml
+  fragment_count: 14
+- skill_id: github-actions-templates
+  file: github-actions-templates.yaml
+  fragment_count: 9
+- skill_id: gitlab-ci-patterns
+  file: gitlab-ci-patterns.yaml
+  fragment_count: 10
+- skill_id: gitops-workflow
+  file: gitops-workflow.yaml
+  fragment_count: 8

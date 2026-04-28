@@ -1,0 +1,26 @@
+skill_type: domain
+skill_id: nextjs-upgrade-patterns
+canonical_name: Next.js Upgrade Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- nextjs
+- migration
+- codemod
+- dependency-upgrade
+always_apply: false
+phase_scope: null
+category_scope: null
+author: github-copilot
+change_summary: initial authoring draft from SKILL.md
+raw_prose: "---\nname: next-upgrade\ndescription: Upgrade Next.js to the latest version following official migration guides and codemods\nargument-hint: \"[target-version]\"\n---\n\n# Upgrade Next.js\n\nUpgrade the current project to the latest Next.js version following official migration guides.\n\n## Instructions\n\n1. **Detect current version**: Read `package.json` to identify the current Next.js version and related dependencies (React, React DOM, etc.)\n\n2. **Fetch the latest upgrade guide**: Use WebFetch to get the official upgrade documentation:\n   - Codemods: https://nextjs.org/docs/app/guides/upgrading/codemods\n   - Version-specific guides (adjust version as needed):\n     - https://nextjs.org/docs/app/guides/upgrading/version-16 \n     - https://nextjs.org/docs/app/guides/upgrading/version-15\n     - https://nextjs.org/docs/app/guides/upgrading/version-14\n\n3. **Determine upgrade path**: Based on current version, identify which migration steps apply. For major version jumps, upgrade incrementally (e.g., 13 → 14 → 15).\n\n4. **Run codemods first**: Next.js provides codemods to automate breaking changes:\n   ```bash\n   npx @next/codemod@latest <transform> <path>\n   ```\n   Common transforms:\n   - `next-async-request-api` - Updates async Request APIs (v15)\n   - `next-request-geo-ip` - Migrates geo/ip properties (v15)\n   - `next-dynamic-access-named-export` - Transforms dynamic imports (v15)\n\n5. **Update dependencies**: Upgrade Next.js and peer dependencies together:\n   ```bash\n   npm install next@latest react@latest react-dom@latest\n   ```\n\n6. **Review breaking changes**: Check the upgrade guide for manual changes needed:\n   - API changes (e.g., async params in v15)\n   - Configuration changes in `next.config.js`\n   - Deprecated features being removed\n\n7. **Update TypeScript types** (if applicable):\n   ```bash\n   npm install @types/react@latest @types/react-dom@latest\n   ```\n\n8. **Test the upgrade**:\n   - Run `npm run build` to check for build errors\n   - Run `npm run dev` and test key functionality"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: "# Upgrade Next.js\n\nUpgrade the current project to the latest Next.js version following official migration guides.\n\n## Instructions\n\n1. **Detect current version**: Read `package.json` to identify the current Next.js version and related dependencies (React, React DOM, etc.)\n\n2. **Fetch the latest upgrade guide**: Use WebFetch to get the official upgrade documentation:\n   - Codemods: https://nextjs.org/docs/app/guides/upgrading/codemods\n   - Version-specific guides (adjust version as needed):\n     - https://nextjs.org/docs/app/guides/upgrading/version-16 \n     - https://nextjs.org/docs/app/guides/upgrading/version-15\n     - https://nextjs.org/docs/app/guides/upgrading/version-14\n\n3. **Determine upgrade path**: Based on current version, identify which migration steps apply. For major version jumps, upgrade incrementally (e.g., 13 → 14 → 15)."
+- sequence: 2
+  fragment_type: execution
+  content: "4. **Run codemods first**: Next.js provides codemods to automate breaking changes:\n   ```bash\n   npx @next/codemod@latest <transform> <path>\n   ```\n   Common transforms:\n   - `next-async-request-api` - Updates async Request APIs (v15)\n   - `next-request-geo-ip` - Migrates geo/ip properties (v15)\n   - `next-dynamic-access-named-export` - Transforms dynamic imports (v15)\n\n5. **Update dependencies**: Upgrade Next.js and peer dependencies together:\n   ```bash\n   npm install next@latest react@latest react-dom@latest\n   ```\n\n6. **Review breaking changes**: Check the upgrade guide for manual changes needed:\n   - API changes (e.g., async params in v15)\n   - Configuration changes in `next.config.js`\n   - Deprecated features being removed\n\n7. **Update TypeScript types** (if applicable):\n   ```bash\n   npm install @types/react@latest @types/react-dom@latest\n   ```"
+- sequence: 3
+  fragment_type: verification
+  content: "8. **Test the upgrade**:\n   - Run `npm run build` to check for build errors\n   - Run `npm run dev` and test key functionality"

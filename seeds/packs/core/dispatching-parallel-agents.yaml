@@ -1,0 +1,204 @@
+skill_type: domain
+skill_id: dispatching-parallel-agents
+canonical_name: Dispatching Parallel Agents
+category: tooling
+skill_class: domain
+domain_tags:
+- parallel-agents
+- task-delegation
+- independent-domains
+- context-isolation
+- concurrent-investigation
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from local-workstation superpowers
+raw_prose: '# Dispatching Parallel Agents
+
+
+  Delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session''s context or history — you construct exactly what they need. This also preserves your own context for coordination work.
+
+
+  When you have multiple unrelated failures (different test files, different subsystems, different bugs), investigating them sequentially wastes time. Each independent investigation can happen in parallel.
+
+
+  **Core principle:** Dispatch one agent per independent problem domain. Let them work concurrently.
+
+
+  ## When to Use
+
+
+  Use when:
+
+  - 3+ test files failing with different root causes
+
+  - Multiple subsystems broken independently
+
+  - Each problem can be understood without context from others
+
+  - No shared state between investigations
+
+
+  Don''t use when:
+
+  - Failures are related (fix one might fix others)
+
+  - Need full system state to understand
+
+  - Agents would interfere with each other (editing same files)
+
+  - Exploratory debugging — you don''t know what''s broken yet
+
+
+  ## The Pattern
+
+
+  1. **Identify independent domains.** Group failures by what''s broken. Each domain is independent — fixing one doesn''t affect another.
+
+  2. **Create focused agent tasks.** Each agent gets specific scope (one file/subsystem), clear goal (make these tests pass), constraints (don''t change other code), expected output (summary of findings + fixes).
+
+  3. **Dispatch in parallel.** All agents run concurrently in a single dispatch.
+
+  4. **Review and integrate.** Read each summary, verify no conflicts, run full suite, integrate.
+
+
+  ## Agent Prompt Structure
+
+
+  Good prompts are: focused (one clear domain), self-contained (all context needed), specific about output (what should the agent return).
+
+
+  Include error messages, test names, root-cause hints if known, and explicit constraints ("do NOT change production code", "fix tests only", "do NOT just increase timeouts — find the real issue").
+
+
+  ## Common Mistakes
+
+
+  - Too broad ("Fix all tests") — agent gets lost. Specific scope wins.
+
+  - No context ("Fix the race condition") — paste error messages and test names.
+
+  - No constraints — agent might refactor everything.
+
+  - Vague output ("Fix it") — require summary of root cause + changes.
+
+
+  ## Verification
+
+
+  After agents return:
+
+  1. Review each summary
+
+  2. Check for conflicts (did agents edit same code?)
+
+  3. Run full suite to verify fixes work together
+
+  4. Spot check — agents can make systematic errors'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Dispatching Parallel Agents
+
+
+    Delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed. They should never inherit your session''s context or history — you construct exactly what they need. This also preserves your own context for coordination work.
+
+
+    **Core principle:** Dispatch one agent per independent problem domain. Let them work concurrently.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    **Use when:**
+
+    - 3+ test files failing with different root causes
+
+    - Multiple subsystems broken independently
+
+    - Each problem can be understood without context from others
+
+    - No shared state between investigations
+
+
+    **Don''t use when:**
+
+    - Failures are related (fix one might fix others)
+
+    - Need to understand full system state
+
+    - Agents would interfere (editing same files)
+
+    - Exploratory debugging — you don''t know what''s broken yet'
+- sequence: 3
+  fragment_type: execution
+  content: "## The Pattern\n\n1. **Identify independent domains.** Group failures by what's broken — File A: tool approval; File B: batch completion; File C: abort. Each is independent.\n2. **Create focused agent tasks.** Each agent gets:\n   - Specific scope (one test file or subsystem)\n   - Clear goal (make these tests pass)\n   - Constraints (don't change unrelated code)\n   - Expected output (summary of findings + fixes)\n3. **Dispatch in parallel.** All agents fire concurrently in a single dispatch.\n4. **Review and integrate.** Read summaries, verify no conflicts, run full suite, integrate."
+- sequence: 4
+  fragment_type: example
+  content: '## Agent Prompt Structure
+
+
+    Good prompts are **focused** (one clear domain), **self-contained** (all context needed), and **specific about output**.
+
+
+    Example:
+
+
+    ```
+
+    Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
+
+    1. "should abort tool with partial output capture" — expects ''interrupted at'' in message
+
+    2. "should handle mixed completed and aborted tools" — fast tool aborted instead of completed
+
+    3. "should properly track pendingToolCount" — expects 3 results but gets 0
+
+
+    These are timing/race condition issues. Your task:
+
+    1. Read the test file and understand what each test verifies
+
+    2. Identify root cause — timing issues or actual bugs?
+
+    3. Fix by replacing arbitrary timeouts with event-based waiting, fixing bugs in abort impl, or adjusting test expectations.
+
+
+    Do NOT just increase timeouts — find the real issue.
+
+
+    Return: summary of what you found and what you fixed.
+
+    ```'
+- sequence: 5
+  fragment_type: guardrail
+  content: '## Common Mistakes
+
+
+    | Bad | Good |
+
+    |-----|------|
+
+    | "Fix all the tests" | "Fix agent-tool-abort.test.ts" — focused scope |
+
+    | "Fix the race condition" | Paste error messages and test names |
+
+    | No constraints | "Do NOT change production code" |
+
+    | "Fix it" | "Return summary of root cause and changes" |'
+- sequence: 6
+  fragment_type: verification
+  content: '## Verification After Agents Return
+
+
+    1. **Review each summary** — understand what changed
+
+    2. **Check for conflicts** — did agents edit the same code?
+
+    3. **Run full suite** — verify all fixes work together
+
+    4. **Spot check** — agents can make systematic errors
+
+
+    Multiple investigations completing concurrently is the goal; failed integration loses the gain.'

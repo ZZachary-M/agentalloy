@@ -1,0 +1,14 @@
+name: go
+version: 1.0.0
+description: Go — concurrency patterns, error handling, idiomatic style.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: go-concurrency-patterns
+  file: go-concurrency-patterns.yaml
+  fragment_count: 12

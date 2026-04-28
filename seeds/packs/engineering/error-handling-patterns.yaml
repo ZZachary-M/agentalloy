@@ -1,0 +1,287 @@
+skill_type: domain
+skill_id: error-handling-patterns
+canonical_name: Error Handling Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- error-handling
+- exceptions
+- result-types
+- circuit-breaker
+- retry-logic
+- graceful-degradation
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents developer-essentials plugin
+raw_prose: '# Error Handling Patterns
+
+
+  Build resilient applications with robust error handling strategies that gracefully handle failures and provide excellent debugging experiences.
+
+
+  ## When to Use
+
+
+  - Implementing error handling in new features
+
+  - Designing error-resilient APIs
+
+  - Debugging production issues
+
+  - Improving application reliability
+
+  - Creating better error messages for users and developers
+
+  - Implementing retry and circuit breaker patterns
+
+  - Handling async/concurrent errors
+
+  - Building fault-tolerant distributed systems
+
+
+  ## Core Concepts
+
+
+  ### Error Handling Philosophies
+
+
+  - **Exceptions:** Traditional try-catch, disrupts control flow. Use for unexpected errors / exceptional conditions.
+
+  - **Result Types:** Explicit success/failure, functional approach. Use for expected errors and validation failures.
+
+  - **Error Codes:** C-style, requires discipline.
+
+  - **Option/Maybe Types:** For nullable values.
+
+  - **Panics/Crashes:** Unrecoverable errors, programming bugs.
+
+
+  ### Error Categories
+
+
+  - **Recoverable:** network timeouts, missing files, invalid user input, API rate limits.
+
+  - **Unrecoverable:** out of memory, stack overflow, programming bugs (null pointer).
+
+
+  ## Python Error Handling
+
+
+  ### Custom Exception Hierarchy
+
+  Define `ApplicationError(Exception)` base with `code`, `details`, `timestamp`. Subclass for specific cases (`ValidationError`, `NotFoundError`, `ExternalServiceError`). Raise with structured details.
+
+
+  ### Context Managers for Cleanup
+
+  `@contextmanager` decorated function that yields the resource, commits on success, rolls back and re-raises on exception, closes in `finally`.
+
+
+  ### Retry with Exponential Backoff
+
+  Decorator with `max_attempts`, `backoff_factor`, `exceptions` tuple. Sleep `backoff_factor ** attempt` between retries.
+
+
+  ## TypeScript / JavaScript Error Handling
+
+
+  ### Custom Error Classes
+
+  Extend `Error`. Capture `code`, `statusCode`, `details`. Use `Error.captureStackTrace` for clean traces.
+
+
+  ### Result Type Pattern
+
+  `type Result<T, E> = { ok: true; value: T } | { ok: false; error: E }` with `Ok(v)` / `Err(e)` helpers and a `chain` combinator. Consumers branch on `result.ok`.
+
+
+  ### Async Error Handling
+
+  `try`/`catch` async; map `instanceof NotFoundError` → return empty, `instanceof NetworkError` → retry. Promise chains: `.then` validates response, `.catch` logs and rethrows.
+
+
+  ## Rust Error Handling
+
+
+  Use `Result<T, E>` and the `?` operator for propagation. Define a custom enum (`AppError::Io(...)`, `AppError::Parse(...)`, etc.). `impl From<ioError> for AppError` enables `?` to auto-convert. `Option<T>::ok_or_else(err)` bridges to `Result`.
+
+
+  ## Go Error Handling
+
+
+  Explicit `(value, error)` returns. Wrap with `fmt.Errorf("...: %w", err)` for chained context. Sentinel errors (`ErrNotFound`) compared via `errors.Is`. Custom error types unwrapped via `errors.As`.
+
+
+  ## Universal Patterns
+
+
+  ### Pattern 1: Circuit Breaker
+
+  States: CLOSED (normal), OPEN (failing — reject), HALF_OPEN (testing recovery). Open after `failure_threshold` failures; close after `success_threshold` successes in HALF_OPEN.
+
+
+  ### Pattern 2: Error Aggregation
+
+  Collect multiple errors instead of failing on the first. `ErrorCollector.add`, `hasErrors`, `throw` (single error if 1, else `AggregateError`).
+
+
+  ### Pattern 3: Graceful Degradation
+
+  `with_fallback(primary, fallback)` runs primary, logs and falls back on error. Stack multiple fallbacks (cache → primary API → backup API → default).
+
+
+  ## Best Practices
+
+
+  1. Fail Fast — validate input early
+
+  2. Preserve Context — stack traces, metadata, timestamps
+
+  3. Meaningful Messages — explain what happened and how to fix
+
+  4. Log Appropriately — error = log; expected failure = don''t spam
+
+  5. Handle at Right Level — catch where you can meaningfully handle
+
+  6. Clean Up Resources — try-finally, context managers, defer
+
+  7. Don''t Swallow Errors — log or re-throw, never silently ignore
+
+  8. Type-Safe Errors — use typed errors when possible
+
+
+  ## Common Pitfalls
+
+
+  - **Catching Too Broadly:** `except Exception` hides bugs
+
+  - **Empty Catch Blocks:** Silently swallowing errors
+
+  - **Logging and Re-throwing:** Creates duplicate log entries
+
+  - **Not Cleaning Up:** Forgetting to close files, connections
+
+  - **Poor Error Messages:** "Error occurred" is not helpful
+
+  - **Returning Error Codes:** Use exceptions or Result types
+
+  - **Ignoring Async Errors:** Unhandled promise rejections'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Error Handling Patterns
+
+
+    Build resilient applications with robust error handling strategies that gracefully handle failures and provide excellent debugging experiences.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Implementing error handling in new features
+
+    - Designing error-resilient APIs
+
+    - Debugging production issues
+
+    - Improving application reliability
+
+    - Creating better error messages for users and developers
+
+    - Implementing retry and circuit breaker patterns
+
+    - Handling async/concurrent errors
+
+    - Building fault-tolerant distributed systems'
+- sequence: 3
+  fragment_type: rationale
+  content: '### Error Handling Philosophies — when to use what
+
+
+    - **Exceptions** — traditional try-catch, disrupts control flow. Use for *unexpected* errors and exceptional conditions.
+
+    - **Result Types** — explicit success/failure, functional approach. Use for *expected* errors and validation failures.
+
+    - **Error Codes** — C-style; requires discipline.
+
+    - **Option/Maybe Types** — for nullable values.
+
+    - **Panics/Crashes** — for unrecoverable errors / programming bugs only.
+
+
+    Recoverable errors: network timeouts, missing files, invalid user input, API rate limits.
+
+    Unrecoverable: out-of-memory, stack overflow, null pointer.'
+- sequence: 4
+  fragment_type: execution
+  content: "### Python: Custom Exception Hierarchy\n\n```python\nclass ApplicationError(Exception):\n    \"\"\"Base exception for all application errors.\"\"\"\n    def __init__(self, message: str, code: str = None, details: dict = None):\n        super().__init__(message)\n        self.code = code\n        self.details = details or {}\n        self.timestamp = datetime.utcnow()\n\nclass ValidationError(ApplicationError): pass\nclass NotFoundError(ApplicationError): pass\n\nclass ExternalServiceError(ApplicationError):\n    def __init__(self, message: str, service: str, **kwargs):\n        super().__init__(message, **kwargs)\n        self.service = service\n\ndef get_user(user_id: str) -> User:\n    user = db.query(User).filter_by(id=user_id).first()\n    if not user:\n        raise NotFoundError(\"User not found\", code=\"USER_NOT_FOUND\",\n                            details={\"user_id\": user_id})\n    return user\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Python: Context Managers for Cleanup\n\n```python\nfrom contextlib import contextmanager\n\n@contextmanager\ndef database_transaction(session):\n    \"\"\"Ensure transaction is committed or rolled back.\"\"\"\n    try:\n        yield session\n        session.commit()\n    except Exception as e:\n        session.rollback()\n        raise\n    finally:\n        session.close()\n\nwith database_transaction(db.session) as session:\n    user = User(name=\"Alice\")\n    session.add(user)\n    # Automatic commit or rollback\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Python: Retry with Exponential Backoff\n\n```python\ndef retry(max_attempts: int = 3, backoff_factor: float = 2.0, exceptions: tuple = (Exception,)):\n    def decorator(func):\n        @wraps(func)\n        def wrapper(*args, **kwargs):\n            last_exception = None\n            for attempt in range(max_attempts):\n                try:\n                    return func(*args, **kwargs)\n                except exceptions as e:\n                    last_exception = e\n                    if attempt < max_attempts - 1:\n                        time.sleep(backoff_factor ** attempt)\n                        continue\n                    raise\n            raise last_exception\n        return wrapper\n    return decorator\n\n@retry(max_attempts=3, exceptions=(NetworkError,))\ndef fetch_data(url: str) -> dict:\n    response = requests.get(url, timeout=5)\n    response.raise_for_status()\n    return response.json()\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### TypeScript: Custom Error Classes\n\n```typescript\nclass ApplicationError extends Error {\n  constructor(\n    message: string,\n    public code: string,\n    public statusCode: number = 500,\n    public details?: Record<string, any>,\n  ) {\n    super(message);\n    this.name = this.constructor.name;\n    Error.captureStackTrace(this, this.constructor);\n  }\n}\n\nclass ValidationError extends ApplicationError {\n  constructor(message: string, details?: Record<string, any>) {\n    super(message, \"VALIDATION_ERROR\", 400, details);\n  }\n}\n\nclass NotFoundError extends ApplicationError {\n  constructor(resource: string, id: string) {\n    super(`${resource} not found`, \"NOT_FOUND\", 404, { resource, id });\n  }\n}\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### TypeScript: Result Type Pattern\n\n```typescript\ntype Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };\n\nfunction Ok<T>(value: T): Result<T, never> { return { ok: true, value }; }\nfunction Err<E>(error: E): Result<never, E> { return { ok: false, error }; }\n\nfunction parseJSON<T>(json: string): Result<T, SyntaxError> {\n  try {\n    return Ok(JSON.parse(json) as T);\n  } catch (error) {\n    return Err(error as SyntaxError);\n  }\n}\n\nconst result = parseJSON<User>(userJson);\nif (result.ok) {\n  console.log(result.value.name);\n} else {\n  console.error(\"Parse failed:\", result.error.message);\n}\n\nfunction chain<T, U, E>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E> {\n  return result.ok ? fn(result.value) : result;\n}\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### TypeScript: Async Error Handling\n\n```typescript\nasync function fetchUserOrders(userId: string): Promise<Order[]> {\n  try {\n    const user = await getUser(userId);\n    return await getOrders(user.id);\n  } catch (error) {\n    if (error instanceof NotFoundError) return [];           // empty for not found\n    if (error instanceof NetworkError) return retryFetchOrders(userId);\n    throw error;                                              // re-throw unexpected\n  }\n}\n\nfunction fetchData(url: string): Promise<Data> {\n  return fetch(url)\n    .then(response => {\n      if (!response.ok) throw new NetworkError(`HTTP ${response.status}`);\n      return response.json();\n    })\n    .catch(error => {\n      console.error(\"Fetch failed:\", error);\n      throw error;\n    });\n}\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Rust: Result and Option\n\n```rust\n// Use ? to propagate\nfn read_file(path: &str) -> Result<String, io::Error> {\n    let mut file = File::open(path)?;\n    let mut contents = String::new();\n    file.read_to_string(&mut contents)?;\n    Ok(contents)\n}\n\n// Custom error enum + From for auto-conversion\n#[derive(Debug)]\nenum AppError {\n    Io(io::Error),\n    Parse(std::num::ParseIntError),\n    NotFound(String),\n}\n\nimpl From<io::Error> for AppError {\n    fn from(error: io::Error) -> Self { AppError::Io(error) }\n}\n\nfn read_number(path: &str) -> Result<i32, AppError> {\n    let contents = read_file(path)?;                          // io::Error auto-converts\n    let n = contents.trim().parse().map_err(AppError::Parse)?;\n    Ok(n)\n}\n\n// Bridge Option to Result\nfn get_user_age(id: &str) -> Result<u32, AppError> {\n    users.iter().find(|u| u.id == id).cloned()\n        .ok_or_else(|| AppError::NotFound(id.to_string()))\n        .map(|user| user.age)\n}\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Go: Explicit Error Returns\n\n```go\nfunc getUser(id string) (*User, error) {\n    user, err := db.QueryUser(id)\n    if err != nil {\n        return nil, fmt.Errorf(\"failed to query user: %w\", err)\n    }\n    if user == nil {\n        return nil, errors.New(\"user not found\")\n    }\n    return user, nil\n}\n\n// Sentinel errors\nvar (\n    ErrNotFound     = errors.New(\"not found\")\n    ErrUnauthorized = errors.New(\"unauthorized\")\n)\n\n// Compare with errors.Is\nuser, err := getUser(\"123\")\nif err != nil {\n    if errors.Is(err, ErrNotFound) { /* handle not found */ }\n}\n\n// Custom error types unwrapped with errors.As\ntype ValidationError struct { Field, Message string }\nfunc (e *ValidationError) Error() string { return fmt.Sprintf(\"validation: %s: %s\", e.Field, e.Message) }\n\nvar valErr *ValidationError\nif errors.As(err, &valErr) {\n    fmt.Printf(\"Validation error: %s\\n\", valErr.Field)\n}\n```"
+- sequence: 12
+  fragment_type: execution
+  content: "### Universal Pattern: Circuit Breaker\n\nPrevent cascading failures in distributed systems. States:\n- **CLOSED** — normal operation\n- **OPEN** — failing, reject requests\n- **HALF_OPEN** — testing if recovered\n\n```python\nclass CircuitBreaker:\n    def __init__(self, failure_threshold=5, timeout=timedelta(seconds=60), success_threshold=2):\n        self.failure_threshold = failure_threshold\n        self.timeout = timeout\n        self.success_threshold = success_threshold\n        self.failure_count = 0\n        self.success_count = 0\n        self.state = CircuitState.CLOSED\n        self.last_failure_time = None\n\n    def call(self, func):\n        if self.state == CircuitState.OPEN:\n            if datetime.now() - self.last_failure_time > self.timeout:\n                self.state = CircuitState.HALF_OPEN\n                self.success_count = 0\n            else:\n                raise Exception(\"Circuit breaker is OPEN\")\n        try:\n            result = func()\n            self.on_success()\n            return result\n        except Exception:\n            self.on_failure()\n            raise\n```\n\nOpen after `failure_threshold` failures; close after `success_threshold` successes in HALF_OPEN."
+- sequence: 13
+  fragment_type: execution
+  content: "### Universal Pattern: Error Aggregation\n\nCollect multiple errors instead of failing on the first.\n\n```typescript\nclass ErrorCollector {\n  private errors: Error[] = [];\n\n  add(error: Error): void { this.errors.push(error); }\n  hasErrors(): boolean { return this.errors.length > 0; }\n  getErrors(): Error[] { return [...this.errors]; }\n\n  throw(): never {\n    if (this.errors.length === 1) throw this.errors[0];\n    throw new AggregateError(this.errors, `${this.errors.length} errors occurred`);\n  }\n}\n\nfunction validateUser(data: any): User {\n  const errors = new ErrorCollector();\n  if (!data.email) errors.add(new ValidationError(\"Email is required\"));\n  else if (!isValidEmail(data.email)) errors.add(new ValidationError(\"Email is invalid\"));\n  if (!data.name || data.name.length < 2) errors.add(new ValidationError(\"Name must be ≥ 2 chars\"));\n  if (!data.age || data.age < 18) errors.add(new ValidationError(\"Age must be 18+\"));\n  if (errors.hasErrors()) errors.throw();\n  return data as User;\n}\n```"
+- sequence: 14
+  fragment_type: execution
+  content: "### Universal Pattern: Graceful Degradation\n\nProvide fallback functionality when errors occur.\n\n```python\ndef with_fallback(primary, fallback, log_error=True):\n    try:\n        return primary()\n    except Exception as e:\n        if log_error:\n            logger.error(f\"Primary function failed: {e}\")\n        return fallback()\n\ndef get_user_profile(user_id: str) -> UserProfile:\n    return with_fallback(\n        primary=lambda: fetch_from_cache(user_id),\n        fallback=lambda: fetch_from_database(user_id)\n    )\n\n# Multiple fallbacks chain\ndef get_exchange_rate(currency: str) -> float:\n    return (\n        try_function(lambda: api_provider_1.get_rate(currency))\n        or try_function(lambda: api_provider_2.get_rate(currency))\n        or try_function(lambda: cache.get_rate(currency))\n        or DEFAULT_RATE\n    )\n```"
+- sequence: 15
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Fail Fast** — validate input early, fail quickly
+
+    2. **Preserve Context** — include stack traces, metadata, timestamps
+
+    3. **Meaningful Messages** — explain what happened and how to fix it
+
+    4. **Log Appropriately** — error = log; expected failure = don''t spam logs
+
+    5. **Handle at Right Level** — catch where you can meaningfully handle
+
+    6. **Clean Up Resources** — try-finally, context managers, defer
+
+    7. **Don''t Swallow Errors** — log or re-throw, never silently ignore
+
+    8. **Type-Safe Errors** — use typed errors when possible'
+- sequence: 16
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    - **Catching Too Broadly** — `except Exception` hides bugs
+
+    - **Empty Catch Blocks** — silently swallowing errors
+
+    - **Logging and Re-throwing** — creates duplicate log entries
+
+    - **Not Cleaning Up** — forgetting to close files / connections
+
+    - **Poor Error Messages** — "Error occurred" is not helpful
+
+    - **Returning Error Codes** — use exceptions or Result types
+
+    - **Ignoring Async Errors** — unhandled promise rejections'

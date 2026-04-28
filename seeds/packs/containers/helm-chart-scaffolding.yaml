@@ -1,0 +1,424 @@
+skill_type: domain
+skill_id: helm-chart-scaffolding
+canonical_name: Helm Chart Scaffolding
+category: ops
+skill_class: domain
+domain_tags:
+- helm
+- kubernetes
+- chart-scaffolding
+- templating
+- deployment-packaging
+- values-management
+- go-templates
+- release-management
+- multi-environment
+- chart-dependencies
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents kubernetes-operations plugin
+raw_prose: "# Helm Chart Scaffolding\n\nComprehensive guidance for creating, organizing, and managing Helm charts for packaging and deploying Kubernetes applications.\n\n## Purpose\n\nThis skill provides step-by-step instructions for building production-ready Helm charts, including chart structure, templating patterns, values management, and validation strategies.\n\n## When to Use This Skill\n\nUse this skill when you need to:\n\n- Create new Helm charts from scratch\n- Package Kubernetes applications for distribution\n- Manage multi-environment deployments with Helm\n- Implement templating for reusable Kubernetes manifests\n- Set up Helm chart repositories\n- Follow Helm best practices and conventions\n\n## Helm Overview\n\n**Helm** is the package manager for Kubernetes that:\n\n- Templates Kubernetes manifests for reusability\n- Manages application releases and rollbacks\n- Handles dependencies between charts\n- Provides version control for deployments\n- Simplifies configuration management across environments\n\n## Step-by-Step Workflow\n\n### 1. Initialize Chart Structure\n\n**Create new chart:**\n\n```bash\nhelm create my-app\n```\n\n**Standard chart structure:**\n\n```\nmy-app/\n├── Chart.yaml           # Chart metadata\n├── values.yaml          # Default configuration values\n├── charts/              # Chart dependencies\n├── templates/           # Kubernetes manifest templates\n│   ├── NOTES.txt       # Post-install notes\n│   ├── _helpers.tpl    # Template helpers\n│   ├── deployment.yaml\n│   ├── service.yaml\n│   ├── ingress.yaml\n│   ├── serviceaccount.yaml\n│   ├── hpa.yaml\n│   └── tests/\n│       └── test-connection.yaml\n└── .helmignore         # Files to ignore\n```\n\n### 2. Configure Chart.yaml\n\n**Chart metadata defines the package:**\n\n```yaml\napiVersion: v2\nname: my-app\ndescription: A Helm chart for My Application\ntype: application\nversion: 1.0.0 # Chart version\nappVersion: \"2.1.0\" # Application version\n\n# Keywords for chart discovery\nkeywords:\n  - web\n  - api\n  - backend\n\n# Maintainer information\nmaintainers:\n  - name: DevOps Team\n    email: devops@example.com\n    url: https://github.com/example/my-app\n\n# Source code repository\nsources:\n  - https://github.com/example/my-app\n\n# Homepage\nhome: https://example.com\n\n# Chart icon\nicon: https://example.com/icon.png\n\n# Dependencies\ndependencies:\n  - name: postgresql\n    version: \"12.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: postgresql.enabled\n  - name: redis\n    version: \"17.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: redis.enabled\n```\n\n**Reference:** See `assets/Chart.yaml.template` for complete example\n\n### 3. Design values.yaml Structure\n\n**Organize values hierarchically:**\n\n```yaml\n# Image configuration\nimage:\n  repository: myapp\n  tag: \"1.0.0\"\n  pullPolicy: IfNotPresent\n\n# Number of replicas\nreplicaCount: 3\n\n# Service configuration\nservice:\n  type: ClusterIP\n  port: 80\n  targetPort: 8080\n\n# Ingress configuration\ningress:\n  enabled: false\n  className: nginx\n  hosts:\n    - host: app.example.com\n      paths:\n        - path: /\n          pathType: Prefix\n\n# Resources\nresources:\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\"\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n\n# Autoscaling\nautoscaling:\n  enabled: false\n  minReplicas: 2\n  maxReplicas: 10\n  targetCPUUtilizationPercentage: 80\n\n# Environment variables\nenv:\n  - name: LOG_LEVEL\n    value: \"info\"\n\n# ConfigMap data\nconfigMap:\n  data:\n    APP_MODE: production\n\n# Dependencies\npostgresql:\n  enabled: true\n  auth:\n    database: myapp\n    username: myapp\n\nredis:\n  enabled: false\n```\n\n**Reference:** See `assets/values.yaml.template` for complete structure\n\n### 4. Create Template Files\n\n**Use Go templating with Helm functions:**\n\n**templates/deployment.yaml:**\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}\n  labels:\n    {{- include \"my-app.labels\" . | nindent 4 }}\nspec:\n  {{- if not .Values.autoscaling.enabled }}\n  replicas: {{ .Values.replicaCount }}\n  {{- end }}\n  selector:\n    matchLabels:\n      {{- include \"my-app.selectorLabels\" . | nindent 6 }}\n  template:\n    metadata:\n      labels:\n        {{- include \"my-app.selectorLabels\" . | nindent 8 }}\n    spec:\n      containers:\n      - name: {{ .Chart.Name }}\n        image: \"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}\"\n        imagePullPolicy: {{ .Values.image.pullPolicy }}\n        ports:\n        - name: http\n          containerPort: {{ .Values.service.targetPort }}\n        resources:\n          {{- toYaml .Values.resources | nindent 12 }}\n        env:\n          {{- toYaml .Values.env | nindent 12 }}\n```\n\n### 5. Create Template Helpers\n\n**templates/\\_helpers.tpl:**\n\n```yaml\n{{/*\nExpand the name of the chart.\n*/}}\n{{- define \"my-app.name\" -}}\n{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix \"-\" }}\n{{- end }}\n\n{{/*\nCreate a default fully qualified app name.\n*/}}\n{{- define \"my-app.fullname\" -}}\n{{- if .Values.fullnameOverride }}\n{{- .Values.fullnameOverride | trunc 63 | trimSuffix \"-\" }}\n{{- else }}\n{{- $name := default .Chart.Name .Values.nameOverride }}\n{{- if contains $name .Release.Name }}\n{{- .Release.Name | trunc 63 | trimSuffix \"-\" }}\n{{- else }}\n{{- printf \"%s-%s\" .Release.Name $name | trunc 63 | trimSuffix \"-\" }}\n{{- end }}\n{{- end }}\n{{- end }}\n\n{{/*\nCommon labels\n*/}}\n{{- define \"my-app.labels\" -}}\nhelm.sh/chart: {{ include \"my-app.chart\" . }}\n{{ include \"my-app.selectorLabels\" . }}\n{{- if .Chart.AppVersion }}\napp.kubernetes.io/version: {{ .Chart.AppVersion | quote }}\n{{- end }}\napp.kubernetes.io/managed-by: {{ .Release.Service }}\n{{- end }}\n\n{{/*\nSelector labels\n*/}}\n{{- define \"my-app.selectorLabels\" -}}\napp.kubernetes.io/name: {{ include \"my-app.name\" . }}\napp.kubernetes.io/instance: {{ .Release.Name }}\n{{- end }}\n```\n\n### 6. Manage Dependencies\n\n**Add dependencies in Chart.yaml:**\n\n```yaml\ndependencies:\n  - name: postgresql\n    version: \"12.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: postgresql.enabled\n```\n\n**Update dependencies:**\n\n```bash\nhelm dependency update\nhelm dependency build\n```\n\n**Override dependency values:**\n\n```yaml\n# values.yaml\npostgresql:\n  enabled: true\n  auth:\n    database: myapp\n    username: myapp\n    password: changeme\n  primary:\n    persistence:\n      enabled: true\n      size: 10Gi\n```\n\n### 7. Test and Validate\n\n**Validation commands:**\n\n```bash\n# Lint the chart\nhelm lint my-app/\n\n# Dry-run installation\nhelm install my-app ./my-app --dry-run --debug\n\n# Template rendering\nhelm template my-app ./my-app\n\n# Template with values\nhelm template my-app ./my-app -f values-prod.yaml\n\n# Show computed values\nhelm show values ./my-app\n```\n\n**Validation script:**\n\n```bash\n#!/bin/bash\nset -e\n\necho \"Linting chart...\"\nhelm lint .\n\necho \"Testing template rendering...\"\nhelm template test-release . --dry-run\n\necho \"Checking for required values...\"\nhelm template test-release . --validate\n\necho \"All validations passed!\"\n```\n\n**Reference:** See `scripts/validate-chart.sh`\n\n### 8. Package and Distribute\n\n**Package the chart:**\n\n```bash\nhelm package my-app/\n# Creates: my-app-1.0.0.tgz\n```\n\n**Create chart repository:**\n\n```bash\n# Create index\nhelm repo index .\n\n# Upload to repository\n# AWS S3 example\naws s3 sync . s3://my-helm-charts/ --exclude \"*\" --include \"*.tgz\" --include \"index.yaml\"\n```\n\n**Use the chart:**\n\n```bash\nhelm repo add my-repo https://charts.example.com\nhelm repo update\nhelm install my-app my-repo/my-app\n```\n\n### 9. Multi-Environment Configuration\n\n**Environment-specific values files:**\n\n```\nmy-app/\n├── values.yaml          # Defaults\n├── values-dev.yaml      # Development\n├── values-staging.yaml  # Staging\n└── values-prod.yaml     # Production\n```\n\n**values-prod.yaml:**\n\n```yaml\nreplicaCount: 5\n\nimage:\n  tag: \"2.1.0\"\n\nresources:\n  requests:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  limits:\n    memory: \"1Gi\"\n    cpu: \"1000m\"\n\nautoscaling:\n  enabled: true\n  minReplicas: 3\n  maxReplicas: 20\n\ningress:\n  enabled: true\n  hosts:\n    - host: app.example.com\n      paths:\n        - path: /\n          pathType: Prefix\n\npostgresql:\n  enabled: true\n  primary:\n    persistence:\n      size: 100Gi\n```\n\n**Install with environment:**\n\n```bash\nhelm install my-app ./my-app -f values-prod.yaml --namespace production\n```\n\n### 10. Implement Hooks and Tests\n\n**Pre-install hook:**\n\n```yaml\n# templates/pre-install-job.yaml\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}-db-setup\n  annotations:\n    \"helm.sh/hook\": pre-install\n    \"helm.sh/hook-weight\": \"-5\"\n    \"helm.sh/hook-delete-policy\": hook-succeeded\nspec:\n  template:\n    spec:\n      containers:\n      - name: db-setup\n        image: postgres:15\n        command: [\"psql\", \"-c\", \"CREATE DATABASE myapp\"]\n      restartPolicy: Never\n```\n\n**Test connection:**\n\n```yaml\n# templates/tests/test-connection.yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: \"{{ include \"my-app.fullname\" . }}-test-connection\"\n  annotations:\n    \"helm.sh/hook\": test\nspec:\n  containers:\n  - name: wget\n    image: busybox\n    command: ['wget']\n    args: ['{{ include \"my-app.fullname\" . }}:{{ .Values.service.port }}']\n  restartPolicy: Never\n```\n\n**Run tests:**\n\n```bash\nhelm test my-app\n```\n\n## Common Patterns\n\n### Pattern 1: Conditional Resources\n\n```yaml\n{{- if .Values.ingress.enabled }}\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}\nspec:\n\
+  \  # ...\n{{- end }}\n```\n\n### Pattern 2: Iterating Over Lists\n\n```yaml\nenv:\n{{- range .Values.env }}\n- name: {{ .name }}\n  value: {{ .value | quote }}\n{{- end }}\n```\n\n### Pattern 3: Including Files\n\n```yaml\ndata:\n  config.yaml: |\n    {{- .Files.Get \"config/application.yaml\" | nindent 4 }}\n```\n\n### Pattern 4: Global Values\n\n```yaml\nglobal:\n  imageRegistry: docker.io\n  imagePullSecrets:\n    - name: regcred\n\n# Use in templates:\nimage: {{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}\n```\n\n## Best Practices\n\n1. **Use semantic versioning** for chart and app versions\n2. **Document all values** in values.yaml with comments\n3. **Use template helpers** for repeated logic\n4. **Validate charts** before packaging\n5. **Pin dependency versions** explicitly\n6. **Use conditions** for optional resources\n7. **Follow naming conventions** (lowercase, hyphens)\n8. **Include NOTES.txt** with usage instructions\n9. **Add labels** consistently using helpers\n10. **Test installations** in all environments\n\n## Troubleshooting\n\n**Template rendering errors:**\n\n```bash\nhelm template my-app ./my-app --debug\n```\n\n**Dependency issues:**\n\n```bash\nhelm dependency update\nhelm dependency list\n```\n\n**Installation failures:**\n\n```bash\nhelm install my-app ./my-app --dry-run --debug\nkubectl get events --sort-by='.lastTimestamp'\n```\n\n\n## Related Skills\n\n- `k8s-manifest-generator` - For creating base Kubernetes manifests\n- `gitops-workflow` - For automated Helm chart deployments"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Helm Chart Scaffolding
+
+
+    Comprehensive guidance for creating, organizing, and managing Helm charts for packaging and deploying Kubernetes applications.
+
+
+    ## Purpose
+
+
+    This skill provides step-by-step instructions for building production-ready Helm charts, including chart structure, templating patterns, values management, and validation strategies.
+
+
+    ## When to Use This Skill
+
+
+    Use this skill when you need to:
+
+
+    - Create new Helm charts from scratch
+
+    - Package Kubernetes applications for distribution
+
+    - Manage multi-environment deployments with Helm
+
+    - Implement templating for reusable Kubernetes manifests
+
+    - Set up Helm chart repositories
+
+    - Follow Helm best practices and conventions
+
+
+    ## Helm Overview
+
+
+    **Helm** is the package manager for Kubernetes that:
+
+
+    - Templates Kubernetes manifests for reusability
+
+    - Manages application releases and rollbacks
+
+    - Handles dependencies between charts
+
+    - Provides version control for deployments
+
+    - Simplifies configuration management across environments'
+- sequence: 2
+  fragment_type: example
+  content: '## Step-by-Step Workflow
+
+
+    ### 1. Initialize Chart Structure
+
+
+    **Create new chart:**
+
+
+    ```bash
+
+    helm create my-app
+
+    ```
+
+
+    **Standard chart structure:**
+
+
+    ```
+
+    my-app/
+
+    ├── Chart.yaml           # Chart metadata
+
+    ├── values.yaml          # Default configuration values
+
+    ├── charts/              # Chart dependencies
+
+    ├── templates/           # Kubernetes manifest templates
+
+    │   ├── NOTES.txt       # Post-install notes
+
+    │   ├── _helpers.tpl    # Template helpers
+
+    │   ├── deployment.yaml
+
+    │   ├── service.yaml
+
+    │   ├── ingress.yaml
+
+    │   ├── serviceaccount.yaml
+
+    │   ├── hpa.yaml
+
+    │   └── tests/
+
+    │       └── test-connection.yaml
+
+    └── .helmignore         # Files to ignore
+
+    ```'
+- sequence: 3
+  fragment_type: example
+  content: "### 2. Configure Chart.yaml\n\n**Chart metadata defines the package:**\n\n```yaml\napiVersion: v2\nname: my-app\ndescription: A Helm chart for My Application\ntype: application\nversion: 1.0.0 # Chart version\nappVersion: \"2.1.0\" # Application version\n\n# Keywords for chart discovery\nkeywords:\n  - web\n  - api\n  - backend\n\n# Maintainer information\nmaintainers:\n  - name: DevOps Team\n    email: devops@example.com\n    url: https://github.com/example/my-app\n\n# Source code repository\nsources:\n  - https://github.com/example/my-app\n\n# Homepage\nhome: https://example.com\n\n# Chart icon\nicon: https://example.com/icon.png\n\n# Dependencies\ndependencies:\n  - name: postgresql\n    version: \"12.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: postgresql.enabled\n  - name: redis\n    version: \"17.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: redis.enabled\n```\n\n**Reference:** See `assets/Chart.yaml.template` for complete example"
+- sequence: 4
+  fragment_type: example
+  content: "### 3. Design values.yaml Structure\n\n**Organize values hierarchically:**\n\n```yaml\n# Image configuration\nimage:\n  repository: myapp\n  tag: \"1.0.0\"\n  pullPolicy: IfNotPresent\n\n# Number of replicas\nreplicaCount: 3\n\n# Service configuration\nservice:\n  type: ClusterIP\n  port: 80\n  targetPort: 8080\n\n# Ingress configuration\ningress:\n  enabled: false\n  className: nginx\n  hosts:\n    - host: app.example.com\n      paths:\n        - path: /\n          pathType: Prefix\n\n# Resources\nresources:\n  requests:\n    memory: \"256Mi\"\n    cpu: \"250m\"\n  limits:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n\n# Autoscaling\nautoscaling:\n  enabled: false\n  minReplicas: 2\n  maxReplicas: 10\n  targetCPUUtilizationPercentage: 80\n\n# Environment variables\nenv:\n  - name: LOG_LEVEL\n    value: \"info\"\n\n# ConfigMap data\nconfigMap:\n  data:\n    APP_MODE: production\n\n# Dependencies\npostgresql:\n  enabled: true\n  auth:\n    database: myapp\n    username: myapp\n\nredis:\n  enabled: false\n```\n\n**Reference:** See `assets/values.yaml.template` for complete structure"
+- sequence: 5
+  fragment_type: example
+  content: "### 4. Create Template Files\n\n**Use Go templating with Helm functions:**\n\n**templates/deployment.yaml:**\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}\n  labels:\n    {{- include \"my-app.labels\" . | nindent 4 }}\nspec:\n  {{- if not .Values.autoscaling.enabled }}\n  replicas: {{ .Values.replicaCount }}\n  {{- end }}\n  selector:\n    matchLabels:\n      {{- include \"my-app.selectorLabels\" . | nindent 6 }}\n  template:\n    metadata:\n      labels:\n        {{- include \"my-app.selectorLabels\" . | nindent 8 }}\n    spec:\n      containers:\n      - name: {{ .Chart.Name }}\n        image: \"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}\"\n        imagePullPolicy: {{ .Values.image.pullPolicy }}\n        ports:\n        - name: http\n          containerPort: {{ .Values.service.targetPort }}\n        resources:\n          {{- toYaml .Values.resources | nindent 12 }}\n        env:\n          {{- toYaml .Values.env | nindent 12 }}\n```"
+- sequence: 6
+  fragment_type: example
+  content: '### 5. Create Template Helpers
+
+
+    **templates/\_helpers.tpl:**
+
+
+    ```yaml
+
+    {{/*
+
+    Expand the name of the chart.
+
+    */}}
+
+    {{- define "my-app.name" -}}
+
+    {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+
+    {{- end }}
+
+
+    {{/*
+
+    Create a default fully qualified app name.
+
+    */}}
+
+    {{- define "my-app.fullname" -}}
+
+    {{- if .Values.fullnameOverride }}
+
+    {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+
+    {{- else }}
+
+    {{- $name := default .Chart.Name .Values.nameOverride }}
+
+    {{- if contains $name .Release.Name }}
+
+    {{- .Release.Name | trunc 63 | trimSuffix "-" }}
+
+    {{- else }}
+
+    {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+
+    {{- end }}
+
+    {{- end }}
+
+    {{- end }}
+
+
+    {{/*
+
+    Common labels
+
+    */}}
+
+    {{- define "my-app.labels" -}}
+
+    helm.sh/chart: {{ include "my-app.chart" . }}
+
+    {{ include "my-app.selectorLabels" . }}
+
+    {{- if .Chart.AppVersion }}
+
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+
+    {{- end }}
+
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+
+    {{- end }}
+
+
+    {{/*
+
+    Selector labels
+
+    */}}
+
+    {{- define "my-app.selectorLabels" -}}
+
+    app.kubernetes.io/name: {{ include "my-app.name" . }}
+
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+    {{- end }}
+
+    ```'
+- sequence: 7
+  fragment_type: execution
+  content: "### 6. Manage Dependencies\n\n**Add dependencies in Chart.yaml:**\n\n```yaml\ndependencies:\n  - name: postgresql\n    version: \"12.0.0\"\n    repository: \"https://charts.bitnami.com/bitnami\"\n    condition: postgresql.enabled\n```\n\n**Update dependencies:**\n\n```bash\nhelm dependency update\nhelm dependency build\n```\n\n**Override dependency values:**\n\n```yaml\n# values.yaml\npostgresql:\n  enabled: true\n  auth:\n    database: myapp\n    username: myapp\n    password: changeme\n  primary:\n    persistence:\n      enabled: true\n      size: 10Gi\n```"
+- sequence: 8
+  fragment_type: verification
+  content: '### 7. Test and Validate
+
+
+    **Validation commands:**
+
+
+    ```bash
+
+    # Lint the chart
+
+    helm lint my-app/
+
+
+    # Dry-run installation
+
+    helm install my-app ./my-app --dry-run --debug
+
+
+    # Template rendering
+
+    helm template my-app ./my-app
+
+
+    # Template with values
+
+    helm template my-app ./my-app -f values-prod.yaml
+
+
+    # Show computed values
+
+    helm show values ./my-app
+
+    ```
+
+
+    **Validation script:**
+
+
+    ```bash
+
+    #!/bin/bash
+
+    set -e
+
+
+    echo "Linting chart..."
+
+    helm lint .
+
+
+    echo "Testing template rendering..."
+
+    helm template test-release . --dry-run
+
+
+    echo "Checking for required values..."
+
+    helm template test-release . --validate
+
+
+    echo "All validations passed!"
+
+    ```
+
+
+    **Reference:** See `scripts/validate-chart.sh`'
+- sequence: 9
+  fragment_type: execution
+  content: '### 8. Package and Distribute
+
+
+    **Package the chart:**
+
+
+    ```bash
+
+    helm package my-app/
+
+    # Creates: my-app-1.0.0.tgz
+
+    ```
+
+
+    **Create chart repository:**
+
+
+    ```bash
+
+    # Create index
+
+    helm repo index .
+
+
+    # Upload to repository
+
+    # AWS S3 example
+
+    aws s3 sync . s3://my-helm-charts/ --exclude "*" --include "*.tgz" --include "index.yaml"
+
+    ```
+
+
+    **Use the chart:**
+
+
+    ```bash
+
+    helm repo add my-repo https://charts.example.com
+
+    helm repo update
+
+    helm install my-app my-repo/my-app
+
+    ```'
+- sequence: 10
+  fragment_type: example
+  content: "### 9. Multi-Environment Configuration\n\n**Environment-specific values files:**\n\n```\nmy-app/\n├── values.yaml          # Defaults\n├── values-dev.yaml      # Development\n├── values-staging.yaml  # Staging\n└── values-prod.yaml     # Production\n```\n\n**values-prod.yaml:**\n\n```yaml\nreplicaCount: 5\n\nimage:\n  tag: \"2.1.0\"\n\nresources:\n  requests:\n    memory: \"512Mi\"\n    cpu: \"500m\"\n  limits:\n    memory: \"1Gi\"\n    cpu: \"1000m\"\n\nautoscaling:\n  enabled: true\n  minReplicas: 3\n  maxReplicas: 20\n\ningress:\n  enabled: true\n  hosts:\n    - host: app.example.com\n      paths:\n        - path: /\n          pathType: Prefix\n\npostgresql:\n  enabled: true\n  primary:\n    persistence:\n      size: 100Gi\n```\n\n**Install with environment:**\n\n```bash\nhelm install my-app ./my-app -f values-prod.yaml --namespace production\n```"
+- sequence: 11
+  fragment_type: example
+  content: "### 10. Implement Hooks and Tests\n\n**Pre-install hook:**\n\n```yaml\n# templates/pre-install-job.yaml\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}-db-setup\n  annotations:\n    \"helm.sh/hook\": pre-install\n    \"helm.sh/hook-weight\": \"-5\"\n    \"helm.sh/hook-delete-policy\": hook-succeeded\nspec:\n  template:\n    spec:\n      containers:\n      - name: db-setup\n        image: postgres:15\n        command: [\"psql\", \"-c\", \"CREATE DATABASE myapp\"]\n      restartPolicy: Never\n```\n\n**Test connection:**\n\n```yaml\n# templates/tests/test-connection.yaml\napiVersion: v1\nkind: Pod\nmetadata:\n  name: \"{{ include \"my-app.fullname\" . }}-test-connection\"\n  annotations:\n    \"helm.sh/hook\": test\nspec:\n  containers:\n  - name: wget\n    image: busybox\n    command: ['wget']\n    args: ['{{ include \"my-app.fullname\" . }}:{{ .Values.service.port }}']\n  restartPolicy: Never\n```\n\n**Run tests:**\n\n```bash\nhelm test my-app\n```"
+- sequence: 12
+  fragment_type: example
+  content: "## Common Patterns\n\n### Pattern 1: Conditional Resources\n\n```yaml\n{{- if .Values.ingress.enabled }}\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{ include \"my-app.fullname\" . }}\nspec:\n  # ...\n{{- end }}\n```\n\n### Pattern 2: Iterating Over Lists\n\n```yaml\nenv:\n{{- range .Values.env }}\n- name: {{ .name }}\n  value: {{ .value | quote }}\n{{- end }}\n```\n\n### Pattern 3: Including Files\n\n```yaml\ndata:\n  config.yaml: |\n    {{- .Files.Get \"config/application.yaml\" | nindent 4 }}\n```\n\n### Pattern 4: Global Values\n\n```yaml\nglobal:\n  imageRegistry: docker.io\n  imagePullSecrets:\n    - name: regcred\n\n# Use in templates:\nimage: {{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}\n```"
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Use semantic versioning** for chart and app versions
+
+    2. **Document all values** in values.yaml with comments
+
+    3. **Use template helpers** for repeated logic
+
+    4. **Validate charts** before packaging
+
+    5. **Pin dependency versions** explicitly
+
+    6. **Use conditions** for optional resources
+
+    7. **Follow naming conventions** (lowercase, hyphens)
+
+    8. **Include NOTES.txt** with usage instructions
+
+    9. **Add labels** consistently using helpers
+
+    10. **Test installations** in all environments'
+- sequence: 14
+  fragment_type: rationale
+  content: '## Troubleshooting
+
+
+    **Template rendering errors:**
+
+
+    ```bash
+
+    helm template my-app ./my-app --debug
+
+    ```
+
+
+    **Dependency issues:**
+
+
+    ```bash
+
+    helm dependency update
+
+    helm dependency list
+
+    ```
+
+
+    **Installation failures:**
+
+
+    ```bash
+
+    helm install my-app ./my-app --dry-run --debug
+
+    kubectl get events --sort-by=''.lastTimestamp''
+
+    ```
+
+
+    ## Related Skills
+
+
+    - `k8s-manifest-generator` - For creating base Kubernetes manifests
+
+    - `gitops-workflow` - For automated Helm chart deployments'

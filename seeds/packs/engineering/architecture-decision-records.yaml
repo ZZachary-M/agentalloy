@@ -1,0 +1,470 @@
+skill_type: domain
+skill_id: architecture-decision-records
+canonical_name: Architecture Decision Records
+category: design
+skill_class: domain
+domain_tags:
+- adr
+- decision-documentation
+- madr-format
+- decision-lifecycle
+- supersedes
+- rfc
+- y-statement
+- deprecation
+- lifecycle-status
+- review-checklist
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin documentation-generation/architecture-decision-records
+raw_prose: "# Architecture Decision Records\n\nCapture the context and rationale behind significant technical decisions. ADRs are short, immutable records that explain why decisions were made, not just what was decided.\n\n## When to Write an ADR\n\n| Write ADR | Skip ADR |\n|---|---|\n| New framework adoption | Minor version upgrades |\n| Database technology choice | Bug fixes |\n| API design patterns | Implementation details |\n| Security architecture | Routine maintenance |\n| Integration patterns | Configuration changes |\n\nAn ADR captures: **Context** (why we needed to decide), **Decision** (what we decided), **Consequences** (positive, negative, risks).\n\n## ADR Lifecycle\n\nProposed → Accepted → Deprecated → Superseded. Or Proposed → Rejected. Once Accepted, never modify — write a new ADR that supersedes it.\n\n## MADR Format\n\nStandard sections: Status, Context, Decision Drivers, Considered Options (with pros/cons), Decision, Rationale, Consequences (positive/negative/risks), Implementation Notes, Related Decisions, References.\n\n## Lightweight ADR\n\nFor smaller decisions: Status, Date, Deciders, Context, Decision, Consequences (good/bad/mitigations). 1-2 paragraphs each.\n\n## Y-Statement Format\n\nSingle-sentence summary: \"In the context of <X>, facing <Y>, we decided for <option> and against <alternatives>, to achieve <Z>, accepting that <trade-off>.\"\n\n## Deprecation ADRs\n\nWhen superseding an earlier decision, write a Deprecation ADR with explicit Migration Plan (phased) and Lessons Learned (what the original ADR over- or under-estimated).\n\n## RFC Style\n\nFor larger proposals: Summary, Motivation, Detailed Design, Drawbacks, Alternatives, Unresolved Questions, Implementation Plan, References.\n\n## Directory and Index\n\n```\ndocs/adr/\n  README.md          # Index with status table\n  template.md        # Team's ADR template\n  0001-use-postgresql.md\n  0002-caching-strategy.md\n  0003-mongodb-user-profiles.md  [DEPRECATED]\n  0020-deprecate-mongodb.md       (supersedes 0003)\n```\n\nIndex README has a status table: ADR, Title, Status, Date.\n\n## Tooling\n\n`adr-tools` CLI: `adr init`, `adr new \"Title\"`, `adr new -s 3 \"Supersede 3\"`, `adr generate toc`, `adr link 2 \"Complements\" 1`.\n\n## Review Checklist\n\nBefore submission: context clear, viable options considered, balanced pros/cons, consequences documented, related ADRs linked.\n\nDuring review: 2+ senior engineers, affected teams consulted, security implications, cost implications, reversibility assessed.\n\nAfter acceptance: index updated, team notified, implementation tickets created, related docs updated.\n\n## Best Practices\n\nDo: write early (before implementation), keep short (1-2 pages), be honest about trade-offs, link related decisions, update status.\n\nDon't: change accepted ADRs (write new ones to supersede), skip context (future readers need background), hide failures (rejected decisions are valuable), be vague, forget implementation tickets."
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: "# Architecture Decision Records\n\nCapture the context and rationale behind significant technical decisions. ADRs are short, **immutable** records that explain *why* a decision was made — not just *what* was decided.\n\nAn ADR captures three things:\n- **Context** — why we needed to make a decision (constraints, environment, drivers)\n- **Decision** — what we decided\n- **Consequences** — what happens as a result (positive, negative, risks)\n\n## Why Append-Only\n\nADRs are a **historical record**, not living documents. Once a decision is Accepted, it is never edited — even if the decision later turns out wrong. The ADR set is the audit trail of how thinking evolved over time. Future readers (new hires, auditors, your future self) need to know not just the current state but the path that got there: what was tried, what was rejected, what assumptions held at the time.\n\nEditing an Accepted ADR rewrites history and destroys this trail. Instead, when circumstances change, write a **new ADR** that supersedes the old one, link them, and update the old one's status to `Deprecated` or `Superseded by ADR-NNNN`. The original prose stays untouched.\n\nThis is the single most-violated ADR rule in practice — teams treat ADRs like wiki pages and edit them in place. Resist this. The diff log is the value.\n\n## Lifecycle Diagram\n\n```\nProposed → Accepted → Deprecated → Superseded\n              ↓\n           Rejected\n```"
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Write an ADR
+
+
+    | Write ADR | Skip ADR |
+
+    |---|---|
+
+    | New framework adoption | Minor version upgrades |
+
+    | Database technology choice | Bug fixes |
+
+    | API design patterns | Implementation details |
+
+    | Security architecture | Routine maintenance |
+
+    | Integration patterns | Configuration changes |
+
+
+    The threshold: would a new engineer joining in 12 months need to know why this choice was made? If yes, write an ADR. If the answer is "they could figure it out from the code," skip it.
+
+
+    Trigger an ADR when a decision is hard to reverse, crosses team boundaries, or commits the project to a vendor, paradigm, or contract.'
+- sequence: 3
+  fragment_type: guardrail
+  content: '## Immutability Rule
+
+
+    **Never modify an Accepted ADR.** This is the foundational invariant of the ADR practice.
+
+
+    When the decision needs to change:
+
+
+    1. Write a **new ADR** that captures the new decision, its new context, and explicitly references the ADR being replaced.
+
+    2. Update the **old ADR''s Status** field only — change `Accepted` to `Deprecated` or `Superseded by ADR-NNNN`. Do not edit any other section of the old ADR.
+
+    3. **Link forward**: the old ADR''s status line points to the new one. The new ADR''s `Related Decisions` section points back.
+
+    4. Update the **index** (`README.md`) to reflect the new statuses.
+
+
+    Why this matters: ADRs are the audit trail. If you edit an Accepted ADR''s Context or Decision in place, you destroy the record of what the team actually believed at decision time. Six months later nobody can answer "why did we pick MongoDB?" — the answer has been overwritten.
+
+
+    Permitted edits to an Accepted ADR: typo fixes, broken-link repair, status field transitions (`Accepted` → `Deprecated` / `Superseded by`). That is the entire allowed list. Everything else — new pros/cons, revised rationale, updated consequences — goes in a **new ADR**.
+
+
+    Rejected ADRs are also preserved unchanged. A rejected decision is a valuable record of an explored path.'
+- sequence: 4
+  fragment_type: example
+  content: '## MADR Format (skeleton)
+
+
+    ```markdown
+
+    # ADR-NNNN: [Decision Title]
+
+
+    ## Status
+
+    Accepted | Proposed | Deprecated | Superseded by ADR-NNNN
+
+
+    ## Context
+
+    Why we needed to make a decision. Constraints, requirements, environment.
+
+
+    ## Decision Drivers
+
+    - Must-haves
+
+    - Should-haves
+
+    - Cost / team familiarity / strategic alignment
+
+
+    ## Considered Options
+
+    ### Option 1: [Name]
+
+    - Pros: ...
+
+    - Cons: ...
+
+    ### Option 2: [Name]
+
+    - Pros: ...
+
+    - Cons: ...
+
+
+    ## Decision
+
+    We will use **[Option N]**.
+
+
+    ## Rationale
+
+    Why this option over the others. Be specific.
+
+
+    ## Consequences
+
+    ### Positive
+
+    - ...
+
+    ### Negative
+
+    - ...
+
+    ### Risks
+
+    - Risk + mitigation
+
+
+    ## Implementation Notes
+
+    Concrete next steps, gotchas.
+
+
+    ## Related Decisions
+
+    - ADR-NNNN: ...
+
+
+    ## References
+
+    External docs, internal benchmarks.
+
+    ```'
+- sequence: 5
+  fragment_type: example
+  content: "## MADR Worked Example: PostgreSQL Selection\n\n```markdown\n# ADR-0001: Use PostgreSQL as Primary Database\n\n## Status\nAccepted\n\n## Context\nWe need a primary database for a new e-commerce platform handling\n~10,000 concurrent users, complex hierarchical product catalogs,\ntransactional order/payment processing, full-text product search,\nand geospatial store-locator queries. The team has experience with\nMySQL, PostgreSQL, and MongoDB. ACID compliance is required for\nfinancial transactions.\n\n## Decision Drivers\n- **Must** have ACID compliance for payments\n- **Must** support complex reporting queries\n- **Should** support full-text search to reduce infra complexity\n- **Should** have strong JSON support for flexible product attributes\n- Team familiarity to reduce onboarding cost\n\n## Considered Options\n### Option 1: PostgreSQL\n- Pros: ACID, JSONB, built-in full-text search, PostGIS, team experience\n- Cons: Replication setup more complex than MySQL\n\n### Option 2: MySQL\n- Pros: Very familiar, simple replication, large community\n- Cons: Weak JSON, no built-in full-text search (needs Elasticsearch),\n  no geospatial without extensions\n\n### Option 3: MongoDB\n- Pros: Flexible schema, native JSON, horizontal scaling\n- Cons: No multi-document ACID at decision time, limited team experience,\n  requires schema discipline\n\n## Decision\nWe will use **PostgreSQL 15** as our primary database.\n\n## Rationale\nPostgreSQL provides the best balance of ACID compliance, built-in\ncapabilities (full-text, JSONB, PostGIS) that eliminate separate\nservices, and team familiarity. Replication complexity is outweighed\nby the reduction in moving parts (no separate Elasticsearch).\n\n## Consequences\n### Positive\n- Single database covers transactions, search, and geospatial\n- Reduced operational surface area\n- Strong consistency for financial data\n\n### Negative\n- Team must learn JSONB and full-text search syntax\n- Vertical scaling limits — read replicas needed sooner\n- PostgreSQL-specific training required\n\n### Risks\n- Built-in FTS may not scale to dedicated-engine performance\n- Mitigation: design schema so Elasticsearch can be added later\n\n## Implementation Notes\n- Use JSONB for flexible product attributes\n- PgBouncer for connection pooling\n- Streaming replication for read replicas\n- `pg_trgm` extension for fuzzy search\n\n## Related Decisions\n- ADR-0002: Caching Strategy (Redis) — complements this choice\n- ADR-0005: Search Architecture — may supersede if Elasticsearch added\n\n## References\n- PostgreSQL JSON docs\n- Internal: `/docs/benchmarks/database-comparison.md`\n```"
+- sequence: 6
+  fragment_type: example
+  content: '## Lightweight & Y-Statement Formats
+
+
+    **Lightweight (smaller decisions):**
+
+    ```markdown
+
+    # ADR-0012: Adopt TypeScript for Frontend Development
+
+    **Status**: Accepted
+
+    **Date**: 2024-01-15
+
+    **Deciders**: @alice, @bob, @charlie
+
+
+    ## Context
+
+    React codebase has grown to 50+ components with rising bug reports
+
+    from prop-type mismatches and undefined errors. PropTypes is runtime-only.
+
+
+    ## Decision
+
+    Adopt TypeScript for all new frontend code. Migrate existing code
+
+    incrementally with `allowJs: true`.
+
+
+    ## Consequences
+
+    **Good**: Compile-time type errors, better IDE support, self-documenting code.
+
+    **Bad**: Learning curve, initial slowdown, build-pipeline complexity.
+
+    **Mitigations**: Training sessions, gradual migration.
+
+    ```
+
+
+    **Y-statement (one-sentence summary):**
+
+    ```
+
+    In the context of building a microservices architecture,
+
+    facing the need for centralized API management, authentication, and rate limiting,
+
+    we decided for Kong Gateway
+
+    and against AWS API Gateway and a custom Nginx solution,
+
+    to achieve vendor independence, plugin extensibility, and team familiarity with Lua,
+
+    accepting that we must manage Kong infrastructure ourselves.
+
+    ```'
+- sequence: 7
+  fragment_type: example
+  content: "## Deprecation ADR (with Migration Plan + Lessons Learned)\n\nUse when a previously Accepted decision is being reversed. Always link forward and back, and capture what was learned so the next decision is better-informed.\n\n```markdown\n# ADR-0020: Deprecate MongoDB in Favor of PostgreSQL\n\n## Status\nAccepted (Supersedes ADR-0003)\n\n## Context\nADR-0003 (2021) chose MongoDB for user profile storage on the basis\nof schema flexibility. Since then:\n- MongoDB multi-document transactions remain awkward for our use case\n- The user-profile schema has stabilized and rarely changes\n- PostgreSQL expertise has grown across other services\n- Operating two databases doubles the on-call surface\n\n## Decision\nDeprecate MongoDB. Migrate user profiles to PostgreSQL.\n\n## Migration Plan\n1. **Week 1-2**: Create PostgreSQL schema; enable dual-write\n2. **Week 3-4**: Backfill historical data; validate consistency\n3. **Week 5**: Switch reads to PostgreSQL; monitor\n4. **Week 6**: Remove MongoDB writes; decommission cluster\n\n## Consequences\n### Positive\n- Single database technology; reduced operational complexity\n- ACID transactions for user data\n- PostgreSQL expertise compounds across services\n\n### Negative\n- ~4 weeks of migration effort\n- Migration-window risk of data inconsistency\n- Lose schema-flexibility option for this domain\n\n## Lessons Learned (from ADR-0003)\n- Schema flexibility benefits were **overestimated** — the schema barely changed\n- Operational cost of running two databases was **underestimated**\n- Future technology decisions should weight long-term maintenance cost\n  more heavily relative to short-term flexibility wins\n\n## Related Decisions\n- Supersedes ADR-0003 (MongoDB for User Profiles)\n```"
+- sequence: 8
+  fragment_type: example
+  content: '## RFC-Style ADR (large proposals)
+
+
+    Use when the proposal is large, exploratory, or needs broad input before becoming a decision. RFC sections expand on MADR with explicit Drawbacks, Alternatives, and Unresolved Questions.
+
+
+    ```markdown
+
+    # RFC-0025: Adopt Event Sourcing for Order Management
+
+
+    ## Summary
+
+    Adopt the event-sourcing pattern for the order-management domain to
+
+    improve auditability, enable temporal queries, and feed real-time
+
+    analytics.
+
+
+    ## Motivation
+
+    1. Audit requirements demand complete order history
+
+    2. "What was the order state at time X?" queries are currently impossible
+
+    3. Analytics needs an event stream for live dashboards
+
+    4. Order-state reconstruction for support is manual today
+
+
+    ## Detailed Design
+
+    ### Events
+
+    - OrderCreated { orderId, customerId, items[], timestamp }
+
+    - OrderItemAdded { orderId, item, timestamp }
+
+    - OrderItemRemoved { orderId, itemId, timestamp }
+
+    - PaymentReceived { orderId, amount, paymentId, timestamp }
+
+    - OrderShipped { orderId, trackingNumber, timestamp }
+
+
+    ### Projections
+
+    - **CurrentOrderState** — materialized view for queries
+
+    - **OrderHistory** — full timeline for audit
+
+    - **DailyOrderMetrics** — analytics aggregation
+
+
+    ### Technology
+
+    - Primary: EventStoreDB (purpose-built, native projections)
+
+    - Alternative considered: Kafka + custom projection service
+
+
+    ## Drawbacks
+
+    - Team learning curve
+
+    - Higher conceptual complexity vs. CRUD
+
+    - Events are immutable once stored — schema design must be careful
+
+    - Storage growth (events are not deleted)
+
+
+    ## Alternatives
+
+    1. **Audit tables** — simpler, but no temporal queries
+
+    2. **CDC from existing DB** — complex, doesn''t change the data model
+
+    3. **Hybrid** — event-source only state changes, CRUD for the rest
+
+
+    ## Unresolved Questions
+
+    - [ ] Event schema versioning strategy
+
+    - [ ] Retention policy for events
+
+    - [ ] Snapshot frequency for performance
+
+
+    ## Implementation Plan
+
+    1. Prototype with one order type (2 weeks)
+
+    2. Team training on event sourcing (1 week)
+
+    3. Full implementation + migration (4 weeks)
+
+    4. Monitoring + optimization (ongoing)
+
+
+    ## References
+
+    - Event Sourcing — Martin Fowler
+
+    - EventStoreDB documentation
+
+    ```'
+- sequence: 9
+  fragment_type: example
+  content: "## Directory Layout & Index\n\n```\ndocs/adr/\n  README.md          # Index with status table\n  template.md        # Team's ADR template\n  0001-use-postgresql.md\n  0002-caching-strategy.md\n  0003-mongodb-user-profiles.md  [DEPRECATED]\n  0020-deprecate-mongodb.md       (supersedes 0003)\n```\n\nADR files are zero-padded, numbered sequentially, kebab-case. Numbers are never reused — even for rejected ADRs.\n\nThe `README.md` index is a status table:\n\n| ADR | Title | Status | Date |\n|---|---|---|---|\n| [0001](0001-use-postgresql.md) | Use PostgreSQL as Primary Database | Accepted | 2024-01-10 |\n| [0002](0002-caching-strategy.md) | Caching Strategy with Redis | Accepted | 2024-01-12 |\n| [0003](0003-mongodb-user-profiles.md) | MongoDB for User Profiles | Deprecated | 2023-06-15 |\n| [0020](0020-deprecate-mongodb.md) | Deprecate MongoDB | Accepted | 2024-01-15 |\n\nThe index also documents the status vocabulary:\n\n- **Proposed** — under discussion\n- **Accepted** — decision made, implementing\n- **Deprecated** — no longer relevant\n- **Superseded** — replaced by another ADR (link forward)\n- **Rejected** — considered but not adopted"
+- sequence: 10
+  fragment_type: execution
+  content: '## adr-tools CLI
+
+
+    `adr-tools` automates the file-numbering, linking, and table-of-contents chores so the directory layout stays consistent.
+
+
+    **Install:**
+
+    ```bash
+
+    brew install adr-tools
+
+    ```
+
+
+    **Initialize the ADR directory** (run once per repo):
+
+    ```bash
+
+    adr init docs/adr
+
+    ```
+
+    Creates `docs/adr/` with a starter template and an `0001-record-architecture-decisions.md` meta-ADR.
+
+
+    **Create a new ADR:**
+
+    ```bash
+
+    adr new "Use PostgreSQL as Primary Database"
+
+    ```
+
+    Auto-numbers the file (`NNNN-use-postgresql-as-primary-database.md`) and pre-fills Status/Context/Decision/Consequences sections.
+
+
+    **Supersede an existing ADR** — the canonical way to "change" a past decision:
+
+    ```bash
+
+    adr new -s 3 "Deprecate MongoDB in Favor of PostgreSQL"
+
+    ```
+
+    The `-s 3` flag flips ADR-0003''s status to `Superseded by ADR-NNNN` and adds the back-link automatically. Never edit the old ADR by hand.
+
+
+    **Regenerate the index table of contents:**
+
+    ```bash
+
+    adr generate toc > docs/adr/README.md
+
+    ```
+
+    Run this whenever an ADR is added or its status changes — typically as a pre-commit hook or CI step.
+
+
+    **Link related ADRs** (non-supersede relationships):
+
+    ```bash
+
+    adr link 2 "Complements" 1 "Is complemented by"
+
+    ```
+
+    Adds reciprocal entries to the `Related Decisions` sections of both ADRs.'
+- sequence: 11
+  fragment_type: verification
+  content: '## Review Checklist
+
+
+    **Before submission:**
+
+    - [ ] Context clearly explains the problem
+
+    - [ ] All viable options considered
+
+    - [ ] Pros/cons balanced and honest
+
+    - [ ] Consequences (positive AND negative) documented
+
+    - [ ] Related ADRs linked
+
+
+    **During review:**
+
+    - [ ] 2+ senior engineers reviewed
+
+    - [ ] Affected teams consulted
+
+    - [ ] Security implications considered
+
+    - [ ] Cost implications documented
+
+    - [ ] Reversibility assessed
+
+
+    **After acceptance:**
+
+    - [ ] ADR index updated (run `adr generate toc`)
+
+    - [ ] Team notified
+
+    - [ ] Implementation tickets created
+
+    - [ ] Related documentation updated'
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Don''ts (prohibitive guardrails)
+
+
+    These are hard rules — violating them undermines the entire ADR practice.
+
+
+    - **Don''t change Accepted ADRs.** Write a new ADR that supersedes the old one. Edits to an Accepted ADR''s Context, Decision, or Consequences destroy the historical record. Only Status, typos, and broken links may be corrected in place.
+
+    - **Don''t skip Context.** A decision without its context is unreviewable. Future readers cannot evaluate whether the decision still applies if they don''t know the constraints that produced it.
+
+    - **Don''t hide failures.** Rejected ADRs and Deprecation ADRs are *more* valuable than Accepted ones — they document the dead ends so the team doesn''t re-walk them. Keep them in the directory and the index.
+
+    - **Don''t be vague.** "We will improve performance" is not a decision. "We will add a Redis read-through cache for product detail queries with a 60-second TTL" is. Specific decisions produce specific consequences that can later be audited.
+
+    - **Don''t forget implementation.** An ADR that doesn''t translate into tickets, code, or operational changes is documentation theater. Track follow-through in the After-Acceptance checklist.
+
+    - **Don''t reuse ADR numbers.** Numbers are permanent identifiers; rejected and superseded ADRs keep theirs forever.'

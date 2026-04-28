@@ -1,0 +1,146 @@
+skill_type: domain
+skill_id: python-code-style
+canonical_name: Python Code Style & Documentation
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- code-style
+- pep8
+- ruff
+- black
+- linting
+- formatting
+- conventions
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Python Code Style & Documentation\n\nConsistent code style and clear documentation make codebases maintainable and collaborative. This skill covers modern Python tooling, naming conventions, and documentation standards.\n\n## When to Use This Skill\n\n- Setting up linting and formatting for a new project\n- Writing or reviewing docstrings\n- Establishing team coding standards\n- Configuring ruff, mypy, or pyright\n- Reviewing code for style consistency\n- Creating project documentation\n\n## Core Concepts\n\n### 1. Automated Formatting\n\nLet tools handle formatting debates. Configure once, enforce automatically.\n\n### 2. Consistent Naming\n\nFollow PEP 8 conventions with meaningful, descriptive names.\n\n### 3. Documentation as Code\n\nDocstrings should be maintained alongside the code they describe.\n\n### 4. Type Annotations\n\nModern Python code should include type hints for all public APIs.\n\n## Quick Start\n\n```bash\n# Install modern tooling\npip install ruff mypy\n\n# Configure in pyproject.toml\n[tool.ruff]\nline-length = 120\ntarget-version = \"py312\"  # Adjust based on your project's minimum Python version\n\n[tool.mypy]\nstrict = true\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Modern Python Tooling\n\nUse `ruff` as an all-in-one linter and formatter. It replaces flake8, isort, and black with a single fast tool.\n\n```toml\n# pyproject.toml\n[tool.ruff]\nline-length = 120\ntarget-version = \"py312\"  # Adjust based on your project's minimum Python version\n\n[tool.ruff.lint]\nselect = [\n    \"E\",    # pycodestyle errors\n    \"W\",    # pycodestyle warnings\n    \"F\",    # pyflakes\n    \"I\",    # isort\n    \"B\",    # flake8-bugbear\n    \"C4\",   # flake8-comprehensions\n    \"UP\",   # pyupgrade\n    \"SIM\",  # flake8-simplify\n]\nignore = [\"E501\"]  # Line length handled by formatter\n\n[tool.ruff.format]\nquote-style = \"double\"\nindent-style = \"space\"\n```\n\nRun with:\n\n```bash\nruff check --fix .  # Lint and auto-fix\nruff format .       # Format code\n```\n\n### Pattern 2: Type Checking Configuration\n\nConfigure strict type checking for production code.\n\n```toml\n# pyproject.toml\n[tool.mypy]\npython_version = \"3.12\"\nstrict = true\nwarn_return_any = true\nwarn_unused_ignores = true\ndisallow_untyped_defs = true\ndisallow_incomplete_defs = true\n\n[[tool.mypy.overrides]]\nmodule = \"tests.*\"\ndisallow_untyped_defs = false\n```\n\nAlternative: Use `pyright` for faster checking.\n\n```toml\n[tool.pyright]\npythonVersion = \"3.12\"\ntypeCheckingMode = \"strict\"\n```\n\n### Pattern 3: Naming Conventions\n\nFollow PEP 8 with emphasis on clarity over brevity.\n\n**Files and Modules:**\n\n```python\n# Good: Descriptive snake_case\nuser_repository.py\norder_processing.py\nhttp_client.py\n\n# Avoid: Abbreviations\nusr_repo.py\nord_proc.py\nhttp_cli.py\n```\n\n**Classes and Functions:**\n\n```python\n# Classes: PascalCase\nclass UserRepository:\n    pass\n\nclass HTTPClientFactory:  # Acronyms stay uppercase\n    pass\n\n# Functions and variables: snake_case\ndef get_user_by_email(email: str) -> User | None:\n    retry_count = 3\n    max_connections = 100\n```\n\n**Constants:**\n\n```python\n# Module-level constants: SCREAMING_SNAKE_CASE\nMAX_RETRY_ATTEMPTS = 3\nDEFAULT_TIMEOUT_SECONDS = 30\nAPI_BASE_URL = \"https://api.example.com\"\n```\n\n### Pattern 4: Import Organization\n\nGroup imports in a consistent order: standard library, third-party, local.\n\n```python\n# Standard library\nimport os\nfrom collections.abc import Callable\nfrom typing import Any\n\n# Third-party packages\nimport httpx\nfrom pydantic import BaseModel\nfrom sqlalchemy import Column\n\n# Local imports\nfrom myproject.models import User\nfrom myproject.services import UserService\n```\n\nUse absolute imports exclusively:\n\n```python\n# Preferred\nfrom myproject.utils import retry_decorator\n\n# Avoid relative imports\nfrom ..utils import retry_decorator\n```\n\n## Advanced Patterns\n\n### Pattern 5: Google-Style Docstrings\n\nWrite docstrings for all public classes, methods, and functions.\n\n**Simple Function:**\n\n```python\ndef get_user(user_id: str) -> User:\n    \"\"\"Retrieve a user by their unique identifier.\"\"\"\n    ...\n```\n\n**Complex Function:**\n\n```python\ndef process_batch(\n    items: list[Item],\n    max_workers: int = 4,\n    on_progress: Callable[[int, int], None] | None = None,\n) -> BatchResult:\n    \"\"\"Process items concurrently using a worker pool.\n\n    Processes each item in the batch using the configured number of\n    workers. Progress can be monitored via the optional callback.\n\n    Args:\n        items: The items to process. Must not be empty.\n        max_workers: Maximum concurrent workers. Defaults to 4.\n        on_progress: Optional callback receiving (completed, total) counts.\n\n    Returns:\n        BatchResult containing succeeded items and any failures with\n        their associated exceptions.\n\n    Raises:\n        ValueError: If items is empty.\n        ProcessingError: If the batch cannot be processed.\n\n    Example:\n        >>> result = process_batch(items, max_workers=8)\n        >>> print(f\"Processed {len(result.succeeded)} items\")\n    \"\"\"\n    ...\n```\n\n**Class Docstring:**\n\n```python\nclass UserService:\n    \"\"\"Service for managing user operations.\n\n    Provides methods for creating, retrieving, updating, and\n    deleting users with proper validation and error handling.\n\n    Attributes:\n        repository: The data access layer for user persistence.\n        logger: Logger instance for operation tracking.\n\n    Example:\n        >>> service = UserService(repository, logger)\n        >>> user = service.create_user(CreateUserInput(...))\n    \"\"\"\n\n    def __init__(self, repository: UserRepository, logger: Logger) -> None:\n        \"\"\"Initialize the user service.\n\n        Args:\n            repository: Data access layer for users.\n            logger: Logger for tracking operations.\n        \"\"\"\n        self.repository = repository\n        self.logger = logger\n```\n\n### Pattern 6: Line Length and Formatting\n\nSet line length to 120 characters for modern displays while maintaining readability.\n\n```python\n# Good: Readable line breaks\ndef create_user(\n    email: str,\n    name: str,\n    role: UserRole = UserRole.MEMBER,\n    notify: bool = True,\n) -> User:\n    ...\n\n# Good: Chain method calls clearly\nresult = (\n    db.query(User)\n    .filter(User.active == True)\n    .order_by(User.created_at.desc())\n    .limit(10)\n    .all()\n)\n\n# Good: Format long strings\nerror_message = (\n    f\"Failed to process user {user_id}: \"\n    f\"received status {response.status_code} \"\n    f\"with body {response.text[:100]}\"\n)\n```\n\n### Pattern 7: Project Documentation\n\n**README Structure:**\n\n```markdown\n# Project Name\n\nBrief description of what the project does.\n\n## Installation\n\n\\`\\`\\`bash\npip install myproject\n\\`\\`\\`\n\n## Quick Start\n\n\\`\\`\\`python\nfrom myproject import Client\n\nclient = Client(api_key=\"...\")\nresult = client.process(data)\n\\`\\`\\`\n\n## Configuration\n\nDocument environment variables and configuration options.\n\n## Development\n\n\\`\\`\\`bash\npip install -e \".[dev]\"\npytest\n\\`\\`\\`\n```\n\n**CHANGELOG Format (Keep a Changelog):**\n\n```markdown\n# Changelog\n\n## [Unreleased]\n\n### Added\n- New feature X\n\n### Changed\n- Modified behavior of Y\n\n### Fixed\n- Bug in Z\n```\n\n## Best Practices Summary\n\n1. **Use ruff** - Single tool for linting and formatting\n2. **Enable strict mypy** - Catch type errors before runtime\n3. **120 character lines** - Modern standard for readability\n4. **Descriptive names** - Clarity over brevity\n5. **Absolute imports** - More maintainable than relative\n6. **Google-style docstrings** - Consistent, readable documentation\n7. **Document public APIs** - Every public function needs a docstring\n8. **Keep docs updated** - Treat documentation as code\n9. **Automate in CI** - Run linters on every commit\n10. **Target Python 3.10+** - For new projects, Python 3.12+ is recommended for modern language features"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Code Style & Documentation
+
+
+    Consistent code style and clear documentation make codebases maintainable and collaborative. This skill covers modern Python tooling, naming conventions, and documentation standards.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Setting up linting and formatting for a new project
+
+    - Writing or reviewing docstrings
+
+    - Establishing team coding standards
+
+    - Configuring ruff, mypy, or pyright
+
+    - Reviewing code for style consistency
+
+    - Creating project documentation'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Automated Formatting
+
+
+    Let tools handle formatting debates. Configure once, enforce automatically.
+
+
+    ### 2. Consistent Naming
+
+
+    Follow PEP 8 conventions with meaningful, descriptive names.
+
+
+    ### 3. Documentation as Code
+
+
+    Docstrings should be maintained alongside the code they describe.
+
+
+    ### 4. Type Annotations
+
+
+    Modern Python code should include type hints for all public APIs.'
+- sequence: 4
+  fragment_type: example
+  content: '## Quick Start
+
+
+    ```bash
+
+    # Install modern tooling
+
+    pip install ruff mypy
+
+
+    # Configure in pyproject.toml
+
+    [tool.ruff]
+
+    line-length = 120
+
+    target-version = "py312"  # Adjust based on your project''s minimum Python version
+
+
+    [tool.mypy]
+
+    strict = true
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: "## Fundamental Patterns\n\n### Pattern 1: Modern Python Tooling\n\nUse `ruff` as an all-in-one linter and formatter. It replaces flake8, isort, and black with a single fast tool.\n\n```toml\n# pyproject.toml\n[tool.ruff]\nline-length = 120\ntarget-version = \"py312\"  # Adjust based on your project's minimum Python version\n\n[tool.ruff.lint]\nselect = [\n    \"E\",    # pycodestyle errors\n    \"W\",    # pycodestyle warnings\n    \"F\",    # pyflakes\n    \"I\",    # isort\n    \"B\",    # flake8-bugbear\n    \"C4\",   # flake8-comprehensions\n    \"UP\",   # pyupgrade\n    \"SIM\",  # flake8-simplify\n]\nignore = [\"E501\"]  # Line length handled by formatter\n\n[tool.ruff.format]\nquote-style = \"double\"\nindent-style = \"space\"\n```\n\nRun with:\n\n```bash\nruff check --fix .  # Lint and auto-fix\nruff format .       # Format code\n```\n\n### Pattern 2: Type Checking Configuration\n\nConfigure strict type checking for production code.\n\n```toml\n# pyproject.toml\n[tool.mypy]\npython_version = \"3.12\"\nstrict = true\nwarn_return_any = true\nwarn_unused_ignores = true\ndisallow_untyped_defs = true\ndisallow_incomplete_defs = true\n\n[[tool.mypy.overrides]]\nmodule = \"tests.*\"\ndisallow_untyped_defs = false\n```\n\nAlternative: Use `pyright` for faster checking.\n\n```toml\n[tool.pyright]\npythonVersion = \"3.12\"\ntypeCheckingMode = \"strict\"\n```\n\n### Pattern 3: Naming Conventions\n\nFollow PEP 8 with emphasis on clarity over brevity.\n\n**Files and Modules:**\n\n```python\n# Good: Descriptive snake_case\nuser_repository.py\norder_processing.py\nhttp_client.py\n\n# Avoid: Abbreviations\nusr_repo.py\nord_proc.py\nhttp_cli.py\n```\n\n**Classes and Functions:**\n\n```python\n# Classes: PascalCase\nclass UserRepository:\n    pass\n\nclass HTTPClientFactory:  # Acronyms stay uppercase\n    pass\n\n# Functions and variables: snake_case\ndef get_user_by_email(email: str) -> User | None:\n    retry_count = 3\n    max_connections = 100\n```\n\n**Constants:**\n\n```python\n# Module-level constants: SCREAMING_SNAKE_CASE\nMAX_RETRY_ATTEMPTS = 3\nDEFAULT_TIMEOUT_SECONDS = 30\nAPI_BASE_URL = \"https://api.example.com\"\n```\n\n### Pattern 4: Import Organization\n\nGroup imports in a consistent order: standard library, third-party, local.\n\n```python\n# Standard library\nimport os\nfrom collections.abc import Callable\nfrom typing import Any\n\n# Third-party packages\nimport httpx\nfrom pydantic import BaseModel\nfrom sqlalchemy import Column\n\n# Local imports\nfrom myproject.models import User\nfrom myproject.services import UserService\n```\n\nUse absolute imports exclusively:\n\n```python\n# Preferred\nfrom myproject.utils import retry_decorator\n\n# Avoid relative imports\nfrom ..utils import retry_decorator\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Advanced Patterns\n\n### Pattern 5: Google-Style Docstrings\n\nWrite docstrings for all public classes, methods, and functions.\n\n**Simple Function:**\n\n```python\ndef get_user(user_id: str) -> User:\n    \"\"\"Retrieve a user by their unique identifier.\"\"\"\n    ...\n```\n\n**Complex Function:**\n\n```python\ndef process_batch(\n    items: list[Item],\n    max_workers: int = 4,\n    on_progress: Callable[[int, int], None] | None = None,\n) -> BatchResult:\n    \"\"\"Process items concurrently using a worker pool.\n\n    Processes each item in the batch using the configured number of\n    workers. Progress can be monitored via the optional callback.\n\n    Args:\n        items: The items to process. Must not be empty.\n        max_workers: Maximum concurrent workers. Defaults to 4.\n        on_progress: Optional callback receiving (completed, total) counts.\n\n    Returns:\n        BatchResult containing succeeded items and any failures with\n        their associated exceptions.\n\n    Raises:\n        ValueError: If items is empty.\n        ProcessingError: If the batch cannot be processed.\n\n    Example:\n        >>> result = process_batch(items, max_workers=8)\n        >>> print(f\"Processed {len(result.succeeded)} items\")\n    \"\"\"\n    ...\n```\n\n**Class Docstring:**\n\n```python\nclass UserService:\n    \"\"\"Service for managing user operations.\n\n    Provides methods for creating, retrieving, updating, and\n    deleting users with proper validation and error handling.\n\n    Attributes:\n        repository: The data access layer for user persistence.\n        logger: Logger instance for operation tracking.\n\n    Example:\n        >>> service = UserService(repository, logger)\n        >>> user = service.create_user(CreateUserInput(...))\n    \"\"\"\n\n    def __init__(self, repository: UserRepository, logger: Logger) -> None:\n        \"\"\"Initialize the user service.\n\n        Args:\n            repository: Data access layer for users.\n            logger: Logger for tracking operations.\n        \"\"\"\n        self.repository = repository\n        self.logger = logger\n```\n\n### Pattern 6: Line Length and Formatting\n\nSet line length to 120 characters for modern displays while maintaining readability.\n\n```python\n# Good: Readable line breaks\ndef create_user(\n    email: str,\n    name: str,\n    role: UserRole = UserRole.MEMBER,\n    notify: bool = True,\n) -> User:\n    ...\n\n# Good: Chain method calls clearly\nresult = (\n    db.query(User)\n    .filter(User.active == True)\n    .order_by(User.created_at.desc())\n    .limit(10)\n    .all()\n)\n\n# Good: Format long strings\nerror_message = (\n    f\"Failed to process user {user_id}: \"\n    f\"received status {response.status_code} \"\n    f\"with body {response.text[:100]}\"\n)\n```\n\n### Pattern 7: Project Documentation\n\n**README Structure:**\n\n```markdown\n# Project Name\n\nBrief description of what the project does."
+- sequence: 7
+  fragment_type: rationale
+  content: '## [Unreleased]
+
+
+    ### Added
+
+    - New feature X
+
+
+    ### Changed
+
+    - Modified behavior of Y
+
+
+    ### Fixed
+
+    - Bug in Z
+
+    ```'
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Use ruff** - Single tool for linting and formatting
+
+    2. **Enable strict mypy** - Catch type errors before runtime
+
+    3. **120 character lines** - Modern standard for readability
+
+    4. **Descriptive names** - Clarity over brevity
+
+    5. **Absolute imports** - More maintainable than relative
+
+    6. **Google-style docstrings** - Consistent, readable documentation
+
+    7. **Document public APIs** - Every public function needs a docstring
+
+    8. **Keep docs updated** - Treat documentation as code
+
+    9. **Automate in CI** - Run linters on every commit
+
+    10. **Target Python 3.10+** - For new projects, Python 3.12+ is recommended for modern language features'

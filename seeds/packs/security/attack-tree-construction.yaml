@@ -1,0 +1,117 @@
+skill_type: domain
+skill_id: attack-tree-construction
+canonical_name: Attack Tree Construction
+category: review
+skill_class: domain
+domain_tags:
+- attack-tree
+- threat-modeling
+- security
+- risk-analysis
+- mermaid
+- plantuml
+- mitigation-priority
+- path-analysis
+- node-types
+- difficulty-rating
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin security-scanning/attack-tree-construction source
+raw_prose: "# Attack Tree Construction\n\nBuild structured threat models using attack trees. Attack trees decompose a high-level attacker goal into sub-goals using AND/OR nodes, with attributes for difficulty, cost, detection risk, and time. Use them to prioritize mitigations by analyzing which paths are easiest, cheapest, or stealthiest.\n\n## When to Use This Skill\n\n- Threat modeling for new systems or features\n- Analyzing attack vectors and their relationships\n- Prioritizing security mitigations by impact\n- Documenting security risks for stakeholders\n- Red team planning and coverage analysis\n- Compliance documentation (STRIDE, attack surface)\n\n## Core Concepts\n\n### Node Types\n\n- **OR Node**: Attacker can achieve goal via ANY child (alternatives)\n- **AND Node**: Attacker must achieve ALL children (prerequisites)\n- **LEAF Node**: Concrete, atomic attack action\n\n### Node Attributes\n\nEach leaf node carries:\n- **Difficulty**: TRIVIAL (1) → EXPERT (5)\n- **Cost**: FREE (1) → NATION_STATE (5)\n- **Detection Risk**: NONE (1) → CERTAIN (5)\n- **Time (hours)**: Estimated effort\n- **Requires Insider**: Boolean\n- **Requires Physical Access**: Boolean\n\n### Analysis Dimensions\n\n- **Easiest path**: Lowest total difficulty\n- **Cheapest path**: Lowest total cost\n- **Stealthiest path**: Lowest max detection risk\n- **Critical nodes**: Nodes appearing in the most attack paths\n\n## Fundamental Patterns\n\n### Pattern 1: Attack Tree Data Model\n\n```python\nfrom dataclasses import dataclass, field\nfrom enum import Enum\nfrom typing import List, Optional\n\nclass NodeType(Enum):\n    OR = \"or\"\n    AND = \"and\"\n    LEAF = \"leaf\"\n\nclass Difficulty(Enum):\n    TRIVIAL = 1\n    LOW = 2\n    MODERATE = 3\n    HIGH = 4\n    EXPERT = 5\n\nclass Cost(Enum):\n    FREE = 1\n    LOW = 2\n    MODERATE = 3\n    HIGH = 4\n    NATION_STATE = 5\n\nclass DetectionRisk(Enum):\n    NONE = 1\n    LOW = 2\n    MODERATE = 3\n    HIGH = 4\n    CERTAIN = 5\n\n@dataclass\nclass AttackAttributes:\n    difficulty: Difficulty = Difficulty.MODERATE\n    cost: Cost = Cost.MODERATE\n    detection_risk: DetectionRisk = DetectionRisk.MODERATE\n    time_hours: float = 0.0\n    requires_insider: bool = False\n    requires_physical: bool = False\n\n@dataclass\nclass AttackNode:\n    id: str\n    name: str\n    description: str = \"\"\n    node_type: NodeType = NodeType.OR\n    attributes: AttackAttributes = field(default_factory=AttackAttributes)\n    children: List[\"AttackNode\"] = field(default_factory=list)\n    mitigations: List[str] = field(default_factory=list)\n```\n\n### Pattern 2: Attack Tree Builder\n\n```python\n@dataclass\nclass AttackTree:\n    name: str\n    description: str\n    root: AttackNode\n\nclass AttackTreeBuilder:\n    def __init__(self, name: str, description: str):\n        self.name = name\n        self.description = description\n        self._nodes: dict[str, AttackNode] = {}\n\n    def add_or_node(self, id: str, name: str, **kwargs) -> \"AttackTreeBuilder\":\n        self._nodes[id] = AttackNode(id=id, name=name, node_type=NodeType.OR, **kwargs)\n        return self\n\n    def add_and_node(self, id: str, name: str, **kwargs) -> \"AttackTreeBuilder\":\n        self._nodes[id] = AttackNode(id=id, name=name, node_type=NodeType.AND, **kwargs)\n        return self\n\n    def add_leaf(self, id: str, name: str, attributes: AttackAttributes, mitigations: list[str] = None, **kwargs) -> \"AttackTreeBuilder\":\n        self._nodes[id] = AttackNode(\n            id=id, name=name, node_type=NodeType.LEAF,\n            attributes=attributes, mitigations=mitigations or [], **kwargs,\n        )\n        return self\n\n    def connect(self, parent_id: str, child_id: str) -> \"AttackTreeBuilder\":\n        self._nodes[parent_id].children.append(self._nodes[child_id])\n        return self\n\n    def build(self, root_id: str) -> AttackTree:\n        return AttackTree(name=self.name, description=self.description, root=self._nodes[root_id])\n```\n\n### Pattern 3: Diagram Export (Mermaid / PlantUML)\n\n```python\nclass MermaidExporter:\n    def export(self, tree: AttackTree) -> str:\n        lines = [\"graph TD\"]\n        self._export_node(tree.root, lines, set())\n        return \"\\n\".join(lines)\n\n    def _export_node(self, node: AttackNode, lines: list, visited: set):\n        if node.id in visited:\n            return\n        visited.add(node.id)\n        shape = self._get_shape(node)\n        lines.append(f'    {node.id}{shape}')\n        for child in node.children:\n            lines.append(f'    {node.id} --> {child.id}')\n            self._export_node(child, lines, visited)\n\n    def _get_shape(self, node: AttackNode) -> str:\n        if node.node_type == NodeType.LEAF:\n            diff = node.attributes.difficulty.name\n            return f'[\"{node.name}<br/>Difficulty: {diff}\"]'\n        elif node.node_type == NodeType.AND:\n            return f'{{\"{node.name} [AND]\"}}'\n        else:\n            return f'(\"{node.name}\")'\n```\n\n### Pattern 4: Attack Path Analysis\n\n```python\nclass AttackPathAnalyzer:\n    def __init__(self, tree: AttackTree):\n        self.tree = tree\n\n    def get_all_paths(self) -> List[List[AttackNode]]:\n        \"\"\"Get all possible attack paths from root to leaves.\"\"\"\n        paths = []\n        self._collect_paths(self.tree.root, [], paths)\n        return paths\n\n    def calculate_path_metrics(self, path: List[AttackNode]) -> dict:\n        leaves = [n for n in path if n.node_type == NodeType.LEAF]\n        return {\n            \"steps\": len(leaves),\n            \"total_difficulty\": sum(n.attributes.difficulty.value for n in leaves),\n            \"total_cost\": sum(n.attributes.cost.value for n in leaves),\n            \"total_time_hours\": sum(n.attributes.time_hours for n in leaves),\n            \"max_detection_risk\": max((n.attributes.detection_risk.value for n in leaves), default=0),\n            \"requires_insider\": any(n.attributes.requires_insider for n in leaves),\n            \"requires_physical\": any(n.attributes.requires_physical for n in leaves),\n        }\n\n    def identify_critical_nodes(self) -> List[tuple[AttackNode, int]]:\n        \"\"\"Find nodes appearing in the most paths — highest mitigation ROI.\"\"\"\n        paths = self.get_all_paths()\n        node_counts = {}\n        for path in paths:\n            for node in path:\n                node_counts.setdefault(node.id, (node, 0))\n                node_counts[node.id] = (node, node_counts[node.id][1] + 1)\n        return sorted(node_counts.values(), key=lambda x: x[1], reverse=True)\n\n    def coverage_analysis(self, mitigated_attacks: set[str]) -> dict:\n        \"\"\"Analyze how mitigations affect attack coverage.\"\"\"\n        all_paths = self.get_all_paths()\n        blocked = [p for p in all_paths if {n.id for n in p if n.node_type == NodeType.LEAF} & mitigated_attacks]\n        open_paths = [p for p in all_paths if p not in blocked]\n        return {\n            \"total_paths\": len(all_paths),\n            \"blocked_paths\": len(blocked),\n            \"open_paths\": len(open_paths),\n            \"coverage_percentage\": len(blocked) / len(all_paths) * 100 if all_paths else 0,\n        }\n\n    def prioritize_mitigations(self) -> list[dict]:\n        \"\"\"Prioritize mitigations by coverage impact.\"\"\"\n        critical = self.identify_critical_nodes()\n        total = len(self.get_all_paths())\n        return sorted([\n            {\n                \"attack\": node.name,\n                \"paths_blocked\": count,\n                \"coverage_impact\": count / total * 100,\n                \"difficulty\": node.attributes.difficulty.name,\n                \"mitigations\": node.mitigations,\n            }\n            for node, count in critical\n            if node.node_type == NodeType.LEAF and node.mitigations\n        ], key=lambda x: x[\"coverage_impact\"], reverse=True)\n```\n\n## Best Practices\n\n### Do's\n- **Start with clear goals** — Define what attacker wants\n- **Be exhaustive** — Consider all attack vectors\n- **Attribute attacks** — Cost, skill, and detection\n- **Update regularly** — New threats emerge\n- **Validate with experts** — Red team review\n\n### Don'ts\n- **Don't oversimplify** — Real attacks are complex\n- **Don't ignore dependencies** — AND nodes matter\n- **Don't forget insider threats** — Not all attackers are external\n- **Don't skip mitigations** — Trees are for defense planning\n- **Don't make it static** — Threat landscape evolves"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Attack Tree Construction
+
+
+    Build structured threat models using attack trees. Attack trees decompose a high-level attacker goal into sub-goals using AND/OR nodes, with attributes for difficulty, cost, detection risk, and time. Use them to prioritize mitigations by analyzing which paths are easiest, cheapest, or stealthiest.
+
+
+    ## Node Types
+
+    - **OR Node**: Attacker can achieve goal via ANY child (alternatives)
+
+    - **AND Node**: Attacker must achieve ALL children (prerequisites)
+
+    - **LEAF Node**: Concrete, atomic attack action
+
+
+    ## Node Attributes
+
+    Each leaf node carries: Difficulty (1-5), Cost (1-5), Detection Risk (1-5), Time (hours), Requires Insider (bool), Requires Physical Access (bool).
+
+
+    ## Analysis Dimensions
+
+    Easiest path (lowest difficulty), cheapest path (lowest cost), stealthiest path (lowest detection), critical nodes (highest mitigation ROI).'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Threat modeling for new systems or features
+
+    - Analyzing attack vectors and their relationships
+
+    - Prioritizing security mitigations by impact
+
+    - Documenting security risks for stakeholders
+
+    - Red team planning and coverage analysis
+
+    - Compliance documentation (STRIDE, attack surface)'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Attack Tree Data Model
+
+
+    Define enums for `NodeType` (OR, AND, LEAF), `Difficulty` (TRIVIAL=1 to EXPERT=5), `Cost` (FREE=1 to NATION_STATE=5), `DetectionRisk` (NONE=1 to CERTAIN=5). Create `AttackAttributes` dataclass with all ratings plus boolean flags. Create `AttackNode` dataclass with id, name, node_type, attributes, children list, and mitigations list.
+
+
+    ## Pattern 2: Attack Tree Builder
+
+
+    Use builder pattern: `add_or_node()`, `add_and_node()`, `add_leaf()` to register nodes, then `connect(parent_id, child_id)` to build the tree structure. Call `build(root_id)` to produce the final `AttackTree`.
+
+
+    ## Pattern 3: Diagram Export
+
+
+    Export to Mermaid (`graph TD` format) or PlantUML. Shape encoding: LEAF nodes show difficulty rating, AND nodes show `[AND]` marker, OR nodes use rounded shape. Track visited nodes to avoid duplicates.'
+- sequence: 4
+  fragment_type: example
+  content: "## Data Model & Builder Example\n\n```python\nclass NodeType(Enum):\n    OR = \"or\"; AND = \"and\"; LEAF = \"leaf\"\n\nclass Difficulty(Enum):\n    TRIVIAL = 1; LOW = 2; MODERATE = 3; HIGH = 4; EXPERT = 5\n\n@dataclass\nclass AttackAttributes:\n    difficulty: Difficulty = Difficulty.MODERATE\n    cost: Cost = Cost.MODERATE\n    detection_risk: DetectionRisk = DetectionRisk.MODERATE\n    time_hours: float = 0.0\n    requires_insider: bool = False\n\n@dataclass\nclass AttackNode:\n    id: str\n    name: str\n    node_type: NodeType = NodeType.OR\n    attributes: AttackAttributes = field(default_factory=AttackAttributes)\n    children: List[\"AttackNode\"] = field(default_factory=list)\n    mitigations: List[str] = field(default_factory=list)\n```\n\n```python\ntree = (AttackTreeBuilder(\"Compromise API\", \"Attack tree for API service\")\n    .add_or_node(\"root\", \"Compromise API\")\n    .add_leaf(\"sql\", \"SQL Injection\", AttackAttributes(difficulty=Difficulty.LOW), mitigations=[\"Parameterized queries\"])\n    .add_leaf(\"auth\", \"Bypass Auth\", AttackAttributes(difficulty=Difficulty.HIGH), mitigations=[\"MFA\", \"Rate limiting\"])\n    .connect(\"root\", \"sql\")\n    .connect(\"root\", \"auth\")\n    .build(\"root\"))\n```"
+- sequence: 5
+  fragment_type: example
+  content: "## Path Analysis & Mitigation Priority Example (Pattern 4)\n\n```python\nanalyzer = AttackPathAnalyzer(tree)\n\npaths = analyzer.get_all_paths()\nfor path in paths:\n    metrics = analyzer.calculate_path_metrics(path)\n    print(f\"Path: {[n.name for n in path]}\")\n    print(f\"  Difficulty: {metrics['total_difficulty']}, Cost: {metrics['total_cost']}\")\n\ncritical = analyzer.identify_critical_nodes()\nfor node, count in critical[:5]:\n    print(f\"{node.name}: appears in {count} paths\")\n\ncoverage = analyzer.coverage_analysis(mitigated_attacks={\"sql\"})\nprint(f\"Coverage: {coverage['coverage_percentage']:.1f}%\")\n\npriorities = analyzer.prioritize_mitigations()\nfor p in priorities[:3]:\n    print(f\"Mitigate '{p['attack']}' → blocks {p['coverage_impact']:.1f}% of paths\")\n```"
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    ### Do''s
+
+    - **Start with clear goals** — Define what attacker wants
+
+    - **Be exhaustive** — Consider all attack vectors
+
+    - **Attribute attacks** — Cost, skill, and detection
+
+    - **Update regularly** — New threats emerge
+
+    - **Validate with experts** — Red team review
+
+
+    ### Don''ts
+
+    - **Don''t oversimplify** — Real attacks are complex
+
+    - **Don''t ignore dependencies** — AND nodes matter
+
+    - **Don''t forget insider threats** — Not all attackers are external
+
+    - **Don''t skip mitigations** — Trees are for defense planning
+
+    - **Don''t make it static** — Threat landscape evolves'

@@ -1,0 +1,152 @@
+skill_type: domain
+skill_id: sast-configuration
+canonical_name: SAST Configuration
+category: review
+skill_class: domain
+domain_tags:
+- sast
+- semgrep
+- sonarqube
+- codeql
+- security-scanning
+- ci-cd
+- pre-commit
+- false-positive
+- compliance
+- static-analysis
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin security-scanning/sast-configuration source
+raw_prose: "# SAST Configuration\n\nConfigure and integrate Static Application Security Testing (SAST) tools into your development workflow. SAST tools analyze source code without executing it, catching security vulnerabilities before they reach production.\n\n## When to Use This Skill\n\n- Setting up Semgrep, SonarQube, or CodeQL\n- Integrating SAST into CI/CD pipelines\n- Configuring pre-commit hooks for security scanning\n- Managing false positives\n- Compliance scanning requirements\n- Choosing the right SAST tool for your stack\n\n## Core Concepts\n\n### SAST Tools Overview\n\n| Tool | Best For | Language Support | Deployment |\n|------|----------|-----------------|------------|\n| **Semgrep** | Custom rules, fast scanning | 30+ languages | CLI, CI, Cloud |\n| **SonarQube** | Code quality + security | 25+ languages | Self-hosted, Cloud |\n| **CodeQL** | Deep semantic analysis | 10+ languages | GitHub Actions |\n\n### Key Principles\n\n- Shift left: catch issues as early as possible\n- Low false-positive rate is better than catching everything\n- Custom rules for your domain-specific patterns\n- Incremental adoption: start with high-confidence rules\n\n## Fundamental Patterns\n\n### Pattern 1: Semgrep Configuration\n\n```yaml\n# .semgrep.yml\nrules:\n  - id: no-hardcoded-secrets\n    patterns:\n      - pattern: |\n          $KEY = \"...\"\n      - metavariable-regex:\n          metavariable: $KEY\n          regex: (password|secret|api_key|token)\n    message: \"Hardcoded secret detected in $KEY\"\n    severity: ERROR\n    languages: [python, javascript, typescript]\n\n  - id: sql-injection\n    patterns:\n      - pattern: |\n          cursor.execute(f\"...\")\n    message: \"Potential SQL injection via f-string\"\n    severity: ERROR\n    languages: [python]\n```\n\nRun: `semgrep --config .semgrep.yml .`\n\n### Pattern 2: CI/CD Integration\n\n```yaml\n# GitHub Actions\nname: SAST\non: [push, pull_request]\njobs:\n  semgrep:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: returntocorp/semgrep-action@v1\n        with:\n          config: >-\n            p/security-audit\n            p/secrets\n            .semgrep.yml\n\n  codeql:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: github/codeql-action/init@v3\n        with:\n          languages: python, javascript\n      - uses: github/codeql-action/analyze@v3\n```\n\n```yaml\n# GitLab CI\nsast:\n  stage: test\n  image: semgrep/semgrep:latest\n  script:\n    - semgrep --config p/security-audit --config .semgrep.yml --json --output report.json .\n  artifacts:\n    reports:\n      sast: report.json\n```\n\n### Pattern 3: Pre-Commit Hooks\n\n```yaml\n# .pre-commit-config.yaml\nrepos:\n  - repo: https://github.com/returntocorp/semgrep\n    rev: v1.50.0\n    hooks:\n      - id: semgrep\n        args: [\"--config\", \"p/secrets\", \"--config\", \".semgrep.yml\", \"--error\"]\n```\n\n### Pattern 4: False Positive Management\n\n```python\n# Inline suppression (when you've verified it's safe)\npassword_hash = bcrypt.hash(password)  # nosemgrep: no-hardcoded-secrets\n\n# File-level ignore\n# In .semgrepignore:\n# tests/fixtures/\n# scripts/seed_data.py\n```\n\n```yaml\n# Rule-level exclusions in .semgrep.yml\nrules:\n  - id: no-hardcoded-secrets\n    paths:\n      exclude:\n        - tests/\n        - \"*.test.*\"\n        - fixtures/\n```\n\n### Pattern 5: SonarQube Configuration\n\n```properties\n# sonar-project.properties\nsonar.projectKey=my-project\nsonar.sources=src\nsonar.tests=tests\nsonar.language=py\nsonar.python.coverage.reportPaths=coverage.xml\nsonar.qualitygate.wait=true\nsonar.issue.ignore.multicriteria=e1\nsonar.issue.ignore.multicriteria.e1.ruleKey=python:S1481\nsonar.issue.ignore.multicriteria.e1.resourceKey=tests/**\n```\n\n### Pattern 6: Compliance Scanning\n\nMap SAST rules to compliance frameworks:\n\n```yaml\n# Semgrep compliance rules\nrules:\n  - id: pci-dss-encryption\n    metadata:\n      compliance:\n        - PCI-DSS 3.4\n        - SOC2 CC6.1\n    patterns:\n      - pattern: |\n          $FUNC(..., encrypt=False, ...)\n    message: \"Data must be encrypted per PCI-DSS 3.4\"\n    severity: ERROR\n```\n\n## Tool Comparison\n\n| Feature | Semgrep | SonarQube | CodeQL |\n|---------|---------|-----------|--------|\n| Speed | Fast | Medium | Slow |\n| Custom rules | Easy (YAML) | Medium (Java) | Hard (QL) |\n| False positives | Low | Medium | Low |\n| CI integration | Excellent | Good | GitHub-native |\n| Free tier | Generous | Community ed. | GitHub repos |\n| Depth of analysis | Pattern-based | Flow analysis | Semantic |\n\n## Best Practices\n\n1. **Start with curated rulesets** — `p/security-audit`, `p/secrets`\n2. **Add custom rules** for domain-specific patterns\n3. **Suppress intentionally**, never globally\n4. **Run in CI** — block PRs on high-severity findings\n5. **Pre-commit for fast feedback** — catch secrets before push\n6. **Track trends** — SonarQube quality gates over time\n7. **Review quarterly** — update rules, retire false positives\n8. **Layer tools** — Semgrep for speed + CodeQL for depth"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# SAST Configuration
+
+
+    Configure and integrate Static Application Security Testing tools into your development workflow. SAST tools analyze source code without executing it, catching security vulnerabilities before they reach production.
+
+
+    ## SAST Tools Overview
+
+
+    | Tool | Best For | Deployment |
+
+    |------|----------|------------|
+
+    | Semgrep | Custom rules, fast scanning, 30+ languages | CLI, CI, Cloud |
+
+    | SonarQube | Code quality + security, 25+ languages | Self-hosted, Cloud |
+
+    | CodeQL | Deep semantic analysis, 10+ languages | GitHub Actions |
+
+
+    ## Key Principles
+
+
+    - Shift left: catch issues as early as possible
+
+    - Low false-positive rate is better than catching everything
+
+    - Custom rules for domain-specific patterns
+
+    - Incremental adoption: start with high-confidence rules'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Setting up Semgrep, SonarQube, or CodeQL
+
+    - Integrating SAST into CI/CD pipelines
+
+    - Configuring pre-commit hooks for security scanning
+
+    - Managing false positives
+
+    - Compliance scanning requirements
+
+    - Choosing the right SAST tool for your stack'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Semgrep Configuration
+
+
+    Create `.semgrep.yml` with custom rules using `patterns`, `metavariable-regex`, and `message` fields. Set `severity` (ERROR, WARNING, INFO) and target `languages`. Use pattern operators like `pattern`, `pattern-not`, `pattern-inside` for precise matching.
+
+
+    ## Pattern 2: CI/CD Integration
+
+
+    GitHub Actions: Use `returntocorp/semgrep-action` with curated rulesets (`p/security-audit`, `p/secrets`) plus custom config. CodeQL: Use `github/codeql-action/init` and `github/codeql-action/analyze`. GitLab CI: Run `semgrep` Docker image with `--json --output report.json` and publish as SAST artifact.
+
+
+    ## Pattern 3: Pre-Commit Hooks
+
+
+    Add Semgrep to `.pre-commit-config.yaml` with `--error` flag to fail on findings. Catches secrets before they''re pushed.'
+- sequence: 4
+  fragment_type: example
+  content: "## Semgrep Custom Rules Example\n\n```yaml\nrules:\n  - id: no-hardcoded-secrets\n    patterns:\n      - pattern: |\n          $KEY = \"...\"\n      - metavariable-regex:\n          metavariable: $KEY\n          regex: (password|secret|api_key|token)\n    message: \"Hardcoded secret detected in $KEY\"\n    severity: ERROR\n    languages: [python, javascript, typescript]\n\n  - id: sql-injection\n    patterns:\n      - pattern: |\n          cursor.execute(f\"...\")\n    message: \"Potential SQL injection via f-string\"\n    severity: ERROR\n    languages: [python]\n```\n\n## CI/CD Integration Example\n\n```yaml\nname: SAST\non: [push, pull_request]\njobs:\n  semgrep:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: returntocorp/semgrep-action@v1\n        with:\n          config: >-\n            p/security-audit\n            p/secrets\n            .semgrep.yml\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 4: False Positive Management
+
+
+    - Inline suppression: `# nosemgrep: rule-id` (only when verified safe)
+
+    - File-level ignore: `.semgrepignore` for test fixtures, seed scripts
+
+    - Rule-level exclusions: `paths.exclude` in rule definition for test directories
+
+
+    ## Pattern 5: SonarQube Configuration
+
+
+    Use `sonar-project.properties` with `sonar.sources`, `sonar.tests`, coverage report paths, and quality gate wait. Suppress specific rules per path with `sonar.issue.ignore.multicriteria`.
+
+
+    ## Pattern 6: Compliance Scanning
+
+
+    Map rules to compliance frameworks (PCI-DSS, SOC2) via `metadata.compliance` in Semgrep rules. This enables filtering findings by compliance requirement.'
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Start with curated rulesets** — `p/security-audit`, `p/secrets`
+
+    2. **Add custom rules** for domain-specific patterns
+
+    3. **Suppress intentionally**, never globally
+
+    4. **Run in CI** — block PRs on high-severity findings
+
+    5. **Pre-commit for fast feedback** — catch secrets before push
+
+    6. **Track trends** — SonarQube quality gates over time
+
+    7. **Review quarterly** — update rules, retire false positives
+
+    8. **Layer tools** — Semgrep for speed + CodeQL for depth
+
+
+    ## Tool Comparison
+
+
+    | Feature | Semgrep | SonarQube | CodeQL |
+
+    |---------|---------|-----------|--------|
+
+    | Speed | Fast | Medium | Slow |
+
+    | Custom rules | Easy (YAML) | Medium (Java) | Hard (QL) |
+
+    | False positives | Low | Medium | Low |
+
+    | CI integration | Excellent | Good | GitHub-native |
+
+    | Depth | Pattern-based | Flow analysis | Semantic |'

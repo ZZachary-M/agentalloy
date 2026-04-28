@@ -1,0 +1,527 @@
+skill_type: domain
+skill_id: incident-runbook-templates
+canonical_name: Incident Runbook Templates
+category: ops
+skill_class: domain
+domain_tags:
+- runbook
+- incident-response
+- severity-levels
+- escalation
+- mitigation-procedures
+- communication-templates
+- on-call
+- postgresql
+- kubernetes
+- rollback
+- severity
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: revise per adversarial QA — drop invented "no placeholders" claim, add Escalation Matrix and Verification fragments, add DB SQL example, add Detection setup, expand seq 1 rationale, reclassify seq 5 (execution) and seq 7 (guardrail imperatives), add kubectl rollback example, expand domain_tags
+raw_prose: '# Incident Runbook Templates
+
+
+  Production-ready structure for incident response runbooks: detection, triage, mitigation, resolution, communication. Write for a 3 AM brain.
+
+
+  ## Severity Levels
+
+
+  | Severity | Impact | Response Time |
+
+  |---|---|---|
+
+  | SEV1 | Complete outage, data loss | 15 min |
+
+  | SEV2 | Major degradation | 30 min |
+
+  | SEV3 | Minor impact | 2 hours |
+
+  | SEV4 | Minimal impact | Next business day |
+
+
+  ## Runbook Structure
+
+
+  1. Overview & Impact
+
+  2. Detection & Alerts
+
+  3. Initial Triage (first 5 min)
+
+  4. Mitigation Steps (by symptom)
+
+  5. Root Cause Investigation
+
+  6. Resolution Procedures
+
+  7. Verification & Rollback
+
+  8. Communication Templates
+
+  9. Escalation Matrix
+
+
+  ## Initial Triage
+
+
+  - Assess scope: which customers, what % of traffic, financial impact, blast radius
+
+  - Quick health checks: service reachable, DB connectivity, external deps, recent changes
+
+  - Initial classification table: symptom -> likely cause -> which mitigation section to jump to
+
+
+  ## Mitigation Procedures
+
+
+  Group by symptom (service down / high latency / partial failures / traffic surge). Each step has:
+
+  - Concrete command (placeholders only for env-specific values like [Service Name], $DB_HOST, [NAME])
+
+  - Prerequisites (kubectl configured, correct kubeconfig)
+
+  - Expected output
+
+  - "If this fails: ..." escape
+
+
+  Always include rollback as Step N+1.
+
+
+  ## Verification After Mitigation
+
+
+  - curl service /health
+
+  - prometheus error rate query
+
+  - p99 latency query
+
+  - smoke-test script
+
+
+  ## Escalation Matrix
+
+
+  - >15 min unresolved SEV1 -> Engineering Manager
+
+  - data breach suspected -> Security Team
+
+  - financial impact >$10k -> Finance + Legal
+
+  - customer communication needed -> Support Lead
+
+
+  ## Communication Templates
+
+
+  - **Initial notification** — severity, status, impact, start time, IC, current actions
+
+  - **Status update** — every 15 min, even with no new info: status, impact, actions, ETA
+
+  - **Resolution notification** — duration, impact, root cause, resolution, follow-up
+
+
+  Assign a dedicated **incident communicator** role separate from the IC.
+
+
+  ## Quick Checklist (top of runbook)
+
+
+  Numbered checklist mirroring section numbers so responders track progress under stress without reading the full doc.
+
+
+  ## Anti-Patterns
+
+
+  - Steps work in staging, fail in incident — preconditions not checked
+
+  - On-call panics, skips steps — quick checklist at top fixes this
+
+  - Runbook rot — commands reference dead clusters/endpoints. Add Last Verified date + owner + CI check.
+
+  - Stakeholder communication delayed — dedicated communicator, status update every 15 min
+
+  - DB commands cause more downtime — require dry-run before destructive SQL'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Incident Runbook Templates
+
+
+    Production-ready structure for incident response runbooks. Cover detection, triage, mitigation, resolution, and communication in a consistent shape across services so responders never have to learn a new layout under pressure.
+
+
+    **Why structure by symptom, not by cause.** During an active incident the responder sees symptoms first (latency spike, error rate climb, requests failing) and only later discovers the cause. Runbooks organized by symptom let a responder jump directly from the alert to the mitigation. Cause-organized runbooks force a diagnosis before any action, which costs minutes that compound into customer impact.
+
+
+    **The 3 AM brain principle.** Every formatting choice in this skill exists because a sleep-deprived on-call engineer paged at 3 AM cannot reason from first principles. They scan, they copy-paste, they follow numbered steps. So:
+
+    - Numbered Quick Checklist at the top (no reading required to start)
+
+    - Concrete commands, copy-pasteable, with placeholders only for env-specific values like [Service Name], $DB_HOST, or [NAME]
+
+    - Every command has prerequisites, expected output, and an "if this fails" escape
+
+    - Section numbers in the classification table point to the exact mitigation block
+
+    - Communication templates pre-written so the comms role does not draft from scratch
+
+
+    Skip any of these and the responder either freezes, runs the wrong command, or burns 10 minutes searching for context that should have been inline. Every section below — severity levels, classification table, mitigation format, communication templates, escalation matrix, verification — is one half of that 3 AM contract.'
+- sequence: 2
+  fragment_type: setup
+  content: '## Severity Levels
+
+
+    | Severity | Impact | Response Time | Example |
+
+    |---|---|---|---|
+
+    | SEV1 | Complete outage, data loss | 15 min | Production down |
+
+    | SEV2 | Major degradation | 30 min | Critical feature broken |
+
+    | SEV3 | Minor impact | 2 hours | Non-critical bug |
+
+    | SEV4 | Minimal impact | Next business day | Cosmetic issue |
+
+
+    Standard runbook structure:
+
+
+    1. Overview & Impact
+
+    2. Detection & Alerts
+
+    3. Initial Triage
+
+    4. Mitigation Steps (by symptom)
+
+    5. Root Cause Investigation
+
+    6. Resolution Procedures
+
+    7. Verification & Rollback
+
+    8. Communication Templates
+
+    9. Escalation Matrix'
+- sequence: 3
+  fragment_type: setup
+  content: "## Detection Section\n\nEvery runbook's Detection section names the alert rules that fire it and the dashboards a responder opens first. Without this, responders search Grafana under stress.\n\n**Alert rules** (Prometheus / alert manager):\n\n```\n- alert: PaymentErrorRateHigh\n  expr: payment_error_rate > 5%\n  for: 2m\n  severity: page\n\n- alert: PaymentLatencyHigh\n  expr: payment_latency_p99 > 2s\n  for: 5m\n  severity: page\n\n- alert: PaymentSuccessRateLow\n  expr: payment_success_rate < 95%\n  for: 2m\n  severity: page\n```\n\n**Dashboard linking pattern.** Each alert's annotation includes a runbook URL deep-linked to the matching mitigation section, plus a dashboard URL pre-filtered to the service and time window:\n\n```\nannotations:\n  runbook: \"https://runbooks/payments#section-4-2-high-latency\"\n  dashboard: \"https://grafana/d/payments?var-service=payment-service&from=now-1h\"\n  sentry: \"https://sentry.io/payments\"\n  vendor_status: \"https://status.stripe.com\"\n```\n\nThe Detection section in the runbook itself lists the same links so a responder paged via PagerDuty, Slack, or an out-of-band channel can still reach context in one click."
+- sequence: 4
+  fragment_type: execution
+  content: '## Initial Triage (First 5 Minutes)
+
+
+    **1. Assess scope.** Which customers? What % of traffic? Financial impact? Blast radius?
+
+
+    **2. Quick health checks:**
+
+    - Can you reach the service? (`curl -I /health`)
+
+    - Database connectivity? (connection pool metrics)
+
+    - External dependencies? (vendor status pages)
+
+    - Recent changes? (deploy history)
+
+
+    **3. Initial classification table:**
+
+
+    | Symptom | Likely Cause | Go to Section |
+
+    |---|---|---|
+
+    | All requests failing | Service down | 4.1 |
+
+    | High latency | Database/dependency | 4.2 |
+
+    | Partial failures | Code bug | 4.3 |
+
+    | Spike in errors | Traffic surge | 4.4 |'
+- sequence: 5
+  fragment_type: execution
+  content: '## Mitigation Procedure Format
+
+
+    Group mitigation steps by symptom (service down / high latency / partial failures / traffic surge).
+
+
+    Each step requires:
+
+    - **Concrete command** — copy-pasteable, with placeholders only for env-specific values ([Service Name], $DB_HOST, [NAME])
+
+    - **Prerequisites** — what must be true (kubectl configured, correct kubeconfig context, env vars set)
+
+    - **Expected output** — what success looks like
+
+    - **"If this fails: ..."** — escape hatch / fallback command
+
+
+    Always include a **rollback** as the final step in every mitigation section.
+
+
+    Example:
+
+    ```bash
+
+    # Step: Check pod status
+
+    kubectl get pods -n payments
+
+    # Prerequisites: kubectl configured, kubeconfig points to prod-cluster
+
+    # If this fails: aws eks update-kubeconfig --name prod-cluster --region us-east-1
+
+    # Expected: pods in Running state
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: '## Quick Checklist Pattern
+
+
+    Place a numbered checklist at the very top of every runbook so responders track progress under stress without reading the full doc. The numbers mirror the section numbers below so the checklist also acts as a table of contents.
+
+
+    Rules:
+
+    - Maximum 6-8 items. If you need more, the runbook is too granular.
+
+    - Every item is a verb-first action ("Declare", "Check", "Roll back", "Post").
+
+    - Reference section numbers in parentheses so each item links to its expanded procedure.
+
+    - The first item is always "declare severity / open war room" and the last is always "escalate if not resolved within SLA".
+
+
+    Example:
+
+
+    ```
+
+    - [ ] 1. Declare incident severity and open war room
+
+    - [ ] 2. Check service health (Section 4.1)
+
+    - [ ] 3. Check recent deployments (Section 4.1)
+
+    - [ ] 4. Roll back if deploy is suspect (Section 4.1)
+
+    - [ ] 5. Post initial notification to #incidents
+
+    - [ ] 6. Escalate if > 15 min unresolved
+
+    ```'
+- sequence: 7
+  fragment_type: example
+  content: '## Kubernetes Rollback Sequence
+
+
+    Standard mitigation block for "service down after recent deploy." Copy verbatim into Section 4.1 of any service runbook, swapping the deployment name and namespace.
+
+
+    ```bash
+
+    # Step 1: Inspect rollout history to confirm a recent deploy is the suspect
+
+    kubectl rollout history deployment/payment-service -n payments
+
+    # Expected: list of revisions; note the previous good revision number
+
+
+    # Step 2: Roll back to previous revision
+
+    kubectl rollout undo deployment/payment-service -n payments
+
+    # If you need a specific revision (not just previous):
+
+    kubectl rollout undo deployment/payment-service -n payments --to-revision=42
+
+
+    # Step 3: Scale up if the bad deploy left replicas under-provisioned
+
+    kubectl scale deployment/payment-service -n payments --replicas=10
+
+
+    # Step 4: Wait for rollout to complete and verify
+
+    kubectl rollout status deployment/payment-service -n payments
+
+    # Expected: "deployment successfully rolled out"
+
+
+    # Step 5: Verify pods are healthy
+
+    kubectl get pods -n payments -l app=payment-service
+
+    # Expected: all pods Running, READY 1/1
+
+    ```
+
+
+    Prerequisites: `kubectl` configured, kubeconfig context points to the prod cluster.
+
+    If `kubectl` commands fail with auth errors: `aws eks update-kubeconfig --name prod-cluster --region us-east-1`.'
+- sequence: 8
+  fragment_type: example
+  content: "## Database Incident SQL\n\nDrop-in queries for the three most common Postgres incident classes. Always run the diagnostic SELECT before the destructive action.\n\n**Connection pool exhaustion:**\n\n```sql\n-- Diagnose: count by state\nSELECT datname, usename, state, count(*)\nFROM pg_stat_activity\nGROUP BY datname, usename, state\nORDER BY count(*) DESC;\n\n-- DRY RUN: count what we would terminate\nSELECT count(*) FROM pg_stat_activity\nWHERE state = 'idle' AND query_start < now() - interval '10 minutes';\n\n-- EXECUTE only after verifying count is reasonable (<50)\nSELECT pg_terminate_backend(pid)\nFROM pg_stat_activity\nWHERE state = 'idle' AND query_start < now() - interval '10 minutes';\n```\n\n**Replication lag:**\n\n```sql\nSELECT\n  CASE\n    WHEN pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn() THEN 0\n    ELSE extract(epoch from now() - pg_last_xact_replay_timestamp())\n  END AS lag_seconds;\n-- If lag > 60s: check network primary->replica, replica disk I/O, consider failover.\n```\n\n**Disk space critical:**\n\n```sql\n-- Find largest tables\nSELECT relname, pg_size_pretty(pg_total_relation_size(relid))\nFROM pg_catalog.pg_statio_user_tables\nORDER BY pg_total_relation_size(relid) DESC\nLIMIT 10;\n```\n\n```bash\n# Reclaim space (locks the table — coordinate with traffic):\npsql -h $DB_HOST -c \"VACUUM FULL large_table;\"\n```"
+- sequence: 9
+  fragment_type: example
+  content: '## Communication Templates
+
+
+    **Initial notification:**
+
+    ```
+
+    INCIDENT: [service] [issue]
+
+    Severity: SEV2
+
+    Status: Investigating
+
+    Impact: ~20% of requests failing
+
+    Start Time: [TIME UTC]
+
+    Incident Commander: [NAME]
+
+    Current Actions: ...
+
+    Updates in #[channel]
+
+    ```
+
+
+    **Status update — every 15 min, even with no new info:**
+
+    ```
+
+    UPDATE
+
+    Status: Mitigating
+
+    Impact: Reduced to ~5% failure rate
+
+    Duration: 25 min
+
+    Actions Taken: ...
+
+    Next Steps: ...
+
+    ETA to Resolution: ~15 min
+
+    Next update in: 15 minutes
+
+    ```
+
+
+    **Resolution notification:**
+
+    ```
+
+    RESOLVED
+
+    Duration: 45 min
+
+    Impact: ~5,000 affected transactions
+
+    Root Cause: ...
+
+    Resolution: ...
+
+    Follow-up: postmortem scheduled, bug fix in progress
+
+    ```
+
+
+    Assign a dedicated **incident communicator** role separate from the IC.'
+- sequence: 10
+  fragment_type: example
+  content: '## Escalation Matrix
+
+
+    Every runbook ends with this table. The conditions are objective so a responder under stress can read a row and act without judgment.
+
+
+    | Condition | Escalate To | Contact |
+
+    |---|---|---|
+
+    | >15 min unresolved SEV1 | Engineering Manager | @manager (Slack) |
+
+    | Data breach suspected | Security Team | #security-incidents |
+
+    | Financial impact > $10k | Finance + Legal | @finance-oncall |
+
+    | Customer communication needed | Support Lead | @support-lead |
+
+
+    Rules:
+
+    - Escalation is additive, never a handoff. The IC stays the IC.
+
+    - "Suspected" is the trigger for security and financial rows — do not wait for confirmation.
+
+    - The customer-communication row fires whenever impact is externally visible, even if duration is short.
+
+    - If a row''s contact is unreachable, fall through to the on-call rotation for that team, not to the IC''s manager.'
+- sequence: 11
+  fragment_type: verification
+  content: "## Post-Mitigation Verification\n\nRun all four checks before declaring the incident resolved. A passing mitigation step is not a passing system — verify externally.\n\n```bash\n# 1. Service health endpoint\ncurl -s https://api.company.com/payments/health | jq\n# Expected: {\"status\": \"ok\", ...}\n\n# 2. Error rate back to baseline (5xx requests over 5m)\ncurl -s \"http://prometheus:9090/api/v1/query?query=sum(rate(http_requests_total{status=~'5..'}[5m]))\" \\\n  | jq '.data.result[0].value[1]'\n# Expected: value below pre-incident baseline (e.g. < 0.01)\n\n# 3. p99 latency acceptable\ncurl -s \"http://prometheus:9090/api/v1/query?query=histogram_quantile(0.99,sum(rate(http_request_duration_seconds_bucket[5m]))by(le))\" \\\n  | jq '.data.result[0].value[1]'\n# Expected: below SLO (e.g. < 2s for payments)\n\n# 4. Smoke test critical user flows end-to-end\n./scripts/smoke-test-payments.sh\n# Expected: exit 0, all checks pass\n```\n\nAll four must pass. If any check fails, the incident is not resolved — return to triage. Record the timestamps of the four passing checks in the incident channel; those become the resolution time on the postmortem."
+- sequence: 12
+  fragment_type: guardrail
+  content: '## Guardrails
+
+
+    - Do not execute destructive SQL (`pg_terminate_backend`, `VACUUM FULL`, `DELETE`, `TRUNCATE`) without first running the diagnostic SELECT and confirming the affected row count is in an expected range.
+
+    - Do not deploy or publish a runbook without a `Last Verified` date and an owner at the top. Stale runbooks reference dead clusters and dead endpoints; require a CI check that validates `curl` URLs and `kubectl` context names.
+
+    - Do not skip the prerequisite line on any command. Every command must declare what must be true (kubectl configured, correct context, env vars set) and what to run if the command fails.
+
+    - Do not run an incident without a Quick Checklist at the top of the runbook. Without it, responders skip steps under stress.
+
+    - Do not assign the incident communicator role to the incident commander. Communication is a full-time job during a SEV1/SEV2; one person cannot drive mitigation and post 15-minute updates.
+
+    - Do not declare resolution from a passing mitigation step alone. Run the four post-mitigation verification checks (health, error rate, p99 latency, smoke test) and record their timestamps.
+
+    - Do not skip the postmortem after any SEV1 or SEV2, regardless of duration.'
+- sequence: 13
+  fragment_type: rationale
+  content: '## Best Practices
+
+
+    **Do:**
+
+    - Keep runbooks updated — review after every incident, not on a calendar
+
+    - Test regularly via game days and chaos engineering — an untested runbook is a guess
+
+    - Always include rollback steps — every mitigation needs an escape
+
+    - Document assumptions — what must be true for steps to work
+
+    - Link to dashboards — quick access during stress beats memorized URLs
+
+
+    **Don''t:**
+
+    - Skip verification — confirm each step worked before moving on
+
+    - Forget communication — silence reads as escalating severity to stakeholders
+
+    - Work alone — escalate early, even if the escalation target is just a witness
+
+    - Skip postmortems — the runbook improves only if you learn from each incident
+
+
+    These reinforce the structural choices in earlier fragments. Where seq 1 explains why the 3 AM brain drives the runbook''s shape, this fragment captures the operational disciplines that keep the runbook from rotting between incidents — review cadence, testing, and the postmortem feedback loop.'

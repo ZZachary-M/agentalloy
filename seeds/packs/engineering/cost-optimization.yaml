@@ -1,0 +1,253 @@
+skill_type: domain
+skill_id: cost-optimization
+canonical_name: Cost Optimization
+category: ops
+skill_class: domain
+domain_tags:
+- cloud-cost
+- rightsizing
+- reserved-instances
+- savings-plans
+- tagging-strategy
+- auto-scaling
+- spot-instances
+- budget-alerts
+- multi-cloud
+- storage-lifecycle
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents cloud-infrastructure plugin
+raw_prose: "# Cloud Cost Optimization\n\nStrategies and patterns for optimizing cloud costs across AWS, Azure, GCP, and OCI.\n\n## Purpose\n\nImplement systematic cost optimization strategies to reduce cloud spending while maintaining performance and reliability.\n\n## When to Use\n\n- Reduce cloud spending\n- Right-size resources\n- Implement cost governance\n- Optimize multi-cloud costs\n- Meet budget constraints\n\n## Cost Optimization Framework\n\n### 1. Visibility\n\n- Implement cost allocation tags\n- Use cloud cost management tools\n- Set up budget alerts\n- Create cost dashboards\n\n### 2. Right-Sizing\n\n- Analyze resource utilization\n- Downsize over-provisioned resources\n- Use auto-scaling\n- Remove idle resources\n\n### 3. Pricing Models\n\n- Use reserved capacity\n- Leverage spot/preemptible instances\n- Implement savings plans\n- Use committed use discounts\n\n### 4. Architecture Optimization\n\n- Use managed services\n- Implement caching\n- Optimize data transfer\n- Use lifecycle policies\n\n## AWS Cost Optimization\n\n### Reserved Instances\n\n```\nSavings: 30-72% vs On-Demand\nTerm: 1 or 3 years\nPayment: All/Partial/No upfront\nFlexibility: Standard or Convertible\n```\n\n### Savings Plans\n\n```\nCompute Savings Plans: 66% savings\nEC2 Instance Savings Plans: 72% savings\nApplies to: EC2, Fargate, Lambda\nFlexible across: Instance families, regions, OS\n```\n\n### Spot Instances\n\n```\nSavings: Up to 90% vs On-Demand\nBest for: Batch jobs, CI/CD, stateless workloads\nRisk: 2-minute interruption notice\nStrategy: Mix with On-Demand for resilience\n```\n\n### S3 Cost Optimization\n\n```hcl\nresource \"aws_s3_bucket_lifecycle_configuration\" \"example\" {\n  bucket = aws_s3_bucket.example.id\n\n  rule {\n    id     = \"transition-to-ia\"\n    status = \"Enabled\"\n\n    transition {\n      days          = 30\n      storage_class = \"STANDARD_IA\"\n    }\n\n    transition {\n      days          = 90\n      storage_class = \"GLACIER\"\n    }\n\n    expiration {\n      days = 365\n    }\n  }\n}\n```\n\n## Azure Cost Optimization\n\n### Reserved VM Instances\n\n- 1 or 3 year terms\n- Up to 72% savings\n- Flexible sizing\n- Exchangeable\n\n### Azure Hybrid Benefit\n\n- Use existing Windows Server licenses\n- Up to 80% savings with RI\n- Available for Windows and SQL Server\n\n### Azure Advisor Recommendations\n\n- Right-size VMs\n- Delete unused resources\n- Use reserved capacity\n- Optimize storage\n\n## GCP Cost Optimization\n\n### Committed Use Discounts\n\n- 1 or 3 year commitment\n- Up to 57% savings\n- Applies to vCPUs and memory\n- Resource-based or spend-based\n\n### Sustained Use Discounts\n\n- Automatic discounts\n- Up to 30% for running instances\n- No commitment required\n- Applies to Compute Engine, GKE\n\n### Preemptible VMs\n\n- Up to 80% savings\n- 24-hour maximum runtime\n- Best for batch workloads\n\n## OCI Cost Optimization\n\n### Flexible Shapes\n\n- Scale OCPUs and memory independently\n- Match instance sizing to workload demand\n- Reduce wasted capacity from fixed VM shapes\n\n### Commitments and Budgets\n\n- Use annual commitments for predictable spend\n- Set compartment-level budgets with alerts\n- Track monthly forecasts with OCI Cost Analysis\n\n### Preemptible Capacity\n\n- Use preemptible instances for batch and ephemeral workloads\n- Keep interruption-tolerant autoscaling groups\n- Mix with standard capacity for critical services\n\n## Tagging Strategy\n\n### AWS Tagging\n\n```hcl\nlocals {\n  common_tags = {\n    Environment = \"production\"\n    Project     = \"my-project\"\n    CostCenter  = \"engineering\"\n    Owner       = \"team@example.com\"\n    ManagedBy   = \"terraform\"\n  }\n}\n\nresource \"aws_instance\" \"example\" {\n  ami           = \"ami-12345678\"\n  instance_type = \"t3.medium\"\n\n  tags = merge(\n    local.common_tags,\n    {\n      Name = \"web-server\"\n    }\n  )\n}\n```\n\n**Reference:** See `references/tagging-standards.md`\n\n## Cost Monitoring\n\n### Budget Alerts\n\n```hcl\n# AWS Budget\nresource \"aws_budgets_budget\" \"monthly\" {\n  name              = \"monthly-budget\"\n  budget_type       = \"COST\"\n  limit_amount      = \"1000\"\n  limit_unit        = \"USD\"\n  time_period_start = \"2024-01-01_00:00\"\n  time_unit         = \"MONTHLY\"\n\n  notification {\n    comparison_operator        = \"GREATER_THAN\"\n    threshold                  = 80\n    threshold_type            = \"PERCENTAGE\"\n    notification_type         = \"ACTUAL\"\n    subscriber_email_addresses = [\"team@example.com\"]\n  }\n}\n```\n\n### Cost Anomaly Detection\n\n- AWS Cost Anomaly Detection\n- Azure Cost Management alerts\n- GCP Budget alerts\n- OCI Budgets and Cost Analysis\n\n## Architecture Patterns\n\n### Pattern 1: Serverless First\n\n- Use Lambda/Functions for event-driven\n- Pay only for execution time\n- Auto-scaling included\n- No idle costs\n\n### Pattern 2: Right-Sized Databases\n\n```\nDevelopment: t3.small RDS\nStaging: t3.large RDS\nProduction: r6g.2xlarge RDS with read replicas\n```\n\n### Pattern 3: Multi-Tier Storage\n\n```\nHot data: S3 Standard\nWarm data: S3 Standard-IA (30 days)\nCold data: S3 Glacier (90 days)\nArchive: S3 Deep Archive (365 days)\n```\n\n### Pattern 4: Auto-Scaling\n\n```hcl\nresource \"aws_autoscaling_policy\" \"scale_up\" {\n  name                   = \"scale-up\"\n  scaling_adjustment     = 2\n  adjustment_type        = \"ChangeInCapacity\"\n  cooldown              = 300\n  autoscaling_group_name = aws_autoscaling_group.main.name\n}\n\nresource \"aws_cloudwatch_metric_alarm\" \"cpu_high\" {\n  alarm_name          = \"cpu-high\"\n  comparison_operator = \"GreaterThanThreshold\"\n  evaluation_periods  = \"2\"\n  metric_name         = \"CPUUtilization\"\n  namespace           = \"AWS/EC2\"\n  period              = \"60\"\n  statistic           = \"Average\"\n  threshold           = \"80\"\n  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]\n}\n```\n\n## Cost Optimization Checklist\n\n- [ ] Implement cost allocation tags\n- [ ] Delete unused resources (EBS, EIPs, snapshots)\n- [ ] Right-size instances based on utilization\n- [ ] Use reserved capacity for steady workloads\n- [ ] Implement auto-scaling\n- [ ] Optimize storage classes\n- [ ] Use lifecycle policies\n- [ ] Enable cost anomaly detection\n- [ ] Set budget alerts\n- [ ] Review costs weekly\n- [ ] Use spot/preemptible instances\n- [ ] Optimize data transfer costs\n- [ ] Implement caching layers\n- [ ] Use managed services\n- [ ] Monitor and optimize continuously"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Cloud Cost Optimization
+
+
+    Strategies and patterns for optimizing cloud costs across AWS, Azure, GCP, and OCI.
+
+
+    ## Purpose
+
+
+    Implement systematic cost optimization strategies to reduce cloud spending while maintaining performance and reliability.
+
+
+    ## When to Use
+
+
+    - Reduce cloud spending
+
+    - Right-size resources
+
+    - Implement cost governance
+
+    - Optimize multi-cloud costs
+
+    - Meet budget constraints'
+- sequence: 2
+  fragment_type: execution
+  content: '## Cost Optimization Framework
+
+
+    ### 1. Visibility
+
+
+    - Implement cost allocation tags
+
+    - Use cloud cost management tools
+
+    - Set up budget alerts
+
+    - Create cost dashboards
+
+
+    ### 2. Right-Sizing
+
+
+    - Analyze resource utilization
+
+    - Downsize over-provisioned resources
+
+    - Use auto-scaling
+
+    - Remove idle resources
+
+
+    ### 3. Pricing Models
+
+
+    - Use reserved capacity
+
+    - Leverage spot/preemptible instances
+
+    - Implement savings plans
+
+    - Use committed use discounts
+
+
+    ### 4. Architecture Optimization
+
+
+    - Use managed services
+
+    - Implement caching
+
+    - Optimize data transfer
+
+    - Use lifecycle policies'
+- sequence: 3
+  fragment_type: example
+  content: "## AWS Cost Optimization\n\n### Reserved Instances\n\n```\nSavings: 30-72% vs On-Demand\nTerm: 1 or 3 years\nPayment: All/Partial/No upfront\nFlexibility: Standard or Convertible\n```\n\n### Savings Plans\n\n```\nCompute Savings Plans: 66% savings\nEC2 Instance Savings Plans: 72% savings\nApplies to: EC2, Fargate, Lambda\nFlexible across: Instance families, regions, OS\n```\n\n### Spot Instances\n\n```\nSavings: Up to 90% vs On-Demand\nBest for: Batch jobs, CI/CD, stateless workloads\nRisk: 2-minute interruption notice\nStrategy: Mix with On-Demand for resilience\n```\n\n### S3 Cost Optimization\n\n```hcl\nresource \"aws_s3_bucket_lifecycle_configuration\" \"example\" {\n  bucket = aws_s3_bucket.example.id\n\n  rule {\n    id     = \"transition-to-ia\"\n    status = \"Enabled\"\n\n    transition {\n      days          = 30\n      storage_class = \"STANDARD_IA\"\n    }\n\n    transition {\n      days          = 90\n      storage_class = \"GLACIER\"\n    }\n\n    expiration {\n      days = 365\n    }\n  }\n}\n```"
+- sequence: 4
+  fragment_type: rationale
+  content: '## Azure Cost Optimization
+
+
+    ### Reserved VM Instances
+
+
+    - 1 or 3 year terms
+
+    - Up to 72% savings
+
+    - Flexible sizing
+
+    - Exchangeable
+
+
+    ### Azure Hybrid Benefit
+
+
+    - Use existing Windows Server licenses
+
+    - Up to 80% savings with RI
+
+    - Available for Windows and SQL Server
+
+
+    ### Azure Advisor Recommendations
+
+
+    - Right-size VMs
+
+    - Delete unused resources
+
+    - Use reserved capacity
+
+    - Optimize storage'
+- sequence: 5
+  fragment_type: rationale
+  content: '## GCP Cost Optimization
+
+
+    ### Committed Use Discounts
+
+
+    - 1 or 3 year commitment
+
+    - Up to 57% savings
+
+    - Applies to vCPUs and memory
+
+    - Resource-based or spend-based
+
+
+    ### Sustained Use Discounts
+
+
+    - Automatic discounts
+
+    - Up to 30% for running instances
+
+    - No commitment required
+
+    - Applies to Compute Engine, GKE
+
+
+    ### Preemptible VMs
+
+
+    - Up to 80% savings
+
+    - 24-hour maximum runtime
+
+    - Best for batch workloads'
+- sequence: 6
+  fragment_type: rationale
+  content: '## OCI Cost Optimization
+
+
+    ### Flexible Shapes
+
+
+    - Scale OCPUs and memory independently
+
+    - Match instance sizing to workload demand
+
+    - Reduce wasted capacity from fixed VM shapes
+
+
+    ### Commitments and Budgets
+
+
+    - Use annual commitments for predictable spend
+
+    - Set compartment-level budgets with alerts
+
+    - Track monthly forecasts with OCI Cost Analysis
+
+
+    ### Preemptible Capacity
+
+
+    - Use preemptible instances for batch and ephemeral workloads
+
+    - Keep interruption-tolerant autoscaling groups
+
+    - Mix with standard capacity for critical services'
+- sequence: 7
+  fragment_type: example
+  content: "## Tagging Strategy\n\n### AWS Tagging\n\n```hcl\nlocals {\n  common_tags = {\n    Environment = \"production\"\n    Project     = \"my-project\"\n    CostCenter  = \"engineering\"\n    Owner       = \"team@example.com\"\n    ManagedBy   = \"terraform\"\n  }\n}\n\nresource \"aws_instance\" \"example\" {\n  ami           = \"ami-12345678\"\n  instance_type = \"t3.medium\"\n\n  tags = merge(\n    local.common_tags,\n    {\n      Name = \"web-server\"\n    }\n  )\n}\n```\n\n**Reference:** See `references/tagging-standards.md`"
+- sequence: 8
+  fragment_type: example
+  content: "## Cost Monitoring\n\n### Budget Alerts\n\n```hcl\n# AWS Budget\nresource \"aws_budgets_budget\" \"monthly\" {\n  name              = \"monthly-budget\"\n  budget_type       = \"COST\"\n  limit_amount      = \"1000\"\n  limit_unit        = \"USD\"\n  time_period_start = \"2024-01-01_00:00\"\n  time_unit         = \"MONTHLY\"\n\n  notification {\n    comparison_operator        = \"GREATER_THAN\"\n    threshold                  = 80\n    threshold_type            = \"PERCENTAGE\"\n    notification_type         = \"ACTUAL\"\n    subscriber_email_addresses = [\"team@example.com\"]\n  }\n}\n```\n\n### Cost Anomaly Detection\n\n- AWS Cost Anomaly Detection\n- Azure Cost Management alerts\n- GCP Budget alerts\n- OCI Budgets and Cost Analysis"
+- sequence: 9
+  fragment_type: example
+  content: "## Architecture Patterns\n\n### Pattern 1: Serverless First\n\n- Use Lambda/Functions for event-driven\n- Pay only for execution time\n- Auto-scaling included\n- No idle costs\n\n### Pattern 2: Right-Sized Databases\n\n```\nDevelopment: t3.small RDS\nStaging: t3.large RDS\nProduction: r6g.2xlarge RDS with read replicas\n```\n\n### Pattern 3: Multi-Tier Storage\n\n```\nHot data: S3 Standard\nWarm data: S3 Standard-IA (30 days)\nCold data: S3 Glacier (90 days)\nArchive: S3 Deep Archive (365 days)\n```\n\n### Pattern 4: Auto-Scaling\n\n```hcl\nresource \"aws_autoscaling_policy\" \"scale_up\" {\n  name                   = \"scale-up\"\n  scaling_adjustment     = 2\n  adjustment_type        = \"ChangeInCapacity\"\n  cooldown              = 300\n  autoscaling_group_name = aws_autoscaling_group.main.name\n}\n\nresource \"aws_cloudwatch_metric_alarm\" \"cpu_high\" {\n  alarm_name          = \"cpu-high\"\n  comparison_operator = \"GreaterThanThreshold\"\n  evaluation_periods  = \"2\"\n  metric_name         = \"CPUUtilization\"\n  namespace           = \"AWS/EC2\"\n  period              = \"60\"\n  statistic           = \"Average\"\n  threshold           = \"80\"\n  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]\n}\n```"
+- sequence: 10
+  fragment_type: verification
+  content: '## Cost Optimization Checklist
+
+
+    - [ ] Implement cost allocation tags
+
+    - [ ] Delete unused resources (EBS, EIPs, snapshots)
+
+    - [ ] Right-size instances based on utilization
+
+    - [ ] Use reserved capacity for steady workloads
+
+    - [ ] Implement auto-scaling
+
+    - [ ] Optimize storage classes
+
+    - [ ] Use lifecycle policies
+
+    - [ ] Enable cost anomaly detection
+
+    - [ ] Set budget alerts
+
+    - [ ] Review costs weekly
+
+    - [ ] Use spot/preemptible instances
+
+    - [ ] Optimize data transfer costs
+
+    - [ ] Implement caching layers
+
+    - [ ] Use managed services
+
+    - [ ] Monitor and optimize continuously'

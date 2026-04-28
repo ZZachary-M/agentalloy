@@ -1,0 +1,57 @@
+name: python
+version: 1.0.0
+description: Python ecosystem — async, packaging, testing, error handling, observability,
+  type safety.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: async-python-patterns
+  file: async-python-patterns.yaml
+  fragment_count: 21
+- skill_id: python-anti-patterns
+  file: python-anti-patterns.yaml
+  fragment_count: 9
+- skill_id: python-background-jobs
+  file: python-background-jobs.yaml
+  fragment_count: 10
+- skill_id: python-code-style
+  file: python-code-style.yaml
+  fragment_count: 8
+- skill_id: python-configuration
+  file: python-configuration.yaml
+  fragment_count: 7
+- skill_id: python-design-patterns
+  file: python-design-patterns.yaml
+  fragment_count: 15
+- skill_id: python-error-handling
+  file: python-error-handling.yaml
+  fragment_count: 11
+- skill_id: python-packaging
+  file: python-packaging.yaml
+  fragment_count: 10
+- skill_id: python-performance-optimization
+  file: python-performance-optimization.yaml
+  fragment_count: 13
+- skill_id: python-project-structure
+  file: python-project-structure.yaml
+  fragment_count: 8
+- skill_id: python-resilience
+  file: python-resilience.yaml
+  fragment_count: 12
+- skill_id: python-resource-management
+  file: python-resource-management.yaml
+  fragment_count: 14
+- skill_id: python-testing-patterns
+  file: python-testing-patterns.yaml
+  fragment_count: 13
+- skill_id: python-type-safety
+  file: python-type-safety.yaml
+  fragment_count: 11
+- skill_id: uv-package-manager
+  file: uv-package-manager.yaml
+  fragment_count: 9

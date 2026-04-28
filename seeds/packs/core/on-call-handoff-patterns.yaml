@@ -1,0 +1,470 @@
+skill_type: domain
+skill_id: on-call-handoff-patterns
+canonical_name: On-Call Handoff Patterns
+category: ops
+skill_class: domain
+domain_tags:
+- on-call
+- shift-handoff
+- context-transfer
+- escalation
+- handoff-checklist
+- incident-commander
+- mid-incident-handoff
+- pagerduty
+- runbook
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin incident-response/on-call-handoff-patterns
+raw_prose: '# On-Call Handoff Patterns
+
+
+  Effective shift transitions ensure continuity, context transfer, and reliable incident response across rotations.
+
+
+  ## When to Use
+
+
+  - Transitioning on-call responsibilities
+
+  - Writing shift handoff summaries
+
+  - Documenting ongoing investigations
+
+  - Establishing on-call rotation procedures
+
+  - Onboarding new on-call engineers
+
+  - Mid-incident handoff (incident commander role)
+
+  - Auditing/improving handoff quality across teams
+
+
+  ## Handoff Components
+
+
+  | Component | Purpose |
+
+  |---|---|
+
+  | Active Incidents | What''s currently broken |
+
+  | Ongoing Investigations | Issues being debugged |
+
+  | Recent Changes | Deployments, configs |
+
+  | Known Issues | Workarounds in place |
+
+  | Upcoming Events | Maintenance, releases |
+
+
+  ## Handoff Timing
+
+
+  Recommended: 30-min overlap between shifts.
+
+  - Outgoing: 15 min writing handoff doc, 15 min sync call
+
+  - Incoming: 15 min reviewing doc, 15 min sync call, 5 min verifying alerting routes
+
+
+  ## Standard Sections
+
+
+  - Active Incidents — or explicit "none"
+
+  - Ongoing Investigations — status, started, impact, context, next steps, resources
+
+  - Resolved This Shift — duration, root cause, resolution, postmortem link
+
+  - Recent Changes — deployments table, config changes, infrastructure
+
+  - Known Issues & Workarounds — issue, workaround, ticket
+
+  - Upcoming Events — date, event, impact, contact
+
+  - Escalation Reminders — escalation matrix
+
+  - Quick Reference — common commands, dashboard links
+
+
+  ## Handoff Checklist
+
+
+  Outgoing: documented active incidents, ongoing investigations, recent changes, known issues, upcoming events; synced with incoming.
+
+
+  Incoming: read doc, joined sync, verified PagerDuty routing, verified Slack notifications, checked VPN/access, reviewed critical dashboards.
+
+
+  Test alert: outgoing fires a test, incoming confirms receipt before overlap ends.
+
+
+  ## Mid-Incident Handoff
+
+
+  Use a dedicated incident-handoff template covering: current state, what we know, what we''ve done, what needs to happen next, key people, communication state.
+
+
+  Outgoing engineer remains available on Slack for 15 min after handoff.
+
+
+  ## Common Failures
+
+
+  - Incomplete handoff — gate every section with an entry or explicit "none"
+
+  - Timezone gaps prevent sync — fall back to async quick-handoff + Loom/voice memo
+
+  - Inconsistent format across teams — adopt one template org-wide, link from PagerDuty schedule
+
+  - Incoming can''t verify alerting — outgoing fires test alert, incoming confirms receipt'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Why Structured On-Call Handoffs Matter
+
+
+    Unstructured handoffs are a primary driver of inflated MTTR. When the incoming responder lacks situational awareness, they spend the first minutes of any new page rediscovering context the outgoing engineer already had — re-reading dashboards, re-deriving root-cause hypotheses, re-identifying which deploys are suspect. That rediscovery time is pure regression risk: in-flight investigations stall, mitigations get re-attempted, and customers feel the delay.
+
+
+    A structured handoff also prevents knowledge loss between rotations. Investigations that span multiple shifts (memory leaks observed over days, intermittent timeouts correlated with backup windows) only progress if each shift inherits the prior shift''s hypotheses, ruled-out causes, and pending experiments. Without a written record, the next responder restarts from zero, and slow-burn issues never get resolved.
+
+
+    Finally, the handoff ritual reinforces a blameless culture. When the format explicitly invites "ongoing investigations," "known issues with workarounds," and "things I didn''t get to," outgoing engineers feel safe disclosing in-flight problems instead of hiding them. Hidden problems become the next shift''s surprise outages. A normalized handoff document makes admitting "this is still broken and I don''t know why" the expected, professional behavior — which is the only condition under which engineers will actually do it.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    Apply this skill when:
+
+
+    - Transitioning on-call responsibilities between engineers and ensuring the incoming responder has full situational awareness
+
+    - Writing a shift summary that captures active incidents, ongoing investigations, and recent changes
+
+    - Handing off mid-incident so a fresh engineer can take over the incident commander role without losing context
+
+    - Documenting ongoing investigations that span multiple shifts
+
+    - Establishing on-call rotation procedures for a new team or service
+
+    - Onboarding a new engineer to the on-call rotation for the first time
+
+    - Auditing or improving handoff quality across teams (e.g., normalizing inconsistent formats org-wide)'
+- sequence: 3
+  fragment_type: execution
+  content: '## Handoff Components & Timing
+
+
+    Components every handoff covers:
+
+
+    | Component | Purpose |
+
+    |---|---|
+
+    | Active Incidents | What''s currently broken |
+
+    | Ongoing Investigations | Issues being debugged |
+
+    | Recent Changes | Deployments, configs |
+
+    | Known Issues | Workarounds in place |
+
+    | Upcoming Events | Maintenance, releases |
+
+
+    **Recommended timing:** 30-min overlap.
+
+    - Outgoing: 15 min writing handoff doc + 15 min sync call
+
+    - Incoming: 15 min reading doc, 15 min sync call, 5 min verifying alerting setup'
+- sequence: 4
+  fragment_type: execution
+  content: '## Sections Every Shift Handoff Includes
+
+
+    Structure every shift handoff document with these sections, in this order. Each section gets at least one entry, or an explicit "none."
+
+
+    - **Active Incidents** — current state, severity, incident commander, mitigation status (or explicit "none")
+
+    - **Ongoing Investigations** — for each: status, started date, impact, context, next steps, resources (dashboards, threads)
+
+    - **Resolved This Shift** — duration, root cause, resolution, postmortem link, follow-up tickets
+
+    - **Recent Changes** — deployments table (service, version, time, notes), config changes, infrastructure changes
+
+    - **Known Issues & Workarounds** — issue, workaround, ticket
+
+    - **Upcoming Events** — date, event, impact, contact (maintenance windows, releases, marketing campaigns)
+
+    - **Escalation Reminders** — first/second escalation by issue type
+
+    - **Quick Reference** — common commands, important links (runbooks, service catalog, incident Slack, PagerDuty)
+
+
+    The outgoing engineer fills these sections during the first 15 min of overlap; the incoming engineer reads them during their first 15 min, then both meet for the sync call.'
+- sequence: 5
+  fragment_type: example
+  content: '## Example: Shift Handoff Document
+
+
+    ````markdown
+
+    # On-Call Handoff: Platform Team
+
+
+    **Outgoing**: @alice (2024-01-15 to 2024-01-22)
+
+    **Incoming**: @bob (2024-01-22 to 2024-01-29)
+
+    **Handoff Time**: 2024-01-22 09:00 UTC
+
+
+    ## Active Incidents
+
+    None currently active.
+
+
+    ## Ongoing Investigations
+
+
+    ### Intermittent API Timeouts (ENG-1234)
+
+    - **Status**: Investigating
+
+    - **Started**: 2024-01-20
+
+    - **Impact**: ~0.1% of requests timing out
+
+    - **Context**: Timeouts correlate with DB backup window (02:00-03:00 UTC). Suspect lock contention. Added logging in PR #567 (deployed 01/21).
+
+    - **Next Steps**: Review logs after tonight''s backup; consider moving backup window if confirmed.
+
+    - **Resources**: Dashboard `grafana/d/api-latency`, thread `#platform-eng 01/20 14:32`
+
+
+    ## Recent Changes — Deployments
+
+
+    | Service      | Version | Time        | Notes                      |
+
+    | ------------ | ------- | ----------- | -------------------------- |
+
+    | api-gateway  | v3.2.1  | 01/21 14:00 | Bug fix for header parsing |
+
+    | user-service | v2.8.0  | 01/20 10:00 | New profile features       |
+
+    | auth-service | v4.1.2  | 01/19 16:00 | Security patch             |
+
+
+    ## Escalation Reminders
+
+
+    | Issue Type     | First Escalation | Second Escalation |
+
+    | -------------- | ---------------- | ----------------- |
+
+    | Payment issues | @payments-oncall | @payments-manager |
+
+    | Auth issues    | @auth-oncall     | @security-team    |
+
+    | Database       | @dba-team        | @infra-manager    |
+
+    | Unknown/severe | @eng-manager     | @vp-engineering   |
+
+    ````'
+- sequence: 6
+  fragment_type: example
+  content: '## Example: Quick Async Handoff
+
+
+    Use when timezone gaps prevent a 30-min sync call. Pair with a short Loom or voice memo and a direct contact for follow-ups.
+
+
+    ```markdown
+
+    # Quick Handoff: @alice -> @bob
+
+
+    ## TL;DR
+
+    - No active incidents
+
+    - 1 investigation ongoing (API timeouts, see ENG-1234)
+
+    - Major release tomorrow (01/24) — be ready for issues
+
+
+    ## Watch List
+
+    1. API latency around 02:00-03:00 UTC (backup window)
+
+    2. Auth service memory (restart if > 80%)
+
+
+    ## Recent
+
+    - Deployed api-gateway v3.2.1 yesterday (stable)
+
+    - Increased rate limits to 1500 RPS
+
+
+    ## Coming Up
+
+    - 01/23 02:00 — DB maintenance (5 min read-only)
+
+    - 01/24 14:00 — v5.0 release
+
+
+    ## Questions?
+
+    I''ll be on Slack until 17:00 today.
+
+    ```'
+- sequence: 7
+  fragment_type: example
+  content: '## Example: Mid-Incident Handoff
+
+
+    Use when transferring incident commander role during an active incident. Distinct from a shift handoff — focused on the single in-flight incident.
+
+
+    ```markdown
+
+    # INCIDENT HANDOFF: Payment Service Degradation
+
+
+    **Incident Start**: 2024-01-22 08:15 UTC
+
+    **Current Status**: Mitigating
+
+    **Severity**: SEV2
+
+
+    ## Current State
+
+    - Error rate: 15% (down from 40%)
+
+    - Mitigation in progress: scaling up pods
+
+    - ETA to resolution: ~30 min
+
+
+    ## What We Know
+
+    1. Root cause: Memory pressure on payment-service pods
+
+    2. Triggered by: Unusual traffic spike (3x normal)
+
+    3. Contributing: Inefficient query in checkout flow
+
+
+    ## What We''ve Done
+
+    - Scaled payment-service from 5 -> 15 pods
+
+    - Enabled rate limiting on checkout endpoint
+
+    - Disabled non-critical features
+
+
+    ## What Needs to Happen
+
+    1. Monitor error rate — should reach <1% in ~15 min
+
+    2. If not improving, escalate to @payments-manager
+
+    3. Once stable, begin root cause investigation
+
+
+    ## Key People
+
+    - Incident Commander: @alice (handing off)
+
+    - Comms Lead: @charlie
+
+    - Technical Lead: @bob (incoming)
+
+
+    ## Communication
+
+    - Status page: Updated at 08:45
+
+    - Customer support: Notified
+
+    - Exec team: Aware
+
+    ```'
+- sequence: 8
+  fragment_type: example
+  content: '## Example: Quick Reference Commands
+
+
+    Include a Quick Reference block at the bottom of the shift handoff. These are the diagnostic commands the incoming engineer reaches for first.
+
+
+    ```bash
+
+    # Check service health — anything not in Running state
+
+    kubectl get pods -A | grep -v Running
+
+
+    # Recent deployments / cluster events
+
+    kubectl get events --sort-by=''.lastTimestamp'' | tail -20
+
+
+    # Database connection count (watch for pool exhaustion)
+
+    psql -c "SELECT count(*) FROM pg_stat_activity;"
+
+
+    # Clear cache — EMERGENCY ONLY
+
+    # FLUSHDB drops the entire selected Redis DB. Confirm with on-call lead
+
+    # before running. Expect cold-cache latency spike for 5-15 min after.
+
+    redis-cli FLUSHDB
+
+    ```
+
+
+    Pair the commands with links: runbooks wiki, service catalog, incident Slack channel, PagerDuty schedule.'
+- sequence: 9
+  fragment_type: execution
+  content: '## Failure-Mode Playbook
+
+
+    When handoffs go wrong, these are the recurring failure modes and the remediation each one requires.
+
+
+    | Failure | Remediation |
+
+    |---|---|
+
+    | Incomplete handoff causes incoming to miss issue | Every section gets an entry or explicit "none". Flag incomplete handoffs as blameless postmortem action items. |
+
+    | Timezone gaps prevent 30-min sync call | Fall back to the async quick-handoff template plus a short Loom or voice memo. Provide a direct contact channel for follow-ups. |
+
+    | Inconsistent format across teams | Adopt one template org-wide. Store completed handoffs in a shared location (wiki/Notion/Confluence). Link each handoff from the PagerDuty schedule entry. |
+
+    | Incoming can''t verify alerting before outgoing logs off | Outgoing fires a test alert. Incoming confirms receipt in PagerDuty and Slack before the overlap window ends. |
+
+    | Mid-incident handoff overwhelms incoming | Use the dedicated incident-handoff template (separate from shift handoff). Outgoing remains on Slack for 15 min after handoff for clarifying questions. |'
+- sequence: 10
+  fragment_type: guardrail
+  content: '## Completion Gate
+
+
+    Do not mark the handoff complete until every standard section has an entry or an explicit "none." A blank section is not the same as "nothing to report" — blanks are indistinguishable from oversights, and the next shift cannot tell whether you forgot to check or genuinely had nothing.
+
+
+    Operationally: the outgoing engineer''s last step is a top-to-bottom read of their own document, confirming each of Active Incidents, Ongoing Investigations, Resolved This Shift, Recent Changes, Known Issues, Upcoming Events, Escalation Reminders, and Quick Reference is filled. Only then is the handoff signed off and the sync call ended.'

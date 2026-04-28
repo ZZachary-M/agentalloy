@@ -1,0 +1,60 @@
+name: typescript
+version: 1.0.0
+description: TypeScript advanced types — generics, conditionals, mapped types, brand
+  types, error diagnosis.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: typescript-advanced-types
+  file: typescript-advanced-types.yaml
+  fragment_count: 16
+- skill_id: typescript-advanced-types-patterns
+  file: typescript-advanced-types-patterns.yaml
+  fragment_count: 4
+- skill_id: typescript-magician-array-index-access
+  file: typescript-magician-array-index-access.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-as-const-typeof
+  file: typescript-magician-as-const-typeof.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-builder-pattern
+  file: typescript-magician-builder-pattern.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-conditional-types
+  file: typescript-magician-conditional-types.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-deep-inference
+  file: typescript-magician-deep-inference.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-error-diagnosis
+  file: typescript-magician-error-diagnosis.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-function-overloads
+  file: typescript-magician-function-overloads.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-generics-basics
+  file: typescript-magician-generics-basics.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-infer-keyword
+  file: typescript-magician-infer-keyword.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-mapped-types
+  file: typescript-magician-mapped-types.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-opaque-types
+  file: typescript-magician-opaque-types.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-template-literal-types
+  file: typescript-magician-template-literal-types.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-type-narrowing
+  file: typescript-magician-type-narrowing.yaml
+  fragment_count: 3
+- skill_id: typescript-magician-utility-types
+  file: typescript-magician-utility-types.yaml
+  fragment_count: 3

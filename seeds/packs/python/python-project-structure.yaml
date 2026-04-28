@@ -1,0 +1,163 @@
+skill_type: domain
+skill_id: python-project-structure
+canonical_name: Python Project Structure & Module Architecture
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- project-structure
+- src-layout
+- packaging
+- pyproject-toml
+- scaffolding
+- monorepo
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Python Project Structure & Module Architecture\n\nDesign well-organized Python projects with clear module boundaries, explicit public interfaces, and maintainable directory structures. Good organization makes code discoverable and changes predictable.\n\n## When to Use This Skill\n\n- Starting a new Python project from scratch\n- Reorganizing an existing codebase for clarity\n- Defining module public APIs with `__all__`\n- Deciding between flat and nested directory structures\n- Determining test file placement strategies\n- Creating reusable library packages\n\n## Core Concepts\n\n### 1. Module Cohesion\n\nGroup related code that changes together. A module should have a single, clear purpose.\n\n### 2. Explicit Interfaces\n\nDefine what's public with `__all__`. Everything not listed is an internal implementation detail.\n\n### 3. Flat Hierarchies\n\nPrefer shallow directory structures. Add depth only for genuine sub-domains.\n\n### 4. Consistent Conventions\n\nApply naming and organization patterns uniformly across the project.\n\n## Quick Start\n\n```\nmyproject/\n├── src/\n│   └── myproject/\n│       ├── __init__.py\n│       ├── services/\n│       ├── models/\n│       └── api/\n├── tests/\n├── pyproject.toml\n└── README.md\n```\n\n## Fundamental Patterns\n\n### Pattern 1: One Concept Per File\n\nEach file should focus on a single concept or closely related set of functions. Consider splitting when a file:\n\n- Handles multiple unrelated responsibilities\n- Grows beyond 300-500 lines (varies by complexity)\n- Contains classes that change for different reasons\n\n```python\n# Good: Focused files\n# user_service.py - User business logic\n# user_repository.py - User data access\n# user_models.py - User data structures\n\n# Avoid: Kitchen sink files\n# user.py - Contains service, repository, models, utilities...\n```\n\n### Pattern 2: Explicit Public APIs with `__all__`\n\nDefine the public interface for every module. Unlisted members are internal implementation details.\n\n```python\n# mypackage/services/__init__.py\nfrom .user_service import UserService\nfrom .order_service import OrderService\nfrom .exceptions import ServiceError, ValidationError\n\n__all__ = [\n    \"UserService\",\n    \"OrderService\",\n    \"ServiceError\",\n    \"ValidationError\",\n]\n\n# Internal helpers remain private by omission\n# from .internal_helpers import _validate_input  # Not exported\n```\n\n### Pattern 3: Flat Directory Structure\n\nPrefer minimal nesting. Deep hierarchies make imports verbose and navigation difficult.\n\n```\n# Preferred: Flat structure\nproject/\n├── api/\n│   ├── routes.py\n│   └── middleware.py\n├── services/\n│   ├── user_service.py\n│   └── order_service.py\n├── models/\n│   ├── user.py\n│   └── order.py\n└── utils/\n    └── validation.py\n\n# Avoid: Deep nesting\nproject/core/internal/services/impl/user/\n```\n\nAdd sub-packages only when there's a genuine sub-domain requiring isolation.\n\n### Pattern 4: Test File Organization\n\nChoose one approach and apply it consistently throughout the project.\n\n**Option A: Colocated Tests**\n\n```\nsrc/\n├── user_service.py\n├── test_user_service.py\n├── order_service.py\n└── test_order_service.py\n```\n\nBenefits: Tests live next to the code they verify. Easy to see coverage gaps.\n\n**Option B: Parallel Test Directory**\n\n```\nsrc/\n├── services/\n│   ├── user_service.py\n│   └── order_service.py\ntests/\n├── services/\n│   ├── test_user_service.py\n│   └── test_order_service.py\n```\n\nBenefits: Clean separation between production and test code. Standard for larger projects.\n\n## Advanced Patterns\n\n### Pattern 5: Package Initialization\n\nUse `__init__.py` to provide a clean public interface for package consumers.\n\n```python\n# mypackage/__init__.py\n\"\"\"MyPackage - A library for doing useful things.\"\"\"\n\nfrom .core import MainClass, HelperClass\nfrom .exceptions import PackageError, ConfigError\nfrom .config import Settings\n\n__all__ = [\n    \"MainClass\",\n    \"HelperClass\",\n    \"PackageError\",\n    \"ConfigError\",\n    \"Settings\",\n]\n\n__version__ = \"1.0.0\"\n```\n\nConsumers can then import directly from the package:\n\n```python\nfrom mypackage import MainClass, Settings\n```\n\n### Pattern 6: Layered Architecture\n\nOrganize code by architectural layer for clear separation of concerns.\n\n```\nmyapp/\n├── api/           # HTTP handlers, request/response\n│   ├── routes/\n│   └── middleware/\n├── services/      # Business logic\n├── repositories/  # Data access\n├── models/        # Domain entities\n├── schemas/       # API schemas (Pydantic)\n└── config/        # Configuration\n```\n\nEach layer should only depend on layers below it, never above.\n\n### Pattern 7: Domain-Driven Structure\n\nFor complex applications, organize by business domain rather than technical layer.\n\n```\necommerce/\n├── users/\n│   ├── models.py\n│   ├── services.py\n│   ├── repository.py\n│   └── api.py\n├── orders/\n│   ├── models.py\n│   ├── services.py\n│   ├── repository.py\n│   └── api.py\n└── shared/\n    ├── database.py\n    └── exceptions.py\n```\n\n## File and Module Naming\n\n### Conventions\n\n- Use `snake_case` for all file and module names: `user_repository.py`\n- Avoid abbreviations that obscure meaning: `user_repository.py` not `usr_repo.py`\n- Match class names to file names: `UserService` in `user_service.py`\n\n### Import Style\n\nUse absolute imports for clarity and reliability:\n\n```python\n# Preferred: Absolute imports\nfrom myproject.services import UserService\nfrom myproject.models import User\n\n# Avoid: Relative imports\nfrom ..services import UserService\nfrom . import models\n```\n\nRelative imports can break when modules are moved or reorganized.\n\n## Best Practices Summary\n\n1. **Keep files focused** - One concept per file, consider splitting at 300-500 lines (varies by complexity)\n2. **Define `__all__` explicitly** - Make public interfaces clear\n3. **Prefer flat structures** - Add depth only for genuine sub-domains\n4. **Use absolute imports** - More reliable and clearer\n5. **Be consistent** - Apply patterns uniformly across the project\n6. **Match names to content** - File names should describe their purpose\n7. **Separate concerns** - Keep layers distinct and dependencies flowing one direction\n8. **Document your structure** - Include a README explaining the organization"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Project Structure & Module Architecture
+
+
+    Design well-organized Python projects with clear module boundaries, explicit public interfaces, and maintainable directory structures. Good organization makes code discoverable and changes predictable.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Starting a new Python project from scratch
+
+    - Reorganizing an existing codebase for clarity
+
+    - Defining module public APIs with `__all__`
+
+    - Deciding between flat and nested directory structures
+
+    - Determining test file placement strategies
+
+    - Creating reusable library packages'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Module Cohesion
+
+
+    Group related code that changes together. A module should have a single, clear purpose.
+
+
+    ### 2. Explicit Interfaces
+
+
+    Define what''s public with `__all__`. Everything not listed is an internal implementation detail.
+
+
+    ### 3. Flat Hierarchies
+
+
+    Prefer shallow directory structures. Add depth only for genuine sub-domains.
+
+
+    ### 4. Consistent Conventions
+
+
+    Apply naming and organization patterns uniformly across the project.'
+- sequence: 4
+  fragment_type: example
+  content: '## Quick Start
+
+
+    ```
+
+    myproject/
+
+    ├── src/
+
+    │   └── myproject/
+
+    │       ├── __init__.py
+
+    │       ├── services/
+
+    │       ├── models/
+
+    │       └── api/
+
+    ├── tests/
+
+    ├── pyproject.toml
+
+    └── README.md
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: "## Fundamental Patterns\n\n### Pattern 1: One Concept Per File\n\nEach file should focus on a single concept or closely related set of functions. Consider splitting when a file:\n\n- Handles multiple unrelated responsibilities\n- Grows beyond 300-500 lines (varies by complexity)\n- Contains classes that change for different reasons\n\n```python\n# Good: Focused files\n# user_service.py - User business logic\n# user_repository.py - User data access\n# user_models.py - User data structures\n\n# Avoid: Kitchen sink files\n# user.py - Contains service, repository, models, utilities...\n```\n\n### Pattern 2: Explicit Public APIs with `__all__`\n\nDefine the public interface for every module. Unlisted members are internal implementation details.\n\n```python\n# mypackage/services/__init__.py\nfrom .user_service import UserService\nfrom .order_service import OrderService\nfrom .exceptions import ServiceError, ValidationError\n\n__all__ = [\n    \"UserService\",\n    \"OrderService\",\n    \"ServiceError\",\n    \"ValidationError\",\n]\n\n# Internal helpers remain private by omission\n# from .internal_helpers import _validate_input  # Not exported\n```\n\n### Pattern 3: Flat Directory Structure\n\nPrefer minimal nesting. Deep hierarchies make imports verbose and navigation difficult.\n\n```\n# Preferred: Flat structure\nproject/\n├── api/\n│   ├── routes.py\n│   └── middleware.py\n├── services/\n│   ├── user_service.py\n│   └── order_service.py\n├── models/\n│   ├── user.py\n│   └── order.py\n└── utils/\n    └── validation.py\n\n# Avoid: Deep nesting\nproject/core/internal/services/impl/user/\n```\n\nAdd sub-packages only when there's a genuine sub-domain requiring isolation.\n\n### Pattern 4: Test File Organization\n\nChoose one approach and apply it consistently throughout the project.\n\n**Option A: Colocated Tests**\n\n```\nsrc/\n├── user_service.py\n├── test_user_service.py\n├── order_service.py\n└── test_order_service.py\n```\n\nBenefits: Tests live next to the code they verify. Easy to see coverage gaps.\n\n**Option B: Parallel Test Directory**\n\n```\nsrc/\n├── services/\n│   ├── user_service.py\n│   └── order_service.py\ntests/\n├── services/\n│   ├── test_user_service.py\n│   └── test_order_service.py\n```\n\nBenefits: Clean separation between production and test code. Standard for larger projects."
+- sequence: 6
+  fragment_type: execution
+  content: "## Advanced Patterns\n\n### Pattern 5: Package Initialization\n\nUse `__init__.py` to provide a clean public interface for package consumers.\n\n```python\n# mypackage/__init__.py\n\"\"\"MyPackage - A library for doing useful things.\"\"\"\n\nfrom .core import MainClass, HelperClass\nfrom .exceptions import PackageError, ConfigError\nfrom .config import Settings\n\n__all__ = [\n    \"MainClass\",\n    \"HelperClass\",\n    \"PackageError\",\n    \"ConfigError\",\n    \"Settings\",\n]\n\n__version__ = \"1.0.0\"\n```\n\nConsumers can then import directly from the package:\n\n```python\nfrom mypackage import MainClass, Settings\n```\n\n### Pattern 6: Layered Architecture\n\nOrganize code by architectural layer for clear separation of concerns.\n\n```\nmyapp/\n├── api/           # HTTP handlers, request/response\n│   ├── routes/\n│   └── middleware/\n├── services/      # Business logic\n├── repositories/  # Data access\n├── models/        # Domain entities\n├── schemas/       # API schemas (Pydantic)\n└── config/        # Configuration\n```\n\nEach layer should only depend on layers below it, never above.\n\n### Pattern 7: Domain-Driven Structure\n\nFor complex applications, organize by business domain rather than technical layer.\n\n```\necommerce/\n├── users/\n│   ├── models.py\n│   ├── services.py\n│   ├── repository.py\n│   └── api.py\n├── orders/\n│   ├── models.py\n│   ├── services.py\n│   ├── repository.py\n│   └── api.py\n└── shared/\n    ├── database.py\n    └── exceptions.py\n```"
+- sequence: 7
+  fragment_type: execution
+  content: '## File and Module Naming
+
+
+    ### Conventions
+
+
+    - Use `snake_case` for all file and module names: `user_repository.py`
+
+    - Avoid abbreviations that obscure meaning: `user_repository.py` not `usr_repo.py`
+
+    - Match class names to file names: `UserService` in `user_service.py`
+
+
+    ### Import Style
+
+
+    Use absolute imports for clarity and reliability:
+
+
+    ```python
+
+    # Preferred: Absolute imports
+
+    from myproject.services import UserService
+
+    from myproject.models import User
+
+
+    # Avoid: Relative imports
+
+    from ..services import UserService
+
+    from . import models
+
+    ```
+
+
+    Relative imports can break when modules are moved or reorganized.'
+- sequence: 8
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Keep files focused** - One concept per file, consider splitting at 300-500 lines (varies by complexity)
+
+    2. **Define `__all__` explicitly** - Make public interfaces clear
+
+    3. **Prefer flat structures** - Add depth only for genuine sub-domains
+
+    4. **Use absolute imports** - More reliable and clearer
+
+    5. **Be consistent** - Apply patterns uniformly across the project
+
+    6. **Match names to content** - File names should describe their purpose
+
+    7. **Separate concerns** - Keep layers distinct and dependencies flowing one direction
+
+    8. **Document your structure** - Include a README explaining the organization'

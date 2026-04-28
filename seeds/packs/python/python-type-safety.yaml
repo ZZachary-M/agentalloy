@@ -1,0 +1,176 @@
+skill_type: domain
+skill_id: python-type-safety
+canonical_name: Python Type Safety
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- type-hints
+- generics
+- protocols
+- mypy
+- pyright
+- type-narrowing
+- typevar
+- structural-typing
+- type-aliases
+- callable-types
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin python-development/python-type-safety source
+raw_prose: "# Python Type Safety\n\nLeverage Python's type system to catch errors at static analysis time. Type annotations serve as enforced documentation that tooling validates automatically.\n\n## When to Use This Skill\n\n- Adding type hints to existing code\n- Creating generic, reusable classes\n- Defining structural interfaces with protocols\n- Configuring mypy or pyright for strict checking\n- Understanding type narrowing and guards\n- Building type-safe APIs and libraries\n\n## Core Concepts\n\n### 1. Type Annotations\n\nDeclare expected types for function parameters, return values, and variables.\n\n### 2. Generics\n\nWrite reusable code that preserves type information across different types.\n\n### 3. Protocols\n\nDefine structural interfaces without inheritance (duck typing with type safety).\n\n### 4. Type Narrowing\n\nUse guards and conditionals to narrow types within code blocks.\n\n## Quick Start\n\n```python\ndef get_user(user_id: str) -> User | None:\n    \"\"\"Return type makes 'might not exist' explicit.\"\"\"\n    ...\n\n# Type checker enforces handling None case\nuser = get_user(\"123\")\nif user is None:\n    raise UserNotFoundError(\"123\")\nprint(user.name)  # Type checker knows user is User here\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Annotate All Public Signatures\n\nEvery public function, method, and class should have type annotations.\n\n```python\ndef get_user(user_id: str) -> User:\n    \"\"\"Retrieve user by ID.\"\"\"\n    ...\n\ndef process_batch(\n    items: list[Item],\n    max_workers: int = 4,\n) -> BatchResult[ProcessedItem]:\n    \"\"\"Process items concurrently.\"\"\"\n    ...\n\nclass UserRepository:\n    def __init__(self, db: Database) -> None:\n        self._db = db\n\n    async def find_by_id(self, user_id: str) -> User | None:\n        \"\"\"Return User if found, None otherwise.\"\"\"\n        ...\n\n    async def find_by_email(self, email: str) -> User | None:\n        ...\n\n    async def save(self, user: User) -> User:\n        \"\"\"Save and return user with generated ID.\"\"\"\n        ...\n```\n\nUse `mypy --strict` or `pyright` in CI to catch type errors early. For existing projects, enable strict mode incrementally using per-module overrides.\n\n### Pattern 2: Use Modern Union Syntax\n\nPython 3.10+ provides cleaner union syntax.\n\n```python\n# Preferred (3.10+)\ndef find_user(user_id: str) -> User | None:\n    ...\n\ndef parse_value(v: str) -> int | float | str:\n    ...\n\n# Older style (still valid, needed for 3.9)\nfrom typing import Optional, Union\n\ndef find_user(user_id: str) -> Optional[User]:\n    ...\n```\n\n### Pattern 3: Type Narrowing with Guards\n\nUse conditionals to narrow types for the type checker.\n\n```python\ndef process_user(user_id: str) -> UserData:\n    user = find_user(user_id)\n\n    if user is None:\n        raise UserNotFoundError(f\"User {user_id} not found\")\n\n    # Type checker knows user is User here, not User | None\n    return UserData(\n        name=user.name,\n        email=user.email,\n    )\n\ndef process_items(items: list[Item | None]) -> list[ProcessedItem]:\n    # Filter and narrow types\n    valid_items = [item for item in items if item is not None]\n    # valid_items is now list[Item]\n    return [process(item) for item in valid_items]\n```\n\n### Pattern 4: Generic Classes\n\nCreate type-safe reusable containers.\n\n```python\nfrom typing import TypeVar, Generic\n\nT = TypeVar(\"T\")\nE = TypeVar(\"E\", bound=Exception)\n\nclass Result(Generic[T, E]):\n    \"\"\"Represents either a success value or an error.\"\"\"\n\n    def __init__(\n        self,\n        value: T | None = None,\n        error: E | None = None,\n    ) -> None:\n        if (value is None) == (error is None):\n            raise ValueError(\"Exactly one of value or error must be set\")\n        self._value = value\n        self._error = error\n\n    @property\n    def is_success(self) -> bool:\n        return self._error is None\n\n    @property\n    def is_failure(self) -> bool:\n        return self._error is not None\n\n    def unwrap(self) -> T:\n        \"\"\"Get value or raise the error.\"\"\"\n        if self._error is not None:\n            raise self._error\n        return self._value  # type: ignore[return-value]\n\n    def unwrap_or(self, default: T) -> T:\n        \"\"\"Get value or return default.\"\"\"\n        if self._error is not None:\n            return default\n        return self._value  # type: ignore[return-value]\n\n# Usage preserves types\ndef parse_config(path: str) -> Result[Config, ConfigError]:\n    try:\n        return Result(value=Config.from_file(path))\n    except ConfigError as e:\n        return Result(error=e)\n\nresult = parse_config(\"config.yaml\")\nif result.is_success:\n    config = result.unwrap()  # Type: Config\n```\n\n### Pattern 5: Generic Repository\n\nCreate type-safe data access patterns.\n\n```python\nfrom typing import TypeVar, Generic\nfrom abc import ABC, abstractmethod\n\nT = TypeVar(\"T\")\nID = TypeVar(\"ID\")\n\nclass Repository(ABC, Generic[T, ID]):\n    \"\"\"Generic repository interface.\"\"\"\n\n    @abstractmethod\n    async def get(self, id: ID) -> T | None:\n        \"\"\"Get entity by ID.\"\"\"\n        ...\n\n    @abstractmethod\n    async def save(self, entity: T) -> T:\n        \"\"\"Save and return entity.\"\"\"\n        ...\n\n    @abstractmethod\n    async def delete(self, id: ID) -> bool:\n        \"\"\"Delete entity, return True if existed.\"\"\"\n        ...\n\nclass UserRepository(Repository[User, str]):\n    \"\"\"Concrete repository for Users with string IDs.\"\"\"\n\n    async def get(self, id: str) -> User | None:\n        row = await self._db.fetchrow(\n            \"SELECT * FROM users WHERE id = $1\", id\n        )\n        return User(**row) if row else None\n\n    async def save(self, entity: User) -> User:\n        ...\n\n    async def delete(self, id: str) -> bool:\n        ...\n```\n\n### Pattern 6: TypeVar with Bounds\n\nRestrict generic parameters to specific types.\n\n```python\nfrom typing import TypeVar\nfrom pydantic import BaseModel\n\nModelT = TypeVar(\"ModelT\", bound=BaseModel)\n\ndef validate_and_create(model_cls: type[ModelT], data: dict) -> ModelT:\n    \"\"\"Create a validated Pydantic model from dict.\"\"\"\n    return model_cls.model_validate(data)\n\n# Works with any BaseModel subclass\nclass User(BaseModel):\n    name: str\n    email: str\n\nuser = validate_and_create(User, {\"name\": \"Alice\", \"email\": \"a@b.com\"})\n# user is typed as User\n\n# Type error: str is not a BaseModel subclass\nresult = validate_and_create(str, {\"name\": \"Alice\"})  # Error!\n```\n\n### Pattern 7: Protocols for Structural Typing\n\nDefine interfaces without requiring inheritance.\n\n```python\nfrom typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Serializable(Protocol):\n    \"\"\"Any class that can be serialized to/from dict.\"\"\"\n\n    def to_dict(self) -> dict:\n        ...\n\n    @classmethod\n    def from_dict(cls, data: dict) -> \"Serializable\":\n        ...\n\n# User satisfies Serializable without inheriting from it\nclass User:\n    def __init__(self, id: str, name: str) -> None:\n        self.id = id\n        self.name = name\n\n    def to_dict(self) -> dict:\n        return {\"id\": self.id, \"name\": self.name}\n\n    @classmethod\n    def from_dict(cls, data: dict) -> \"User\":\n        return cls(id=data[\"id\"], name=data[\"name\"])\n\ndef serialize(obj: Serializable) -> str:\n    \"\"\"Works with any Serializable object.\"\"\"\n    return json.dumps(obj.to_dict())\n\n# Works - User matches the protocol\nserialize(User(\"1\", \"Alice\"))\n\n# Runtime checking with @runtime_checkable\nisinstance(User(\"1\", \"Alice\"), Serializable)  # True\n```\n\n### Pattern 8: Common Protocol Patterns\n\nDefine reusable structural interfaces.\n\n```python\nfrom typing import Protocol\n\nclass Closeable(Protocol):\n    \"\"\"Resource that can be closed.\"\"\"\n    def close(self) -> None: ...\n\nclass AsyncCloseable(Protocol):\n    \"\"\"Async resource that can be closed.\"\"\"\n    async def close(self) -> None: ...\n\nclass Readable(Protocol):\n    \"\"\"Object that can be read from.\"\"\"\n    def read(self, n: int = -1) -> bytes: ...\n\nclass HasId(Protocol):\n    \"\"\"Object with an ID property.\"\"\"\n    @property\n    def id(self) -> str: ...\n\nclass Comparable(Protocol):\n    \"\"\"Object that supports comparison.\"\"\"\n    def __lt__(self, other: \"Comparable\") -> bool: ...\n    def __le__(self, other: \"Comparable\") -> bool: ...\n```\n\n### Pattern 9: Type Aliases\n\nCreate meaningful type names.\n\n**Note:** The `type Alias = ...` statement syntax (PEP 695) was introduced in **Python 3.12**, not 3.10. For projects targeting earlier versions (including 3.10/3.11), use the `TypeAlias` annotation (PEP 613, available since Python 3.10).\n\n```python\n# Python 3.12+ type statement (PEP 695)\ntype UserId = str\ntype UserDict = dict[str, Any]\n\n# Python 3.12+ type statement with generics (PEP 695)\ntype Handler[T] = Callable[[Request], T]\ntype AsyncHandler[T] = Callable[[Request], Awaitable[T]]\n```\n\n```python\n# Python 3.10-3.11 style (needed for broader compatibility)\nfrom typing import TypeAlias\nfrom collections.abc import Callable, Awaitable\n\nUserId: TypeAlias = str\nHandler: TypeAlias = Callable[[Request], Response]\n```\n\n```python\n# Usage\ndef register_handler(path: str, handler: Handler[Response]) -> None:\n    ...\n```\n\n### Pattern 10: Callable Types\n\nType function parameters and callbacks.\n\n```python\nfrom collections.abc import Callable, Awaitable\n\n# Sync callback\nProgressCallback = Callable[[int, int], None]  # (current, total)\n\n# Async callback\nAsyncHandler = Callable[[Request], Awaitable[Response]]\n\n# With named parameters (using Protocol)\nclass OnProgress(Protocol):\n    def __call__(\n        self,\n        current: int,\n        total: int,\n        *,\n        message: str\
+  \ = \"\",\n    ) -> None: ...\n\ndef process_items(\n    items: list[Item],\n    on_progress: ProgressCallback | None = None,\n) -> list[Result]:\n    for i, item in enumerate(items):\n        if on_progress:\n            on_progress(i, len(items))\n        ...\n```\n\n## Configuration\n\n### Strict Mode Checklist\n\nFor `mypy --strict` compliance:\n\n```toml\n# pyproject.toml\n[tool.mypy]\npython_version = \"3.12\"\nstrict = true\nwarn_return_any = true\nwarn_unused_ignores = true\ndisallow_untyped_defs = true\ndisallow_incomplete_defs = true\nno_implicit_optional = true\n```\n\nIncremental adoption goals:\n- All function parameters annotated\n- All return types annotated\n- Class attributes annotated\n- Minimize `Any` usage (acceptable for truly dynamic data)\n- Generic collections use type parameters (`list[str]` not `list`)\n\nFor existing codebases, enable strict mode per-module using `# mypy: strict` or configure per-module overrides in `pyproject.toml`.\n\n## Best Practices Summary\n\n1. **Annotate all public APIs** - Functions, methods, class attributes\n2. **Use `T | None`** - Modern union syntax over `Optional[T]`\n3. **Run strict type checking** - `mypy --strict` in CI\n4. **Use generics** - Preserve type info in reusable code\n5. **Define protocols** - Structural typing for interfaces\n6. **Narrow types** - Use guards to help the type checker\n7. **Bound type vars** - Restrict generics to meaningful types\n8. **Create type aliases** - Meaningful names for complex types\n9. **Minimize `Any`** - Use specific types or generics. `Any` is acceptable for truly dynamic data or when interfacing with untyped third-party code\n10. **Document with types** - Types are enforceable documentation"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Type Safety
+
+
+    Leverage Python''s type system to catch errors at static analysis time. Type annotations serve as enforced documentation that tooling validates automatically.
+
+
+    ## Core Concepts
+
+
+    ### 1. Type Annotations
+
+    Declare expected types for function parameters, return values, and variables.
+
+
+    ### 2. Generics
+
+    Write reusable code that preserves type information across different types.
+
+
+    ### 3. Protocols
+
+    Define structural interfaces without inheritance (duck typing with type safety).
+
+
+    ### 4. Type Narrowing
+
+    Use guards and conditionals to narrow types within code blocks.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Adding type hints to existing code
+
+    - Creating generic, reusable classes
+
+    - Defining structural interfaces with protocols
+
+    - Configuring mypy or pyright for strict checking
+
+    - Understanding type narrowing and guards
+
+    - Building type-safe APIs and libraries'
+- sequence: 3
+  fragment_type: example
+  content: "## Quick Start\n\n```python\ndef get_user(user_id: str) -> User | None:\n    \"\"\"Return type makes 'might not exist' explicit.\"\"\"\n    ...\n\n# Type checker enforces handling None case\nuser = get_user(\"123\")\nif user is None:\n    raise UserNotFoundError(\"123\")\nprint(user.name)  # Type checker knows user is User here\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Pattern 1: Annotate All Public Signatures
+
+
+    Every public function, method, and class should have type annotations.
+
+
+    Use `mypy --strict` or `pyright` in CI to catch type errors early. For existing projects, enable strict mode incrementally using per-module overrides.
+
+
+    ## Pattern 2: Use Modern Union Syntax
+
+
+    Python 3.10+ provides cleaner union syntax. Use `T | None` instead of `Optional[T]`. The older `Optional`/`Union` style is still valid for Python 3.9 compatibility.
+
+
+    ## Pattern 3: Type Narrowing with Guards
+
+
+    Use conditionals to narrow types for the type checker. After an `if user is None` guard, the type checker knows the else branch has a non-None type. List comprehension filters with `is not None` also narrow element types.'
+- sequence: 5
+  fragment_type: example
+  content: "## Pattern 1–3 Code Examples\n\n```python\ndef get_user(user_id: str) -> User:\n    \"\"\"Retrieve user by ID.\"\"\"\n    ...\n\ndef process_batch(\n    items: list[Item],\n    max_workers: int = 4,\n) -> BatchResult[ProcessedItem]:\n    \"\"\"Process items concurrently.\"\"\"\n    ...\n\nclass UserRepository:\n    def __init__(self, db: Database) -> None:\n        self._db = db\n\n    async def find_by_id(self, user_id: str) -> User | None:\n        ...\n    async def save(self, user: User) -> User:\n        ...\n```\n\n```python\n# Preferred (3.10+)\ndef find_user(user_id: str) -> User | None: ...\ndef parse_value(v: str) -> int | float | str: ...\n```\n\n```python\ndef process_user(user_id: str) -> UserData:\n    user = find_user(user_id)\n    if user is None:\n        raise UserNotFoundError(f\"User {user_id} not found\")\n    return UserData(name=user.name, email=user.email)\n\ndef process_items(items: list[Item | None]) -> list[ProcessedItem]:\n    valid_items = [item for item in items if item is not None]\n    return [process(item) for item in valid_items]\n```"
+- sequence: 6
+  fragment_type: example
+  content: "## Pattern 4: Generic Classes — Result Type\n\n```python\nfrom typing import TypeVar, Generic\n\nT = TypeVar(\"T\")\nE = TypeVar(\"E\", bound=Exception)\n\nclass Result(Generic[T, E]):\n    def __init__(self, value: T | None = None, error: E | None = None) -> None:\n        if (value is None) == (error is None):\n            raise ValueError(\"Exactly one of value or error must be set\")\n        self._value = value\n        self._error = error\n\n    @property\n    def is_success(self) -> bool:\n        return self._error is None\n\n    def unwrap(self) -> T:\n        if self._error is not None:\n            raise self._error\n        return self._value  # type: ignore[return-value]\n\n    def unwrap_or(self, default: T) -> T:\n        if self._error is not None:\n            return default\n        return self._value  # type: ignore[return-value]\n\ndef parse_config(path: str) -> Result[Config, ConfigError]:\n    try:\n        return Result(value=Config.from_file(path))\n    except ConfigError as e:\n        return Result(error=e)\n```"
+- sequence: 7
+  fragment_type: example
+  content: "## Pattern 5: Generic Repository\n\n```python\nfrom typing import TypeVar, Generic\nfrom abc import ABC, abstractmethod\n\nT = TypeVar(\"T\")\nID = TypeVar(\"ID\")\n\nclass Repository(ABC, Generic[T, ID]):\n    @abstractmethod\n    async def get(self, id: ID) -> T | None: ...\n    @abstractmethod\n    async def save(self, entity: T) -> T: ...\n    @abstractmethod\n    async def delete(self, id: ID) -> bool: ...\n\nclass UserRepository(Repository[User, str]):\n    async def get(self, id: str) -> User | None:\n        row = await self._db.fetchrow(\"SELECT * FROM users WHERE id = $1\", id)\n        return User(**row) if row else None\n```\n\n## Pattern 6: TypeVar with Bounds\n\n```python\nfrom typing import TypeVar\nfrom pydantic import BaseModel\n\nModelT = TypeVar(\"ModelT\", bound=BaseModel)\n\ndef validate_and_create(model_cls: type[ModelT], data: dict) -> ModelT:\n    return model_cls.model_validate(data)\n\nuser = validate_and_create(User, {\"name\": \"Alice\", \"email\": \"a@b.com\"})\n# user is typed as User\n```"
+- sequence: 8
+  fragment_type: example
+  content: "## Pattern 7: Protocols for Structural Typing\n\n```python\nfrom typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Serializable(Protocol):\n    def to_dict(self) -> dict: ...\n    @classmethod\n    def from_dict(cls, data: dict) -> \"Serializable\": ...\n\nclass User:\n    def __init__(self, id: str, name: str) -> None:\n        self.id = id\n        self.name = name\n    def to_dict(self) -> dict:\n        return {\"id\": self.id, \"name\": self.name}\n    @classmethod\n    def from_dict(cls, data: dict) -> \"User\":\n        return cls(id=data[\"id\"], name=data[\"name\"])\n\ndef serialize(obj: Serializable) -> str:\n    return json.dumps(obj.to_dict())\n\nserialize(User(\"1\", \"Alice\"))  # Works without inheritance\nisinstance(User(\"1\", \"Alice\"), Serializable)  # True\n```\n\n## Pattern 8: Common Protocol Patterns\n\n```python\nclass Closeable(Protocol):\n    def close(self) -> None: ...\nclass AsyncCloseable(Protocol):\n    async def close(self) -> None: ...\nclass Readable(Protocol):\n    def read(self, n: int = -1) -> bytes: ...\nclass HasId(Protocol):\n    @property\n    def id(self) -> str: ...\n```"
+- sequence: 9
+  fragment_type: example
+  content: "## Pattern 9: Type Aliases\n\n**Note:** The `type Alias = ...` statement syntax (PEP 695) was introduced in **Python 3.12**, not 3.10. For projects targeting earlier versions, use `TypeAlias` (PEP 613, Python 3.10+).\n\n```python\n# Python 3.12+ (PEP 695)\ntype UserId = str\ntype Handler[T] = Callable[[Request], T]\n\n# Python 3.10-3.11\nfrom typing import TypeAlias\nUserId: TypeAlias = str\nHandler: TypeAlias = Callable[[Request], Response]\n```\n\n## Pattern 10: Callable Types\n\n```python\nfrom collections.abc import Callable, Awaitable\n\nProgressCallback = Callable[[int, int], None]\nAsyncHandler = Callable[[Request], Awaitable[Response]]\n\nclass OnProgress(Protocol):\n    def __call__(self, current: int, total: int, *, message: str = \"\") -> None: ...\n\ndef process_items(\n    items: list[Item],\n    on_progress: ProgressCallback | None = None,\n) -> list[Result]:\n    for i, item in enumerate(items):\n        if on_progress:\n            on_progress(i, len(items))\n```"
+- sequence: 10
+  fragment_type: execution
+  content: '## Strict Mode Checklist
+
+
+    For `mypy --strict` compliance:
+
+
+    ```toml
+
+    [tool.mypy]
+
+    python_version = "3.12"
+
+    strict = true
+
+    warn_return_any = true
+
+    warn_unused_ignores = true
+
+    disallow_untyped_defs = true
+
+    disallow_incomplete_defs = true
+
+    no_implicit_optional = true
+
+    ```
+
+
+    Incremental adoption goals:
+
+    - All function parameters annotated
+
+    - All return types annotated
+
+    - Class attributes annotated
+
+    - Minimize `Any` usage (acceptable for truly dynamic data)
+
+    - Generic collections use type parameters (`list[str]` not `list`)
+
+
+    For existing codebases, enable strict mode per-module using `# mypy: strict` or configure per-module overrides in `pyproject.toml`.'
+- sequence: 11
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Annotate all public APIs** - Functions, methods, class attributes
+
+    2. **Use `T | None`** - Modern union syntax over `Optional[T]`
+
+    3. **Run strict type checking** - `mypy --strict` in CI
+
+    4. **Use generics** - Preserve type info in reusable code
+
+    5. **Define protocols** - Structural typing for interfaces
+
+    6. **Narrow types** - Use guards to help the type checker
+
+    7. **Bound type vars** - Restrict generics to meaningful types
+
+    8. **Create type aliases** - Meaningful names for complex types
+
+    9. **Minimize `Any`** - Use specific types or generics. `Any` is acceptable for truly dynamic data or when interfacing with untyped third-party code
+
+    10. **Document with types** - Types are enforceable documentation'

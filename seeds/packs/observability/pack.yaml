@@ -1,0 +1,30 @@
+name: observability
+version: 1.0.0
+description: Observability — Prometheus, Grafana, distributed tracing, SLO implementation,
+  service mesh observability.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: distributed-tracing
+  file: distributed-tracing.yaml
+  fragment_count: 13
+- skill_id: grafana-dashboards
+  file: grafana-dashboards.yaml
+  fragment_count: 10
+- skill_id: prometheus-configuration
+  file: prometheus-configuration.yaml
+  fragment_count: 11
+- skill_id: python-observability
+  file: python-observability.yaml
+  fragment_count: 9
+- skill_id: service-mesh-observability
+  file: service-mesh-observability.yaml
+  fragment_count: 11
+- skill_id: slo-implementation
+  file: slo-implementation.yaml
+  fragment_count: 11

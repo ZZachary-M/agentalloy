@@ -1,0 +1,164 @@
+skill_type: domain
+skill_id: auth-implementation-patterns
+canonical_name: Authentication & Authorization Implementation Patterns
+category: engineering
+skill_class: domain
+domain_tags:
+- authentication
+- authorization
+- jwt
+- oauth2
+- rbac
+- session-management
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents developer-essentials plugin
+raw_prose: "# Authentication & Authorization Implementation Patterns\n\nBuild secure, scalable authentication and authorization systems using industry-standard patterns and modern best practices.\n\n## When to Use This Skill\n\n- Implementing user authentication systems\n- Securing REST or GraphQL APIs\n- Adding OAuth2/social login\n- Implementing role-based access control (RBAC)\n- Designing session management\n- Migrating authentication systems\n- Debugging auth issues\n- Implementing SSO or multi-tenancy\n\n## Core Concepts\n\n### 1. Authentication vs Authorization\n\n**Authentication (AuthN)**: Who are you? Verify identity (username/password, OAuth, biometrics), issue credentials (sessions, tokens), manage login/logout.\n\n**Authorization (AuthZ)**: What can you do? Permission checking, role-based access control (RBAC), resource ownership validation, policy enforcement.\n\n### 2. Authentication Strategies\n\n**Session-Based:** Server stores session state, session ID in cookie, traditional, simple, stateful.\n\n**Token-Based (JWT):** Stateless, self-contained, scales horizontally, can store claims.\n\n**OAuth2/OpenID Connect:** Delegate authentication, social login (Google, GitHub), enterprise SSO.\n\n## JWT Authentication\n\n### Pattern: JWT with access + refresh tokens\n\n```typescript\nfunction generateTokens(userId: string, email: string, role: string) {\n  const accessToken = jwt.sign({ userId, email, role }, process.env.JWT_SECRET!, { expiresIn: \"15m\" });\n  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET!, { expiresIn: \"7d\" });\n  return { accessToken, refreshToken };\n}\n\nfunction verifyToken(token: string): JWTPayload {\n  try {\n    return jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;\n  } catch (error) {\n    if (error instanceof jwt.TokenExpiredError) throw new Error(\"Token expired\");\n    if (error instanceof jwt.JsonWebTokenError) throw new Error(\"Invalid token\");\n    throw error;\n  }\n}\n\nfunction authenticate(req, res, next) {\n  const authHeader = req.headers.authorization;\n  if (!authHeader?.startsWith(\"Bearer \")) return res.status(401).json({ error: \"No token provided\" });\n  const token = authHeader.substring(7);\n  try {\n    req.user = verifyToken(token);\n    next();\n  } catch (error) {\n    return res.status(401).json({ error: \"Invalid token\" });\n  }\n}\n```\n\n### Pattern: Refresh token flow\n\nStore refresh tokens hashed in DB with expiry. On refresh, verify token, lookup in DB, issue new access token. On logout, delete from DB. To logout all devices, delete all tokens for user.\n\n## Session-Based Authentication\n\nUse express-session with Redis store. Cookie config: `secure: true` in production, `httpOnly: true`, `sameSite: 'strict'` for CSRF, 24h `maxAge`. Session middleware checks `req.session.userId` and rejects unauthenticated. Logout calls `req.session.destroy` and clears cookie.\n\n## OAuth2 / Social Login\n\nUse Passport.js with provider strategies (`passport-google-oauth20`, `passport-github2`). Strategy callback: find or create user from profile, link by provider ID. Callback route: generate JWT, redirect to frontend with token in query string.\n\n## Authorization Patterns\n\n### Pattern 1: Role-Based Access Control (RBAC)\n\nDefine a role hierarchy (`Role.ADMIN` includes `MODERATOR` and `USER`). Middleware `requireRole(...roles)` checks `hasRole(req.user.role, requiredRole)` against the hierarchy and returns 403 if insufficient.\n\n### Pattern 2: Permission-Based Access Control\n\nDefine permissions (`READ_USERS`, `WRITE_POSTS`, etc.) and a `rolePermissions` map. Middleware `requirePermission(...permissions)` checks every required permission against the user's role's permissions.\n\n### Pattern 3: Resource Ownership\n\nMiddleware `requireOwnership(resourceType, idParam)` looks up the resource, allows admins, otherwise compares `resource.userId` to `req.user.userId`.\n\n## Security Best Practices\n\n### Password Security\n\nValidate with zod (12+ chars, upper/lower/digit/special). Hash with bcrypt at saltRounds=12. Never store plain. Use `bcrypt.compare` for verification.\n\n### Rate Limiting\n\nUse `express-rate-limit` with Redis store. Login limiter: 5 attempts per 15 minutes. API limiter: 100 requests per minute. Prevents brute force.\n\n## Best Practices\n\n1. Never Store Plain Passwords — always hash with bcrypt/argon2\n2. Use HTTPS — encrypt data in transit\n3. Short-Lived Access Tokens — 15-30 minutes max\n4. Secure Cookies — httpOnly, secure, sameSite flags\n5. Validate All Input — email format, password strength\n6. Rate Limit Auth Endpoints — prevent brute force\n7. Implement CSRF Protection — for session-based auth\n8. Rotate Secrets Regularly — JWT secrets, session secrets\n9. Log Security Events — login attempts, failed auth\n10. Use MFA When Possible — extra security layer\n\n## Common Pitfalls\n\n- **Weak Passwords**: Enforce strong password policies\n- **JWT in localStorage**: Vulnerable to XSS, use httpOnly cookies\n- **No Token Expiration**: Tokens should expire\n- **Client-Side Auth Checks Only**: Always validate server-side\n- **Insecure Password Reset**: Use secure tokens with expiration\n- **No Rate Limiting**: Vulnerable to brute force\n- **Trusting Client Data**: Always validate on server"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Authentication & Authorization Implementation Patterns
+
+
+    Build secure, scalable authentication and authorization systems using industry-standard patterns and modern best practices.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Implementing user authentication systems
+
+    - Securing REST or GraphQL APIs
+
+    - Adding OAuth2/social login
+
+    - Implementing role-based access control (RBAC)
+
+    - Designing session management
+
+    - Migrating authentication systems
+
+    - Debugging auth issues
+
+    - Implementing SSO or multi-tenancy'
+- sequence: 3
+  fragment_type: rationale
+  content: '### Authentication vs Authorization
+
+
+    **Authentication (AuthN) — Who are you?**
+
+    - Verifying identity (username/password, OAuth, biometrics)
+
+    - Issuing credentials (sessions, tokens)
+
+    - Managing login/logout
+
+
+    **Authorization (AuthZ) — What can you do?**
+
+    - Permission checking
+
+    - Role-based access control (RBAC)
+
+    - Resource ownership validation
+
+    - Policy enforcement'
+- sequence: 4
+  fragment_type: rationale
+  content: '### Authentication Strategies
+
+
+    **Session-Based:** Server stores session state. Session ID in cookie. Traditional, simple, stateful.
+
+
+    **Token-Based (JWT):** Stateless, self-contained. Scales horizontally. Can store claims.
+
+
+    **OAuth2/OpenID Connect:** Delegate authentication. Social login (Google, GitHub). Enterprise SSO.'
+- sequence: 5
+  fragment_type: execution
+  content: "### JWT Implementation Pattern\n\n```typescript\n// Generate access + refresh tokens\nfunction generateTokens(userId: string, email: string, role: string) {\n  const accessToken = jwt.sign({ userId, email, role }, process.env.JWT_SECRET!, { expiresIn: \"15m\" });\n  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET!, { expiresIn: \"7d\" });\n  return { accessToken, refreshToken };\n}\n\n// Verify with explicit error mapping\nfunction verifyToken(token: string): JWTPayload {\n  try {\n    return jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;\n  } catch (error) {\n    if (error instanceof jwt.TokenExpiredError) throw new Error(\"Token expired\");\n    if (error instanceof jwt.JsonWebTokenError) throw new Error(\"Invalid token\");\n    throw error;\n  }\n}\n\n// Bearer-token middleware\nfunction authenticate(req, res, next) {\n  const authHeader = req.headers.authorization;\n  if (!authHeader?.startsWith(\"Bearer \")) return res.status(401).json({ error: \"No token provided\" });\n  try {\n    req.user = verifyToken(authHeader.substring(7));\n    next();\n  } catch {\n    return res.status(401).json({ error: \"Invalid token\" });\n  }\n}\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '### Refresh Token Flow
+
+
+    Store refresh tokens **hashed** in the database with expiry. On `/auth/refresh`:
+
+
+    1. `jwt.verify` the refresh token using `JWT_REFRESH_SECRET`
+
+    2. Lookup the hashed token in the DB; check `expiresAt > now`
+
+    3. Issue a new short-lived access token
+
+    4. Optionally rotate the refresh token
+
+
+    On logout: `db.refreshTokens.deleteOne({ token: hash(refreshToken) })`. To logout all devices: `db.refreshTokens.deleteMany({ userId })`.'
+- sequence: 7
+  fragment_type: example
+  content: "### Session-Based Auth (Express Session + Redis)\n\n```typescript\napp.use(session({\n  store: new RedisStore({ client: redisClient }),\n  secret: process.env.SESSION_SECRET!,\n  resave: false,\n  saveUninitialized: false,\n  cookie: {\n    secure: process.env.NODE_ENV === \"production\",  // HTTPS only\n    httpOnly: true,                                  // No JavaScript access\n    maxAge: 24 * 60 * 60 * 1000,                    // 24 hours\n    sameSite: \"strict\",                              // CSRF protection\n  },\n}));\n\nfunction requireAuth(req, res, next) {\n  if (!req.session.userId) return res.status(401).json({ error: \"Not authenticated\" });\n  next();\n}\n\napp.post(\"/api/auth/logout\", (req, res) => {\n  req.session.destroy(err => {\n    if (err) return res.status(500).json({ error: \"Logout failed\" });\n    res.clearCookie(\"connect.sid\");\n    res.json({ message: \"Logged out successfully\" });\n  });\n});\n```"
+- sequence: 8
+  fragment_type: example
+  content: "### OAuth2 / Social Login (Passport.js)\n\n```typescript\npassport.use(new GoogleStrategy(\n  {\n    clientID: process.env.GOOGLE_CLIENT_ID!,\n    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,\n    callbackURL: \"/api/auth/google/callback\",\n  },\n  async (accessToken, refreshToken, profile, done) => {\n    let user = await db.users.findOne({ googleId: profile.id });\n    if (!user) {\n      user = await db.users.create({\n        googleId: profile.id,\n        email: profile.emails?.[0]?.value,\n        name: profile.displayName,\n        avatar: profile.photos?.[0]?.value,\n      });\n    }\n    return done(null, user);\n  },\n));\n\napp.get(\"/api/auth/google\", passport.authenticate(\"google\", { scope: [\"profile\", \"email\"] }));\napp.get(\"/api/auth/google/callback\",\n  passport.authenticate(\"google\", { session: false }),\n  (req, res) => {\n    const tokens = generateTokens(req.user.id, req.user.email, req.user.role);\n    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${tokens.accessToken}`);\n  },\n);\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Role-Based Access Control (RBAC)\n\n```typescript\nenum Role { USER = \"user\", MODERATOR = \"moderator\", ADMIN = \"admin\" }\n\nconst roleHierarchy: Record<Role, Role[]> = {\n  [Role.ADMIN]: [Role.ADMIN, Role.MODERATOR, Role.USER],\n  [Role.MODERATOR]: [Role.MODERATOR, Role.USER],\n  [Role.USER]: [Role.USER],\n};\n\nfunction requireRole(...roles: Role[]) {\n  return (req, res, next) => {\n    if (!req.user) return res.status(401).json({ error: \"Not authenticated\" });\n    if (!roles.some(role => roleHierarchy[req.user.role].includes(role))) {\n      return res.status(403).json({ error: \"Insufficient permissions\" });\n    }\n    next();\n  };\n}\n\napp.delete(\"/api/users/:id\", authenticate, requireRole(Role.ADMIN), handler);\n```"
+- sequence: 10
+  fragment_type: example
+  content: "### Permission-Based Access Control\n\n```typescript\nenum Permission {\n  READ_USERS = \"read:users\",\n  WRITE_USERS = \"write:users\",\n  DELETE_USERS = \"delete:users\",\n  READ_POSTS = \"read:posts\",\n  WRITE_POSTS = \"write:posts\",\n}\n\nconst rolePermissions: Record<Role, Permission[]> = {\n  [Role.USER]: [Permission.READ_POSTS, Permission.WRITE_POSTS],\n  [Role.MODERATOR]: [Permission.READ_POSTS, Permission.WRITE_POSTS, Permission.READ_USERS],\n  [Role.ADMIN]: Object.values(Permission),\n};\n\nfunction requirePermission(...permissions: Permission[]) {\n  return (req, res, next) => {\n    if (!req.user) return res.status(401).json({ error: \"Not authenticated\" });\n    if (!permissions.every(p => rolePermissions[req.user.role]?.includes(p))) {\n      return res.status(403).json({ error: \"Insufficient permissions\" });\n    }\n    next();\n  };\n}\n```"
+- sequence: 11
+  fragment_type: example
+  content: "### Resource Ownership\n\n```typescript\nasync function requireOwnership(resourceType: \"post\" | \"comment\", resourceIdParam = \"id\") {\n  return async (req, res, next) => {\n    if (!req.user) return res.status(401).json({ error: \"Not authenticated\" });\n    const resourceId = req.params[resourceIdParam];\n\n    if (req.user.role === Role.ADMIN) return next();   // Admins bypass\n\n    const resource = resourceType === \"post\"\n      ? await db.posts.findById(resourceId)\n      : await db.comments.findById(resourceId);\n\n    if (!resource) return res.status(404).json({ error: \"Resource not found\" });\n    if (resource.userId !== req.user.userId) return res.status(403).json({ error: \"Not authorized\" });\n\n    next();\n  };\n}\n```"
+- sequence: 12
+  fragment_type: example
+  content: "### Password Security\n\n```typescript\n// Validation schema\nconst passwordSchema = z.string()\n  .min(12, \"Password must be at least 12 characters\")\n  .regex(/[A-Z]/, \"Password must contain uppercase letter\")\n  .regex(/[a-z]/, \"Password must contain lowercase letter\")\n  .regex(/[0-9]/, \"Password must contain number\")\n  .regex(/[^A-Za-z0-9]/, \"Password must contain special character\");\n\n// Hash with bcrypt — saltRounds=12 (~2^12 iterations)\nasync function hashPassword(password: string): Promise<string> {\n  return bcrypt.hash(password, 12);\n}\n\nasync function verifyPassword(password: string, hash: string): Promise<boolean> {\n  return bcrypt.compare(password, hash);\n}\n```"
+- sequence: 13
+  fragment_type: example
+  content: "### Rate Limiting\n\n```typescript\nconst loginLimiter = rateLimit({\n  store: new RedisStore({ client: redisClient }),\n  windowMs: 15 * 60 * 1000,   // 15 minutes\n  max: 5,                      // 5 attempts\n  message: \"Too many login attempts, please try again later\",\n  standardHeaders: true,\n  legacyHeaders: false,\n});\n\nconst apiLimiter = rateLimit({\n  windowMs: 60 * 1000,    // 1 minute\n  max: 100,               // 100 requests/minute\n  standardHeaders: true,\n});\n\napp.post(\"/api/auth/login\", loginLimiter, handler);\napp.use(\"/api/\", apiLimiter);\n```"
+- sequence: 14
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Never Store Plain Passwords** — always hash with bcrypt/argon2
+
+    2. **Use HTTPS** — encrypt data in transit
+
+    3. **Short-Lived Access Tokens** — 15-30 minutes max
+
+    4. **Secure Cookies** — httpOnly, secure, sameSite flags
+
+    5. **Validate All Input** — email format, password strength
+
+    6. **Rate Limit Auth Endpoints** — prevent brute force attacks
+
+    7. **Implement CSRF Protection** — for session-based auth
+
+    8. **Rotate Secrets Regularly** — JWT secrets, session secrets
+
+    9. **Log Security Events** — login attempts, failed auth
+
+    10. **Use MFA When Possible** — extra security layer'
+- sequence: 15
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    - **Weak Passwords** — enforce strong password policies
+
+    - **JWT in localStorage** — vulnerable to XSS, use httpOnly cookies
+
+    - **No Token Expiration** — tokens should always expire
+
+    - **Client-Side Auth Checks Only** — always validate server-side
+
+    - **Insecure Password Reset** — use secure tokens with expiration
+
+    - **No Rate Limiting** — vulnerable to brute force
+
+    - **Trusting Client Data** — always validate on server'

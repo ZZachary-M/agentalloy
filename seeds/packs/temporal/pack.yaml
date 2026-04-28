@@ -1,0 +1,17 @@
+name: temporal
+version: 1.0.0
+description: Temporal durable workflows — TypeScript SDK + Python testing strategies.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: temporal-python-testing
+  file: temporal-python-testing.yaml
+  fragment_count: 16
+- skill_id: temporal-typescript
+  file: temporal-typescript.yaml
+  fragment_count: 7

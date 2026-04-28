@@ -14,7 +14,7 @@ A local **Skillsmith** service that gives your coding agent (this LLM, or anothe
 
 The runtime is a small FastAPI service backed by:
 - An embedding model (`qwen3-embedding:0.6b`, 1024-dim) — runs on any hardware via Ollama or LM Studio
-- A skill corpus (~150 skills, ~1700 fragments) — ships inside the wheel; copied to the user data dir on first run
+- A skill corpus split into **packs** that the user opts into at install time (default: `core` + `engineering`; opt-in: `nodejs`, `typescript`, `nestjs`, `react`, `vue`, `agents`, `auth`, `observability`, etc.). Pack source YAMLs ship in the wheel; the binary corpus (LadybugDB + DuckDB) is generated locally on first install.
 - Your handoff harness (Claude Code / Cursor / Continue.dev / etc.) — wired so it can query the API
 
 **Skillsmith is user-scoped, not per-repo.** You install once; every project the user opens can wire to the same service. State lives at `${XDG_CONFIG_HOME:-~/.config}/skillsmith/`; corpus at `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/`. Repos contain only sentinel-bounded blocks injected into agent config files (`CLAUDE.md`, `.cursor/rules/skillsmith.mdc`, etc.).
@@ -184,25 +184,42 @@ The output may include `manual_steps_required` if the user picked a runner witho
 
 ---
 
-## Step 6: Verify the seeded corpus
+## Step 6: Initialize the corpus directory
 
 > RUN
 > ```bash
 > skillsmith seed-corpus
 > ```
 
-The pre-seeded skill corpus ships inside the skillsmith Python wheel at `skillsmith/_corpus/`. On first run, this command copies the corpus into `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/` (the user-scoped writable location, where `install-pack` can later add to it). On subsequent runs, this is a fast presence + integrity check.
-
-If the check passes, tell the user:
-> "Skill corpus verified at ~/.local/share/skillsmith/corpus/: [skill_count] skills, [fragment_count] fragments. Pre-computed embeddings are already loaded — no download or re-embed needed."
->
-> (Read the actual counts from the CLI output's `skill_count` and `fragment_count` fields.)
-
-If the check reports `missing_files`, the bundled corpus didn't ship in this wheel install. Recommend `pip install --force-reinstall skillsmith` (or `uv sync --reinstall`).
+This creates the user-scoped corpus directory at `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/` and initializes empty LadybugDB + DuckDB stores. The wheel no longer ships pre-built skills — Step 7 below populates the corpus from packs the user picks.
 
 ---
 
-## Step 7: Write `.env`
+## Step 7: Pick and install skill packs
+
+> RUN
+> ```bash
+> skillsmith install-packs
+> ```
+
+The user is shown a list of available packs (each with description + skill count) and asked to pick which ones to install. Two packs (`core`, `engineering`) are always installed automatically.
+
+> ASK
+>
+> Tell the user:
+> > "Skillsmith's corpus is split into packs. You opt in to the ones that match your stack. `core` and `engineering` install automatically. The most common picks for backend work: `nodejs`, `typescript`, plus your framework (e.g., `nestjs`, `fastify`). For agentic dev, add `agents`. Pick now or accept defaults — you can install more packs later with `skillsmith install-pack <name>`."
+>
+> Read the available packs from the CLI's interactive prompt. Wait for the user's selection.
+
+The command ingests each chosen pack and runs one bulk re-embed pass at the end. **Expect 5–10 minutes** on a warm-cache iGPU for a moderate selection (e.g., core + engineering + nodejs + typescript = ~115 skills, ~700 fragments).
+
+Non-interactive / scripted environments: pass `--packs <name1,name2,...>` (or `--packs all`) to skip the prompt. With no flag in non-TTY mode, only the always-on packs install.
+
+If the bulk re-embed fails partway (e.g., LM Studio crashes mid-run), the install state records what landed and the embed step is idempotent — just re-run `skillsmith reembed` to finish.
+
+---
+
+## Step 8: Write `.env`
 
 > RUN
 > ```bash
@@ -215,7 +232,7 @@ If the user wants a non-default port (because 47950 is taken on their machine), 
 
 ---
 
-## Step 8: Handoff harness selection
+## Step 9: Handoff harness selection
 
 > ASK
 >
@@ -238,7 +255,7 @@ Record the harness choice. The CLI uses one of: `claude-code`, `gemini-cli`, `cu
 
 ---
 
-## Step 9: Wire the harness
+## Step 10: Wire the harness
 
 > RUN
 > ```bash
@@ -268,7 +285,7 @@ If the user picked `manual`, the output includes copy-pasteable instructions for
 
 ---
 
-## Step 10: Verify
+## Step 11: Verify
 
 > RUN
 > ```bash
@@ -289,7 +306,7 @@ If any check fails:
 
 ---
 
-## Step 11: Enable persistent service
+## Step 12: Enable persistent service
 
 > **Note:** If you ran `skillsmith setup`, this step was already prompted interactively as part of that command. Skip to Step 12 if `install-state.json` already contains a `service_mode` entry.
 
@@ -317,7 +334,7 @@ The subcommand detects the available service manager (systemd/launchd) or contai
 
 ---
 
-## Step 12: Start the service + first-run demo
+## Step 13: Start the service + first-run demo
 
 Start the service in foreground (recommended — same idiom as `ollama serve`):
 

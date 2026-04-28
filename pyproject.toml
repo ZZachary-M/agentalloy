@@ -37,12 +37,14 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/skillsmith"]
-# Force-include the bundled corpus binary files so a future hatchling
-# upgrade or a config change can't silently strip them. The `*.duck`
-# extension is uncommon enough that defaults aren't reliable.
+# Pack-based corpus distribution: the wheel ships only seed YAML packs;
+# users opt into packs at `skillsmith setup`, and the binary corpus
+# (LadybugDB + DuckDB) is generated locally from the chosen packs.
+# The empty `_corpus/.gitkeep` keeps the directory present so runtime
+# code that resolves `_corpus/` paths doesn't break.
 artifacts = [
-    "src/skillsmith/_corpus/skills.duck",
-    "src/skillsmith/_corpus/ladybug",
+    "src/skillsmith/_corpus/.gitkeep",
+    "seeds/packs/**/*.yaml",
 ]
 
 [tool.ruff]

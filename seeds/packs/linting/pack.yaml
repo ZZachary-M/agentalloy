@@ -1,0 +1,33 @@
+name: linting
+version: 1.0.0
+description: Linting — ESLint flat config, neostandard, migration from legacy ESLint.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- typescript
+skills:
+- skill_id: eslint-flat-config
+  file: eslint-flat-config.yaml
+  fragment_count: 7
+- skill_id: linting-neostandard-eslint9-ci-and-editor-integration
+  file: linting-neostandard-eslint9-ci-and-editor-integration.yaml
+  fragment_count: 3
+- skill_id: linting-neostandard-eslint9-eslint-v9-flat-config
+  file: linting-neostandard-eslint9-eslint-v9-flat-config.yaml
+  fragment_count: 5
+- skill_id: linting-neostandard-eslint9-migration-from-legacy-eslint
+  file: linting-neostandard-eslint9-migration-from-legacy-eslint.yaml
+  fragment_count: 3
+- skill_id: linting-neostandard-eslint9-migration-from-standard
+  file: linting-neostandard-eslint9-migration-from-standard.yaml
+  fragment_count: 4
+- skill_id: linting-neostandard-eslint9-neostandard
+  file: linting-neostandard-eslint9-neostandard.yaml
+  fragment_count: 3
+- skill_id: linting-neostandard-eslint9-overview
+  file: linting-neostandard-eslint9-overview.yaml
+  fragment_count: 5

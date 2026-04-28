@@ -1,0 +1,70 @@
+name: fastify
+version: 1.0.0
+description: Fastify framework — plugins, JSON Schema, hooks, pino logging, performance.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- nodejs
+- typescript
+skills:
+- skill_id: fastify-authentication
+  file: fastify-authentication.yaml
+  fragment_count: 3
+- skill_id: fastify-configuration
+  file: fastify-configuration.yaml
+  fragment_count: 3
+- skill_id: fastify-content-type
+  file: fastify-content-type.yaml
+  fragment_count: 3
+- skill_id: fastify-cors-security
+  file: fastify-cors-security.yaml
+  fragment_count: 3
+- skill_id: fastify-database
+  file: fastify-database.yaml
+  fragment_count: 3
+- skill_id: fastify-decorators
+  file: fastify-decorators.yaml
+  fragment_count: 3
+- skill_id: fastify-deployment
+  file: fastify-deployment.yaml
+  fragment_count: 3
+- skill_id: fastify-error-handling
+  file: fastify-error-handling.yaml
+  fragment_count: 3
+- skill_id: fastify-hooks
+  file: fastify-hooks.yaml
+  fragment_count: 3
+- skill_id: fastify-http-proxy
+  file: fastify-http-proxy.yaml
+  fragment_count: 3
+- skill_id: fastify-logging
+  file: fastify-logging.yaml
+  fragment_count: 3
+- skill_id: fastify-overview
+  file: fastify-overview.yaml
+  fragment_count: 5
+- skill_id: fastify-performance
+  file: fastify-performance.yaml
+  fragment_count: 3
+- skill_id: fastify-plugins
+  file: fastify-plugins.yaml
+  fragment_count: 3
+- skill_id: fastify-routes
+  file: fastify-routes.yaml
+  fragment_count: 3
+- skill_id: fastify-schemas
+  file: fastify-schemas.yaml
+  fragment_count: 3
+- skill_id: fastify-serialization
+  file: fastify-serialization.yaml
+  fragment_count: 3
+- skill_id: fastify-typescript
+  file: fastify-typescript.yaml
+  fragment_count: 3
+- skill_id: fastify-websockets
+  file: fastify-websockets.yaml
+  fragment_count: 3

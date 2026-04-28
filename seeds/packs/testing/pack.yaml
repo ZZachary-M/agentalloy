@@ -1,0 +1,24 @@
+name: testing
+version: 1.0.0
+description: Testing patterns — JavaScript testing, bats, e2e, browser testing with
+  DevTools.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: bats-testing-patterns
+  file: bats-testing-patterns.yaml
+  fragment_count: 12
+- skill_id: browser-testing-with-devtools
+  file: browser-testing-with-devtools.yaml
+  fragment_count: 9
+- skill_id: e2e-testing-patterns
+  file: e2e-testing-patterns.yaml
+  fragment_count: 13
+- skill_id: javascript-testing-patterns
+  file: javascript-testing-patterns.yaml
+  fragment_count: 8

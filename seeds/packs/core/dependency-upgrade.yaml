@@ -1,0 +1,384 @@
+skill_type: domain
+skill_id: dependency-upgrade
+canonical_name: Dependency Upgrade
+category: engineering
+skill_class: domain
+domain_tags:
+- dependency-upgrade
+- semver
+- breaking-changes
+- codemod
+- dependabot
+- renovate
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from claude-agents framework-migration plugin
+raw_prose: '# Dependency Upgrade
+
+
+  Master major dependency version upgrades, compatibility analysis, staged upgrade strategies, and comprehensive testing approaches.
+
+
+  ## When to Use
+
+
+  - Upgrading major framework versions
+
+  - Updating security-vulnerable dependencies
+
+  - Modernizing legacy dependencies
+
+  - Resolving dependency conflicts
+
+  - Planning incremental upgrade paths
+
+  - Testing compatibility matrices
+
+  - Automating dependency updates
+
+
+  ## Semantic Versioning Review
+
+
+  `MAJOR.MINOR.PATCH` — MAJOR breaking, MINOR additive, PATCH bugfix.
+
+  - `^2.3.1` = `>=2.3.1 <3.0.0` (minor + patch updates)
+
+  - `~2.3.1` = `>=2.3.1 <2.4.0` (patch only)
+
+  - `2.3.1` = exact
+
+
+  ## Dependency Analysis
+
+
+  ```bash
+
+  npm outdated; npm audit; npm audit fix
+
+  yarn outdated; yarn audit
+
+  npx npm-check-updates -u            # update package.json to latest
+
+
+  npm ls package-name                  # why is this installed?
+
+  yarn why package-name
+
+  npx madge --image graph.png src/     # visualize
+
+  ```
+
+
+  ## Staged Upgrade Strategy
+
+
+  Phase 1 — Planning: list current versions, read CHANGELOG.md / MIGRATION.md, define upgrade order (TypeScript → framework → routing → testing → build).
+
+
+  Phase 2 — Incremental: upgrade one package at a time, run tests + build between each.
+
+
+  Phase 3 — Validation: write tests asserting peer-dep compatibility (e.g. `react` and `react-dom` versions match).
+
+
+  ## Breaking Change Handling
+
+
+  - Identify via CHANGELOG.md
+
+  - Apply codemods: `npx jscodeshift -t <url> src/` (use `--dry` to preview)
+
+  - Custom migration scripts using `glob` + `fs.readFileSync` + regex replace
+
+
+  ## Testing Strategy
+
+
+  - Unit tests must still pass
+
+  - Integration tests verify cross-module compatibility
+
+  - Visual regression tests (Percy, Chromatic) catch UI drift
+
+  - E2E tests (Playwright/Cypress) catch real flow regressions
+
+
+  ## Automated Dependency Updates
+
+
+  - **Renovate** — `renovate.json` with `extends: ["config:base"]`, auto-merge minor+patch
+
+  - **Dependabot** — `.github/dependabot.yml`, schedule weekly, ignore-rules for known incompatibilities
+
+
+  ## Rollback Plan
+
+
+  - Pin known-good versions in `package-lock.json` / `yarn.lock`
+
+  - Tag pre-upgrade commit
+
+  - Revert via `git revert` of upgrade PR + reinstall locked versions
+
+
+  ## Common Upgrade Patterns
+
+
+  - **Lock File Management** — commit lockfiles; resolve conflicts by re-running `npm install`/`yarn`, never hand-edit
+
+  - **Peer Dependency Resolution** — use `--legacy-peer-deps` carefully; prefer `npm install <pkg>` matching peers
+
+  - **Workspace Upgrades** — pnpm/yarn workspaces: bump root, run install, verify all workspaces build'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Dependency Upgrade
+
+
+    Master major dependency version upgrades, compatibility analysis, staged upgrade strategies, and comprehensive testing approaches.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    - Upgrading major framework versions
+
+    - Updating security-vulnerable dependencies
+
+    - Modernizing legacy dependencies
+
+    - Resolving dependency conflicts
+
+    - Planning incremental upgrade paths
+
+    - Testing compatibility matrices
+
+    - Automating dependency updates'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Semantic Versioning Review
+
+
+    ```
+
+    MAJOR.MINOR.PATCH (e.g., 2.3.1)
+
+
+    MAJOR: Breaking changes
+
+    MINOR: New features, backward compatible
+
+    PATCH: Bug fixes, backward compatible
+
+
+    ^2.3.1 = >=2.3.1 <3.0.0   (minor updates)
+
+    ~2.3.1 = >=2.3.1 <2.4.0   (patch updates)
+
+    2.3.1  = exact version
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: '### Audit Dependencies
+
+
+    ```bash
+
+    # npm
+
+    npm outdated
+
+    npm audit
+
+    npm audit fix
+
+
+    # yarn
+
+    yarn outdated
+
+    yarn audit
+
+
+    # Check for major updates
+
+    npx npm-check-updates
+
+    npx npm-check-updates -u   # Update package.json
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: '### Analyze Dependency Tree
+
+
+    ```bash
+
+    # See why a package is installed
+
+    npm ls package-name
+
+    yarn why package-name
+
+
+    # Find duplicate packages
+
+    npm dedupe
+
+    yarn dedupe
+
+
+    # Visualize dependencies
+
+    npx madge --image graph.png src/
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: '### Staged Upgrade — Phase 1: Planning
+
+
+    ```bash
+
+    # 1. Identify current versions
+
+    npm list --depth=0
+
+
+    # 2. Check for breaking changes
+
+    # Read CHANGELOG.md and MIGRATION.md
+
+
+    # 3. Define upgrade order
+
+    echo "Upgrade order:
+
+    1. TypeScript
+
+    2. React
+
+    3. React Router
+
+    4. Testing libraries
+
+    5. Build tools" > UPGRADE_PLAN.md
+
+    ```'
+- sequence: 7
+  fragment_type: execution
+  content: '### Staged Upgrade — Phase 2: Incremental
+
+
+    Don''t upgrade everything at once. Test between each step.
+
+
+    ```bash
+
+    # Step 1: Update TypeScript
+
+    npm install typescript@latest
+
+    npm run test && npm run build
+
+
+    # Step 2: Update React (one major version at a time)
+
+    npm install react@17 react-dom@17
+
+    npm run test
+
+
+    # Step 3: Update peer libraries
+
+    npm install react-router-dom@6
+
+    npm run test
+
+    ```'
+- sequence: 8
+  fragment_type: execution
+  content: "### Staged Upgrade — Phase 3: Validation\n\nAdd tests that lock in compatibility:\n\n```javascript\ndescribe(\"Dependency Compatibility\", () => {\n  it(\"should have compatible React versions\", () => {\n    const reactVersion = require(\"react/package.json\").version;\n    const reactDomVersion = require(\"react-dom/package.json\").version;\n    expect(reactVersion).toBe(reactDomVersion);\n  });\n\n  it(\"should not have peer dependency warnings\", () => {\n    // Run npm ls and check for warnings\n  });\n});\n```"
+- sequence: 9
+  fragment_type: execution
+  content: '### Codemod for Automated Fixes
+
+
+    ```bash
+
+    # Run jscodeshift with transform URL
+
+    npx jscodeshift -t <transform-url> <path>
+
+
+    # Example: Rename unsafe lifecycle methods
+
+    npx jscodeshift -t https://raw.githubusercontent.com/reactjs/react-codemod/master/transforms/rename-unsafe-lifecycles.js src/
+
+
+    # For TypeScript files
+
+    npx jscodeshift -t <url> --parser=tsx src/
+
+
+    # Dry run to preview changes
+
+    npx jscodeshift -t <url> --dry src/
+
+    ```'
+- sequence: 10
+  fragment_type: execution
+  content: "### Compatibility Matrix Pattern\n\n```javascript\nconst compatibilityMatrix = {\n  react: {\n    \"16.x\": {\n      \"react-dom\": \"^16.0.0\",\n      \"react-router-dom\": \"^5.0.0\",\n      \"@testing-library/react\": \"^11.0.0\",\n    },\n    \"17.x\": {\n      \"react-dom\": \"^17.0.0\",\n      \"react-router-dom\": \"^5.0.0 || ^6.0.0\",\n      \"@testing-library/react\": \"^12.0.0\",\n    },\n    \"18.x\": {\n      \"react-dom\": \"^18.0.0\",\n      \"react-router-dom\": \"^6.0.0\",\n      \"@testing-library/react\": \"^13.0.0\",\n    },\n  },\n};\n\nfunction checkCompatibility(packages) {\n  // Validate package versions against matrix\n}\n```"
+- sequence: 11
+  fragment_type: example
+  content: "### Automated Updates: Renovate / Dependabot\n\nRenovate (`renovate.json`):\n```json\n{\n  \"extends\": [\"config:base\"],\n  \"schedule\": [\"before 5am on Monday\"],\n  \"packageRules\": [\n    {\n      \"matchUpdateTypes\": [\"minor\", \"patch\"],\n      \"automerge\": true\n    }\n  ]\n}\n```\n\nDependabot (`.github/dependabot.yml`):\n```yaml\nversion: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    ignore:\n      - dependency-name: \"legacy-pkg\"\n```"
+- sequence: 12
+  fragment_type: verification
+  content: '## Testing Strategy
+
+
+    Run all of these before merging an upgrade:
+
+
+    - **Unit tests** — `npm run test`; everything must still pass
+
+    - **Integration tests** — verify cross-module compatibility
+
+    - **Visual regression tests** — Percy / Chromatic catch UI drift
+
+    - **E2E tests** — Playwright / Cypress catch real flow regressions
+
+    - **Build verification** — `npm run build` clean
+
+    - **Type check** — `npx tsc --noEmit`'
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Rollback Plan
+
+
+    Every upgrade should be revertable:
+
+
+    - Pin known-good versions in `package-lock.json` / `yarn.lock`
+
+    - Tag the pre-upgrade commit (`git tag pre-upgrade-react18`)
+
+    - Document rollback steps in the PR
+
+    - Revert via `git revert <upgrade-commit>` + reinstall locked versions
+
+    - For breaking DB migrations, prepare down migrations alongside the upgrade'
+- sequence: 14
+  fragment_type: guardrail
+  content: '## Common Upgrade Patterns
+
+
+    - **Lock File Management** — always commit `package-lock.json` / `yarn.lock`. Resolve conflicts by re-running `npm install` / `yarn`, never hand-edit lockfiles.
+
+    - **Peer Dependency Resolution** — use `--legacy-peer-deps` only as last resort. Prefer matching peers manually with `npm install <pkg>@<version>`.
+
+    - **Workspace Upgrades** — pnpm/yarn workspaces: bump at root, run install, verify each workspace builds. Watch for cross-workspace peer mismatches.'

@@ -1,0 +1,122 @@
+skill_type: domain
+skill_id: workflow-orchestration-patterns
+canonical_name: Workflow Orchestration Patterns
+category: design
+skill_class: domain
+domain_tags:
+- temporal
+- workflow
+- activity
+- saga
+- fan-out-fan-in
+- entity-workflow
+- async-callback
+- versioning
+- determinism
+- resilience
+- durable-execution
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin backend-development/workflow-orchestration-patterns source
+raw_prose: "# Workflow Orchestration Patterns\n\nImplement durable, fault-tolerant workflows using Temporal (or similar platforms). Workflows define the \"what\" (logic, order, conditions) while activities define the \"how\" (actual work with side effects).\n\n## When to Use This Skill\n\n- Building long-running business processes\n- Implementing saga patterns with durable execution\n- Fan-out/fan-in parallel processing\n- Entity workflows (long-lived stateful entities)\n- Async human-in-the-loop callbacks\n- Migrating from cron jobs or message queues to durable workflows\n\n## Core Concepts\n\n### Workflows vs Activities\n\n**Workflows**: Deterministic functions that orchestrate activities. Must not have side effects, must not use non-deterministic APIs (random, time, network). Temporal replays workflow history on recovery — non-deterministic code breaks replay.\n\n**Activities**: Functions that perform actual work — API calls, database writes, file I/O. Can fail and be retried. Have timeouts and retry policies.\n\n### Key Principles\n\n- Workflows are deterministic — same input produces same sequence of commands\n- Activities are idempotent — safe to retry on failure\n- State is durable — survives process crashes and restarts\n- Timeouts are explicit — every activity has start-to-close and schedule-to-close timeouts\n\n## Fundamental Patterns\n\n### Pattern 1: Basic Workflow and Activities\n\n```python\nfrom temporalio import workflow, activity\nfrom datetime import timedelta\n\n@activity.defn\nasync def validate_order(order_id: str) -> bool:\n    # Actual validation logic (can call APIs, DB)\n    order = await db.get_order(order_id)\n    return order.is_valid()\n\n@activity.defn\nasync def charge_payment(order_id: str, amount: float) -> str:\n    result = await payment_gateway.charge(order_id, amount)\n    return result.transaction_id\n\n@activity.defn\nasync def send_confirmation(order_id: str, email: str) -> None:\n    await email_service.send(email, template=\"order_confirmed\", order_id=order_id)\n\n@workflow.defn\nclass OrderWorkflow:\n    @workflow.run\n    async def run(self, order: OrderInput) -> OrderResult:\n        # Step 1: Validate\n        is_valid = await workflow.execute_activity(\n            validate_order, order.id,\n            start_to_close_timeout=timedelta(seconds=30),\n        )\n        if not is_valid:\n            return OrderResult(status=\"rejected\")\n\n        # Step 2: Charge\n        tx_id = await workflow.execute_activity(\n            charge_payment, args=[order.id, order.total],\n            start_to_close_timeout=timedelta(seconds=60),\n            retry_policy=RetryPolicy(maximum_attempts=3),\n        )\n\n        # Step 3: Confirm\n        await workflow.execute_activity(\n            send_confirmation, args=[order.id, order.email],\n            start_to_close_timeout=timedelta(seconds=30),\n        )\n\n        return OrderResult(status=\"completed\", transaction_id=tx_id)\n```\n\n### Pattern 2: Saga Pattern with Compensation\n\n```python\n@workflow.defn\nclass OrderSagaWorkflow:\n    @workflow.run\n    async def run(self, order: OrderInput) -> SagaResult:\n        compensations: list[tuple[str, list]] = []\n\n        try:\n            # Step 1: Reserve inventory\n            await workflow.execute_activity(\n                reserve_inventory, order.items,\n                start_to_close_timeout=timedelta(seconds=30),\n            )\n            compensations.append((\"release_inventory\", [order.items]))\n\n            # Step 2: Charge payment\n            tx_id = await workflow.execute_activity(\n                charge_payment, args=[order.id, order.total],\n                start_to_close_timeout=timedelta(seconds=60),\n            )\n            compensations.append((\"refund_payment\", [tx_id]))\n\n            # Step 3: Create shipment\n            await workflow.execute_activity(\n                create_shipment, args=[order.id, order.address],\n                start_to_close_timeout=timedelta(seconds=30),\n            )\n\n            return SagaResult(status=\"completed\")\n\n        except Exception as e:\n            # Run compensations in reverse\n            for comp_name, comp_args in reversed(compensations):\n                try:\n                    await workflow.execute_activity(\n                        comp_name, args=comp_args,\n                        start_to_close_timeout=timedelta(seconds=30),\n                    )\n                except Exception as comp_error:\n                    workflow.logger.error(f\"Compensation {comp_name} failed: {comp_error}\")\n            return SagaResult(status=\"failed\", error=str(e))\n```\n\n### Pattern 3: Entity Workflow (Long-Lived Stateful)\n\n```python\n@workflow.defn\nclass SubscriptionWorkflow:\n    def __init__(self):\n        self.status = \"active\"\n        self.balance = 0.0\n\n    @workflow.run\n    async def run(self, subscription: SubscriptionInput) -> None:\n        while self.status == \"active\":\n            # Wait for next billing cycle\n            await workflow.sleep(timedelta(days=30))\n\n            # Charge monthly\n            try:\n                await workflow.execute_activity(\n                    charge_subscription, args=[subscription.id, subscription.amount],\n                    start_to_close_timeout=timedelta(seconds=60),\n                )\n                self.balance += subscription.amount\n            except PaymentFailed:\n                self.status = \"past_due\"\n                # Grace period\n                await workflow.sleep(timedelta(days=7))\n                if self.status == \"past_due\":\n                    self.status = \"cancelled\"\n\n    @workflow.signal\n    async def cancel(self) -> None:\n        self.status = \"cancelled\"\n\n    @workflow.query\n    def get_status(self) -> str:\n        return self.status\n```\n\n### Pattern 4: Fan-Out/Fan-In\n\n```python\n@workflow.defn\nclass BatchProcessingWorkflow:\n    @workflow.run\n    async def run(self, items: list[str]) -> BatchResult:\n        # Fan out: process items in parallel\n        tasks = [\n            workflow.execute_activity(\n                process_item, item,\n                start_to_close_timeout=timedelta(seconds=120),\n            )\n            for item in items\n        ]\n        results = await asyncio.gather(*tasks, return_exceptions=True)\n\n        succeeded = [r for r in results if not isinstance(r, Exception)]\n        failed = [r for r in results if isinstance(r, Exception)]\n\n        return BatchResult(\n            total=len(items),\n            succeeded=len(succeeded),\n            failed=len(failed),\n        )\n```\n\n### Pattern 5: Async Callback (Human-in-the-Loop)\n\n```python\n@workflow.defn\nclass ApprovalWorkflow:\n    def __init__(self):\n        self.approved: bool | None = None\n\n    @workflow.run\n    async def run(self, request: ApprovalRequest) -> ApprovalResult:\n        await workflow.execute_activity(\n            send_approval_request, args=[request.approver_email, request.details],\n            start_to_close_timeout=timedelta(seconds=30),\n        )\n\n        # Wait for signal (with timeout)\n        try:\n            await workflow.wait_condition(\n                lambda: self.approved is not None,\n                timeout=timedelta(hours=24),\n            )\n        except asyncio.TimeoutError:\n            return ApprovalResult(status=\"expired\")\n\n        if self.approved:\n            await workflow.execute_activity(execute_approved_action, request.id)\n            return ApprovalResult(status=\"approved\")\n        else:\n            return ApprovalResult(status=\"rejected\")\n\n    @workflow.signal\n    async def approve(self, decision: bool) -> None:\n        self.approved = decision\n```\n\n## Determinism Constraints\n\nInside workflows, you MUST NOT:\n- Call `datetime.now()` — use `workflow.now()`\n- Use `random.random()` — use `workflow.random()`\n- Make network calls — use activities\n- Use threading — use `asyncio` only\n- Access mutable global state\n\n## Versioning\n\nWhen changing workflow logic, use `workflow.patched(\"change-id\")` to branch behavior for in-flight workflows:\n\n```python\nif workflow.patched(\"v2-add-notification\"):\n    await workflow.execute_activity(send_notification, ...)\n```\n\n## Resilience Best Practices\n\n1. **Set explicit timeouts** on every activity\n2. **Use retry policies** with backoff for transient failures\n3. **Design idempotent activities** — safe to retry\n4. **Keep workflows deterministic** — no side effects\n5. **Use signals for external input** — not polling\n6. **Version workflow changes** — for in-flight compatibility\n7. **Monitor workflow health** — track stuck, failed, timed-out workflows\n8. **Test with replay** — verify determinism by replaying history"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Workflow Orchestration Patterns
+
+
+    Implement durable, fault-tolerant workflows using Temporal (or similar platforms). Workflows define the "what" (logic, order, conditions) while activities define the "how" (actual work with side effects).
+
+
+    ## Core Concepts
+
+
+    - **Workflows**: Deterministic functions that orchestrate activities. Must not have side effects or use non-deterministic APIs. Temporal replays workflow history on recovery.
+
+    - **Activities**: Functions that perform actual work (API calls, DB writes). Can fail and be retried. Have timeouts and retry policies.
+
+    - **Key Principles**: Workflows are deterministic, activities are idempotent, state is durable, timeouts are explicit.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Building long-running business processes
+
+    - Implementing saga patterns with durable execution
+
+    - Fan-out/fan-in parallel processing
+
+    - Entity workflows (long-lived stateful entities)
+
+    - Async human-in-the-loop callbacks
+
+    - Migrating from cron jobs or message queues to durable workflows'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Basic Workflow and Activities
+
+
+    Define activities with `@activity.defn` for actual work (validation, payment, email). Define workflows with `@workflow.defn` and `@workflow.run`. Execute activities via `workflow.execute_activity()` with explicit `start_to_close_timeout` and optional `retry_policy`. Activities are sequential by default — await each before proceeding.
+
+
+    ## Pattern 2: Saga Pattern with Compensation
+
+
+    Maintain a compensations list as `list[tuple[name, args]]`. After each successful step, append its compensation. On exception, iterate compensations in reverse and execute each. Log compensation failures — they may need manual intervention.
+
+
+    ## Pattern 3: Entity Workflow (Long-Lived Stateful)
+
+
+    Use `workflow.sleep()` for periodic actions (e.g., monthly billing). Use `@workflow.signal` for external input (cancel, update). Use `@workflow.query` for state inspection. The workflow loop runs indefinitely until signaled or a terminal condition is reached.'
+- sequence: 4
+  fragment_type: example
+  content: "## Basic Workflow Example (Pattern 1)\n\n```python\n@activity.defn\nasync def validate_order(order_id: str) -> bool:\n    order = await db.get_order(order_id)\n    return order.is_valid()\n\n@activity.defn\nasync def charge_payment(order_id: str, amount: float) -> str:\n    result = await payment_gateway.charge(order_id, amount)\n    return result.transaction_id\n\n@workflow.defn\nclass OrderWorkflow:\n    @workflow.run\n    async def run(self, order: OrderInput) -> OrderResult:\n        is_valid = await workflow.execute_activity(\n            validate_order, order.id,\n            start_to_close_timeout=timedelta(seconds=30),\n        )\n        if not is_valid:\n            return OrderResult(status=\"rejected\")\n        tx_id = await workflow.execute_activity(\n            charge_payment, args=[order.id, order.total],\n            start_to_close_timeout=timedelta(seconds=60),\n            retry_policy=RetryPolicy(maximum_attempts=3),\n        )\n        return OrderResult(status=\"completed\", transaction_id=tx_id)\n```"
+- sequence: 5
+  fragment_type: example
+  content: "## Fan-Out/Fan-In Example (Pattern 4)\n\n```python\n@workflow.defn\nclass BatchProcessingWorkflow:\n    @workflow.run\n    async def run(self, items: list[str]) -> BatchResult:\n        tasks = [\n            workflow.execute_activity(\n                process_item, item,\n                start_to_close_timeout=timedelta(seconds=120),\n            )\n            for item in items\n        ]\n        results = await asyncio.gather(*tasks, return_exceptions=True)\n        succeeded = [r for r in results if not isinstance(r, Exception)]\n        failed = [r for r in results if isinstance(r, Exception)]\n        return BatchResult(total=len(items), succeeded=len(succeeded), failed=len(failed))\n```\n\n## Async Callback / Human-in-the-Loop (Pattern 5)\n\n```python\n@workflow.defn\nclass ApprovalWorkflow:\n    def __init__(self):\n        self.approved: bool | None = None\n\n    @workflow.run\n    async def run(self, request: ApprovalRequest) -> ApprovalResult:\n        await workflow.execute_activity(send_approval_request, ...)\n        try:\n            await workflow.wait_condition(lambda: self.approved is not None, timeout=timedelta(hours=24))\n        except asyncio.TimeoutError:\n            return ApprovalResult(status=\"expired\")\n        return ApprovalResult(status=\"approved\" if self.approved else \"rejected\")\n\n    @workflow.signal\n    async def approve(self, decision: bool) -> None:\n        self.approved = decision\n```"
+- sequence: 6
+  fragment_type: guardrail
+  content: '## Determinism Constraints
+
+
+    Inside workflows, you MUST NOT:
+
+    - Call `datetime.now()` — use `workflow.now()`
+
+    - Use `random.random()` — use `workflow.random()`
+
+    - Make network calls — use activities
+
+    - Use threading — use `asyncio` only
+
+    - Access mutable global state
+
+
+    ## Versioning
+
+
+    Use `workflow.patched("change-id")` to branch behavior for in-flight workflows when changing logic.
+
+
+    ## Resilience Best Practices
+
+
+    1. Set explicit timeouts on every activity
+
+    2. Use retry policies with backoff for transient failures
+
+    3. Design idempotent activities — safe to retry
+
+    4. Keep workflows deterministic — no side effects
+
+    5. Use signals for external input — not polling
+
+    6. Version workflow changes — for in-flight compatibility
+
+    7. Monitor workflow health — track stuck, failed, timed-out workflows
+
+    8. Test with replay — verify determinism by replaying history'

@@ -1,0 +1,165 @@
+skill_type: domain
+skill_id: mtls-configuration
+canonical_name: mTLS Configuration
+category: ops
+skill_class: domain
+domain_tags:
+- mtls
+- tls
+- certificates
+- istio
+- linkerd
+- spiffe
+- spire
+- cert-manager
+- service-mesh
+- zero-trust
+- certificate-rotation
+- mutual-authentication
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin cloud-infrastructure/mtls-configuration source
+raw_prose: "# mTLS Configuration\n\nConfigure mutual TLS (mTLS) for service-to-service authentication. In mTLS, both client and server present certificates, verifying each other's identity. This is the foundation of zero-trust networking.\n\n## When to Use This Skill\n\n- Enabling mTLS in service meshes (Istio, Linkerd)\n- Setting up certificate hierarchies and rotation\n- Configuring cert-manager for automated certificate management\n- Implementing SPIFFE/SPIRE for workload identity\n- Debugging TLS handshake failures\n- Transitioning from permissive to strict mTLS\n\n## Core Concepts\n\n### mTLS Flow\n\n```\nClient                         Server\n  |  1. ClientHello              |\n  |----------------------------->|\n  |  2. ServerHello + ServerCert |\n  |<-----------------------------|\n  |  3. ClientCert               |\n  |----------------------------->|\n  |  4. Both verify certs        |\n  |  5. Encrypted channel        |\n  |<===========================>|\n```\n\n### Certificate Hierarchy\n\n```\nRoot CA\n├── Intermediate CA (mesh)\n│   ├── Service A certificate\n│   ├── Service B certificate\n│   └── Service C certificate\n└── Intermediate CA (external)\n    └── External service certificates\n```\n\n### Key Principles\n\n- **Zero trust**: Every service must authenticate, even within the cluster\n- **Short-lived certs**: Rotate frequently (hours, not years)\n- **Automated issuance**: No manual certificate management\n- **Workload identity**: Certs tied to service identity, not host\n\n## Fundamental Patterns\n\n### Pattern 1: Istio Strict mTLS\n\n```yaml\n# PeerAuthentication: enforce mTLS for all services in namespace\napiVersion: security.istio.io/v1beta1\nkind: PeerAuthentication\nmetadata:\n  name: default\n  namespace: production\nspec:\n  mtls:\n    mode: STRICT  # Only mTLS traffic allowed\n```\n\n```yaml\n# Mesh-wide strict mTLS\napiVersion: security.istio.io/v1beta1\nkind: PeerAuthentication\nmetadata:\n  name: default\n  namespace: istio-system\nspec:\n  mtls:\n    mode: STRICT\n```\n\n### Pattern 2: Istio Destination Rules\n\n```yaml\n# DestinationRule: configure mTLS for outbound connections\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: default\n  namespace: production\nspec:\n  host: \"*.production.svc.cluster.local\"\n  trafficPolicy:\n    tls:\n      mode: ISTIO_MUTUAL  # Use Istio-issued certs\n```\n\n### Pattern 3: cert-manager with Let's Encrypt\n\n```yaml\n# ClusterIssuer for automated cert issuance\napiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: letsencrypt-prod\nspec:\n  acme:\n    server: https://acme-v2.api.letsencrypt.org/directory\n    email: platform@example.com\n    privateKeySecretRef:\n      name: letsencrypt-prod-account\n    solvers:\n      - http01:\n          ingress:\n            class: nginx\n```\n\n```yaml\n# Certificate request\napiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata:\n  name: api-tls\n  namespace: production\nspec:\n  secretName: api-tls-secret\n  duration: 2160h    # 90 days\n  renewBefore: 360h  # 15 days before expiry\n  issuerRef:\n    name: letsencrypt-prod\n    kind: ClusterIssuer\n  dnsNames:\n    - api.example.com\n    - \"*.api.example.com\"\n```\n\n### Pattern 4: SPIFFE/SPIRE Workload Identity\n\nSPIFFE (Secure Production Identity Framework for Everyone) provides cryptographic identities to workloads. SPIRE is the implementation.\n\n```yaml\n# SPIRE server configuration\nserver {\n  bind_address = \"0.0.0.0\"\n  bind_port = \"8081\"\n  trust_domain = \"example.com\"\n  data_dir = \"/run/spire/data\"\n  log_level = \"INFO\"\n\n  ca_ttl = \"24h\"\n  default_svid_ttl = \"1h\"\n}\n\nplugins {\n  DataStore \"sql\" {\n    plugin_data {\n      database_type = \"postgres\"\n      connection_string = \"dbname=spire host=localhost\"\n    }\n  }\n  KeyManager \"memory\" {}\n  NodeAttestor \"k8s_psat\" {\n    plugin_data {\n      clusters = {\n        \"production\" = {\n          service_account_allow_list = [\"spire:spire-agent\"]\n        }\n      }\n    }\n  }\n}\n```\n\nSPIFFE IDs follow the format: `spiffe://trust-domain/path`\nExample: `spiffe://example.com/ns/production/sa/api-service`\n\n### Pattern 5: Linkerd mTLS\n\nLinkerd provides mTLS automatically when injected:\n\n```yaml\n# Inject Linkerd sidecar (mTLS automatic)\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api-service\n  annotations:\n    linkerd.io/inject: enabled\nspec:\n  template:\n    metadata:\n      annotations:\n        linkerd.io/inject: enabled\n```\n\nLinkerd uses its own identity system based on the cluster's trust anchor. All meshed pods get mTLS automatically — no configuration needed.\n\n### Pattern 6: Certificate Rotation\n\n```python\n# Application-level cert rotation watcher\nimport ssl\nimport os\nimport time\nfrom pathlib import Path\n\nclass CertRotationWatcher:\n    def __init__(self, cert_path: str, key_path: str, ca_path: str):\n        self.cert_path = cert_path\n        self.key_path = key_path\n        self.ca_path = ca_path\n        self._ssl_context: ssl.SSLContext | None = None\n        self._last_modified: float = 0.0\n\n    def get_ssl_context(self) -> ssl.SSLContext:\n        current_mtime = os.path.getmtime(self.cert_path)\n        if self._ssl_context is None or current_mtime > self._last_modified:\n            self._ssl_context = self._create_context()\n            self._last_modified = current_mtime\n        return self._ssl_context\n\n    def _create_context(self) -> ssl.SSLContext:\n        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)\n        ctx.load_cert_chain(self.cert_path, self.key_path)\n        ctx.load_verify_locations(self.ca_path)\n        ctx.verify_mode = ssl.CERT_REQUIRED\n        return ctx\n```\n\n## Debugging mTLS\n\n### Common Issues\n\n| Symptom | Likely Cause | Fix |\n|---------|-------------|-----|\n| Connection refused | mTLS mode mismatch | Check PeerAuthentication mode |\n| Certificate expired | Rotation not working | Check cert-manager logs, SPIRE agent |\n| Unknown CA | Trust chain broken | Verify CA certs are distributed |\n| Handshake failure | Client cert not sent | Verify DestinationRule tls mode |\n| 503 errors | Sidecar not injected | Check pod annotations |\n\n### Debug Commands\n\n```bash\n# Check Istio mTLS status\nistioctl authn tls-check <pod> -n <namespace>\n\n# Verify certificate chain\nopenssl s_client -connect service:443 -cert client.pem -key client-key.pem\n\n# Check cert expiry\nopenssl x509 -in cert.pem -noout -dates\n\n# Linkerd identity check\nlinkerd identity -n <namespace>\n```\n\n## Best Practices\n\n1. **Start permissive, go strict** — Transition gradually\n2. **Short-lived certificates** — Hours, not years\n3. **Automate rotation** — cert-manager or SPIRE\n4. **Monitor expiry** — Alert before certs expire\n5. **Use service mesh** — Istio or Linkerd for automatic mTLS\n6. **SPIFFE for identity** — Workload identity, not host identity\n7. **Trust anchors** — Distribute root CAs securely\n8. **Debug early** — Test mTLS in staging first\n9. **Log TLS errors** — Capture handshake failures\n10. **Audit access** — Review which services can communicate"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# mTLS Configuration
+
+
+    Configure mutual TLS for service-to-service authentication. Both client and server present certificates, verifying each other''s identity. Foundation of zero-trust networking.
+
+
+    ## mTLS Flow
+
+
+    1. ClientHello → 2. ServerHello + ServerCert → 3. ClientCert → 4. Both verify → 5. Encrypted channel
+
+
+    ## Certificate Hierarchy
+
+
+    Root CA → Intermediate CAs (mesh, external) → Service certificates. Short-lived (hours), automatically issued, tied to workload identity.
+
+
+    ## Key Principles
+
+
+    - Zero trust: every service authenticates, even within cluster
+
+    - Short-lived certs: rotate frequently
+
+    - Automated issuance: no manual management
+
+    - Workload identity: certs tied to service, not host'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Enabling mTLS in service meshes (Istio, Linkerd)
+
+    - Setting up certificate hierarchies and rotation
+
+    - Configuring cert-manager for automated certificate management
+
+    - Implementing SPIFFE/SPIRE for workload identity
+
+    - Debugging TLS handshake failures
+
+    - Transitioning from permissive to strict mTLS'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Istio Strict mTLS
+
+
+    Apply `PeerAuthentication` with `mode: STRICT` at namespace or mesh level (`istio-system` namespace). This rejects all non-mTLS traffic. Start with `PERMISSIVE` mode during migration.
+
+
+    ## Pattern 2: Istio Destination Rules
+
+
+    Configure `DestinationRule` with `tls.mode: ISTIO_MUTUAL` for outbound connections. Target host pattern: `*.namespace.svc.cluster.local`.
+
+
+    ## Pattern 3: cert-manager with Let''s Encrypt
+
+
+    Create `ClusterIssuer` with ACME solver (HTTP-01 or DNS-01). Request `Certificate` resources with `duration`, `renewBefore`, and `dnsNames`. cert-manager handles issuance and renewal automatically, storing certs in Kubernetes secrets.'
+- sequence: 4
+  fragment_type: example
+  content: "## Istio mTLS Configuration Example\n\n```yaml\napiVersion: security.istio.io/v1beta1\nkind: PeerAuthentication\nmetadata:\n  name: default\n  namespace: production\nspec:\n  mtls:\n    mode: STRICT\n```\n\n```yaml\napiVersion: networking.istio.io/v1beta1\nkind: DestinationRule\nmetadata:\n  name: default\n  namespace: production\nspec:\n  host: \"*.production.svc.cluster.local\"\n  trafficPolicy:\n    tls:\n      mode: ISTIO_MUTUAL\n```\n\n## cert-manager Certificate Example\n\n```yaml\napiVersion: cert-manager.io/v1\nkind: Certificate\nmetadata:\n  name: api-tls\nspec:\n  secretName: api-tls-secret\n  duration: 2160h\n  renewBefore: 360h\n  issuerRef:\n    name: letsencrypt-prod\n    kind: ClusterIssuer\n  dnsNames:\n    - api.example.com\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 4: SPIFFE/SPIRE Workload Identity
+
+
+    SPIFFE provides cryptographic identities to workloads via SVIDs (SPIFFE Verifiable Identity Documents). SPIRE is the implementation. IDs follow `spiffe://trust-domain/path` format (e.g., `spiffe://example.com/ns/production/sa/api-service`). Configure SPIRE server with trust domain, CA TTL, and node attestors (e.g., `k8s_psat` for Kubernetes).
+
+
+    ## Pattern 5: Linkerd mTLS
+
+
+    Linkerd provides automatic mTLS when sidecar is injected (`linkerd.io/inject: enabled`). Uses its own identity system based on cluster trust anchor. No additional configuration needed — all meshed pods get mTLS automatically.
+
+
+    ## Pattern 6: Certificate Rotation
+
+
+    For application-level rotation, watch cert file modification time. Reload SSL context only when cert file changes. Use `ssl.CERT_REQUIRED` verify mode. In service mesh setups, rotation is handled automatically by the mesh control plane.'
+- sequence: 6
+  fragment_type: verification
+  content: '## Debugging mTLS
+
+
+    | Symptom | Likely Cause | Fix |
+
+    |---------|-------------|-----|
+
+    | Connection refused | mTLS mode mismatch | Check PeerAuthentication mode |
+
+    | Certificate expired | Rotation not working | Check cert-manager/SPIRE logs |
+
+    | Unknown CA | Trust chain broken | Verify CA certs distributed |
+
+    | Handshake failure | Client cert not sent | Verify DestinationRule tls mode |
+
+    | 503 errors | Sidecar not injected | Check pod annotations |
+
+
+    ```bash
+
+    istioctl authn tls-check <pod> -n <namespace>
+
+    openssl s_client -connect service:443 -cert client.pem -key client-key.pem
+
+    openssl x509 -in cert.pem -noout -dates
+
+    linkerd identity -n <namespace>
+
+    ```'
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Best Practices
+
+
+    1. **Start permissive, go strict** — Transition gradually
+
+    2. **Short-lived certificates** — Hours, not years
+
+    3. **Automate rotation** — cert-manager or SPIRE
+
+    4. **Monitor expiry** — Alert before certs expire
+
+    5. **Use service mesh** — Istio or Linkerd for automatic mTLS
+
+    6. **SPIFFE for identity** — Workload identity, not host identity
+
+    7. **Trust anchors** — Distribute root CAs securely
+
+    8. **Debug early** — Test mTLS in staging first
+
+    9. **Log TLS errors** — Capture handshake failures
+
+    10. **Audit access** — Review which services can communicate'

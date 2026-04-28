@@ -1,0 +1,57 @@
+name: ui-design
+version: 1.0.0
+description: UI/UX — mobile (iOS/Android), React Native, web design, accessibility,
+  Tailwind, design systems.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: design-system-patterns
+  file: design-system-patterns.yaml
+  fragment_count: 10
+- skill_id: frontend-ui-engineering
+  file: frontend-ui-engineering.yaml
+  fragment_count: 17
+- skill_id: interaction-design
+  file: interaction-design.yaml
+  fragment_count: 9
+- skill_id: mobile-android-design
+  file: mobile-android-design.yaml
+  fragment_count: 10
+- skill_id: mobile-ios-design
+  file: mobile-ios-design.yaml
+  fragment_count: 6
+- skill_id: react-native-architecture
+  file: react-native-architecture.yaml
+  fragment_count: 12
+- skill_id: react-native-design
+  file: react-native-design.yaml
+  fragment_count: 10
+- skill_id: responsive-design
+  file: responsive-design.yaml
+  fragment_count: 13
+- skill_id: screen-reader-testing
+  file: screen-reader-testing.yaml
+  fragment_count: 12
+- skill_id: tailwind-design-system
+  file: tailwind-design-system.yaml
+  fragment_count: 10
+- skill_id: vercel-react-native-skills
+  file: vercel-react-native-skills.yaml
+  fragment_count: 12
+- skill_id: visual-design-foundations
+  file: visual-design-foundations.yaml
+  fragment_count: 9
+- skill_id: wcag-audit-patterns
+  file: wcag-audit-patterns.yaml
+  fragment_count: 13
+- skill_id: web-component-design
+  file: web-component-design.yaml
+  fragment_count: 6
+- skill_id: web-design-guidelines
+  file: web-design-guidelines.yaml
+  fragment_count: 4

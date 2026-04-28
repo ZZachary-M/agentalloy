@@ -1,0 +1,357 @@
+skill_type: domain
+skill_id: distributed-tracing
+canonical_name: Distributed Tracing
+category: ops
+skill_class: domain
+domain_tags:
+- distributed-tracing
+- opentelemetry
+- jaeger
+- tempo
+- span
+- context-propagation
+- sampling
+- trace-id
+- observability
+- microservices
+- w3c-trace-context
+- baggage
+- batch-span-processor
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin observability-monitoring/distributed-tracing
+raw_prose: '# Distributed Tracing
+
+
+  Track requests across distributed systems to understand latency, dependencies, and failure points. OpenTelemetry is the vendor-neutral instrumentation standard; Jaeger and Tempo are common backends.
+
+
+  ## When to Use
+
+
+  - Debug latency issues
+
+  - Understand service dependencies
+
+  - Identify bottlenecks
+
+  - Trace error propagation
+
+  - Analyze request paths
+
+
+  ## Concepts
+
+
+  - **Trace** — end-to-end request journey across services, identified by `trace_id`
+
+  - **Span** — single operation within a trace, with start/end timestamps and parent reference
+
+  - **Context** — metadata propagated between services (W3C `traceparent`, `tracestate` headers)
+
+  - **Tags / Attributes** — key-value pairs on spans for filtering and search
+
+  - **Events / Logs** — timestamped events within a span (errors, milestones)
+
+  - **Baggage** — distributed key-value context that propagates with the trace
+
+
+  ## Instrumentation
+
+
+  Use OpenTelemetry SDKs (auto-instrumentation libraries cover Flask, Express, gRPC, HTTP clients, DB drivers). Manual spans for business logic. Set service name in resource attributes.
+
+
+  ## Context Propagation
+
+
+  HTTP headers carry trace context: `traceparent: 00-<trace_id>-<parent_span_id>-<flags>`. Inject on outgoing calls, extract on incoming. OpenTelemetry''s `propagation.inject` / `propagation.extract` handle this; HTTP and gRPC instrumentation do it automatically.
+
+
+  ## Sampling Strategies
+
+
+  - **Probabilistic** — sample fixed % (1% in production typical)
+
+  - **Rate limiting** — cap traces/second to control cost
+
+  - **Adaptive** — adjust sampling based on conditions
+
+  - **Parent-based** — propagate sampling decision from upstream
+
+
+  ## Backends
+
+
+  - **Jaeger** — self-hosted, stores in Elasticsearch/Cassandra, full UI
+
+  - **Tempo** (Grafana) — object-storage-backed, cheap, queries via Grafana
+
+
+  ## Logging Correlation
+
+
+  Inject `trace_id` into log lines. Anyone reading logs can jump to the matching trace.
+
+
+  ## Best Practices
+
+
+  Sample 1-10% in production. Add meaningful tags (`user.id`, `request.id`). Propagate context across all service boundaries. Record exceptions in spans. Use consistent operation naming. Monitor tracing overhead (target <1% CPU). Document instrumentation standards.
+
+
+  ## Common Pitfalls
+
+
+  - No traces appearing — collector endpoint misconfigured, network blocked, sampling rate too low
+
+  - High latency overhead — sampling too aggressive, batch span processor not enabled'
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Why Distributed Tracing
+
+
+    In a monolith, a single stack trace tells the whole story of a request. In a microservice graph, that story is fragmented across N services, each with their own logs, metrics, and clocks. Reconstructing the path of a single failing request from siloed observability is slow, manual, and often impossible.
+
+
+    **Tracing rebuilds the request narrative.** A single `trace_id` carried through the call graph stitches every span — every service hop, every DB query, every external call — into one timeline. Latency analysis stops being "which service is slow" and becomes "which span on which path is slow," with parent-child causality preserved.
+
+
+    **Tracing exposes what metrics cannot.** A 99th percentile latency metric tells you that *some* requests are slow; tracing tells you *which* requests, *why*, and what they have in common (a specific tenant, a particular code path, a contended downstream). Without traces, debugging tail latency is guesswork.
+
+
+    **Tracing surfaces emergent dependencies.** Service dependency graphs derived from real traces show what actually calls what — including the surprise dependencies (the "temporary" sync HTTP call from service A to service Z that became load-bearing).
+
+
+    **Why OpenTelemetry specifically.** OTel is the vendor-neutral instrumentation API. Code instrumented with OTel can export to Jaeger, Tempo, Honeycomb, Datadog, or any other backend without re-instrumentation.
+
+
+    **Core principle:** A request''s journey through a distributed system is the only complete unit of observability. Logs and metrics describe slices; traces describe wholes.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use
+
+
+    Distributed tracing is the right tool when you need to:
+
+
+    - Debug latency issues
+
+    - Understand service dependencies
+
+    - Identify bottlenecks
+
+    - Trace error propagation
+
+    - Analyze request paths
+
+
+    Tracing answers questions that cross service boundaries — questions that single-service logs and metrics cannot answer because the relevant evidence is split across multiple processes. If your investigation regularly involves correlating timestamps across services or guessing which downstream call caused an upstream slowdown, you need tracing. The signal is "I can see *that* it''s slow but not *where*" — that gap is the tracing-shaped hole.'
+- sequence: 3
+  fragment_type: setup
+  content: "## Trace Anatomy\n\n```\nTrace (trace_id: abc123)\n  Span (frontend) [100ms]\n    Span (api-gateway) [80ms]\n      Span (auth-service) [10ms]\n      Span (user-service) [60ms]\n        Span (database) [40ms]\n```\n\nComponents:\n\n- **Trace** — end-to-end request, identified by `trace_id` (16 bytes)\n- **Span** — single operation within a trace, with `span_id`, parent `span_id`, start/end timestamps\n- **Context** — propagated metadata (W3C `traceparent`, `tracestate` headers)\n- **Attributes (tags)** — key-value pairs on spans for filtering: `user.id`, `db.system`, `http.status_code`\n- **Events** — timestamped events within a span (exception thrown, retry attempted)\n- **Baggage** — distributed context that propagates with the trace, separate from attributes"
+- sequence: 4
+  fragment_type: setup
+  content: "## Jaeger — Docker Compose (Local Dev)\n\nMinimal all-in-one Jaeger for local development. Brings up the agent, collector, query service, and UI in a single container.\n\n```yaml\nversion: \"3.8\"\nservices:\n  jaeger:\n    image: jaegertracing/all-in-one:latest\n    ports:\n      - \"5775:5775/udp\"\n      - \"6831:6831/udp\"\n      - \"6832:6832/udp\"\n      - \"5778:5778\"\n      - \"16686:16686\" # UI\n      - \"14268:14268\" # Collector\n      - \"14250:14250\" # gRPC\n      - \"9411:9411\"   # Zipkin\n    environment:\n      - COLLECTOR_ZIPKIN_HOST_PORT=:9411\n```\n\nBring it up with `docker compose up -d` (or `podman-compose up -d`). The UI is at `http://localhost:16686`. Point application exporters at `jaeger:6831` (UDP, agent) or `http://jaeger:14268/api/traces` (HTTP, collector). The all-in-one image stores traces in memory only — fine for development, not for production. For production, use the Jaeger Operator on Kubernetes with Elasticsearch or Cassandra storage."
+- sequence: 5
+  fragment_type: setup
+  content: "## Tempo — Kubernetes ConfigMap\n\nGrafana Tempo is an object-storage-backed trace backend, cheaper than Elasticsearch for high volumes. The ConfigMap below configures distributor receivers (Jaeger and OTLP) and S3 storage.\n\n```yaml\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: tempo-config\ndata:\n  tempo.yaml: |\n    server:\n      http_listen_port: 3200\n\n    distributor:\n      receivers:\n        jaeger:\n          protocols:\n            thrift_http:\n            grpc:\n        otlp:\n          protocols:\n            http:\n            grpc:\n\n    storage:\n      trace:\n        backend: s3\n        s3:\n          bucket: tempo-traces\n          endpoint: s3.amazonaws.com\n\n    querier:\n      frontend_worker:\n        frontend_address: tempo-query-frontend:9095\n```\n\nMount the ConfigMap into the Tempo Deployment at `/etc/tempo` and run with `-config.file=/etc/tempo/tempo.yaml`. Tempo accepts ingest from any OTLP or Jaeger-protocol exporter, so applications instrumented for Jaeger can switch backends without code changes. Query traces via Grafana's Tempo data source."
+- sequence: 6
+  fragment_type: example
+  content: "## OpenTelemetry — Python (Flask)\n\n```python\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.jaeger.thrift import JaegerExporter\nfrom opentelemetry.sdk.resources import SERVICE_NAME, Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\nfrom opentelemetry.instrumentation.flask import FlaskInstrumentor\n\nresource = Resource(attributes={SERVICE_NAME: \"my-service\"})\nprovider = TracerProvider(resource=resource)\nprovider.add_span_processor(BatchSpanProcessor(\n    JaegerExporter(agent_host_name=\"jaeger\", agent_port=6831)\n))\ntrace.set_tracer_provider(provider)\n\napp = Flask(__name__)\nFlaskInstrumentor().instrument_app(app)\n\n@app.route('/api/users')\ndef get_users():\n    tracer = trace.get_tracer(__name__)\n    with tracer.start_as_current_span(\"get_users\") as span:\n        span.set_attribute(\"user.count\", 100)\n        return {\"users\": fetch_users()}\n```\n\n`BatchSpanProcessor` batches and async-flushes spans, keeping tracing overhead off the request path. Auto-instrumentation (`FlaskInstrumentor`) covers HTTP and DB; manual spans wrap business logic."
+- sequence: 7
+  fragment_type: example
+  content: "## OpenTelemetry — Node.js & Go\n\nNode.js (Express):\n\n```javascript\nconst { NodeTracerProvider } = require(\"@opentelemetry/sdk-trace-node\");\nconst { JaegerExporter } = require(\"@opentelemetry/exporter-jaeger\");\nconst { BatchSpanProcessor } = require(\"@opentelemetry/sdk-trace-base\");\nconst { registerInstrumentations } = require(\"@opentelemetry/instrumentation\");\nconst { HttpInstrumentation } = require(\"@opentelemetry/instrumentation-http\");\nconst { ExpressInstrumentation } = require(\"@opentelemetry/instrumentation-express\");\n\nconst provider = new NodeTracerProvider({\n  resource: { attributes: { \"service.name\": \"my-service\" } },\n});\nprovider.addSpanProcessor(new BatchSpanProcessor(\n  new JaegerExporter({ endpoint: \"http://jaeger:14268/api/traces\" })\n));\nprovider.register();\nregisterInstrumentations({\n  instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],\n});\n```\n\nGo:\n\n```go\nfunc initTracer() (*sdktrace.TracerProvider, error) {\n    exporter, _ := jaeger.New(jaeger.WithCollectorEndpoint(\n        jaeger.WithEndpoint(\"http://jaeger:14268/api/traces\"),\n    ))\n    tp := sdktrace.NewTracerProvider(\n        sdktrace.WithBatcher(exporter),\n        sdktrace.WithResource(resource.NewWithAttributes(\n            semconv.SchemaURL,\n            semconv.ServiceNameKey.String(\"my-service\"),\n        )),\n    )\n    otel.SetTracerProvider(tp)\n    return tp, nil\n}\n```\n\nThe pattern is identical across languages: configure resource, wrap exporter in a batch processor, register provider, enable auto-instrumentation, add manual spans where needed."
+- sequence: 8
+  fragment_type: execution
+  content: '## Context Propagation
+
+
+    W3C trace context flows in HTTP headers:
+
+
+    ```
+
+    traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+
+    tracestate: congo=t61rcWkgMzE
+
+    ```
+
+
+    Format: `version-trace_id-span_id-flags`. The downstream service extracts this header, makes its spans children of the inbound `span_id`, and propagates onward.
+
+
+    OpenTelemetry handles propagation automatically for HTTP and gRPC clients. For raw HTTP calls or message queues, propagate manually:
+
+
+    ```python
+
+    from opentelemetry.propagate import inject
+
+    headers = {}
+
+    inject(headers)  # Injects traceparent + tracestate
+
+    response = requests.get("http://downstream/api", headers=headers)
+
+    ```
+
+
+    ```javascript
+
+    const { propagation, context } = require("@opentelemetry/api");
+
+    const headers = {};
+
+    propagation.inject(context.active(), headers);
+
+    axios.get("http://downstream/api", { headers });
+
+    ```
+
+
+    Propagation gaps (sync → async without context binding, message queues without baggage in headers) produce broken traces — spans appear orphaned because the trace_id was lost crossing the boundary. Always verify trace continuity end-to-end after adding a new boundary.'
+- sequence: 9
+  fragment_type: execution
+  content: "## Sampling Strategies\n\nTrace volume in production is too high to ingest 100%. Pick a sampling strategy by cost vs coverage:\n\n| Strategy | Pros | Cons |\n|---|---|---|\n| **Probabilistic** (`param: 0.01`) | Simple, deterministic per trace_id | Misses rare errors at low rates |\n| **Rate limiting** (`param: 100/sec`) | Caps cost regardless of traffic | Hot services lose proportionally more |\n| **Adaptive** | Adjusts sampling based on conditions | More complex to operate |\n\n```yaml\n# Probabilistic: sample 1% of traces\nsampler:\n  type: probabilistic\n  param: 0.01\n```\n\n```yaml\n# Rate limiting: max 100 traces per second\nsampler:\n  type: ratelimiting\n  param: 100\n```\n\nFor consistent traces across services, use parent-based sampling: each service honors the upstream sampling decision, so a sampled trace stays sampled across the call graph.\n\n```python\nfrom opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased\nsampler = ParentBased(root=TraceIdRatioBased(0.01))\n```\n\nProduction typical: 1-10% probabilistic at the edge, parent-based downstream."
+- sequence: 10
+  fragment_type: execution
+  content: '## Best Practices
+
+
+    Apply these as defaults on any new instrumentation:
+
+
+    1. **Sample 1-10% in production** — full sampling is impractical at scale.
+
+    2. **Add meaningful tags** — `user.id`, `request.id`. Avoid unbounded-cardinality values like raw URLs (use route templates: `GET /users/{id}`).
+
+    3. **Propagate context across all service boundaries** — HTTP, gRPC, message queues. Every gap breaks a trace.
+
+    4. **Log exceptions in spans** — `span.record_exception(e); span.set_status(StatusCode.ERROR)`. Errors without span context are nearly useless for debugging.
+
+    5. **Use consistent operation naming** across services and languages.
+
+    6. **Monitor tracing overhead** — target <1% CPU. If overhead climbs, reduce sampling, increase batch size, or check for synchronous exporter calls.
+
+    7. **Set up alerts** for trace error rates.
+
+    8. **Implement distributed context (baggage)** for cross-service request metadata.
+
+    9. **Use span events** for important milestones within a span.
+
+    10. **Document instrumentation standards** — agree across teams on attribute names, span naming, error semantics.
+
+
+    Inject `trace_id` into structured log lines so operators can pivot from log entries to the matching trace — the canonical observability join key.'
+- sequence: 11
+  fragment_type: example
+  content: '## Trace Analysis Queries
+
+
+    Find slow requests (Jaeger):
+
+
+    ```
+
+    service=my-service
+
+    duration > 1s
+
+    ```
+
+
+    Find errors:
+
+
+    ```
+
+    service=my-service
+
+    error=true
+
+    tags.http.status_code >= 500
+
+    ```
+
+
+    Service dependency graph: Jaeger and Tempo auto-derive from sampled traces, showing service-to-service edges with request rate, error rate, and average latency.
+
+
+    Correlate logs with traces by injecting `trace_id` into structured log lines:
+
+
+    ```python
+
+    span = trace.get_current_span()
+
+    trace_id = format(span.get_span_context().trace_id, ''032x'')
+
+    logger.info("Processing request", extra={"trace_id": trace_id})
+
+    ```
+
+
+    Operators reading logs jump directly to the matching trace by `trace_id`.'
+- sequence: 12
+  fragment_type: verification
+  content: '## Diagnostic Checks
+
+
+    When tracing misbehaves, work through these checks in order. Both symptoms below are documented in the source skill''s Troubleshooting section.
+
+
+    **No traces appearing in the backend:**
+
+
+    1. Check the collector endpoint — is the exporter URL correct, reachable from the application pod/host?
+
+    2. Verify network connectivity — `curl` or `nc` to the collector port from inside the application network.
+
+    3. Check sampling configuration — a 0% sampler produces zero traces; confirm the configured ratio.
+
+    4. Review application logs — OpenTelemetry SDKs log exporter failures (TLS errors, connection refused, 4xx from collector).
+
+
+    **High latency overhead from tracing:**
+
+
+    1. Reduce sampling rate — fewer spans means less serialization and export work on the request path.
+
+    2. Confirm `BatchSpanProcessor` is in use — `SimpleSpanProcessor` exports synchronously and adds latency to every request. Production code must use the batch processor.
+
+    3. Check exporter configuration — synchronous exporter calls, undersized batches, or a slow/unreachable collector cause backpressure that surfaces as application latency.
+
+
+    Acceptance criteria: traces visible in the backend UI within 30s of a request; tracing CPU overhead <1% under normal load.'
+- sequence: 13
+  fragment_type: guardrail
+  content: '## Common Pitfalls
+
+
+    Source-grounded entries (from the skill''s Troubleshooting section):
+
+
+    | Symptom | Likely Cause | Fix |
+
+    |---|---|---|
+
+    | No traces appearing in backend | Collector endpoint wrong, network blocked, sampling at 0% | Verify exporter URL, check collector logs, confirm sampler config; review application logs for exporter errors |
+
+    | Latency overhead > 1% CPU | Synchronous span export, sampling too aggressive, exporter misconfigured | Use `BatchSpanProcessor`, reduce sampling rate, verify exporter target is reachable and fast |
+
+
+    The rows below are operator-grade extensions — common in practice but not directly enumerated in the source skill. Treat them as field experience, not canonical guidance:
+
+
+    | Symptom | Likely Cause | Fix |
+
+    |---|---|---|
+
+    | Traces broken at service boundary | Context not propagated (raw HTTP, message queue, async handoff) | Manually `inject` outbound and `extract` inbound; for queues, embed `traceparent` in message metadata |
+
+    | Trace shows orphaned spans | Service called without auto-instrumentation | Enable the appropriate instrumentation library on the missing service |'

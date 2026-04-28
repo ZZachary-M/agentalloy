@@ -1,0 +1,42 @@
+name: security
+version: 1.0.0
+description: Security — secrets management, SAST, threat modeling (STRIDE/attack trees),
+  hardening, defensive patterns.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: attack-tree-construction
+  file: attack-tree-construction.yaml
+  fragment_count: 6
+- skill_id: bash-defensive-patterns
+  file: bash-defensive-patterns.yaml
+  fragment_count: 15
+- skill_id: memory-safety-patterns
+  file: memory-safety-patterns.yaml
+  fragment_count: 10
+- skill_id: sast-configuration
+  file: sast-configuration.yaml
+  fragment_count: 6
+- skill_id: secrets-management
+  file: secrets-management.yaml
+  fragment_count: 11
+- skill_id: security-and-hardening
+  file: security-and-hardening.yaml
+  fragment_count: 13
+- skill_id: security-requirement-extraction
+  file: security-requirement-extraction.yaml
+  fragment_count: 10
+- skill_id: shellcheck-configuration
+  file: shellcheck-configuration.yaml
+  fragment_count: 11
+- skill_id: stride-analysis-patterns
+  file: stride-analysis-patterns.yaml
+  fragment_count: 11
+- skill_id: threat-mitigation-mapping
+  file: threat-mitigation-mapping.yaml
+  fragment_count: 9

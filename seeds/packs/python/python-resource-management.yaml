@@ -1,0 +1,124 @@
+skill_type: domain
+skill_id: python-resource-management
+canonical_name: Python Resource Management
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- context-managers
+- resource-cleanup
+- file-handles
+- connections
+- with-statement
+- gc
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin source
+raw_prose: "# Python Resource Management\n\nManage resources deterministically using context managers. Resources like database connections, file handles, and network sockets should be released reliably, even when exceptions occur.\n\n## When to Use This Skill\n\n- Managing database connections and connection pools\n- Working with file handles and I/O\n- Implementing custom context managers\n- Building streaming responses with state\n- Handling nested resource cleanup\n- Creating async context managers\n\n## Core Concepts\n\n### 1. Context Managers\n\nThe `with` statement ensures resources are released automatically, even on exceptions.\n\n### 2. Protocol Methods\n\n`__enter__`/`__exit__` for sync, `__aenter__`/`__aexit__` for async resource management.\n\n### 3. Unconditional Cleanup\n\n`__exit__` always runs, regardless of whether an exception occurred.\n\n### 4. Exception Handling\n\nReturn `True` from `__exit__` to suppress exceptions, `False` to propagate them.\n\n## Quick Start\n\n```python\nfrom contextlib import contextmanager\n\n@contextmanager\ndef managed_resource():\n    resource = acquire_resource()\n    try:\n        yield resource\n    finally:\n        resource.cleanup()\n\nwith managed_resource() as r:\n    r.do_work()\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Class-Based Context Manager\n\nImplement the context manager protocol for complex resources.\n\n```python\nclass DatabaseConnection:\n    \"\"\"Database connection with automatic cleanup.\"\"\"\n\n    def __init__(self, dsn: str) -> None:\n        self._dsn = dsn\n        self._conn: Connection | None = None\n\n    def connect(self) -> None:\n        \"\"\"Establish database connection.\"\"\"\n        self._conn = psycopg.connect(self._dsn)\n\n    def close(self) -> None:\n        \"\"\"Close connection if open.\"\"\"\n        if self._conn is not None:\n            self._conn.close()\n            self._conn = None\n\n    def __enter__(self) -> \"DatabaseConnection\":\n        \"\"\"Enter context: connect and return self.\"\"\"\n        self.connect()\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Exit context: always close connection.\"\"\"\n        self.close()\n\n# Usage with context manager (preferred)\nwith DatabaseConnection(dsn) as db:\n    result = db.execute(query)\n\n# Manual management when needed\ndb = DatabaseConnection(dsn)\ndb.connect()\ntry:\n    result = db.execute(query)\nfinally:\n    db.close()\n```\n\n### Pattern 2: Async Context Manager\n\nFor async resources, implement the async protocol.\n\n```python\nclass AsyncDatabasePool:\n    \"\"\"Async database connection pool.\"\"\"\n\n    def __init__(self, dsn: str, min_size: int = 1, max_size: int = 10) -> None:\n        self._dsn = dsn\n        self._min_size = min_size\n        self._max_size = max_size\n        self._pool: asyncpg.Pool | None = None\n\n    async def __aenter__(self) -> \"AsyncDatabasePool\":\n        \"\"\"Create connection pool.\"\"\"\n        self._pool = await asyncpg.create_pool(\n            self._dsn,\n            min_size=self._min_size,\n            max_size=self._max_size,\n        )\n        return self\n\n    async def __aexit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Close all connections in pool.\"\"\"\n        if self._pool is not None:\n            await self._pool.close()\n\n    async def execute(self, query: str, *args) -> list[dict]:\n        \"\"\"Execute query using pooled connection.\"\"\"\n        async with self._pool.acquire() as conn:\n            return await conn.fetch(query, *args)\n\n# Usage\nasync with AsyncDatabasePool(dsn) as pool:\n    users = await pool.execute(\"SELECT * FROM users WHERE active = $1\", True)\n```\n\n### Pattern 3: Using @contextmanager Decorator\n\nSimplify context managers with the decorator for straightforward cases.\n\n```python\nfrom contextlib import contextmanager, asynccontextmanager\nimport time\nimport structlog\n\nlogger = structlog.get_logger()\n\n@contextmanager\ndef timed_block(name: str):\n    \"\"\"Time a block of code.\"\"\"\n    start = time.perf_counter()\n    try:\n        yield\n    finally:\n        elapsed = time.perf_counter() - start\n        logger.info(f\"{name} completed\", duration_seconds=round(elapsed, 3))\n\n# Usage\nwith timed_block(\"data_processing\"):\n    process_large_dataset()\n\n@asynccontextmanager\nasync def database_transaction(conn: AsyncConnection):\n    \"\"\"Manage database transaction.\"\"\"\n    await conn.execute(\"BEGIN\")\n    try:\n        yield conn\n        await conn.execute(\"COMMIT\")\n    except Exception:\n        await conn.execute(\"ROLLBACK\")\n        raise\n\n# Usage\nasync with database_transaction(conn) as tx:\n    await tx.execute(\"INSERT INTO users ...\")\n    await tx.execute(\"INSERT INTO audit_log ...\")\n```\n\n### Pattern 4: Unconditional Resource Release\n\nAlways clean up resources in `__exit__`, regardless of exceptions.\n\n```python\nclass FileProcessor:\n    \"\"\"Process file with guaranteed cleanup.\"\"\"\n\n    def __init__(self, path: str) -> None:\n        self._path = path\n        self._file: IO | None = None\n        self._temp_files: list[Path] = []\n\n    def __enter__(self) -> \"FileProcessor\":\n        self._file = open(self._path, \"r\")\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Clean up all resources unconditionally.\"\"\"\n        # Close main file\n        if self._file is not None:\n            self._file.close()\n\n        # Clean up any temporary files\n        for temp_file in self._temp_files:\n            try:\n                temp_file.unlink()\n            except OSError:\n                pass  # Best effort cleanup\n\n        # Return None/False to propagate any exception\n```\n\n## Advanced Patterns\n\n### Pattern 5: Selective Exception Suppression\n\nOnly suppress specific, documented exceptions.\n\n```python\nclass StreamWriter:\n    \"\"\"Writer that handles broken pipe gracefully.\"\"\"\n\n    def __init__(self, stream) -> None:\n        self._stream = stream\n\n    def __enter__(self) -> \"StreamWriter\":\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> bool:\n        \"\"\"Clean up, suppressing BrokenPipeError on shutdown.\"\"\"\n        self._stream.close()\n\n        # Suppress BrokenPipeError (client disconnected)\n        # This is expected behavior, not an error\n        if exc_type is BrokenPipeError:\n            return True  # Exception suppressed\n\n        return False  # Propagate all other exceptions\n```\n\n### Pattern 6: Streaming with Accumulated State\n\nMaintain both incremental chunks and accumulated state during streaming.\n\n```python\nfrom collections.abc import Generator\nfrom dataclasses import dataclass, field\n\n@dataclass\nclass StreamingResult:\n    \"\"\"Accumulated streaming result.\"\"\"\n\n    chunks: list[str] = field(default_factory=list)\n    _finalized: bool = False\n\n    @property\n    def content(self) -> str:\n        \"\"\"Get accumulated content.\"\"\"\n        return \"\".join(self.chunks)\n\n    def add_chunk(self, chunk: str) -> None:\n        \"\"\"Add chunk to accumulator.\"\"\"\n        if self._finalized:\n            raise RuntimeError(\"Cannot add to finalized result\")\n        self.chunks.append(chunk)\n\n    def finalize(self) -> str:\n        \"\"\"Mark stream complete and return content.\"\"\"\n        self._finalized = True\n        return self.content\n\ndef stream_with_accumulation(\n    response: StreamingResponse,\n) -> Generator[tuple[str, str], None, str]:\n    \"\"\"Stream response while accumulating content.\n\n    Yields:\n        Tuple of (accumulated_content, new_chunk) for each chunk.\n\n    Returns:\n        Final accumulated content.\n    \"\"\"\n    result = StreamingResult()\n\n    for chunk in response.iter_content():\n        result.add_chunk(chunk)\n        yield result.content, chunk\n\n    return result.finalize()\n```\n\n### Pattern 7: Efficient String Accumulation\n\nAvoid O(n²) string concatenation when accumulating.\n\n```python\ndef accumulate_stream(stream) -> str:\n    \"\"\"Efficiently accumulate stream content.\"\"\"\n    # BAD: O(n²) due to string immutability\n    # content = \"\"\n    # for chunk in stream:\n    #     content += chunk  # Creates new string each time\n\n    # GOOD: O(n) with list and join\n    chunks: list[str] = []\n    for chunk in stream:\n        chunks.append(chunk)\n    return \"\".join(chunks)  # Single allocation\n```\n\n### Pattern 8: Tracking Stream Metrics\n\nMeasure time-to-first-byte and total streaming time.\n\n```python\nimport time\nfrom collections.abc import Generator\n\ndef stream_with_metrics(\n    response: StreamingResponse,\n) -> Generator[str, None, dict]:\n    \"\"\"Stream response while collecting metrics.\n\n    Yields:\n        Content chunks.\n\n    Returns:\n        Metrics dictionary.\n    \"\"\"\n    start = time.perf_counter()\n    first_chunk_time: float | None = None\n    chunk_count = 0\n    total_bytes = 0\n\n    for chunk in response.iter_content():\n        if first_chunk_time is None:\n            first_chunk_time = time.perf_counter() - start\n\n        chunk_count += 1\n        total_bytes += len(chunk.encode())\n        yield chunk\n\n    total_time = time.perf_counter() - start\n\n    return {\n        \"time_to_first_byte_ms\": round((first_chunk_time or 0) * 1000, 2),\n        \"total_time_ms\": round(total_time * 1000, 2),\n     \
+  \   \"chunk_count\": chunk_count,\n        \"total_bytes\": total_bytes,\n    }\n```\n\n### Pattern 9: Managing Multiple Resources with ExitStack\n\nHandle a dynamic number of resources cleanly.\n\n```python\nfrom contextlib import ExitStack, AsyncExitStack\nfrom pathlib import Path\n\ndef process_files(paths: list[Path]) -> list[str]:\n    \"\"\"Process multiple files with automatic cleanup.\"\"\"\n    results = []\n\n    with ExitStack() as stack:\n        # Open all files - they'll all be closed when block exits\n        files = [stack.enter_context(open(p)) for p in paths]\n\n        for f in files:\n            results.append(f.read())\n\n    return results\n\nasync def process_connections(hosts: list[str]) -> list[dict]:\n    \"\"\"Process multiple async connections.\"\"\"\n    results = []\n\n    async with AsyncExitStack() as stack:\n        connections = [\n            await stack.enter_async_context(connect_to_host(host))\n            for host in hosts\n        ]\n\n        for conn in connections:\n            results.append(await conn.fetch_data())\n\n    return results\n```\n\n## Best Practices Summary\n\n1. **Always use context managers** - For any resource that needs cleanup\n2. **Clean up unconditionally** - `__exit__` runs even on exception\n3. **Don't suppress unexpectedly** - Return `False` unless suppression is intentional\n4. **Use @contextmanager** - For simple resource patterns\n5. **Implement both protocols** - Support `with` and manual management\n6. **Use ExitStack** - For dynamic numbers of resources\n7. **Accumulate efficiently** - List + join, not string concatenation\n8. **Track metrics** - Time-to-first-byte matters for streaming\n9. **Document behavior** - Especially exception suppression\n10. **Test cleanup paths** - Verify resources are released on errors"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Resource Management
+
+
+    Manage resources deterministically using context managers. Resources like database connections, file handles, and network sockets should be released reliably, even when exceptions occur.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Managing database connections and connection pools
+
+    - Working with file handles and I/O
+
+    - Implementing custom context managers
+
+    - Building streaming responses with state
+
+    - Handling nested resource cleanup
+
+    - Creating async context managers'
+- sequence: 3
+  fragment_type: rationale
+  content: '## Core Concepts
+
+
+    ### 1. Context Managers
+
+
+    The `with` statement ensures resources are released automatically, even on exceptions.
+
+
+    ### 2. Protocol Methods
+
+
+    `__enter__`/`__exit__` for sync, `__aenter__`/`__aexit__` for async resource management.
+
+
+    ### 3. Unconditional Cleanup
+
+
+    `__exit__` always runs, regardless of whether an exception occurred.
+
+
+    ### 4. Exception Handling
+
+
+    Return `True` from `__exit__` to suppress exceptions, `False` to propagate them.'
+- sequence: 4
+  fragment_type: example
+  content: "## Quick Start\n\n```python\nfrom contextlib import contextmanager\n\n@contextmanager\ndef managed_resource():\n    resource = acquire_resource()\n    try:\n        yield resource\n    finally:\n        resource.cleanup()\n\nwith managed_resource() as r:\n    r.do_work()\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "### Pattern 1: Class-Based Context Manager\n\nImplement the context manager protocol for complex resources.\n\n```python\nclass DatabaseConnection:\n    \"\"\"Database connection with automatic cleanup.\"\"\"\n\n    def __init__(self, dsn: str) -> None:\n        self._dsn = dsn\n        self._conn: Connection | None = None\n\n    def connect(self) -> None:\n        \"\"\"Establish database connection.\"\"\"\n        self._conn = psycopg.connect(self._dsn)\n\n    def close(self) -> None:\n        \"\"\"Close connection if open.\"\"\"\n        if self._conn is not None:\n            self._conn.close()\n            self._conn = None\n\n    def __enter__(self) -> \"DatabaseConnection\":\n        \"\"\"Enter context: connect and return self.\"\"\"\n        self.connect()\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Exit context: always close connection.\"\"\"\n        self.close()\n\n# Usage with context manager (preferred)\nwith DatabaseConnection(dsn) as db:\n    result = db.execute(query)\n\n# Manual management when needed\ndb = DatabaseConnection(dsn)\ndb.connect()\ntry:\n    result = db.execute(query)\nfinally:\n    db.close()\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "### Pattern 2: Async Context Manager\n\nFor async resources, implement the async protocol.\n\n```python\nclass AsyncDatabasePool:\n    \"\"\"Async database connection pool.\"\"\"\n\n    def __init__(self, dsn: str, min_size: int = 1, max_size: int = 10) -> None:\n        self._dsn = dsn\n        self._min_size = min_size\n        self._max_size = max_size\n        self._pool: asyncpg.Pool | None = None\n\n    async def __aenter__(self) -> \"AsyncDatabasePool\":\n        \"\"\"Create connection pool.\"\"\"\n        self._pool = await asyncpg.create_pool(\n            self._dsn,\n            min_size=self._min_size,\n            max_size=self._max_size,\n        )\n        return self\n\n    async def __aexit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Close all connections in pool.\"\"\"\n        if self._pool is not None:\n            await self._pool.close()\n\n    async def execute(self, query: str, *args) -> list[dict]:\n        \"\"\"Execute query using pooled connection.\"\"\"\n        async with self._pool.acquire() as conn:\n            return await conn.fetch(query, *args)\n\n# Usage\nasync with AsyncDatabasePool(dsn) as pool:\n    users = await pool.execute(\"SELECT * FROM users WHERE active = $1\", True)\n```"
+- sequence: 7
+  fragment_type: execution
+  content: "### Pattern 3: Using @contextmanager Decorator\n\nSimplify context managers with the decorator for straightforward cases.\n\n```python\nfrom contextlib import contextmanager, asynccontextmanager\nimport time\nimport structlog\n\nlogger = structlog.get_logger()\n\n@contextmanager\ndef timed_block(name: str):\n    \"\"\"Time a block of code.\"\"\"\n    start = time.perf_counter()\n    try:\n        yield\n    finally:\n        elapsed = time.perf_counter() - start\n        logger.info(f\"{name} completed\", duration_seconds=round(elapsed, 3))\n\n# Usage\nwith timed_block(\"data_processing\"):\n    process_large_dataset()\n\n@asynccontextmanager\nasync def database_transaction(conn: AsyncConnection):\n    \"\"\"Manage database transaction.\"\"\"\n    await conn.execute(\"BEGIN\")\n    try:\n        yield conn\n        await conn.execute(\"COMMIT\")\n    except Exception:\n        await conn.execute(\"ROLLBACK\")\n        raise\n\n# Usage\nasync with database_transaction(conn) as tx:\n    await tx.execute(\"INSERT INTO users ...\")\n    await tx.execute(\"INSERT INTO audit_log ...\")\n```"
+- sequence: 8
+  fragment_type: execution
+  content: "### Pattern 4: Unconditional Resource Release\n\nAlways clean up resources in `__exit__`, regardless of exceptions.\n\n```python\nclass FileProcessor:\n    \"\"\"Process file with guaranteed cleanup.\"\"\"\n\n    def __init__(self, path: str) -> None:\n        self._path = path\n        self._file: IO | None = None\n        self._temp_files: list[Path] = []\n\n    def __enter__(self) -> \"FileProcessor\":\n        self._file = open(self._path, \"r\")\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> None:\n        \"\"\"Clean up all resources unconditionally.\"\"\"\n        # Close main file\n        if self._file is not None:\n            self._file.close()\n\n        # Clean up any temporary files\n        for temp_file in self._temp_files:\n            try:\n                temp_file.unlink()\n            except OSError:\n                pass  # Best effort cleanup\n\n        # Return None/False to propagate any exception\n```"
+- sequence: 9
+  fragment_type: execution
+  content: "### Pattern 5: Selective Exception Suppression\n\nOnly suppress specific, documented exceptions.\n\n```python\nclass StreamWriter:\n    \"\"\"Writer that handles broken pipe gracefully.\"\"\"\n\n    def __init__(self, stream) -> None:\n        self._stream = stream\n\n    def __enter__(self) -> \"StreamWriter\":\n        return self\n\n    def __exit__(\n        self,\n        exc_type: type[BaseException] | None,\n        exc_val: BaseException | None,\n        exc_tb: TracebackType | None,\n    ) -> bool:\n        \"\"\"Clean up, suppressing BrokenPipeError on shutdown.\"\"\"\n        self._stream.close()\n\n        # Suppress BrokenPipeError (client disconnected)\n        # This is expected behavior, not an error\n        if exc_type is BrokenPipeError:\n            return True  # Exception suppressed\n\n        return False  # Propagate all other exceptions\n```"
+- sequence: 10
+  fragment_type: execution
+  content: "### Pattern 6: Streaming with Accumulated State\n\nMaintain both incremental chunks and accumulated state during streaming.\n\n```python\nfrom collections.abc import Generator\nfrom dataclasses import dataclass, field\n\n@dataclass\nclass StreamingResult:\n    \"\"\"Accumulated streaming result.\"\"\"\n\n    chunks: list[str] = field(default_factory=list)\n    _finalized: bool = False\n\n    @property\n    def content(self) -> str:\n        \"\"\"Get accumulated content.\"\"\"\n        return \"\".join(self.chunks)\n\n    def add_chunk(self, chunk: str) -> None:\n        \"\"\"Add chunk to accumulator.\"\"\"\n        if self._finalized:\n            raise RuntimeError(\"Cannot add to finalized result\")\n        self.chunks.append(chunk)\n\n    def finalize(self) -> str:\n        \"\"\"Mark stream complete and return content.\"\"\"\n        self._finalized = True\n        return self.content\n\ndef stream_with_accumulation(\n    response: StreamingResponse,\n) -> Generator[tuple[str, str], None, str]:\n    \"\"\"Stream response while accumulating content.\n\n    Yields:\n        Tuple of (accumulated_content, new_chunk) for each chunk.\n\n    Returns:\n        Final accumulated content.\n    \"\"\"\n    result = StreamingResult()\n\n    for chunk in response.iter_content():\n        result.add_chunk(chunk)\n        yield result.content, chunk\n\n    return result.finalize()\n```"
+- sequence: 11
+  fragment_type: execution
+  content: "### Pattern 7: Efficient String Accumulation\n\nAvoid O(n²) string concatenation when accumulating.\n\n```python\ndef accumulate_stream(stream) -> str:\n    \"\"\"Efficiently accumulate stream content.\"\"\"\n    # BAD: O(n²) due to string immutability\n    # content = \"\"\n    # for chunk in stream:\n    #     content += chunk  # Creates new string each time\n\n    # GOOD: O(n) with list and join\n    chunks: list[str] = []\n    for chunk in stream:\n        chunks.append(chunk)\n    return \"\".join(chunks)  # Single allocation\n```"
+- sequence: 12
+  fragment_type: execution
+  content: "### Pattern 8: Tracking Stream Metrics\n\nMeasure time-to-first-byte and total streaming time.\n\n```python\nimport time\nfrom collections.abc import Generator\n\ndef stream_with_metrics(\n    response: StreamingResponse,\n) -> Generator[str, None, dict]:\n    \"\"\"Stream response while collecting metrics.\n\n    Yields:\n        Content chunks.\n\n    Returns:\n        Metrics dictionary.\n    \"\"\"\n    start = time.perf_counter()\n    first_chunk_time: float | None = None\n    chunk_count = 0\n    total_bytes = 0\n\n    for chunk in response.iter_content():\n        if first_chunk_time is None:\n            first_chunk_time = time.perf_counter() - start\n\n        chunk_count += 1\n        total_bytes += len(chunk.encode())\n        yield chunk\n\n    total_time = time.perf_counter() - start\n\n    return {\n        \"time_to_first_byte_ms\": round((first_chunk_time or 0) * 1000, 2),\n        \"total_time_ms\": round(total_time * 1000, 2),\n        \"chunk_count\": chunk_count,\n        \"total_bytes\": total_bytes,\n    }\n```"
+- sequence: 13
+  fragment_type: execution
+  content: "### Pattern 9: Managing Multiple Resources with ExitStack\n\nHandle a dynamic number of resources cleanly.\n\n```python\nfrom contextlib import ExitStack, AsyncExitStack\nfrom pathlib import Path\n\ndef process_files(paths: list[Path]) -> list[str]:\n    \"\"\"Process multiple files with automatic cleanup.\"\"\"\n    results = []\n\n    with ExitStack() as stack:\n        # Open all files - they'll all be closed when block exits\n        files = [stack.enter_context(open(p)) for p in paths]\n\n        for f in files:\n            results.append(f.read())\n\n    return results\n\nasync def process_connections(hosts: list[str]) -> list[dict]:\n    \"\"\"Process multiple async connections.\"\"\"\n    results = []\n\n    async with AsyncExitStack() as stack:\n        connections = [\n            await stack.enter_async_context(connect_to_host(host))\n            for host in hosts\n        ]\n\n        for conn in connections:\n            results.append(await conn.fetch_data())\n\n    return results\n```"
+- sequence: 14
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Always use context managers** - For any resource that needs cleanup
+
+    2. **Clean up unconditionally** - `__exit__` runs even on exception
+
+    3. **Don''t suppress unexpectedly** - Return `False` unless suppression is intentional
+
+    4. **Use @contextmanager** - For simple resource patterns
+
+    5. **Implement both protocols** - Support `with` and manual management
+
+    6. **Use ExitStack** - For dynamic numbers of resources
+
+    7. **Accumulate efficiently** - List + join, not string concatenation
+
+    8. **Track metrics** - Time-to-first-byte matters for streaming
+
+    9. **Document behavior** - Especially exception suppression
+
+    10. **Test cleanup paths** - Verify resources are released on errors'

@@ -1,0 +1,36 @@
+name: containers
+version: 1.0.0
+description: Container orchestration — Kubernetes, Helm, service mesh (Istio/Linkerd),
+  mTLS, multi-cloud networking.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: []
+skills:
+- skill_id: helm-chart-scaffolding
+  file: helm-chart-scaffolding.yaml
+  fragment_count: 14
+- skill_id: hybrid-cloud-networking
+  file: hybrid-cloud-networking.yaml
+  fragment_count: 9
+- skill_id: istio-traffic-management
+  file: istio-traffic-management.yaml
+  fragment_count: 6
+- skill_id: k8s-manifest-generator
+  file: k8s-manifest-generator.yaml
+  fragment_count: 18
+- skill_id: k8s-security-policies
+  file: k8s-security-policies.yaml
+  fragment_count: 10
+- skill_id: linkerd-patterns
+  file: linkerd-patterns.yaml
+  fragment_count: 11
+- skill_id: mtls-configuration
+  file: mtls-configuration.yaml
+  fragment_count: 7
+- skill_id: multi-cloud-architecture
+  file: multi-cloud-architecture.yaml
+  fragment_count: 8

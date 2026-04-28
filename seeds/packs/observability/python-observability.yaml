@@ -1,0 +1,164 @@
+skill_type: domain
+skill_id: python-observability
+canonical_name: Python Observability
+category: ops
+skill_class: domain
+domain_tags:
+- python
+- observability
+- structured-logging
+- structlog
+- prometheus
+- metrics
+- tracing
+- opentelemetry
+- correlation-id
+- golden-signals
+- cardinality
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring from agents plugin python-development/python-observability source
+raw_prose: "# Python Observability\n\nInstrument Python applications with structured logs, metrics, and traces. When something breaks in production, you need to answer \"what, where, and why\" without deploying new code.\n\n## When to Use This Skill\n\n- Adding structured logging to applications\n- Implementing metrics collection with Prometheus\n- Setting up distributed tracing across services\n- Propagating correlation IDs through request chains\n- Debugging production issues\n- Building observability dashboards\n\n## Core Concepts\n\n### 1. Structured Logging\nEmit logs as JSON with consistent fields for production environments. Machine-readable logs enable powerful queries and alerts. For local development, consider human-readable formats.\n\n### 2. The Four Golden Signals\nTrack latency, traffic, errors, and saturation for every service boundary.\n\n### 3. Correlation IDs\nThread a unique ID through all logs and spans for a single request, enabling end-to-end tracing.\n\n### 4. Bounded Cardinality\nKeep metric label values bounded. Unbounded labels (like user IDs) explode storage costs.\n\n## Quick Start\n\n```python\nimport structlog\n\nstructlog.configure(\n    processors=[\n        structlog.processors.TimeStamper(fmt=\"iso\"),\n        structlog.processors.JSONRenderer(),\n    ],\n)\n\nlogger = structlog.get_logger()\nlogger.info(\"Request processed\", user_id=\"123\", duration_ms=45)\n```\n\n## Fundamental Patterns\n\n### Pattern 1: Structured Logging with Structlog\n\nConfigure structlog for JSON output with consistent fields.\n\n```python\nimport logging\nimport structlog\n\ndef configure_logging(log_level: str = \"INFO\") -> None:\n    structlog.configure(\n        processors=[\n            structlog.contextvars.merge_contextvars,\n            structlog.processors.add_log_level,\n            structlog.processors.TimeStamper(fmt=\"iso\"),\n            structlog.processors.StackInfoRenderer(),\n            structlog.processors.format_exc_info,\n            structlog.processors.JSONRenderer(),\n        ],\n        wrapper_class=structlog.make_filtering_bound_logger(\n            getattr(logging, log_level.upper())\n        ),\n        context_class=dict,\n        logger_factory=structlog.PrintLoggerFactory(),\n        cache_logger_on_first_use=True,\n    )\n\nconfigure_logging(\"INFO\")\nlogger = structlog.get_logger()\n```\n\n### Pattern 2: Consistent Log Fields\n\nEvery log entry should include standard fields for filtering and correlation.\n\n```python\nimport structlog\nfrom contextvars import ContextVar\n\ncorrelation_id: ContextVar[str] = ContextVar(\"correlation_id\", default=\"\")\n\nlogger = structlog.get_logger()\n\ndef process_request(request: Request) -> Response:\n    logger.info(\n        \"Request received\",\n        correlation_id=correlation_id.get(),\n        method=request.method,\n        path=request.path,\n        user_id=request.user_id,\n    )\n\n    try:\n        result = handle_request(request)\n        logger.info(\n            \"Request completed\",\n            correlation_id=correlation_id.get(),\n            status_code=200,\n            duration_ms=elapsed,\n        )\n        return result\n    except Exception as e:\n        logger.error(\n            \"Request failed\",\n            correlation_id=correlation_id.get(),\n            error_type=type(e).__name__,\n            error_message=str(e),\n        )\n        raise\n```\n\n### Pattern 3: Semantic Log Levels\n\nUse log levels consistently across the application.\n\n| Level | Purpose | Examples |\n|-------|---------|----------|\n| `DEBUG` | Development diagnostics | Variable values, internal state |\n| `INFO` | Request lifecycle, operations | Request start/end, job completion |\n| `WARNING` | Recoverable anomalies | Retry attempts, fallback used |\n| `ERROR` | Failures needing attention | Exceptions, service unavailable |\n\n```python\nlogger.debug(\"Cache lookup\", key=cache_key, hit=cache_hit)\nlogger.info(\"Order created\", order_id=order.id, total=order.total)\nlogger.warning(\"Rate limit approaching\", current_rate=950, limit=1000, reset_seconds=30)\nlogger.error(\"Payment processing failed\", order_id=order.id, error=str(e), payment_provider=\"stripe\")\n```\n\nNever log expected behavior at `ERROR`. A user entering a wrong password is `INFO`, not `ERROR`.\n\n### Pattern 4: Correlation ID Propagation\n\nGenerate a unique ID at ingress and thread it through all operations.\n\n```python\nfrom contextvars import ContextVar\nimport uuid\nimport structlog\n\ncorrelation_id: ContextVar[str] = ContextVar(\"correlation_id\", default=\"\")\n\ndef set_correlation_id(cid: str | None = None) -> str:\n    cid = cid or str(uuid.uuid4())\n    correlation_id.set(cid)\n    structlog.contextvars.bind_contextvars(correlation_id=cid)\n    return cid\n\n# FastAPI middleware example\nasync def correlation_middleware(request: Request, call_next):\n    cid = request.headers.get(\"X-Correlation-ID\") or str(uuid.uuid4())\n    set_correlation_id(cid)\n    response = await call_next(request)\n    response.headers[\"X-Correlation-ID\"] = cid\n    return response\n```\n\nPropagate to outbound requests:\n\n```python\nimport httpx\n\nasync def call_downstream_service(endpoint: str, data: dict) -> dict:\n    async with httpx.AsyncClient() as client:\n        response = await client.post(\n            endpoint,\n            json=data,\n            headers={\"X-Correlation-ID\": correlation_id.get()},\n        )\n        return response.json()\n```\n\n## Advanced Patterns\n\n### Pattern 5: The Four Golden Signals with Prometheus\n\n```python\nfrom prometheus_client import Counter, Histogram, Gauge\n\nREQUEST_LATENCY = Histogram(\n    \"http_request_duration_seconds\",\n    \"Request latency in seconds\",\n    [\"method\", \"endpoint\", \"status\"],\n    buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],\n)\n\nREQUEST_COUNT = Counter(\n    \"http_requests_total\",\n    \"Total HTTP requests\",\n    [\"method\", \"endpoint\", \"status\"],\n)\n\nERROR_COUNT = Counter(\n    \"http_errors_total\",\n    \"Total HTTP errors\",\n    [\"method\", \"endpoint\", \"error_type\"],\n)\n\nDB_POOL_USAGE = Gauge(\n    \"db_connection_pool_used\",\n    \"Number of database connections in use\",\n)\n```\n\nInstrument your endpoints:\n\n```python\nimport time\nfrom functools import wraps\n\ndef track_request(func):\n    @wraps(func)\n    async def wrapper(request: Request, *args, **kwargs):\n        method = request.method\n        endpoint = request.url.path\n        start = time.perf_counter()\n        try:\n            response = await func(request, *args, **kwargs)\n            status = str(response.status_code)\n            return response\n        except Exception as e:\n            status = \"500\"\n            ERROR_COUNT.labels(method=method, endpoint=endpoint, error_type=type(e).__name__).inc()\n            raise\n        finally:\n            duration = time.perf_counter() - start\n            REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status).inc()\n            REQUEST_LATENCY.labels(method=method, endpoint=endpoint, status=status).observe(duration)\n    return wrapper\n```\n\n### Pattern 6: Bounded Cardinality\n\nAvoid labels with unbounded values to prevent metric explosion.\n\n```python\n# BAD: User ID has potentially millions of values\nREQUEST_COUNT.labels(method=\"GET\", user_id=user.id)  # Don't do this!\n\n# GOOD: Bounded values only\nREQUEST_COUNT.labels(method=\"GET\", endpoint=\"/users\", status=\"200\")\n\n# If you need per-user metrics, use a different approach:\n# - Log the user_id and query logs\n# - Use a separate analytics system\n# - Bucket users by type/tier\nREQUEST_COUNT.labels(method=\"GET\", endpoint=\"/users\", user_tier=\"premium\")\n```\n\n### Pattern 7: Timed Operations with Context Manager\n\n```python\nfrom contextlib import contextmanager\nimport time\nimport structlog\n\nlogger = structlog.get_logger()\n\n@contextmanager\ndef timed_operation(name: str, **extra_fields):\n    start = time.perf_counter()\n    logger.debug(\"Operation started\", operation=name, **extra_fields)\n    try:\n        yield\n    except Exception as e:\n        elapsed_ms = (time.perf_counter() - start) * 1000\n        logger.error(\n            \"Operation failed\",\n            operation=name,\n            duration_ms=round(elapsed_ms, 2),\n            error=str(e),\n            **extra_fields,\n        )\n        raise\n    else:\n        elapsed_ms = (time.perf_counter() - start) * 1000\n        logger.info(\n            \"Operation completed\",\n            operation=name,\n            duration_ms=round(elapsed_ms, 2),\n            **extra_fields,\n        )\n\n# Usage\nwith timed_operation(\"fetch_user_orders\", user_id=user.id):\n    orders = await order_repository.get_by_user(user.id)\n```\n\n### Pattern 8: OpenTelemetry Tracing\n\n**Note:** OpenTelemetry is actively evolving. Check the official Python documentation for the latest API patterns and best practices.\n\n```python\nfrom opentelemetry import trace\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\nfrom opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n\ndef configure_tracing(service_name: str, otlp_endpoint: str) -> None:\n    provider = TracerProvider()\n    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))\n    provider.add_span_processor(processor)\n    trace.set_tracer_provider(provider)\n\ntracer = trace.get_tracer(__name__)\n\nasync def process_order(order_id: str) -> Order:\n    with tracer.start_as_current_span(\"process_order\") as span:\n        span.set_attribute(\"order.id\", order_id)\n        with tracer.start_as_current_span(\"validate_order\"):\n            validate_order(order_id)\n        with tracer.start_as_current_span(\"charge_payment\"):\n            charge_payment(order_id)\n        with tracer.start_as_current_span(\"\
+  send_confirmation\"):\n            send_confirmation(order_id)\n        return order\n```\n\n## Best Practices Summary\n\n1. **Use structured logging** - JSON logs with consistent fields\n2. **Propagate correlation IDs** - Thread through all requests and logs\n3. **Track the four golden signals** - Latency, traffic, errors, saturation\n4. **Bound label cardinality** - Never use unbounded values as metric labels\n5. **Log at appropriate levels** - Don't cry wolf with ERROR\n6. **Include context** - User ID, request ID, operation name in logs\n7. **Use context managers** - Consistent timing and error handling\n8. **Separate concerns** - Observability code shouldn't pollute business logic\n9. **Test your observability** - Verify logs and metrics in integration tests\n10. **Set up alerts** - Metrics are useless without alerting"
+fragments:
+- sequence: 1
+  fragment_type: rationale
+  content: '# Python Observability
+
+
+    Instrument Python applications with structured logs, metrics, and traces. When something breaks in production, you need to answer "what, where, and why" without deploying new code.
+
+
+    ## Core Concepts
+
+
+    1. **Structured Logging** — Emit logs as JSON with consistent fields. Machine-readable logs enable powerful queries and alerts.
+
+    2. **The Four Golden Signals** — Track latency, traffic, errors, and saturation for every service boundary.
+
+    3. **Correlation IDs** — Thread a unique ID through all logs and spans for a single request, enabling end-to-end tracing.
+
+    4. **Bounded Cardinality** — Keep metric label values bounded. Unbounded labels (like user IDs) explode storage costs.'
+- sequence: 2
+  fragment_type: setup
+  content: '## When to Use This Skill
+
+
+    - Adding structured logging to applications
+
+    - Implementing metrics collection with Prometheus
+
+    - Setting up distributed tracing across services
+
+    - Propagating correlation IDs through request chains
+
+    - Debugging production issues
+
+    - Building observability dashboards'
+- sequence: 3
+  fragment_type: execution
+  content: '## Pattern 1: Structured Logging with Structlog
+
+
+    Configure structlog for JSON output with consistent fields. Use `structlog.configure()` with processors for context vars merging, log level, ISO timestamps, stack info rendering, exception formatting, and JSON rendering. Use `make_filtering_bound_logger` to set the filtering level from `logging` module levels.
+
+
+    ## Pattern 2: Consistent Log Fields
+
+
+    Every log entry should include standard fields: `correlation_id`, `method`, `path`, `user_id` on request received; `status_code`, `duration_ms` on completion; `error_type`, `error_message` on failure.
+
+
+    ## Pattern 3: Semantic Log Levels
+
+
+    | Level | Purpose |
+
+    |-------|---------|
+
+    | DEBUG | Development diagnostics — variable values, internal state |
+
+    | INFO | Request lifecycle — start/end, job completion |
+
+    | WARNING | Recoverable anomalies — retry attempts, fallback used |
+
+    | ERROR | Failures needing attention — exceptions, service unavailable |
+
+
+    Never log expected behavior at ERROR. A user entering a wrong password is INFO, not ERROR.'
+- sequence: 4
+  fragment_type: example
+  content: "## Structured Logging Code Examples\n\n```python\nimport structlog\n\nstructlog.configure(\n    processors=[\n        structlog.contextvars.merge_contextvars,\n        structlog.processors.add_log_level,\n        structlog.processors.TimeStamper(fmt=\"iso\"),\n        structlog.processors.StackInfoRenderer(),\n        structlog.processors.format_exc_info,\n        structlog.processors.JSONRenderer(),\n    ],\n    wrapper_class=structlog.make_filtering_bound_logger(\n        getattr(logging, \"INFO\")\n    ),\n    context_class=dict,\n    logger_factory=structlog.PrintLoggerFactory(),\n    cache_logger_on_first_use=True,\n)\nlogger = structlog.get_logger()\n```\n\n```python\nlogger.debug(\"Cache lookup\", key=cache_key, hit=cache_hit)\nlogger.info(\"Order created\", order_id=order.id, total=order.total)\nlogger.warning(\"Rate limit approaching\", current_rate=950, limit=1000)\nlogger.error(\"Payment failed\", order_id=order.id, error=str(e))\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Pattern 4: Correlation ID Propagation
+
+
+    Generate a unique ID at ingress and thread it through all operations. Use `contextvars.ContextVar` to store the correlation ID. In FastAPI, use middleware to extract `X-Correlation-ID` from incoming headers (or generate a UUID), bind it via `structlog.contextvars.bind_contextvars`, and add it to the response header. For outbound HTTP calls, include the `X-Correlation-ID` header in `httpx.AsyncClient` requests.
+
+
+    ## Pattern 5: The Four Golden Signals with Prometheus
+
+
+    Track four metric types at every service boundary using `prometheus_client`:
+
+    - **Latency**: `Histogram` for request duration in seconds with appropriate buckets
+
+    - **Traffic**: `Counter` for total HTTP requests by method/endpoint/status
+
+    - **Errors**: `Counter` for HTTP errors by method/endpoint/error_type
+
+    - **Saturation**: `Gauge` for resource utilization (e.g. DB connection pool used)
+
+
+    Use a `@track_request` decorator with `time.perf_counter()` to instrument endpoints automatically.'
+- sequence: 6
+  fragment_type: example
+  content: "## Correlation ID & Prometheus Code Examples\n\n```python\nfrom contextvars import ContextVar\nimport uuid, structlog\n\ncorrelation_id: ContextVar[str] = ContextVar(\"correlation_id\", default=\"\")\n\ndef set_correlation_id(cid: str | None = None) -> str:\n    cid = cid or str(uuid.uuid4())\n    correlation_id.set(cid)\n    structlog.contextvars.bind_contextvars(correlation_id=cid)\n    return cid\n```\n\n```python\nfrom prometheus_client import Counter, Histogram, Gauge\n\nREQUEST_LATENCY = Histogram(\n    \"http_request_duration_seconds\", \"Request latency\",\n    [\"method\", \"endpoint\", \"status\"],\n    buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],\n)\nREQUEST_COUNT = Counter(\"http_requests_total\", \"Total requests\", [\"method\", \"endpoint\", \"status\"])\nERROR_COUNT = Counter(\"http_errors_total\", \"Total errors\", [\"method\", \"endpoint\", \"error_type\"])\nDB_POOL_USAGE = Gauge(\"db_connection_pool_used\", \"DB connections in use\")\n```"
+- sequence: 7
+  fragment_type: guardrail
+  content: '## Pattern 6: Bounded Cardinality
+
+
+    Avoid labels with unbounded values to prevent metric explosion:
+
+    - BAD: `REQUEST_COUNT.labels(method="GET", user_id=user.id)` — potentially millions of values
+
+    - GOOD: `REQUEST_COUNT.labels(method="GET", endpoint="/users", status="200")` — bounded set
+
+    - For per-user metrics, log the user_id and query logs, use a separate analytics system, or bucket users by type/tier
+
+
+    ## Pattern 7: Timed Operations
+
+
+    Use a `@contextmanager` `timed_operation` that logs operation start at DEBUG, operation failure at ERROR with duration, and operation success at INFO with duration. This keeps timing consistent and avoids scattering `time.perf_counter()` calls.'
+- sequence: 8
+  fragment_type: example
+  content: "## OpenTelemetry Tracing Example (Pattern 8)\n\n```python\nfrom opentelemetry import trace\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\nfrom opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n\ndef configure_tracing(service_name: str, otlp_endpoint: str) -> None:\n    provider = TracerProvider()\n    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))\n    provider.add_span_processor(processor)\n    trace.set_tracer_provider(provider)\n\ntracer = trace.get_tracer(__name__)\n\nasync def process_order(order_id: str) -> Order:\n    with tracer.start_as_current_span(\"process_order\") as span:\n        span.set_attribute(\"order.id\", order_id)\n        with tracer.start_as_current_span(\"validate_order\"):\n            validate_order(order_id)\n        with tracer.start_as_current_span(\"charge_payment\"):\n            charge_payment(order_id)\n        with tracer.start_as_current_span(\"send_confirmation\"):\n            send_confirmation(order_id)\n        return order\n```"
+- sequence: 9
+  fragment_type: guardrail
+  content: '## Best Practices Summary
+
+
+    1. **Use structured logging** - JSON logs with consistent fields
+
+    2. **Propagate correlation IDs** - Thread through all requests and logs
+
+    3. **Track the four golden signals** - Latency, traffic, errors, saturation
+
+    4. **Bound label cardinality** - Never use unbounded values as metric labels
+
+    5. **Log at appropriate levels** - Don''t cry wolf with ERROR
+
+    6. **Include context** - User ID, request ID, operation name in logs
+
+    7. **Use context managers** - Consistent timing and error handling
+
+    8. **Separate concerns** - Observability code shouldn''t pollute business logic
+
+    9. **Test your observability** - Verify logs and metrics in integration tests
+
+    10. **Set up alerts** - Metrics are useless without alerting'
