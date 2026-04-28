@@ -13,7 +13,6 @@ import argparse
 import os
 import shlex
 import sys
-from pathlib import Path
 
 from skillsmith.install import state as install_state
 
@@ -45,10 +44,9 @@ def add_parser(
 
 
 def _run(args: argparse.Namespace) -> int:
-    # 1. Load the user-scope .env into os.environ. We don't use python-dotenv
-    # to avoid pulling in another dependency; the parser is intentionally
-    # minimal — KEY=value lines, # comments, no shell expansion.
-    loaded_keys = _load_env_into_environ(install_state.env_path())
+    # 1. Load the user-scope .env into os.environ via the shared helper
+    # in install.state — same code path as ``server-start``.
+    loaded_keys = install_state.load_env_into_environ()
     if loaded_keys:
         print(
             f"skillsmith serve: loaded {len(loaded_keys)} keys from {install_state.env_path()}",
@@ -99,34 +97,3 @@ def _run(args: argparse.Namespace) -> int:
         return 2
     # Unreachable after execvp; kept for type-checker.
     return 0
-
-
-def _load_env_into_environ(env_path: Path) -> list[str]:
-    """Parse a .env file and inject its keys into os.environ. Returns
-    the list of keys that were loaded (for logging). Process-env
-    values that are already set take precedence over .env (matching
-    pydantic-settings' priority model).
-    """
-    if not env_path.exists():
-        return []
-    loaded: list[str] = []
-    for raw in env_path.read_text().splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key = key.strip()
-        # Allow shell-style `export KEY=value` (common when users paste
-        # from `set -a; source ...; set +a` workflows).
-        if key.startswith("export "):
-            key = key[len("export ") :].strip()
-        val = val.strip()
-        # Strip matching outer quotes for typical .env values.
-        if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
-            val = val[1:-1]
-        if key and key not in os.environ:
-            os.environ[key] = val
-            loaded.append(key)
-    return loaded

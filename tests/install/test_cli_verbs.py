@@ -225,14 +225,13 @@ class TestServe:
     def test_export_prefix_stripped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """`.env` written shell-style with `export KEY=val` is common; the
         parser must strip the prefix or the actual key never gets set."""
-        from skillsmith.install.subcommands import serve
 
         env_path = install_state.env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
         env_path.write_text("export PORT=9999\nexport NAME=skillsmith\n")
         monkeypatch.delenv("PORT", raising=False)
         monkeypatch.delenv("NAME", raising=False)
-        loaded = serve._load_env_into_environ(env_path)
+        loaded = install_state.load_env_into_environ(env_path)
         assert "PORT" in loaded
         assert "NAME" in loaded
         import os
@@ -242,7 +241,6 @@ class TestServe:
         assert "export PORT" not in os.environ
 
     def test_loads_env_into_environ(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from skillsmith.install.subcommands import serve
 
         env_path = install_state.env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
@@ -250,7 +248,7 @@ class TestServe:
         # FOO must not be already set in environ for our load to take effect.
         monkeypatch.delenv("FOO", raising=False)
         monkeypatch.delenv("BAZ", raising=False)
-        loaded = serve._load_env_into_environ(env_path)
+        loaded = install_state.load_env_into_environ(env_path)
         assert "FOO" in loaded
         assert "BAZ" in loaded
         assert "EMPTY" in loaded
@@ -264,13 +262,12 @@ class TestServe:
     ) -> None:
         """A key already in the process env must NOT be overridden by .env —
         process env is the higher-priority source."""
-        from skillsmith.install.subcommands import serve
 
         env_path = install_state.env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
         env_path.write_text("FOO=from_env_file\n")
         monkeypatch.setenv("FOO", "from_process")
-        loaded = serve._load_env_into_environ(env_path)
+        loaded = install_state.load_env_into_environ(env_path)
         import os
 
         assert os.environ["FOO"] == "from_process"

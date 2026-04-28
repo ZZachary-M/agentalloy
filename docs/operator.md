@@ -44,6 +44,21 @@ uv run python -m skillsmith
 
 The service starts in degraded mode if the runtime cache fails to load (e.g. empty store). The health endpoint will report `runtime_store: unavailable` until the store is seeded and the service restarted.
 
+### Single-writer corpus lock
+
+KuzuDB enforces a single-writer lock on the corpus directory. While a server is running it holds that lock; a second process trying to write (e.g. `install-pack` or `seed-corpus` from another shell) will fail. The CLI provides background-mode lifecycle subcommands so you can release the lock without `kill <pid>`:
+
+```bash
+python -m skillsmith.install server-status              # port, pid, reachable
+python -m skillsmith.install server-start [--port N]    # detached uvicorn, logs to ~/.local/share/skillsmith/server.log
+python -m skillsmith.install server-stop [--timeout 10] # SIGTERM, escalates to SIGKILL
+python -m skillsmith.install server-restart
+```
+
+`serve` (foreground, blocking) is unchanged for the typical "run it in a terminal and leave it" workflow. Reach for `server-*` when you need to ingest from a second shell or script the lifecycle.
+
+`server-stop` SIGTERMs whatever process is bound to the configured port; it does not verify the target is skillsmith. On a shared port, that's the operator's concern. `server-start` and `serve` use the same `.env` loader, so background and foreground modes produce identical runtime configurations.
+
 ---
 
 ## Skill Category Vocabulary

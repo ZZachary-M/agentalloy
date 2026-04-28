@@ -53,6 +53,48 @@ def env_path() -> Path:
     return user_config_dir() / ".env"
 
 
+def parse_env_file(path: Path | None = None) -> dict[str, str]:
+    """Parse a .env file into a plain dict. Pure — no side effects.
+
+    KEY=value lines, # comments, ``export KEY=value`` shorthand, optional
+    matching outer quotes stripped. Path defaults to ``env_path()``.
+    Returns ``{}`` if the file is missing.
+    """
+    p = path if path is not None else env_path()
+    if not p.exists():
+        return {}
+    parsed: dict[str, str] = {}
+    for raw in p.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if key.startswith("export "):
+            key = key[len("export ") :].strip()
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
+            val = val[1:-1]
+        if key:
+            parsed[key] = val
+    return parsed
+
+
+def load_env_into_environ(path: Path | None = None) -> list[str]:
+    """Parse a .env file and inject its keys into ``os.environ``.
+
+    Returns the list of keys loaded (for logging). Process-env values
+    already set take precedence over the file (matching pydantic-settings'
+    priority model). For non-mutating use see ``parse_env_file``.
+    """
+    loaded: list[str] = []
+    for key, val in parse_env_file(path).items():
+        if key not in os.environ:
+            os.environ[key] = val
+            loaded.append(key)
+    return loaded
+
+
 def _is_real_corpus(p: Path) -> bool:
     """Sentinel check — returns True only if ``p`` looks like a complete corpus.
 
