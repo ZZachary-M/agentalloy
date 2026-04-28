@@ -6,25 +6,18 @@ Ranked by leverage. Pick one (or combine #1 + #2).
 
 ---
 
-## 1. Improve the skill-authoring prompt (highest leverage)
+## 1. Improve the skill-authoring prompt (highest leverage) — DONE 2026-04-28
 
 The adversarial review of batch 2 captured 6 cross-skill patterns at
-`docs/skill-review-history/2026-04-28-batch-2-stack-foundations.md`. Apply them to
-the `sys-skill-authoring-agent` skill so future authoring is better the first time.
+`docs/skill-review-history/2026-04-28-batch-2-stack-foundations.md`. The 6 rules
+are now codified at `fixtures/skill-authoring-guidelines.md` (R1–R6) and
+referenced from `fixtures/skill-authoring-agent.md`.
 
-**Concrete additions:**
-
-- "Before authoring a skill against any technology with API churn (frameworks <2 years old, ML/agent APIs, vendor SDKs), fetch the current authoritative docs first via `ctx_fetch_and_index`. Quote them when the example uses a non-trivial signature."
-- "Every code block that uses a non-stdlib name (e.g., `Prisma.Decimal`, `Decimal128`, `Anthropic.Tool`) must show the `import` line at least once in the same skill."
-- "The verification checklist is a contract. Every item must be a thing the agent can mechanically check — no vague assertions like 'good practices followed.' If you can't write a one-line shell or assertion that verifies it, drop the item."
-- "For state-machine or coverage examples (soft-delete extensions, retry handlers, switch statements over enums), enumerate every method or state. Comment why each one is or isn't handled."
-- "Trace through one edge case mentally before including any example. The most common failure mode is examples that work for the happy path but skip the rare-but-real edge."
-- "When citing minimums or version-specific behavior (e.g., 'cache prefix must be ≥ 4096 tokens for Opus'), include the date you verified it. Quietly outdated facts are worse than 'I don't know — go check.'"
-
-**Process:** edit the existing `sys-skill-authoring-agent` skill in
-`src/skillsmith/_packs/core/` (if present) OR the `fixtures/skill-authoring-agent.md`
-master prompt. Re-export, re-ingest. Run the next batch through it and compare review
-feedback density.
+**Validation:** run the next authoring batch (#2 below) using the guidelines doc
+as a pre-author checklist, then compare review-feedback density vs. the batch-2
+review history. If feedback density drops materially, the rules are paying.
+If a pattern recurs that the rules don't cover, append to the "Anti-patterns
+observed" section of the guidelines doc.
 
 ---
 
