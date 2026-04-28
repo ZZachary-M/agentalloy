@@ -310,7 +310,7 @@ def _check_harness_config_present(st: dict[str, Any]) -> dict[str, Any]:
 def _check_harness_config_url(st: dict[str, Any]) -> dict[str, Any]:
     """Check 7: Injected URL matches the configured port."""
     t0 = time.monotonic()
-    port = install_state.validate_port(st.get("port", 8000))
+    port = install_state.validate_port(st.get("port", 47950))
     expected_url = f"http://localhost:{port}"
     files_written = st.get("harness_files_written", [])
     if not files_written:
@@ -454,7 +454,7 @@ def run_checks(st: dict[str, Any], root: Path | None = None) -> dict[str, Any]: 
     user_corpus = install_state.corpus_dir()
     duck_path = env.get("DUCKDB_PATH", str(user_corpus / "skills.duck"))
     ladybug_path = env.get("LADYBUG_DB_PATH", str(user_corpus / "ladybug"))
-    port = install_state.validate_port(st.get("port", 8000))
+    port = install_state.validate_port(st.get("port", 47950))
 
     # Resolve relative paths against the user corpus dir (not the cwd) —
     # the service no longer assumes a project-relative working directory.

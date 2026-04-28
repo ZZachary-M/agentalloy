@@ -4,7 +4,7 @@
 # For AMD Radeon dGPU or iGPU (LM Studio Vulkan backend), use compose.radeon.yaml instead.
 #
 # What this gives you:
-#   - skillsmith service on http://localhost:8000 with the pre-seeded corpus
+#   - skillsmith service on http://localhost:47950 with the pre-seeded corpus
 #   - Ollama running qwen3-embedding:0.6b on http://localhost:11434
 #   - The model is auto-pulled on first start by the `ollama-pull` init service
 #   - Persistent volumes for the corpus (./data on host) and Ollama models
@@ -12,7 +12,7 @@
 # Usage:
 #   podman compose up -d
 #   podman compose logs -f skillsmith
-#   curl http://localhost:8000/health
+#   curl http://localhost:47950/health
 #
 # To run on Docker:  docker compose up -d  (drop-in compatible)
 
@@ -63,9 +63,9 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "8000:8000"
+      - "47950:47950"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:47950/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
       interval: 15s
       timeout: 5s
       start_period: 10s

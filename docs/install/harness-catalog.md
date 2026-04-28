@@ -2,7 +2,7 @@
 
 Companion to [`spec.md`](./spec.md) and [`contracts.md`](./contracts.md). Authoritative for per-harness file paths, the actual injection content, and edge cases.
 
-Each section is a single harness. Implementers should treat the **Injected content** code blocks as canonical templates — these go directly into `src/skillsmith/install/harness_templates/<harness>.md`. The `{port}` placeholder is the only template variable, substituted from the configured port (default 8000).
+Each section is a single harness. Implementers should treat the **Injected content** code blocks as canonical templates — these go directly into `src/skillsmith/install/harness_templates/<harness>.md`. The `{port}` placeholder is the only template variable, substituted from the configured port (default 47950).
 
 All injections use the standard sentinel pair:
 

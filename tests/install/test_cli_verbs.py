@@ -43,7 +43,7 @@ class TestStatus:
         assert out["completed_steps"] == []
         assert out["wired_repos"] == []
         assert out["corpus"]["present"] is False  # bundled corpus blocked by conftest
-        assert out["service"]["port"] == 8000
+        assert out["service"]["port"] == 47950
 
     def test_groups_entries_by_repo_root(
         self, repo_root: Path, capsys: pytest.CaptureFixture[str]

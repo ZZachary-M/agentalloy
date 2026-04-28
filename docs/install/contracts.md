@@ -72,7 +72,7 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
       "step": "write-env",
       "completed_at": "2026-04-26T14:24:10Z",
       "env_path": "/home/user/.config/skillsmith/.env",
-      "port": 8000
+      "port": 47950
     },
     {
       "step": "wire-harness",
@@ -104,7 +104,7 @@ Path: `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. Created on 
   ],
   "models_pulled": ["ollama:qwen3-embedding:0.6b"],
   "env_path": "/home/user/.config/skillsmith/.env",
-  "port": 8000,
+  "port": 47950,
   "last_verify_passed_at": "2026-04-26T14:25:00Z"
 }
 ```
@@ -371,7 +371,7 @@ Embeddings are pre-computed in the shipped DuckDB; **no `reembed` is needed afte
   "schema_version": 1,
   "env_path": "/home/user/.config/skillsmith/.env",
   "preset": "apple-silicon",
-  "port": 8000,
+  "port": 47950,
   "values_written": {
     "RUNTIME_EMBED_BASE_URL": "http://localhost:11434",
     "RUNTIME_EMBEDDING_MODEL": "qwen3-embedding:0.6b",
@@ -399,7 +399,7 @@ defaults:
   LOG_LEVEL: "INFO"
 ```
 
-**Port handling.** Preset URLs reference fixed *runner* ports (Ollama 11434, LM Studio 1234). The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 8000). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
+**Port handling.** Preset URLs reference fixed *runner* ports (Ollama 11434, LM Studio 1234). The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 47950). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
 
 **Validation:** `write-env` rejects unknown keys in `--overrides` (typo guard). It also refuses to write if `.env` exists and was not produced by a previous `write-env` run (no overwriting hand-edited files without `--force`).
 
@@ -407,7 +407,7 @@ defaults:
 
 ## `enable-service`
 
-**Input:** `--mode {native,container,manual}`, `--runtime {podman,docker}` (container mode only), `--port N` (default: from state, fallback 8000).
+**Input:** `--mode {native,container,manual}`, `--runtime {podman,docker}` (container mode only), `--port N` (default: from state, fallback 47950).
 
 **Output:**
 
@@ -468,8 +468,8 @@ defaults:
     {"name": "ladybug_present", "passed": true, "duration_ms": 4, "detail": "/home/user/.local/share/skillsmith/corpus/ladybug has 153 skills"},
     {"name": "skill_count_meets_minimum", "passed": true, "duration_ms": 3, "detail": "153 >= 50 (MIN_SKILL_COUNT)"},
     {"name": "harness_config_present", "passed": true, "duration_ms": 2, "detail": "/home/user/dev/project-a/CLAUDE.md contains skillsmith sentinel block"},
-    {"name": "harness_config_url_matches", "passed": true, "duration_ms": 1, "detail": "Injected URL http://localhost:8000 matches configured port"},
-    {"name": "runtime_port_available", "passed": true, "duration_ms": 1, "detail": "Port 8000 is available (or already bound by skillsmith)"}
+    {"name": "harness_config_url_matches", "passed": true, "duration_ms": 1, "detail": "Injected URL http://localhost:47950 matches configured port"},
+    {"name": "runtime_port_available", "passed": true, "duration_ms": 1, "detail": "Port 47950 is available (or already bound by skillsmith)"}
   ]
 }
 ```

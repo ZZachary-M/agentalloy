@@ -584,7 +584,7 @@ configuration.
 flm serve qwen3.5:0.8b --embed 1                    # FastFlowLM NPU
 # Load qwen/qwen3.6-35b-a3b in LM Studio (GUI)
 
-uv run uvicorn skillsmith.app:app --host 127.0.0.1 --port 8000 &
+uv run uvicorn skillsmith.app:app --host 127.0.0.1 --port 47950 &
 
 # 2. Re-embed corpus (one-time, after embed-model swap)
 uv run python -m skillsmith.reembed

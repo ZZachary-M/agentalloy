@@ -36,7 +36,7 @@ Or copy `.env.example` and fill in manually. Full reference:
 uv sync
 
 # Start the server (development)
-uv run uvicorn skillsmith.app:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn skillsmith.app:app --reload --host 0.0.0.0 --port 47950
 
 # Or use the module entry point
 uv run python -m skillsmith
@@ -101,7 +101,7 @@ GET /health
 Reports overall service status and per-dependency readiness.
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:47950/health
 ```
 
 ```json
@@ -129,7 +129,7 @@ GET /diagnostics/runtime
 Shows whether the in-memory cache is consistent with the store, and per-path readiness.
 
 ```bash
-curl http://localhost:8000/diagnostics/runtime | python3 -m json.tool
+curl http://localhost:47950/diagnostics/runtime | python3 -m json.tool
 ```
 
 Key fields:
@@ -149,7 +149,7 @@ POST /compose
 Assembles skill guidance for a task. Returns composed text with governance prepended.
 
 ```bash
-curl -s -X POST http://localhost:8000/compose \
+curl -s -X POST http://localhost:47950/compose \
   -H "Content-Type: application/json" \
   -d '{
     "task": "Design a Python FastAPI endpoint that validates a JSON request body",
@@ -181,10 +181,10 @@ POST /retrieve               — semantic query without assembly
 
 ```bash
 # By ID
-curl http://localhost:8000/retrieve/py-fastapi-endpoint-design
+curl http://localhost:47950/retrieve/py-fastapi-endpoint-design
 
 # Semantic query
-curl -s -X POST http://localhost:8000/retrieve \
+curl -s -X POST http://localhost:47950/retrieve \
   -H "Content-Type: application/json" \
   -d '{"task": "fastapi endpoint with validation", "phase": "design", "k": 3}'
 ```
@@ -200,7 +200,7 @@ GET /skills/{skill_id}
 Returns full skill detail: identity, active version metadata, raw prose, and fragment list.
 
 ```bash
-curl http://localhost:8000/skills/py-fastapi-endpoint-design | python3 -m json.tool
+curl http://localhost:47950/skills/py-fastapi-endpoint-design | python3 -m json.tool
 ```
 
 ---

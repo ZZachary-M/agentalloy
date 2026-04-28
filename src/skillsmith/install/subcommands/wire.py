@@ -34,7 +34,7 @@ def add_parser(
         "--port",
         type=int,
         default=None,
-        help="Override the service port (default: read from user state, fallback 8000).",
+        help="Override the service port (default: read from user state, fallback 47950).",
     )
     p.add_argument(
         "--force",
@@ -62,7 +62,7 @@ def _run(args: argparse.Namespace) -> int:
         port = install_state.validate_port(args.port)
     else:
         st = install_state.load_state()
-        port = install_state.validate_port(st.get("port", 8000))
+        port = install_state.validate_port(st.get("port", 47950))
 
     result = wire_harness(harness, port=port, root=cwd, force=args.force)
     json.dump(result, sys.stdout, indent=2)

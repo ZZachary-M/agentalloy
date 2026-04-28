@@ -1,7 +1,7 @@
 """POC harness: composed vs flat across the 5 pre-registered tasks.
 
 Composed arm: POST /compose to a running skillsmith (uvicorn at $SKILLSMITH_URL,
-default http://localhost:8000), then call the agent model with /compose's
+default http://localhost:47950), then call the agent model with /compose's
 ``output`` field as a system prompt + the task spec as user prompt.
 
 Flat arm: concatenate the gold skills' raw SKILL.md files as the system
@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILL_SOURCE_ROOT = REPO_ROOT / "skill-source" / "agent-skills" / "skills"
 RUNS_ROOT = REPO_ROOT / "eval" / "runs"
 
-SKILLSMITH_URL = os.environ.get("SKILLSMITH_URL", "http://localhost:8000")
+SKILLSMITH_URL = os.environ.get("SKILLSMITH_URL", "http://localhost:47950")
 LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", "http://localhost:1234")
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "qwen/qwen2.5-coder-14b")
 

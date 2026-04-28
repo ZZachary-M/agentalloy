@@ -236,7 +236,7 @@ def run_doctor(root: Path | None = None) -> dict[str, Any]:
 
     root = root or _repo_root()
     st = install_state.load_state(root)
-    port = install_state.validate_port(st.get("port", 8000))
+    port = install_state.validate_port(st.get("port", 47950))
 
     # Run verify's 8 checks
     verify_result = verify_checks(st, root)

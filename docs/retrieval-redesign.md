@@ -140,7 +140,7 @@ cd ~/dev/skillsmith
 uv run pytest tests/ -v
 uv run ruff check src/ tests/
 uv run pyright src/skillsmith/retrieval/ src/skillsmith/storage/ src/skillsmith/install/
-.venv/bin/uvicorn skillsmith.app:app --host 127.0.0.1 --port 8000 &
+.venv/bin/uvicorn skillsmith.app:app --host 127.0.0.1 --port 47950 &
 # then run the probe set above
 ```
 

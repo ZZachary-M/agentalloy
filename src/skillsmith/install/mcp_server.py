@@ -12,7 +12,7 @@ Protocol reference: https://spec.modelcontextprotocol.io/
 
 Run via::
 
-    python -m skillsmith.install.mcp_server --port 8000
+    python -m skillsmith.install.mcp_server --port 47950
 
 The server reads JSON-RPC requests from stdin (one per line) and writes
 responses to stdout. Errors and progress are logged to stderr.
@@ -240,8 +240,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Local Skillsmith service port (default: 8000).",
+        default=47950,
+        help="Local Skillsmith service port (default: 47950).",
     )
     args = parser.parse_args(argv)
     return serve(args.port)

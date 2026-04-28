@@ -270,7 +270,7 @@ This means existing `.env.cpu`, `.env.apple-silicon`, etc. files in the repo bec
 
 ### Port configurability
 
-The default API port is 8000, but it can be overridden with `--port <n>` on `write-env`. The chosen port is recorded in `install-state.json` and read by `wire-harness` so the injected curl/MCP config points at the right URL. `doctor` checks port availability before writing anything and surfaces a collision early.
+The default API port is 47950, but it can be overridden with `--port <n>` on `write-env`. The chosen port is recorded in `install-state.json` and read by `wire-harness` so the injected curl/MCP config points at the right URL. `doctor` checks port availability before writing anything and surfaces a collision early.
 
 ### Sentinel-based injection contract
 

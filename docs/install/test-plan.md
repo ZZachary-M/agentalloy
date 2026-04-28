@@ -48,7 +48,7 @@ Location: `tests/install/`. Run with `uv run pytest tests/install/`.
 | Test | Asserts |
 |---|---|
 | `test_preset_loaded_from_yaml` | `apple-silicon.yaml` loads cleanly into a Pydantic model |
-| `test_port_substitution` | `{port}` in template values is replaced with `--port` arg or 8000 default |
+| `test_port_substitution` | `{port}` in template values is replaced with `--port` arg or 47950 default |
 | `test_overrides_validated_against_known_keys` | `--overrides UNKNOWN_KEY=foo` is rejected |
 | `test_existing_env_not_overwritten_without_force` | `write-env` errors if `.env` exists and wasn't written by prior install |
 

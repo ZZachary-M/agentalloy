@@ -49,7 +49,7 @@ This task is expected to:
 
 **Verification:**
 ```bash
-curl -s -X POST http://localhost:8000/compose \
+curl -s -X POST http://localhost:47950/compose \
   -H "Content-Type: application/json" \
   -d '{"task": "Design a Python FastAPI endpoint that validates a JSON request body and returns a structured error response", "phase": "design"}' \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('source_skills:', r.get('source_skills')); assert len(r.get('source_skills',[])) >= 2"
@@ -69,7 +69,7 @@ Using the compose response from AC-1:
 **Verification:**
 ```bash
 # Check system_skills_applied and system_fragments in the compose response
-curl -s -X POST http://localhost:8000/compose \
+curl -s -X POST http://localhost:47950/compose \
   -H "Content-Type: application/json" \
   -d '{"task": "Design a Python FastAPI endpoint that validates a JSON request body and returns a structured error response", "phase": "design"}' \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('system_skills_applied:', r.get('system_skills_applied')); print('system_fragments:', r.get('system_fragments')); assert r.get('system_skills_applied') is True"
@@ -82,7 +82,7 @@ curl -s -X POST http://localhost:8000/compose \
 **Endpoint:** `GET /retrieve/{skill_id}`
 
 ```bash
-curl -s http://localhost:8000/retrieve/py-fastapi-endpoint-design \
+curl -s http://localhost:47950/retrieve/py-fastapi-endpoint-design \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('version_id:', r['active_version']['version_id']); assert r['skill_id'] == 'py-fastapi-endpoint-design'"
 ```
 
@@ -99,7 +99,7 @@ curl -s http://localhost:8000/retrieve/py-fastapi-endpoint-design \
 **Endpoint:** `POST /retrieve`
 
 ```bash
-curl -s -X POST http://localhost:8000/retrieve \
+curl -s -X POST http://localhost:47950/retrieve \
   -H "Content-Type: application/json" \
   -d '{"task": "fastapi endpoint with error handling", "phase": "design", "k": 3}' \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('hits:', [h['skill_id'] for h in r['results']]); assert len(r['results']) > 0"
@@ -117,7 +117,7 @@ curl -s -X POST http://localhost:8000/retrieve \
 **Endpoint:** `GET /skills/{skill_id}`
 
 ```bash
-curl -s http://localhost:8000/skills/py-fastapi-endpoint-design \
+curl -s http://localhost:47950/skills/py-fastapi-endpoint-design \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('fragments:', len(r.get('fragments', []))); assert r['skill_class'] == 'domain'"
 ```
 
@@ -134,7 +134,7 @@ curl -s http://localhost:8000/skills/py-fastapi-endpoint-design \
 **Endpoint:** `GET /health`
 
 ```bash
-curl -s http://localhost:8000/health \
+curl -s http://localhost:47950/health \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print(json.dumps(r, indent=2)); assert r['status'] == 'healthy'"
 ```
 
@@ -152,7 +152,7 @@ curl -s http://localhost:8000/health \
 **Verification:** The compose response `source_skills` should reference only the active version ID, not the draft version ID. Check via:
 
 ```bash
-curl -s http://localhost:8000/diagnostics/runtime \
+curl -s http://localhost:47950/diagnostics/runtime \
   | python3 -c "import json,sys; r=json.load(sys.stdin); print('consistent:', r['consistency']['consistent']); print('cache_loaded:', r['cache_loaded'])"
 ```
 

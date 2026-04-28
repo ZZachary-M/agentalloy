@@ -67,7 +67,8 @@ For authoring (generating new skills via the LLM pipeline), you also need a chat
 
 ```bash
 uv sync
-python -m skillsmith.install setup
+uv tool install --editable .   # puts `skillsmith` in PATH system-wide
+skillsmith setup
 skillsmith serve
 ```
 
@@ -79,11 +80,11 @@ For evaluators or CI environments:
 
 ```bash
 podman compose up -d         # or: docker compose up -d
-curl http://localhost:8000/health
+curl http://localhost:47950/health
 ```
 
 This brings up:
-- `skillsmith` — FastAPI service on port 8000, with the pre-seeded corpus baked in
+- `skillsmith` — FastAPI service on port 47950, with the pre-seeded corpus baked in
 - `ollama` — Ollama on port 11434 with `qwen3-embedding:0.6b` auto-pulled on first start
 
 Persistent state:

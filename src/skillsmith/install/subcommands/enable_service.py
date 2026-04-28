@@ -394,7 +394,7 @@ def _enable_container(
 def enable_service(
     mode: str,
     runtime: str | None = None,
-    port: int = 8000,
+    port: int = 47950,
     repo_root: Path | None = None,
     preset: str | None = None,
 ) -> dict[str, Any]:
@@ -491,14 +491,14 @@ def add_parser(
         "--port",
         type=int,
         default=None,
-        help="Service port override (default: read from user state, fallback 8000).",
+        help="Service port override (default: read from user state, fallback 47950).",
     )
     p.set_defaults(func=run)
 
 
 def run(args: argparse.Namespace) -> int:
     st = install_state.load_state()
-    port = install_state.validate_port(args.port if args.port is not None else st.get("port", 8000))
+    port = install_state.validate_port(args.port if args.port is not None else st.get("port", 47950))
     preset: str | None = st.get("preset")
 
     mode = args.mode

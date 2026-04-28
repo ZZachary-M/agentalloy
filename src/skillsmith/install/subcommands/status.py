@@ -57,7 +57,7 @@ def _run(args: argparse.Namespace) -> int:  # noqa: ARG001
     corpus_present = (corpus_path / "skills.duck").exists() and (corpus_path / "ladybug").exists()
 
     # Service reachability — TCP connect only; doctor/verify do the deeper /health probe.
-    port_raw = st.get("port", 8000)
+    port_raw = st.get("port", 47950)
     try:
         port = install_state.validate_port(port_raw)
         service_reachable = _port_open("127.0.0.1", port)

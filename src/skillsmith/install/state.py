@@ -250,7 +250,7 @@ def _empty_state() -> dict[str, Any]:
         "harness_files_written": [],
         "models_pulled": [],
         "env_path": None,
-        "port": 8000,
+        "port": 47950,
         "last_verify_passed_at": None,
     }
 
@@ -390,7 +390,7 @@ def _migrate(data: dict[str, Any], from_version: int) -> dict[str, Any]:
         data.setdefault("harness_files_written", [])
         data.setdefault("models_pulled", [])
         data.setdefault("env_path", None)
-        data.setdefault("port", 8000)
+        data.setdefault("port", 47950)
         data.setdefault("last_verify_passed_at", None)
     if from_version < 2:
         # v1 → v2: state moved from per-repo to user-scope. v1 had a

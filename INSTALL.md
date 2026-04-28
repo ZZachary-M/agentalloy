@@ -28,6 +28,9 @@ Total install time: usually 3–5 minutes on a warm machine.
 Most users want exactly this:
 
 ```bash
+# One-time: install the CLI into PATH so it works from any directory.
+uv tool install --editable .
+
 # Once per machine — installs everything user-scoped.
 # Will prompt: "Do you want skillsmith to run persistently as a background service?"
 skillsmith setup
@@ -66,6 +69,39 @@ This installs the skillsmith Python dependencies into a project-local `.venv`. S
 If `uv sync` fails:
 - Network issue → retry or check proxy settings
 - Python version mismatch → `python --version` should be ≥ 3.12
+
+---
+
+## Step 1b: Install the CLI user-scoped
+
+> RUN
+> ```bash
+> uv tool install --editable .
+> ```
+
+This installs the `skillsmith` command into the user's PATH (at `~/.local/bin/skillsmith` or equivalent) so it works from any directory — not just from inside this repo. Required so `skillsmith wire`, `skillsmith serve`, and `skillsmith status` work after you `cd` into a project repo.
+
+Verify it landed:
+
+> RUN
+> ```bash
+> skillsmith --help
+> ```
+
+If the command is not found, `~/.local/bin` is not in PATH. Fix:
+
+> ASK
+>
+> Tell the user:
+> > "`~/.local/bin` is not in your PATH. Add this line to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) and restart the shell:
+> >
+> > ```bash
+> > export PATH="$HOME/.local/bin:$PATH"
+> > ```
+> >
+> > Once done, confirm with `which skillsmith`."
+>
+> Wait for confirmation before continuing.
 
 ---
 
