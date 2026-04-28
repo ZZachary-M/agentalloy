@@ -1,15 +1,19 @@
 """``uninstall`` subcommand.
 
-Removes harness wiring (sentinel-bounded), ``.env``, and
-``install-state.json``.  Preserves ``data/`` by default.
+Removes harness wiring (sentinel-bounded), ``.env``, ``install-state.json``,
+the native service unit / plist (if any), and the uv tool installation.
+Preserves ``data/`` by default.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +57,68 @@ def _remove_sentinel_block(text: str, begin: str, end: str) -> str:
     while "\n\n\n" in result:
         result = result.replace("\n\n\n", "\n\n")
     return result
+
+
+def _stop_native_service(st: dict[str, Any]) -> list[dict[str, Any]]:
+    """Stop and disable the native systemd/launchd service if one was registered."""
+    actions: list[dict[str, Any]] = []
+    mode = st.get("service_mode")
+    unit_path_str = st.get("service_unit_path")
+    if mode != "native" or not unit_path_str:
+        return actions
+
+    unit_path = Path(unit_path_str)
+    os_name = sys.platform
+
+    if os_name == "linux" and unit_path.suffix == ".service":
+        unit_name = unit_path.name
+        for cmd in (
+            ["systemctl", "--user", "disable", "--now", unit_name],
+            ["systemctl", "--user", "daemon-reload"],
+        ):
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                subprocess.run(cmd, capture_output=True, timeout=10)
+        if unit_path.exists():
+            unit_path.unlink()
+            actions.append({"path": str(unit_path), "action": "deleted_systemd_unit"})
+        # Also remove the sanitized env file written alongside the unit
+        sanitized = unit_path.parent / "skillsmith.env"
+        if sanitized.exists():
+            sanitized.unlink()
+            actions.append({"path": str(sanitized), "action": "deleted_systemd_env"})
+
+    elif os_name == "darwin" and unit_path.suffix == ".plist":
+        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+            subprocess.run(
+                ["launchctl", "unload", "-w", str(unit_path)],
+                capture_output=True,
+                timeout=10,
+            )
+        if unit_path.exists():
+            unit_path.unlink()
+            actions.append({"path": str(unit_path), "action": "deleted_launchd_plist"})
+
+    return actions
+
+
+def _remove_uv_tool() -> dict[str, Any]:
+    """Remove the uv tool installation. Returns an action dict."""
+    uv = shutil.which("uv")
+    if not uv:
+        return {"action": "uv_tool_skipped", "reason": "uv not found in PATH"}
+    try:
+        result = subprocess.run(
+            [uv, "tool", "uninstall", "skillsmith"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return {"action": "uv_tool_uninstalled"}
+        # uv exits non-zero if the tool wasn't installed — treat as already gone
+        return {"action": "uv_tool_skipped", "reason": result.stderr.strip() or "not installed"}
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"action": "uv_tool_skipped", "reason": str(exc)}
 
 
 def uninstall(
@@ -331,12 +397,23 @@ def uninstall(
     elif data_dir.exists():
         data_kept.append(str(data_dir))
 
-    # 6. Remove user-scope state directory (skipped by `unwire`)
+    # 6. Stop and remove native service unit / plist (skipped by `unwire`)
+    service_actions: list[dict[str, Any]] = []
+    if remove_user_state:
+        service_actions = _stop_native_service(st)
+        files_removed.extend(service_actions)
+
+    # 7. Remove user-scope state directory (skipped by `unwire`)
     if remove_user_state:
         state_d = install_state.state_dir()
         if state_d.exists():
             shutil.rmtree(state_d)
             files_removed.append({"path": str(state_d), "action": "deleted_state_directory"})
+
+    # 8. Remove uv tool installation (skipped by `unwire`)
+    uv_tool_result: dict[str, Any] = {}
+    if remove_user_state:
+        uv_tool_result = _remove_uv_tool()
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -344,6 +421,7 @@ def uninstall(
         "files_removed": files_removed,
         "data_kept": data_kept,
         "warnings": warnings,
+        "uv_tool": uv_tool_result,
     }
 
 

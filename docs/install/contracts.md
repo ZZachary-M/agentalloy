@@ -555,10 +555,12 @@ The actual injected content per harness is in [`harness-catalog.md`](./harness-c
   ],
   "files_removed": [
     {"path": "/home/user/.config/skillsmith/.env", "action": "deleted"},
+    {"path": "/home/user/.config/systemd/user/skillsmith.service", "action": "deleted_systemd_unit"},
     {"path": "/home/user/.config/skillsmith", "action": "deleted_state_directory"}
   ],
   "data_kept": ["/home/user/.local/share/skillsmith/corpus"],
-  "warnings": []
+  "warnings": [],
+  "uv_tool": {"action": "uv_tool_uninstalled"}
 }
 ```
 
@@ -566,6 +568,8 @@ The actual injected content per harness is in [`harness-catalog.md`](./harness-c
 - Reads `harness_files_written` from state.
 - For each entry: verify `content_sha256` matches what's currently between the sentinels. If mismatch (user edited inside the block), warn and skip unless `--force`. If sentinels are gone entirely, warn and skip unless `--force`.
 - Removes `.env` (always), `install-state.json` (always).
+- Stops and removes the native service unit/plist if `service_mode: native` is recorded in state (Linux: `systemctl --user disable --now`, removes `.service` file and `skillsmith.env`; macOS: `launchctl unload -w`, removes `.plist`).
+- Removes the `skillsmith` uv tool installation via `uv tool uninstall skillsmith`. If not installed or uv not found, `uv_tool.action` is `uv_tool_skipped` with a `reason`.
 - **Preserves `data/` by default** (locked decision in `spec.md`). Removes `data/` only when `--remove-data` is passed.
 
 ---
