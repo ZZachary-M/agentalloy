@@ -2,9 +2,9 @@
 
 > **For the calling LLM:** Read this file top-to-bottom. Each numbered step tells you what to do. When you see a `> RUN` block, execute that command and capture the output. When you see a `> ASK` block, ask the user the question and wait for their answer before proceeding. When you see a `> CONFIRM` block, present the result to the user and wait for them to confirm or correct.
 >
-> Skip steps already marked complete in the user-scope state file at `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. If that file doesn't exist yet, you're on a fresh install. (You can read it with `python -m skillsmith.install status`.)
+> Skip steps already marked complete in the user-scope state file at `${XDG_CONFIG_HOME:-~/.config}/skillsmith/install-state.json`. If that file doesn't exist yet, you're on a fresh install. (You can read it with `skillsmith status`.)
 >
-> If any subcommand exits with a non-zero status, surface the error to the user and run `python -m skillsmith.install doctor` for remediation hints. Do not continue past a failed step.
+> If any subcommand exits with a non-zero status, surface the error to the user and run `skillsmith doctor` for remediation hints. Do not continue past a failed step.
 
 ---
 
@@ -109,7 +109,7 @@ If the command is not found, `~/.local/bin` is not in PATH. Fix:
 
 > RUN
 > ```bash
-> python -m skillsmith.install detect
+> skillsmith detect
 > ```
 
 This emits a JSON document describing the hardware. Read it. The output is also written to `${XDG_DATA_HOME:-~/.local/share}/skillsmith/outputs/detect.json` so subsequent steps can refer to it.
@@ -127,7 +127,7 @@ This emits a JSON document describing the hardware. Read it. The output is also 
 
 > RUN
 > ```bash
-> python -m skillsmith.install recommend-host-targets --hardware ~/.local/share/skillsmith/outputs/detect.json
+> skillsmith recommend-host-targets --hardware ~/.local/share/skillsmith/outputs/detect.json
 > ```
 
 The output lists which host targets are available on this hardware. Exactly one will be flagged `recommended: true`.
@@ -147,7 +147,7 @@ The output lists which host targets are available on this hardware. Exactly one 
 
 > RUN
 > ```bash
-> python -m skillsmith.install recommend-models --hardware ~/.local/share/skillsmith/outputs/detect.json --host <chosen-target>
+> skillsmith recommend-models --hardware ~/.local/share/skillsmith/outputs/detect.json --host <chosen-target>
 > ```
 
 The output lists `{embed_model, embed_runner}` options valid for the chosen host target, with one flagged `default: true`. The `preset` field tells you which `.env` preset will be used.
@@ -165,7 +165,7 @@ The output lists `{embed_model, embed_runner}` options valid for the chosen host
 
 > RUN
 > ```bash
-> python -m skillsmith.install pull-models --models ~/.local/share/skillsmith/outputs/recommend-models.json
+> skillsmith pull-models --models ~/.local/share/skillsmith/outputs/recommend-models.json
 > ```
 
 The output may include `manual_steps_required` if the user picked a runner without auto-pull (LM Studio, MLX, vLLM). If so:
@@ -180,7 +180,7 @@ The output may include `manual_steps_required` if the user picked a runner witho
 
 > RUN
 > ```bash
-> python -m skillsmith.install seed-corpus
+> skillsmith seed-corpus
 > ```
 
 The pre-seeded skill corpus ships inside the skillsmith Python wheel at `skillsmith/_corpus/`. On first run, this command copies the corpus into `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/` (the user-scoped writable location, where `install-pack` can later add to it). On subsequent runs, this is a fast presence + integrity check.
@@ -198,7 +198,7 @@ If the check reports `missing_files`, the bundled corpus didn't ship in this whe
 
 > RUN
 > ```bash
-> python -m skillsmith.install write-env --preset <chosen-preset>
+> skillsmith write-env --preset <chosen-preset>
 > ```
 
 (Substitute the preset name from step 4's `preset` field, e.g., `apple-silicon`.) The `.env` is written to `${XDG_CONFIG_HOME:-~/.config}/skillsmith/.env` with mode `0600` (owner read/write only).
@@ -234,7 +234,7 @@ Record the harness choice. The CLI uses one of: `claude-code`, `gemini-cli`, `cu
 
 > RUN
 > ```bash
-> cd <user's repo> && python -m skillsmith.install wire-harness --harness <chosen-harness>
+> cd <user's repo> && skillsmith wire-harness --harness <chosen-harness>
 > ```
 
 (Substitute the harness key from step 8.) The shorter form is `skillsmith wire --harness <chosen>` — the verb auto-detects the harness from the cwd if you omit the flag.
@@ -264,7 +264,7 @@ If the user picked `manual`, the output includes copy-pasteable instructions for
 
 > RUN
 > ```bash
-> python -m skillsmith.install verify
+> skillsmith verify
 > ```
 
 This runs 8 enumerated install-time checks (embedding endpoint reachable, returns 1024-dim, DuckDB present at the user-scope corpus dir, harness config present, port available, etc.).
@@ -274,7 +274,7 @@ If `all_checks_passed: true`, proceed to step 11.
 If any check fails:
 > RUN
 > ```bash
-> python -m skillsmith.install doctor
+> skillsmith doctor
 > ```
 >
 > Read the doctor output to the user. Each failed check has an `error` and a `remediation`. Surface the remediation to the user and ask if they want to retry the failed step or get help.
@@ -296,13 +296,13 @@ Then based on the answer:
 > RUN
 > ```bash
 > # For native:
-> python -m skillsmith.install enable-service --mode native
+> skillsmith enable-service --mode native
 >
 > # For container:
-> python -m skillsmith.install enable-service --mode container
+> skillsmith enable-service --mode container
 >
 > # For manual:
-> python -m skillsmith.install enable-service --mode manual
+> skillsmith enable-service --mode manual
 > ```
 
 The subcommand detects the available service manager (systemd/launchd) or container runtime (podman preferred, docker fallback), writes the appropriate unit/plist/compose invocation, starts the service, and polls `/health` for up to 30s to confirm startup. Radeon preset uses `compose.radeon.yaml` (skillsmith-only; LM Studio runs on the host). On success, the mode is recorded in `install-state.json`.
@@ -362,11 +362,11 @@ Operator commands the user can run later (these are NOT part of this runbook —
 | `skillsmith serve` | Start the service in foreground (terminal must stay open) |
 | `skillsmith wire` | Wire the current repo (cwd) to the service |
 | `skillsmith unwire` | Remove sentinels from the current repo only (keeps user state, `.env`, and corpus) |
-| `python -m skillsmith.install doctor` | Runtime health check on demand |
-| `python -m skillsmith.install update` | Migrate corpus in place after a version bump |
-| `python -m skillsmith.install install-pack <name>` | Add a published skill pack to the user corpus |
-| `python -m skillsmith.install reset-step <name>` | Clear a specific install step (escape hatch for changing config without full uninstall) |
-| `python -m skillsmith.install uninstall` | Full teardown — removes user state, `.env`, corpus, AND sentinels in cwd repo |
+| `skillsmith doctor` | Runtime health check on demand |
+| `skillsmith update` | Migrate corpus in place after a version bump |
+| `skillsmith install-pack <name>` | Add a published skill pack to the user corpus |
+| `skillsmith reset-step <name>` | Clear a specific install step (escape hatch for changing config without full uninstall) |
+| `skillsmith uninstall` | Full teardown — removes user state, `.env`, corpus, AND sentinels in cwd repo |
 
 ---
 
