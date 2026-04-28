@@ -87,7 +87,11 @@ def _run(args: argparse.Namespace) -> int:
             # from a prior run); that's recorded but not counted as a hard
             # failure here.
             pass
-        if r.get("action") not in ("ingested", "ingested_with_errors"):
+        # `already_installed` is a successful no-op (every skill in the
+        # pack was already in the corpus). `ingested_with_errors` had
+        # real failures but at least some progress; we still track which
+        # packs that affects via per-pack ingest_failures, not here.
+        if r.get("action") not in ("ingested", "ingested_with_errors", "already_installed"):
             failed.append(pack_name)
 
     # Bulk reembed once at the end (idempotent — only embeds new fragments).
@@ -232,8 +236,14 @@ def _ordered_with_deps(
     chosen: set[str],
     available: dict[str, dict[str, Any]],
 ) -> list[str]:
-    """Topological order: dependencies before dependents. Adds missing deps."""
+    """Topological order: dependencies before dependents. Adds missing deps.
+
+    Warns when a pack declares a dependency on a pack that isn't available.
+    Without the warning, missing deps were silently ignored — masking
+    misconfigurations until runtime.
+    """
     closed: set[str] = set()
+    missing_deps: list[tuple[str, str]] = []  # (declarant, missing_dep)
     work = list(chosen)
     while work:
         name = work.pop()
@@ -241,8 +251,18 @@ def _ordered_with_deps(
             continue
         closed.add(name)
         for dep in available.get(name, {}).get("depends_on") or []:
-            if dep in available and dep not in closed:
+            if dep not in available:
+                missing_deps.append((name, dep))
+                continue
+            if dep not in closed:
                 work.append(dep)
+
+    for declarant, dep in missing_deps:
+        print(
+            f"WARN: pack '{declarant}' declares depends_on '{dep}', "
+            f"but that pack is not available — proceeding without it.",
+            file=sys.stderr,
+        )
 
     # Simple DFS-based topo sort
     ordered: list[str] = []

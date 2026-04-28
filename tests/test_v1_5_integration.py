@@ -54,7 +54,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # seeds/*.yaml are review-YAML-shaped (matches what ingest consumes). The
 # fixtures/domain/*.yaml files use a different multi-version export shape
 # that's loaded by fixtures/loader.py, not ingest.py.
-FIXTURE_SKILL = REPO_ROOT / "seeds" / "test-driven-development.yaml"
+FIXTURE_SKILL = REPO_ROOT / "src" / "skillsmith" / "_packs" / "core" / "test-driven-development.yaml"
 
 
 # ---------------------------------------------------------------------------

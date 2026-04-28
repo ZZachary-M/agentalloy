@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from skillsmith.ingest import EXIT_OK, EXIT_USAGE, EXIT_VALIDATION, main
+from skillsmith.ingest import EXIT_DUPLICATE, EXIT_OK, EXIT_USAGE, EXIT_VALIDATION, main
 from skillsmith.storage.ladybug import LadybugStore
 
 _DOMAIN_YAML = textwrap.dedent("""\
@@ -129,7 +129,11 @@ def test_duplicate_skill_id_without_force_fails(
         main([str(yaml_file), "--yes"])
         code = main([str(yaml_file), "--yes"])
 
-    assert code == EXIT_VALIDATION
+    # Re-running ingest on an already-loaded skill returns EXIT_DUPLICATE
+    # so re-running setup / install-pack on a populated DB is a clean no-op
+    # rather than a "validation failure". Real validation errors still use
+    # EXIT_VALIDATION.
+    assert code == EXIT_DUPLICATE
 
 
 def test_canonical_name_collision_without_force_fails(
@@ -146,7 +150,8 @@ def test_canonical_name_collision_without_force_fails(
         assert main([str(first), "--yes"]) == EXIT_OK
         code = main([str(second), "--yes"])
 
-    assert code == EXIT_VALIDATION
+    # Same exit-code semantics for canonical_name collisions.
+    assert code == EXIT_DUPLICATE
 
 
 def test_force_overwrites(tmp_path: Path, seeded_db: tuple[str, LadybugStore]) -> None:

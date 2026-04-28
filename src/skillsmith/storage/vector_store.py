@@ -363,6 +363,20 @@ class VectorStore:
         row = self._conn.execute("SELECT COUNT(*) FROM fragment_embeddings").fetchone()
         return int(row[0]) if row else 0
 
+    def embedding_dim(self) -> int | None:
+        """Return the dimension of stored embeddings, or None if the corpus is empty.
+
+        Used by install-pack to hard-block dim-mismatched packs before they
+        corrupt the vector store. Reads one non-null embedding and measures
+        its length — DuckDB doesn't enforce a fixed length on FLOAT[] columns,
+        so the corpus's "dim" is whatever was first written.
+        """
+        row = self._conn.execute(
+            "SELECT len(embedding) FROM fragment_embeddings "
+            "WHERE embedding IS NOT NULL LIMIT 1"
+        ).fetchone()
+        return int(row[0]) if row else None
+
     def fragment_ids_present(self, fragment_ids: Sequence[str]) -> set[str]:
         """Return the subset of ``fragment_ids`` that already have embeddings.
         Useful for idempotent re-embed runs (skip what's already done)."""

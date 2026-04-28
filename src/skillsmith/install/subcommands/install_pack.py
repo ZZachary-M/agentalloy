@@ -126,7 +126,14 @@ def _resolve_manifest_url(pack_name: str, override: str | None) -> str:
 
 
 def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
-    """Run the existing ingest pipeline on one YAML. Returns parsed result."""
+    """Run the existing ingest pipeline on one YAML. Returns parsed result.
+
+    Distinguishes three outcomes:
+      - exit_code 0           → ingested fresh
+      - exit_code 4 (DUPLICATE) → skill_id or canonical_name already in corpus;
+                                 treated as a benign skip, not a failure.
+      - other non-zero        → real failure (parse, validation, DB error).
+    """
     result = subprocess.run(  # noqa: S603 — fixed args, no shell
         [
             sys.executable,
@@ -140,9 +147,15 @@ def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
         text=True,
         timeout=120,
     )
+    rc = result.returncode
     return {
         "yaml": yaml_path.name,
-        "exit_code": result.returncode,
+        "exit_code": rc,
+        "outcome": (
+            "ingested" if rc == 0
+            else "duplicate" if rc == 4
+            else "failed"
+        ),
         "stdout_tail": result.stdout.strip().splitlines()[-1] if result.stdout.strip() else "",
         "stderr_tail": result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "",
     }
@@ -179,15 +192,49 @@ def _read_pack_manifest(pack_dir: Path) -> tuple[dict[str, Any] | None, list[str
             if f not in entry:
                 errors.append(f"skills[{i}] missing required field: {f}")
         fname = entry.get("file")
-        if fname and not (pack_dir / fname).is_file():
+        skill_path = pack_dir / fname if fname else None
+        if not skill_path or not skill_path.is_file():
             errors.append(f"skills[{i}] file not found on disk: {fname}")
+            continue
+
+        # Validate that the YAML's actual fragment count + skill_id match
+        # the manifest's claim. A stale manifest indicates the pack was
+        # edited without re-running the migration script — surface the
+        # drift instead of letting it ingest with wrong inventory.
+        claimed_count = entry.get("fragment_count")
+        claimed_id = entry.get("skill_id")
+        try:
+            data = _yaml.safe_load(skill_path.read_text(encoding="utf-8")) or {}
+        except _yaml.YAMLError as exc:
+            errors.append(f"skills[{i}] {fname}: yaml parse error: {exc}")
+            continue
+        actual_id = data.get("skill_id")
+        if claimed_id and actual_id and str(claimed_id) != str(actual_id):
+            errors.append(
+                f"skills[{i}] skill_id drift: manifest says '{claimed_id}', "
+                f"file '{fname}' has '{actual_id}'"
+            )
+        if isinstance(claimed_count, int):
+            actual_count = len(data.get("fragments") or [])
+            if actual_count != claimed_count:
+                errors.append(
+                    f"skills[{i}] fragment_count drift: manifest says "
+                    f"{claimed_count}, file '{fname}' has {actual_count}"
+                )
 
     return manifest, errors
 
 
 def _check_embedding_dim(manifest: dict[str, Any], root: Path) -> str | None:
-    """Hard-block on dim mismatch with the running corpus. Returns error str or None."""
+    """Hard-block on dim mismatch with the running corpus. Returns error str or None.
+
+    Also soft-warns to stderr on `embed_model` name mismatch when dims agree
+    — the pack will likely work but retrieval quality could degrade if the
+    two models embed different things into the same dimension.
+    """
+    _ = root  # reserved
     pack_dim = manifest.get("embedding_dim")
+    pack_model = manifest.get("embed_model")
     if not isinstance(pack_dim, int):
         return None  # nothing to check against; let ingest decide
     try:
@@ -196,24 +243,24 @@ def _check_embedding_dim(manifest: dict[str, Any], root: Path) -> str | None:
 
         settings = get_settings()
         with open_or_create(settings.duckdb_path) as vs:
-            row = vs._conn.execute(  # pyright: ignore[reportPrivateUsage]
-                "SELECT COUNT(*) FROM fragment_embeddings WHERE embedding IS NOT NULL"
-            ).fetchone()
-            corpus_has_embeddings = bool(row and row[0])
-            if not corpus_has_embeddings:
+            current_dim = vs.embedding_dim()
+            if current_dim is None:
                 return None  # corpus is empty; pack defines the dim
-            sample = vs._conn.execute(  # pyright: ignore[reportPrivateUsage]
-                "SELECT len(embedding) FROM fragment_embeddings "
-                "WHERE embedding IS NOT NULL LIMIT 1"
-            ).fetchone()
-            if not sample:
-                return None
-            current_dim = int(sample[0])
             if current_dim != pack_dim:
                 return (
                     f"embedding dimension mismatch: pack expects {pack_dim}-dim "
                     f"but corpus is {current_dim}-dim. Re-embed with a matching "
                     f"model or pick a pack with embedding_dim={current_dim}."
+                )
+            # Dims match. Soft-warn on model-name mismatch.
+            current_model = settings.runtime_embedding_model
+            if pack_model and current_model and pack_model != current_model:
+                print(
+                    f"WARN: pack was authored with embed_model='{pack_model}' "
+                    f"but the running corpus uses '{current_model}'. The pack "
+                    f"will install (dimensions match), but vector retrieval "
+                    f"quality may be reduced for these skills.",
+                    file=sys.stderr,
                 )
     except Exception:  # noqa: BLE001 — best-effort; let downstream surface real failures
         return None
@@ -261,7 +308,9 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
         yaml_path = pack_dir / str(entry["file"])
         ingest_results.append(_ingest_yaml(yaml_path, root))
 
-    failed = [r for r in ingest_results if r["exit_code"] != 0]
+    new_count = sum(1 for r in ingest_results if r["outcome"] == "ingested")
+    duplicate_count = sum(1 for r in ingest_results if r["outcome"] == "duplicate")
+    failed = [r for r in ingest_results if r["outcome"] == "failed"]
 
     state = install_state.load_state(root)
     packs = state.get("installed_packs") or []
@@ -274,6 +323,8 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
             "embedding_dim": int(manifest.get("embedding_dim", 0)),
             "yaml_files": [str(e["file"]) for e in skills_entries],
             "skill_count": len(skills_entries),
+            "skills_ingested": new_count,
+            "skills_already_present": duplicate_count,
             "ingest_failures": len(failed),
             "installed_at": int(time.time()),
         }
@@ -282,13 +333,22 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
     install_state.record_step(state, STEP_NAME, extra={"pack": name, "source": "local"})
     install_state.save_state(state, root)
 
+    if failed:
+        action = "ingested_with_errors"
+    elif new_count == 0 and duplicate_count > 0:
+        action = "already_installed"
+    else:
+        action = "ingested"
+
     return {
         "schema_version": SCHEMA_VERSION,
-        "action": "ingested" if not failed else "ingested_with_errors",
+        "action": action,
         "pack": name,
         "source": f"local:{pack_dir}",
         "version": manifest.get("version"),
         "skill_count": len(skills_entries),
+        "skills_ingested": new_count,
+        "skills_already_present": duplicate_count,
         "ingest_results": ingest_results,
         "ingest_failures": len(failed),
         "remediation": (
@@ -464,7 +524,11 @@ def install_pack(
         for target in ingest_targets:
             ingest_results.append(_ingest_yaml(target, root))
 
-    failed = [r for r in ingest_results if r["exit_code"] != 0]
+    # Same outcome classification as the local-pack flow: only `failed`
+    # counts as a real failure; `duplicate` is a benign skip.
+    new_count = sum(1 for r in ingest_results if r["outcome"] == "ingested")
+    duplicate_count = sum(1 for r in ingest_results if r["outcome"] == "duplicate")
+    failed = [r for r in ingest_results if r["outcome"] == "failed"]
 
     # 5. Record in install state
     state = install_state.load_state(root)
@@ -475,6 +539,8 @@ def install_pack(
             "manifest_url": url,
             "manifest_sha256": expected_sha,
             "yaml_files": copied,
+            "skills_ingested": new_count,
+            "skills_already_present": duplicate_count,
             "ingest_failures": len(failed),
             "installed_at": int(time.time()),
         }
@@ -483,14 +549,23 @@ def install_pack(
     install_state.record_step(state, STEP_NAME, extra={"pack": name})
     install_state.save_state(state, root)
 
+    if failed:
+        action = "ingested_with_errors"
+    elif new_count == 0 and duplicate_count > 0:
+        action = "already_installed"
+    else:
+        action = "ingested"
+
     duration_ms = int((time.monotonic() - t0) * 1000)
     return {
         "schema_version": SCHEMA_VERSION,
-        "action": "ingested" if not failed else "ingested_with_errors",
+        "action": action,
         "pack": name,
         "manifest_url": url,
         "manifest_sha256": expected_sha,
         "yaml_files": copied,
+        "skills_ingested": new_count,
+        "skills_already_present": duplicate_count,
         "ingest_results": ingest_results,
         "ingest_failures": len(failed),
         "remediation": (
@@ -537,6 +612,8 @@ def _run(args: argparse.Namespace) -> int:
     print(json.dumps(result, indent=2))
     if result.get("ingest_failures", 0) > 0:
         return 2
-    if result.get("action") not in ("ingested",):
+    # `ingested` (fresh skills loaded) and `already_installed` (every skill
+    # was already in the corpus — benign no-op) are both successes.
+    if result.get("action") not in ("ingested", "already_installed"):
         return 1
     return 0

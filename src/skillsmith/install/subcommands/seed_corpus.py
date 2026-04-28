@@ -157,6 +157,16 @@ def check_corpus(root: Path | None = None) -> dict[str, Any]:  # noqa: ARG001 â€
             "duration_ms": duration_ms,
         }
 
+    # The remaining paths (failed metadata read, under-minimum skill count)
+    # are integrity issues on a pre-existing populated corpus, not the
+    # fresh-install case. Their remediation message points at install-pack
+    # (which can repopulate from a known-good source).
+    remediation = (
+        "Corpus integrity check failed. Run `skillsmith install-packs` "
+        "to repopulate from packs, or remove "
+        "${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/ to start fresh."
+    )
+
     # 2. Read DuckDB metadata
     try:
         duck_meta = _check_duckdb(duck_path)

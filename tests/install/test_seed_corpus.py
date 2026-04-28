@@ -45,33 +45,31 @@ def user_corpus(tmp_path: Path) -> Path:
 
 
 class TestMissingFiles:
-    def test_missing_duckdb(
+    """In the pack-based distribution, missing corpus files trigger the
+    `initialized_empty` action — empty stores get materialized so the
+    subsequent `install-packs` step can populate them. The old
+    `missing_files` action is gone for the fully-missing case."""
+
+    def test_missing_both_initializes_empty(
+        self, repo_root: Path, no_bundled_corpus: None
+    ) -> None:
+        """Fresh install: neither file exists → init empty stores."""
+        result = check_corpus(repo_root)
+        assert result["action"] == "initialized_empty"
+        assert result["skill_count"] == 0
+        assert result["fragment_count"] == 0
+        assert "install-packs" in result.get("remediation", "")
+
+    def test_partial_corruption_returns_init_failed(
         self, repo_root: Path, user_corpus: Path, no_bundled_corpus: None
     ) -> None:
+        """A pre-existing-but-malformed ladybug path can't be initialized.
+        Surface the failure rather than silently overwriting."""
+        # Pre-create an empty `ladybug` directory (Kuzu expects a file).
         (user_corpus / "ladybug").mkdir()
         result = check_corpus(repo_root)
-        assert result["action"] == "missing_files"
-        assert "skills.duck" in str(result.get("missing", []))
-
-    def test_missing_ladybug(
-        self, repo_root: Path, user_corpus: Path, no_bundled_corpus: None
-    ) -> None:
-        (user_corpus / "skills.duck").write_bytes(b"")
-        result = check_corpus(repo_root)
-        assert result["action"] == "missing_files"
-        assert "ladybug" in str(result.get("missing", []))
-
-    def test_missing_both(self, repo_root: Path, no_bundled_corpus: None) -> None:
-        result = check_corpus(repo_root)
-        assert result["action"] == "missing_files"
-        missing = result.get("missing", [])
-        assert len(missing) == 2
-
-    def test_remediation_hint(self, repo_root: Path, no_bundled_corpus: None) -> None:
-        result = check_corpus(repo_root)
-        # Remediation now points at re-installing the package or running
-        # install-pack, since the corpus ships in the wheel.
-        assert "skillsmith" in result.get("remediation", "")
+        assert result["action"] == "init_failed"
+        assert "Could not initialize" in result.get("error", "")
 
 
 class TestVerifiedPresent:
@@ -98,9 +96,13 @@ class TestVerifiedPresent:
 
 class TestUnderMinimumSkillCount:
     @patch("skillsmith.install.subcommands.seed_corpus._check_duckdb")
-    def test_under_minimum_returns_missing_files(
+    def test_under_minimum_still_flagged(
         self, mock_duck: MagicMock, repo_root: Path, user_corpus: Path
     ) -> None:
+        """A populated-but-under-minimum corpus still triggers the
+        ``missing_files`` action — that path detects integrity problems
+        in a corpus that DOES have the files but is suspiciously small.
+        Distinct from the `initialized_empty` path (no files at all)."""
         (user_corpus / "skills.duck").write_bytes(b"fake")
         (user_corpus / "ladybug").mkdir()
         mock_duck.return_value = {

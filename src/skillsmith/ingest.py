@@ -34,6 +34,11 @@ EXIT_OK = 0
 EXIT_USAGE = 1
 EXIT_VALIDATION = 2
 EXIT_DB = 3
+# A skill with the same skill_id (or canonical_name) is already in the corpus.
+# Distinct exit code so re-running ingest on a populated DB is a benign no-op
+# rather than a failure — install-pack uses this to skip the ingest cleanly
+# instead of counting it as a real ingest failure.
+EXIT_DUPLICATE = 4
 
 _VALID_SYSTEM_CATEGORIES = frozenset(
     {"governance", "operational", "tooling", "safety", "quality", "observability"}
@@ -140,11 +145,11 @@ def _single(yaml_path: Path, *, force: bool, yes: bool) -> int:
         )
         if existing_name is not None and not force:
             print(
-                f"error: skill_id '{record.skill_id}' already exists "
+                f"skip: skill_id '{record.skill_id}' already exists "
                 f"(canonical_name: '{existing_name}'). Use --force to overwrite.",
                 file=sys.stderr,
             )
-            return EXIT_VALIDATION
+            return EXIT_DUPLICATE
 
         if existing_name is None:
             existing_id_by_name = store.scalar(
@@ -153,11 +158,11 @@ def _single(yaml_path: Path, *, force: bool, yes: bool) -> int:
             )
             if existing_id_by_name is not None and not force:
                 print(
-                    f"error: canonical_name '{record.canonical_name}' is already used by "
+                    f"skip: canonical_name '{record.canonical_name}' is already used by "
                     f"skill_id '{existing_id_by_name}'. Use --force to overwrite.",
                     file=sys.stderr,
                 )
-                return EXIT_VALIDATION
+                return EXIT_DUPLICATE
 
         _print_summary(record, existing=existing_name is not None)
         if not yes:
