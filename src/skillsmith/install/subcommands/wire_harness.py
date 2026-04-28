@@ -746,7 +746,9 @@ def add_parser(
 
 def _run(args: argparse.Namespace) -> int:
     st = install_state.load_state()
-    port = install_state.validate_port(args.port if args.port is not None else st.get("port", 47950))
+    port = install_state.validate_port(
+        args.port if args.port is not None else st.get("port", 47950)
+    )
     result = wire_harness(
         args.harness,
         port=port,
