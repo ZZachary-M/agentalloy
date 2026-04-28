@@ -1,0 +1,37 @@
+skill_type: domain
+skill_id: vue-debug-guides-template-ref-null-with-v-if
+canonical_name: Template Refs Become Null When Elements Are Unmounted
+category: engineering
+skill_class: domain
+domain_tags:
+- conditional-rendering
+- v-if
+- vue-debug-guides
+- vue
+- template-refs
+- vue3
+- watchers
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/template-ref-null-with-v-if.md
+raw_prose: "# Template Refs Become Null When Elements Are Unmounted\n\n**Impact: MEDIUM** - When using template refs with `v-if`, the ref becomes `null` when the element is unmounted. Watchers and effects that access these refs must handle the null case to avoid runtime errors.\n\nThis is especially tricky with `watchEffect` since it runs automatically and may execute when the ref is null.\n\n## Task Checklist\n\n- [ ] Always check for null before accessing ref properties when using v-if\n- [ ] In watchers, explicitly handle the null case (element unmounted or not yet mounted)\n- [ ] Consider whether v-show is more appropriate if you need persistent ref access\n- [ ] Use optional chaining (?.) when accessing ref properties in uncertain contexts\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// WRONG: No null check - will error when v-if is false\nwatchEffect(() => {\n  inputEl.value.focus() // TypeError when showInput is false\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n  <button @click=\"showInput = !showInput\">Toggle</button>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: Handle both mounted and unmounted states\nwatchEffect(() => {\n  if (inputEl.value) {\n    inputEl.value.focus()\n  } else {\n    // Element not mounted yet, or unmounted by v-if\n    console.log('Input element not available')\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n  <button @click=\"showInput = !showInput\">Toggle</button>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: Watch the ref and handle null explicitly\nwatch(inputEl, (el) => {\n  if (el) {\n    el.focus()\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { useTemplateRef, watchEffect } from 'vue'\n\n// Vue 3.5+ approach\nconst input = useTemplateRef('my-input')\n\n// CORRECT: Use optional chaining for safe access\nwatchEffect(() => {\n  input.value?.focus()\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"my-input\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, onMounted } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// ALTERNATIVE: Use v-show if you need consistent ref access\n// v-show keeps element in DOM, just hides it with CSS\n</script>\n\n<template>\n  <!-- Element always exists in DOM, ref is never null -->\n  <input v-show=\"showInput\" ref=\"inputEl\" />\n</template>\n```\n\n## Reference\n- [Vue.js Template Refs](https://vuejs.org/guide/essentials/template-refs.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Template Refs Become Null When Elements Are Unmounted
+
+
+    **Impact: MEDIUM** - When using template refs with `v-if`, the ref becomes `null` when the element is unmounted. Watchers and effects that access these refs must handle the null case to avoid runtime errors.
+
+
+    This is especially tricky with `watchEffect` since it runs automatically and may execute when the ref is null.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always check for null before accessing ref properties when using v-if\n- [ ] In watchers, explicitly handle the null case (element unmounted or not yet mounted)\n- [ ] Consider whether v-show is more appropriate if you need persistent ref access\n- [ ] Use optional chaining (?.) when accessing ref properties in uncertain contexts\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// WRONG: No null check - will error when v-if is false\nwatchEffect(() => {\n  inputEl.value.focus() // TypeError when showInput is false\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n  <button @click=\"showInput = !showInput\">Toggle</button>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: Handle both mounted and unmounted states\nwatchEffect(() => {\n  if (inputEl.value) {\n    inputEl.value.focus()\n  } else {\n    // Element not mounted yet, or unmounted by v-if\n    console.log('Input element not available')\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n  <button @click=\"showInput = !showInput\">Toggle</button>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: Watch the ref and handle null explicitly\nwatch(inputEl, (el) => {\n  if (el) {\n    el.focus()\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { useTemplateRef, watchEffect } from 'vue'\n\n// Vue 3.5+ approach\nconst input = useTemplateRef('my-input')\n\n// CORRECT: Use optional chaining for safe access\nwatchEffect(() => {\n  input.value?.focus()\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"my-input\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, onMounted } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// ALTERNATIVE: Use v-show if you need consistent ref access\n// v-show keeps element in DOM, just hides it with CSS\n</script>\n\n<template>\n  <!-- Element always exists in DOM, ref is never null -->\n  <input v-show=\"showInput\" ref=\"inputEl\" />\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Template Refs](https://vuejs.org/guide/essentials/template-refs.html)'

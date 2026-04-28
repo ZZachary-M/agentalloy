@@ -1,0 +1,40 @@
+skill_type: domain
+skill_id: vue-debug-guides-reactivity-proxy-identity-hazard
+canonical_name: Avoid Comparing Reactive Objects with === Operator
+category: engineering
+skill_class: domain
+domain_tags:
+- reactivity
+- proxy
+- debugging
+- vue-debug-guides
+- comparison
+- vue
+- vue3
+- identity
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/reactivity-proxy-identity-hazard.md
+raw_prose: "# Avoid Comparing Reactive Objects with === Operator\n\n**Impact: HIGH** - Vue's `reactive()` returns a Proxy wrapper that has a different identity than the original object. Using `===` to compare reactive objects can lead to silent bugs where comparisons unexpectedly return `false`.\n\nWhen you wrap an object with `reactive()`, the returned proxy is NOT equal to the original object. Additionally, accessing nested objects from a reactive object returns new proxy wrappers each time, which can cause identity comparison issues.\n\n## Task Checklist\n\n- [ ] Never compare reactive object instances with `===` directly\n- [ ] Use unique identifiers (ID, UUID) for object comparison instead\n- [ ] Use `toRaw()` on both sides when identity comparison is absolutely necessary\n- [ ] Consider using primitive identifiers from database records for comparison\n\n**Incorrect:**\n```javascript\nimport { reactive } from 'vue'\n\nconst original = { id: 1, name: 'Item' }\nconst state = reactive(original)\n\n// BUG: Always returns false - proxy !== original\nif (state === original) {\n  console.log('Same object') // Never executes\n}\n\n// BUG: Nested object comparison fails\nconst items = reactive([{ id: 1 }, { id: 2 }])\nconst item = items[0]\n\n// Later...\nif (items[0] === item) {\n  // May or may not work depending on Vue's proxy caching\n}\n\n// BUG: Comparing items from different reactive sources\nconst listA = reactive([{ id: 1 }])\nconst listB = reactive([{ id: 1 }])\nif (listA[0] === listB[0]) {\n  // Never true, even though they represent the same data\n}\n```\n\n**Correct:**\n```javascript\nimport { reactive, toRaw } from 'vue'\n\nconst original = { id: 1, name: 'Item' }\nconst state = reactive(original)\n\n// CORRECT: Use toRaw() for identity comparison\nif (toRaw(state) === original) {\n  console.log('Same underlying object') // Works!\n}\n\n// BEST: Use unique identifiers instead\nconst items = reactive([\n  { id: 'uuid-1', name: 'Item 1' },\n  { id: 'uuid-2', name: 'Item 2' }\n])\n\nfunction findItem(targetId) {\n  return items.find(item => item.id === targetId)\n}\n\nfunction isSelected(item) {\n  return selectedId.value === item.id // Compare IDs, not objects\n}\n\n// CORRECT: For Set/Map operations, use primitive keys\nconst selectedIds = reactive(new Set())\nselectedIds.add(item.id)  // Use ID, not object\nselectedIds.has(item.id)  // Check by ID\n```\n\n```javascript\n// When you must compare objects, use toRaw on both sides\nimport { toRaw, isReactive } from 'vue'\n\nfunction areEqual(a, b) {\n  const rawA = isReactive(a) ? toRaw(a) : a\n  const rawB = isReactive(b) ? toRaw(b) : b\n  return rawA === rawB\n}\n```\n\n## Reference\n- [Vue.js Reactivity in Depth](https://vuejs.org/guide/extras/reactivity-in-depth.html)\n- [Vue.js toRaw() API](https://vuejs.org/api/reactivity-advanced.html#toraw)\n"
+fragments:
+- sequence: 1
+  fragment_type: guardrail
+  content: '# Avoid Comparing Reactive Objects with === Operator
+
+
+    **Impact: HIGH** - Vue''s `reactive()` returns a Proxy wrapper that has a different identity than the original object. Using `===` to compare reactive objects can lead to silent bugs where comparisons unexpectedly return `false`.
+
+
+    When you wrap an object with `reactive()`, the returned proxy is NOT equal to the original object. Additionally, accessing nested objects from a reactive object returns new proxy wrappers each time, which can cause identity comparison issues.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never compare reactive object instances with `===` directly\n- [ ] Use unique identifiers (ID, UUID) for object comparison instead\n- [ ] Use `toRaw()` on both sides when identity comparison is absolutely necessary\n- [ ] Consider using primitive identifiers from database records for comparison\n\n**Incorrect:**\n```javascript\nimport { reactive } from 'vue'\n\nconst original = { id: 1, name: 'Item' }\nconst state = reactive(original)\n\n// BUG: Always returns false - proxy !== original\nif (state === original) {\n  console.log('Same object') // Never executes\n}\n\n// BUG: Nested object comparison fails\nconst items = reactive([{ id: 1 }, { id: 2 }])\nconst item = items[0]\n\n// Later...\nif (items[0] === item) {\n  // May or may not work depending on Vue's proxy caching\n}\n\n// BUG: Comparing items from different reactive sources\nconst listA = reactive([{ id: 1 }])\nconst listB = reactive([{ id: 1 }])\nif (listA[0] === listB[0]) {\n  // Never true, even though they represent the same data\n}\n```\n\n**Correct:**\n```javascript\nimport { reactive, toRaw } from 'vue'\n\nconst original = { id: 1, name: 'Item' }\nconst state = reactive(original)\n\n// CORRECT: Use toRaw() for identity comparison\nif (toRaw(state) === original) {\n  console.log('Same underlying object') // Works!\n}\n\n// BEST: Use unique identifiers instead\nconst items = reactive([\n  { id: 'uuid-1', name: 'Item 1' },\n  { id: 'uuid-2', name: 'Item 2' }\n])\n\nfunction findItem(targetId) {\n  return items.find(item => item.id === targetId)\n}\n\nfunction isSelected(item) {\n  return selectedId.value === item.id // Compare IDs, not objects\n}\n\n// CORRECT: For Set/Map operations, use primitive keys\nconst selectedIds = reactive(new Set())\nselectedIds.add(item.id)  // Use ID, not object\nselectedIds.has(item.id)  // Check by ID\n```\n\n```javascript\n// When you must compare objects, use toRaw on both sides\nimport { toRaw, isReactive } from 'vue'\n\nfunction areEqual(a, b) {\n  const rawA = isReactive(a) ? toRaw(a) : a\n  const rawB = isReactive(b) ? toRaw(b) : b\n  return rawA === rawB\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Reactivity in Depth](https://vuejs.org/guide/extras/reactivity-in-depth.html)
+
+    - [Vue.js toRaw() API](https://vuejs.org/api/reactivity-advanced.html#toraw)'

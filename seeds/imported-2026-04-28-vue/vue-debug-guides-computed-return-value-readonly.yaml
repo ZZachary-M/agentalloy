@@ -1,0 +1,45 @@
+skill_type: domain
+skill_id: vue-debug-guides-computed-return-value-readonly
+canonical_name: Never Mutate Computed Property Return Values
+category: engineering
+skill_class: domain
+domain_tags:
+- immutability
+- reactivity
+- vue-debug-guides
+- vue
+- computed
+- common-mistake
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/computed-return-value-readonly.md
+raw_prose: "# Never Mutate Computed Property Return Values\n\n**Impact: HIGH** - The returned value from a computed property is derived state - a temporary snapshot. Mutating this value leads to bugs that are difficult to debug.\n\n**Important:** Mutations DO persist while the computed cache remains valid, but are lost when recomputation occurs. The danger lies in unpredictable cache invalidation timing - any change to the computed's dependencies triggers recomputation, silently discarding your mutations. This makes bugs intermittent and hard to reproduce.\n\nEvery time the source state changes, a new snapshot is created. Mutating a snapshot is meaningless because it will be discarded on the next recalculation.\n\n## Task Checklist\n\n- [ ] Treat computed return values as read-only\n- [ ] Update the source state instead of the computed value\n- [ ] Use writable computed properties if bidirectional binding is needed\n- [ ] Avoid array mutating methods (push, pop, splice, reverse, sort) on computed arrays\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst books = ref(['Vue Guide', 'React Handbook'])\n\nconst publishedBooks = computed(() => {\n  return books.value.filter(book => book.includes('Guide'))\n})\n\nfunction addBook() {\n  // BAD: Mutating computed value - change will be lost!\n  publishedBooks.value.push('New Book')\n}\n\n// BAD: Mutating computed array\nconst sortedBooks = computed(() => books.value.filter(b => b))\n\nfunction reverseBooks() {\n  // BAD: This mutates the computed snapshot\n  sortedBooks.value.reverse()\n}\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return {\n      author: {\n        name: 'John',\n        books: ['Book A', 'Book B']\n      }\n    }\n  },\n  computed: {\n    authorBooks() {\n      return this.author.books\n    }\n  },\n  methods: {\n    addBook() {\n      // BAD: Mutating computed value\n      this.authorBooks.push('New Book')\n    }\n  }\n}\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst books = ref(['Vue Guide', 'React Handbook'])\n\nconst publishedBooks = computed(() => {\n  return books.value.filter(book => book.includes('Guide'))\n})\n\nfunction addBook(bookName) {\n  // GOOD: Update the source state\n  books.value.push(bookName)\n}\n\n// GOOD: Create a copy before mutating for display\nconst sortedBooks = computed(() => {\n  return [...books.value].sort()  // Spread to create copy before sort\n})\n\nconst reversedBooks = computed(() => {\n  return [...books.value].reverse()  // Spread to create copy before reverse\n})\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return {\n      author: {\n        name: 'John',\n        books: ['Book A', 'Book B']\n      }\n    }\n  },\n  computed: {\n    authorBooks() {\n      return this.author.books\n    }\n  },\n  methods: {\n    addBook(bookName) {\n      // GOOD: Update source state\n      this.author.books.push(bookName)\n    }\n  }\n}\n</script>\n```\n\n## Writable Computed for Bidirectional Binding\n\nIf you genuinely need to \"set\" a computed value, use a writable computed property:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst firstName = ref('John')\nconst lastName = ref('Doe')\n\n// Writable computed with getter and setter\nconst fullName = computed({\n  get() {\n    return `${firstName.value} ${lastName.value}`\n  },\n  set(newValue) {\n    // Update source state based on the new value\n    const parts = newValue.split(' ')\n    firstName.value = parts[0] || ''\n    lastName.value = parts[1] || ''\n  }\n})\n\n// Now this is valid:\nfullName.value = 'Jane Smith'  // Updates firstName and lastName\n</script>\n```\n\n## Reference\n- [Vue.js Computed Properties - Avoid Mutating Computed Value](https://vuejs.org/guide/essentials/computed.html#avoid-mutating-computed-value)\n- [Vue.js Computed Properties - Writable Computed](https://vuejs.org/guide/essentials/computed.html#writable-computed)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Never Mutate Computed Property Return Values
+
+
+    **Impact: HIGH** - The returned value from a computed property is derived state - a temporary snapshot. Mutating this value leads to bugs that are difficult to debug.
+
+
+    **Important:** Mutations DO persist while the computed cache remains valid, but are lost when recomputation occurs. The danger lies in unpredictable cache invalidation timing - any change to the computed''s dependencies triggers recomputation, silently discarding your mutations. This makes bugs intermittent and hard to reproduce.
+
+
+    Every time the source state changes, a new snapshot is created. Mutating a snapshot is meaningless because it will be discarded on the next recalculation.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Treat computed return values as read-only\n- [ ] Update the source state instead of the computed value\n- [ ] Use writable computed properties if bidirectional binding is needed\n- [ ] Avoid array mutating methods (push, pop, splice, reverse, sort) on computed arrays\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst books = ref(['Vue Guide', 'React Handbook'])\n\nconst publishedBooks = computed(() => {\n  return books.value.filter(book => book.includes('Guide'))\n})\n\nfunction addBook() {\n  // BAD: Mutating computed value - change will be lost!\n  publishedBooks.value.push('New Book')\n}\n\n// BAD: Mutating computed array\nconst sortedBooks = computed(() => books.value.filter(b => b))\n\nfunction reverseBooks() {\n  // BAD: This mutates the computed snapshot\n  sortedBooks.value.reverse()\n}\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return {\n      author: {\n        name: 'John',\n        books: ['Book A', 'Book B']\n      }\n    }\n  },\n  computed: {\n    authorBooks() {\n      return this.author.books\n    }\n  },\n  methods: {\n    addBook() {\n      // BAD: Mutating computed value\n      this.authorBooks.push('New Book')\n    }\n  }\n}\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst books = ref(['Vue Guide', 'React Handbook'])\n\nconst publishedBooks = computed(() => {\n  return books.value.filter(book => book.includes('Guide'))\n})\n\nfunction addBook(bookName) {\n  // GOOD: Update the source state\n  books.value.push(bookName)\n}\n\n// GOOD: Create a copy before mutating for display\nconst sortedBooks = computed(() => {\n  return [...books.value].sort()  // Spread to create copy before sort\n})\n\nconst reversedBooks = computed(() => {\n  return [...books.value].reverse()  // Spread to create copy before reverse\n})\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return {\n      author: {\n        name: 'John',\n        books: ['Book A', 'Book B']\n      }\n    }\n  },\n  computed: {\n    authorBooks() {\n      return this.author.books\n    }\n  },\n  methods: {\n    addBook(bookName) {\n      // GOOD: Update source state\n      this.author.books.push(bookName)\n    }\n  }\n}\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Writable Computed for Bidirectional Binding\n\nIf you genuinely need to \"set\" a computed value, use a writable computed property:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst firstName = ref('John')\nconst lastName = ref('Doe')\n\n// Writable computed with getter and setter\nconst fullName = computed({\n  get() {\n    return `${firstName.value} ${lastName.value}`\n  },\n  set(newValue) {\n    // Update source state based on the new value\n    const parts = newValue.split(' ')\n    firstName.value = parts[0] || ''\n    lastName.value = parts[1] || ''\n  }\n})\n\n// Now this is valid:\nfullName.value = 'Jane Smith'  // Updates firstName and lastName\n</script>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Computed Properties - Avoid Mutating Computed Value](https://vuejs.org/guide/essentials/computed.html#avoid-mutating-computed-value)
+
+    - [Vue.js Computed Properties - Writable Computed](https://vuejs.org/guide/essentials/computed.html#writable-computed)'

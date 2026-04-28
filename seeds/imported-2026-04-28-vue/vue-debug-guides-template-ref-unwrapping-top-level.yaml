@@ -1,0 +1,37 @@
+skill_type: domain
+skill_id: vue-debug-guides-template-ref-unwrapping-top-level
+canonical_name: Template Ref Unwrapping Only Works for Top-Level Properties
+category: engineering
+skill_class: domain
+domain_tags:
+- template
+- reactivity
+- vue-debug-guides
+- unwrapping
+- vue
+- ref
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/template-ref-unwrapping-top-level.md
+raw_prose: "# Template Ref Unwrapping Only Works for Top-Level Properties\n\n**Impact: MEDIUM** - Vue only auto-unwraps refs that are top-level properties in the template render context. Nested refs (refs inside objects) are NOT unwrapped in expressions, causing `[object Object]` rendering or calculation errors.\n\nThis caveat trips up developers when they store refs inside reactive objects or plain objects and try to use them in template expressions like `{{ object.count + 1 }}`.\n\n## Task Checklist\n\n- [ ] Keep refs at the top level of your setup return or script setup\n- [ ] Destructure nested refs to top-level variables before using in expressions\n- [ ] Be aware that text interpolation `{{ object.ref }}` DOES unwrap, but expressions `{{ object.ref + 1 }}` do NOT\n- [ ] Consider restructuring data to avoid nested refs in templates\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst object = { id: ref(1) }\n</script>\n\n<template>\n  <!-- WRONG: Nested ref in expression - does NOT unwrap -->\n  <p>ID + 1 = {{ object.id + 1 }}</p>\n  <!-- Renders: \"ID + 1 = [object Object]1\" -->\n\n  <!-- Surprisingly, plain interpolation DOES work -->\n  <p>ID = {{ object.id }}</p>\n  <!-- Renders: \"ID = 1\" (unwrapped because it's the final expression) -->\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst object = { id: ref(1) }\n\n// SOLUTION 1: Destructure to top-level\nconst { id } = object\n</script>\n\n<template>\n  <!-- CORRECT: Top-level ref unwraps in all expressions -->\n  <p>Count + 1 = {{ count + 1 }}</p>\n  <!-- Renders: \"Count + 1 = 1\" -->\n\n  <!-- CORRECT: Destructured ref is now top-level -->\n  <p>ID + 1 = {{ id + 1 }}</p>\n  <!-- Renders: \"ID + 1 = 2\" -->\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst object = { id: ref(1) }\n\n// SOLUTION 2: Use computed for derived values\nconst idPlusOne = computed(() => object.id.value + 1)\n</script>\n\n<template>\n  <!-- CORRECT: Computed handles the .value access -->\n  <p>ID + 1 = {{ idPlusOne }}</p>\n</template>\n```\n\n```vue\n<script setup>\nimport { reactive } from 'vue'\n\n// SOLUTION 3: Use reactive object instead (refs inside reactive auto-unwrap)\nconst object = reactive({ id: 1 })\n</script>\n\n<template>\n  <!-- CORRECT: Plain reactive property works in expressions -->\n  <p>ID + 1 = {{ object.id + 1 }}</p>\n</template>\n```\n\n```javascript\n// WHY this happens:\n// - Template compilation only adds .value to top-level identifiers\n// - {{ count + 1 }} compiles to: count.value + 1\n// - {{ object.id + 1 }} compiles to: object.id + 1 (no .value added!)\n// - Plain {{ object.id }} has special handling for display purposes\n```\n\n## Reference\n- [Vue.js Reactivity Fundamentals - Caveat when Unwrapping in Templates](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#caveat-when-unwrapping-in-templates)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Template Ref Unwrapping Only Works for Top-Level Properties
+
+
+    **Impact: MEDIUM** - Vue only auto-unwraps refs that are top-level properties in the template render context. Nested refs (refs inside objects) are NOT unwrapped in expressions, causing `[object Object]` rendering or calculation errors.
+
+
+    This caveat trips up developers when they store refs inside reactive objects or plain objects and try to use them in template expressions like `{{ object.count + 1 }}`.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Keep refs at the top level of your setup return or script setup\n- [ ] Destructure nested refs to top-level variables before using in expressions\n- [ ] Be aware that text interpolation `{{ object.ref }}` DOES unwrap, but expressions `{{ object.ref + 1 }}` do NOT\n- [ ] Consider restructuring data to avoid nested refs in templates\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst object = { id: ref(1) }\n</script>\n\n<template>\n  <!-- WRONG: Nested ref in expression - does NOT unwrap -->\n  <p>ID + 1 = {{ object.id + 1 }}</p>\n  <!-- Renders: \"ID + 1 = [object Object]1\" -->\n\n  <!-- Surprisingly, plain interpolation DOES work -->\n  <p>ID = {{ object.id }}</p>\n  <!-- Renders: \"ID = 1\" (unwrapped because it's the final expression) -->\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst object = { id: ref(1) }\n\n// SOLUTION 1: Destructure to top-level\nconst { id } = object\n</script>\n\n<template>\n  <!-- CORRECT: Top-level ref unwraps in all expressions -->\n  <p>Count + 1 = {{ count + 1 }}</p>\n  <!-- Renders: \"Count + 1 = 1\" -->\n\n  <!-- CORRECT: Destructured ref is now top-level -->\n  <p>ID + 1 = {{ id + 1 }}</p>\n  <!-- Renders: \"ID + 1 = 2\" -->\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst object = { id: ref(1) }\n\n// SOLUTION 2: Use computed for derived values\nconst idPlusOne = computed(() => object.id.value + 1)\n</script>\n\n<template>\n  <!-- CORRECT: Computed handles the .value access -->\n  <p>ID + 1 = {{ idPlusOne }}</p>\n</template>\n```\n\n```vue\n<script setup>\nimport { reactive } from 'vue'\n\n// SOLUTION 3: Use reactive object instead (refs inside reactive auto-unwrap)\nconst object = reactive({ id: 1 })\n</script>\n\n<template>\n  <!-- CORRECT: Plain reactive property works in expressions -->\n  <p>ID + 1 = {{ object.id + 1 }}</p>\n</template>\n```\n\n```javascript\n// WHY this happens:\n// - Template compilation only adds .value to top-level identifiers\n// - {{ count + 1 }} compiles to: count.value + 1\n// - {{ object.id + 1 }} compiles to: object.id + 1 (no .value added!)\n// - Plain {{ object.id }} has special handling for display purposes\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Reactivity Fundamentals - Caveat when Unwrapping in Templates](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#caveat-when-unwrapping-in-templates)'

@@ -1,0 +1,63 @@
+skill_type: domain
+skill_id: vue-debug-guides-component-ref-requires-defineexpose
+canonical_name: Component Refs Require defineExpose with Script Setup
+category: engineering
+skill_class: domain
+domain_tags:
+- component-communication
+- defineExpose
+- vue-debug-guides
+- vue
+- script-setup
+- template-refs
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/component-ref-requires-defineexpose.md
+raw_prose: "# Component Refs Require defineExpose with Script Setup\n\n**Impact: HIGH** - Components using `<script setup>` are private by default. A parent component using a template ref to access a child will get an empty object unless the child explicitly exposes properties using `defineExpose()`. This is a fundamental change from Options API behavior.\n\nThis catches many developers off-guard when migrating from Options API, where `this.$refs.child` gave full access to the child instance.\n\n## Task Checklist\n\n- [ ] Use `defineExpose()` to explicitly expose properties/methods to parent refs\n- [ ] Only expose what's necessary - keep component internals private\n- [ ] Document exposed APIs as they form your component's public interface\n- [ ] Prefer props/emit for parent-child communication; use refs sparingly\n- [ ] Call defineExpose before any await operation (see async caveat)\n\n**Incorrect:**\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst internalState = ref('private')\n\nfunction increment() {\n  count.value++\n}\n\nfunction reset() {\n  count.value = 0\n}\n\n// WRONG: Nothing exposed - parent ref sees empty object\n</script>\n\n<template>\n  <div>{{ count }}</div>\n</template>\n```\n\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport { ref, onMounted } from 'vue'\nimport ChildComponent from './ChildComponent.vue'\n\nconst childRef = ref(null)\n\nonMounted(() => {\n  // WRONG: childRef.value is {} - empty object!\n  console.log(childRef.value.count) // undefined\n  childRef.value.increment() // TypeError: not a function\n})\n</script>\n\n<template>\n  <ChildComponent ref=\"childRef\" />\n</template>\n```\n\n**Correct:**\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst internalState = ref('private') // Keep this private\n\nfunction increment() {\n  count.value++\n}\n\nfunction reset() {\n  count.value = 0\n}\n\n// CORRECT: Explicitly expose public API\ndefineExpose({\n  count,      // Expose the ref\n  increment,  // Expose methods\n  reset\n  // internalState NOT exposed - stays private\n})\n</script>\n\n<template>\n  <div>{{ count }}</div>\n</template>\n```\n\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport { ref, onMounted } from 'vue'\nimport ChildComponent from './ChildComponent.vue'\n\nconst childRef = ref(null)\n\nonMounted(() => {\n  // CORRECT: Can access exposed properties\n  console.log(childRef.value.count) // 0\n  childRef.value.increment() // Works!\n\n  // internalState is not accessible (private)\n  console.log(childRef.value.internalState) // undefined\n})\n</script>\n\n<template>\n  <ChildComponent ref=\"childRef\" />\n</template>\n```\n\n```vue\n<!-- Input wrapper example - exposing native element -->\n<script setup>\nimport { ref } from 'vue'\n\nconst inputEl = ref(null)\n\n// Expose the native input for parent to access (e.g., for focus)\ndefineExpose({\n  focus: () => inputEl.value?.focus(),\n  blur: () => inputEl.value?.blur(),\n  // Or expose the element directly\n  el: inputEl\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-bind=\"$attrs\" />\n</template>\n```\n\n```javascript\n// Options API equivalent using expose option\nexport default {\n  expose: ['count', 'increment', 'reset'],\n  data() {\n    return {\n      count: 0,\n      internalState: 'private'\n    }\n  },\n  methods: {\n    increment() { this.count++ },\n    reset() { this.count = 0 }\n  }\n}\n```\n\n## Best Practice Reminder\n\nComponent refs create tight coupling between parent and child. Prefer standard patterns:\n\n```vue\n<!-- PREFERRED: Use props and emit for communication -->\n<script setup>\nconst props = defineProps(['modelValue'])\nconst emit = defineEmits(['update:modelValue'])\n</script>\n\n<!-- Only use refs for imperative actions like focus(), scrollTo(), etc. -->\n```\n\n## Reference\n- [Vue.js Component Refs](https://vuejs.org/guide/essentials/template-refs.html#ref-on-component)\n- [Script Setup - defineExpose](https://vuejs.org/api/sfc-script-setup.html#defineexpose)\n"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Component Refs Require defineExpose with Script Setup
+
+
+    **Impact: HIGH** - Components using `<script setup>` are private by default. A parent component using a template ref to access a child will get an empty object unless the child explicitly exposes properties using `defineExpose()`. This is a fundamental change from Options API behavior.
+
+
+    This catches many developers off-guard when migrating from Options API, where `this.$refs.child` gave full access to the child instance.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Use `defineExpose()` to explicitly expose properties/methods to parent refs\n- [ ] Only expose what's necessary - keep component internals private\n- [ ] Document exposed APIs as they form your component's public interface\n- [ ] Prefer props/emit for parent-child communication; use refs sparingly\n- [ ] Call defineExpose before any await operation (see async caveat)\n\n**Incorrect:**\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst internalState = ref('private')\n\nfunction increment() {\n  count.value++\n}\n\nfunction reset() {\n  count.value = 0\n}\n\n// WRONG: Nothing exposed - parent ref sees empty object\n</script>\n\n<template>\n  <div>{{ count }}</div>\n</template>\n```\n\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport { ref, onMounted } from 'vue'\nimport ChildComponent from './ChildComponent.vue'\n\nconst childRef = ref(null)\n\nonMounted(() => {\n  // WRONG: childRef.value is {} - empty object!\n  console.log(childRef.value.count) // undefined\n  childRef.value.increment() // TypeError: not a function\n})\n</script>\n\n<template>\n  <ChildComponent ref=\"childRef\" />\n</template>\n```\n\n**Correct:**\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst internalState = ref('private') // Keep this private\n\nfunction increment() {\n  count.value++\n}\n\nfunction reset() {\n  count.value = 0\n}\n\n// CORRECT: Explicitly expose public API\ndefineExpose({\n  count,      // Expose the ref\n  increment,  // Expose methods\n  reset\n  // internalState NOT exposed - stays private\n})\n</script>\n\n<template>\n  <div>{{ count }}</div>\n</template>\n```\n\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport { ref, onMounted } from 'vue'\nimport ChildComponent from './ChildComponent.vue'\n\nconst childRef = ref(null)\n\nonMounted(() => {\n  // CORRECT: Can access exposed properties\n  console.log(childRef.value.count) // 0\n  childRef.value.increment() // Works!\n\n  // internalState is not accessible (private)\n  console.log(childRef.value.internalState) // undefined\n})\n</script>\n\n<template>\n  <ChildComponent ref=\"childRef\" />\n</template>\n```\n\n```vue\n<!-- Input wrapper example - exposing native element -->\n<script setup>\nimport { ref } from 'vue'\n\nconst inputEl = ref(null)\n\n// Expose the native input for parent to access (e.g., for focus)\ndefineExpose({\n  focus: () => inputEl.value?.focus(),\n  blur: () => inputEl.value?.blur(),\n  // Or expose the element directly\n  el: inputEl\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-bind=\"$attrs\" />\n</template>\n```\n\n```javascript\n// Options API equivalent using expose option\nexport default {\n  expose: ['count', 'increment', 'reset'],\n  data() {\n    return {\n      count: 0,\n      internalState: 'private'\n    }\n  },\n  methods: {\n    increment() { this.count++ },\n    reset() { this.count = 0 }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Best Practice Reminder
+
+
+    Component refs create tight coupling between parent and child. Prefer standard patterns:
+
+
+    ```vue
+
+    <!-- PREFERRED: Use props and emit for communication -->
+
+    <script setup>
+
+    const props = defineProps([''modelValue''])
+
+    const emit = defineEmits([''update:modelValue''])
+
+    </script>
+
+
+    <!-- Only use refs for imperative actions like focus(), scrollTo(), etc. -->
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Component Refs](https://vuejs.org/guide/essentials/template-refs.html#ref-on-component)
+
+    - [Script Setup - defineExpose](https://vuejs.org/api/sfc-script-setup.html#defineexpose)'

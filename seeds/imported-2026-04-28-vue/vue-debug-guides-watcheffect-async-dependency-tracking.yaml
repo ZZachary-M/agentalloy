@@ -1,0 +1,49 @@
+skill_type: domain
+skill_id: vue-debug-guides-watcheffect-async-dependency-tracking
+canonical_name: watchEffect Only Tracks Dependencies Before First Await
+category: engineering
+skill_class: domain
+domain_tags:
+- watchEffect
+- async
+- vue-debug-guides
+- vue
+- await
+- vue3
+- dependency-tracking
+- watchers
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/watcheffect-async-dependency-tracking.md
+raw_prose: "# watchEffect Only Tracks Dependencies Before First Await\n\n**Impact: HIGH** - `watchEffect` automatically tracks reactive dependencies, but only during synchronous execution. Any reactive properties accessed after the first `await` statement will NOT be tracked, and changes to them won't trigger the watcher.\n\nFor async operations, either access all dependencies before the await, or use `watch` with explicit dependencies.\n\n## Task Checklist\n\n- [ ] Access all reactive dependencies BEFORE the first await in watchEffect\n- [ ] Use `watch` with explicit source when async tracking is needed\n- [ ] Store reactive values in local variables before await\n- [ ] Be aware that dependencies after await are invisible to Vue\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst userId = ref(1)\nconst includeDetails = ref(true)\nconst userData = ref(null)\n\n// BAD: includeDetails is accessed after await - NOT TRACKED!\nwatchEffect(async () => {\n  const response = await fetch(`/api/users/${userId.value}`)\n  const data = await response.json()\n\n  // This dependency is NOT tracked - changes won't trigger re-run\n  if (includeDetails.value) {\n    userData.value = { ...data, details: await fetchDetails(data.id) }\n  } else {\n    userData.value = data\n  }\n})\n\n// BAD: Multiple dependencies after await\nwatchEffect(async () => {\n  await someAsyncSetup()\n\n  // None of these are tracked!\n  console.log(optionA.value)  // Not tracked\n  console.log(optionB.value)  // Not tracked\n  doSomething(optionC.value)  // Not tracked\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect, watch } from 'vue'\n\nconst userId = ref(1)\nconst includeDetails = ref(true)\nconst userData = ref(null)\n\n// CORRECT: Access all dependencies before await\nwatchEffect(async () => {\n  // Capture reactive values synchronously\n  const id = userId.value\n  const withDetails = includeDetails.value\n\n  // Now these are tracked\n  const response = await fetch(`/api/users/${id}`)\n  const data = await response.json()\n\n  if (withDetails) {\n    userData.value = { ...data, details: await fetchDetails(data.id) }\n  } else {\n    userData.value = data\n  }\n})\n\n// ALTERNATIVE: Use watch with explicit dependencies\nwatch(\n  [userId, includeDetails],\n  async ([id, withDetails]) => {\n    const response = await fetch(`/api/users/${id}`)\n    const data = await response.json()\n\n    if (withDetails) {\n      userData.value = { ...data, details: await fetchDetails(data.id) }\n    } else {\n      userData.value = data\n    }\n  },\n  { immediate: true }\n)\n</script>\n```\n\n## Pattern: Extract Dependencies First\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst filters = ref({ status: 'active', sortBy: 'name' })\nconst page = ref(1)\nconst results = ref([])\n\n// CORRECT: Extract all needed values synchronously\nwatchEffect(async () => {\n  // All dependencies accessed before await - all tracked!\n  const { status, sortBy } = filters.value\n  const currentPage = page.value\n\n  // Now safe to do async work\n  const response = await fetch(\n    `/api/items?status=${status}&sort=${sortBy}&page=${currentPage}`\n  )\n  results.value = await response.json()\n})\n</script>\n```\n\n## When to Use watch Instead\n\n```vue\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst source = ref('initial')\nconst option = ref('default')\nconst result = ref(null)\n\n// BEST for complex async: Use watch with explicit sources\n// All dependencies are explicitly declared and always tracked\nwatch(\n  [source, option],\n  async ([sourceVal, optionVal]) => {\n    const data = await processAsync(sourceVal)\n    result.value = applyOption(data, optionVal)\n  },\n  { immediate: true }\n)\n</script>\n```\n\n## Debugging Untracked Dependencies\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst a = ref(1)\nconst b = ref(2)\n\nwatchEffect(async () => {\n  console.log('Tracked dependency a:', a.value)  // Tracked\n\n  await someAsyncOperation()\n\n  console.log('Untracked dependency b:', b.value)  // NOT tracked!\n  // Changing b.value won't re-run this watchEffect\n})\n\n// Test: Change a.value -> watchEffect re-runs\n// Test: Change b.value -> watchEffect does NOT re-run\n</script>\n```\n\n## Reference\n- [Vue.js Watchers - watchEffect](https://vuejs.org/guide/essentials/watchers.html#watcheffect)\n- [Vue.js API - watchEffect](https://vuejs.org/api/reactivity-core.html#watcheffect)\n"
+fragments:
+- sequence: 1
+  fragment_type: example
+  content: '# watchEffect Only Tracks Dependencies Before First Await
+
+
+    **Impact: HIGH** - `watchEffect` automatically tracks reactive dependencies, but only during synchronous execution. Any reactive properties accessed after the first `await` statement will NOT be tracked, and changes to them won''t trigger the watcher.
+
+
+    For async operations, either access all dependencies before the await, or use `watch` with explicit dependencies.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Access all reactive dependencies BEFORE the first await in watchEffect\n- [ ] Use `watch` with explicit source when async tracking is needed\n- [ ] Store reactive values in local variables before await\n- [ ] Be aware that dependencies after await are invisible to Vue\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst userId = ref(1)\nconst includeDetails = ref(true)\nconst userData = ref(null)\n\n// BAD: includeDetails is accessed after await - NOT TRACKED!\nwatchEffect(async () => {\n  const response = await fetch(`/api/users/${userId.value}`)\n  const data = await response.json()\n\n  // This dependency is NOT tracked - changes won't trigger re-run\n  if (includeDetails.value) {\n    userData.value = { ...data, details: await fetchDetails(data.id) }\n  } else {\n    userData.value = data\n  }\n})\n\n// BAD: Multiple dependencies after await\nwatchEffect(async () => {\n  await someAsyncSetup()\n\n  // None of these are tracked!\n  console.log(optionA.value)  // Not tracked\n  console.log(optionB.value)  // Not tracked\n  doSomething(optionC.value)  // Not tracked\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect, watch } from 'vue'\n\nconst userId = ref(1)\nconst includeDetails = ref(true)\nconst userData = ref(null)\n\n// CORRECT: Access all dependencies before await\nwatchEffect(async () => {\n  // Capture reactive values synchronously\n  const id = userId.value\n  const withDetails = includeDetails.value\n\n  // Now these are tracked\n  const response = await fetch(`/api/users/${id}`)\n  const data = await response.json()\n\n  if (withDetails) {\n    userData.value = { ...data, details: await fetchDetails(data.id) }\n  } else {\n    userData.value = data\n  }\n})\n\n// ALTERNATIVE: Use watch with explicit dependencies\nwatch(\n  [userId, includeDetails],\n  async ([id, withDetails]) => {\n    const response = await fetch(`/api/users/${id}`)\n    const data = await response.json()\n\n    if (withDetails) {\n      userData.value = { ...data, details: await fetchDetails(data.id) }\n    } else {\n      userData.value = data\n    }\n  },\n  { immediate: true }\n)\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Pattern: Extract Dependencies First\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst filters = ref({ status: 'active', sortBy: 'name' })\nconst page = ref(1)\nconst results = ref([])\n\n// CORRECT: Extract all needed values synchronously\nwatchEffect(async () => {\n  // All dependencies accessed before await - all tracked!\n  const { status, sortBy } = filters.value\n  const currentPage = page.value\n\n  // Now safe to do async work\n  const response = await fetch(\n    `/api/items?status=${status}&sort=${sortBy}&page=${currentPage}`\n  )\n  results.value = await response.json()\n})\n</script>\n```"
+- sequence: 4
+  fragment_type: setup
+  content: "## When to Use watch Instead\n\n```vue\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst source = ref('initial')\nconst option = ref('default')\nconst result = ref(null)\n\n// BEST for complex async: Use watch with explicit sources\n// All dependencies are explicitly declared and always tracked\nwatch(\n  [source, option],\n  async ([sourceVal, optionVal]) => {\n    const data = await processAsync(sourceVal)\n    result.value = applyOption(data, optionVal)\n  },\n  { immediate: true }\n)\n</script>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Debugging Untracked Dependencies\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst a = ref(1)\nconst b = ref(2)\n\nwatchEffect(async () => {\n  console.log('Tracked dependency a:', a.value)  // Tracked\n\n  await someAsyncOperation()\n\n  console.log('Untracked dependency b:', b.value)  // NOT tracked!\n  // Changing b.value won't re-run this watchEffect\n})\n\n// Test: Change a.value -> watchEffect re-runs\n// Test: Change b.value -> watchEffect does NOT re-run\n</script>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Watchers - watchEffect](https://vuejs.org/guide/essentials/watchers.html#watcheffect)
+
+    - [Vue.js API - watchEffect](https://vuejs.org/api/reactivity-core.html#watcheffect)'

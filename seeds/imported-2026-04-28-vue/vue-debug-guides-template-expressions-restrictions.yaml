@@ -1,0 +1,42 @@
+skill_type: domain
+skill_id: vue-debug-guides-template-expressions-restrictions
+canonical_name: Template Expressions Must Be Single Expressions
+category: engineering
+skill_class: domain
+domain_tags:
+- template
+- syntax
+- vue-debug-guides
+- expressions
+- vue
+- interpolation
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/template-expressions-restrictions.md
+raw_prose: "# Template Expressions Must Be Single Expressions\n\n**Impact: MEDIUM** - Vue templates only support single JavaScript expressions, not statements. Using variable declarations, if statements, or multiple statements will cause template compilation errors.\n\nTemplate interpolation `{{ }}` and directive bindings evaluate JavaScript expressions that produce a value. Statements like `if`, `for`, variable declarations, or multi-line code blocks are not allowed.\n\n## Task Checklist\n\n- [ ] Use only single expressions in `{{ }}` interpolation\n- [ ] Use ternary operators instead of if/else statements\n- [ ] Move complex logic to computed properties or methods\n- [ ] Avoid variable declarations in templates\n- [ ] Use `v-if`/`v-else` directives for conditional rendering\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Variable declaration is a statement, not expression -->\n  <p>{{ var greeting = 'Hello' }}</p>\n  <p>{{ let x = 1 }}</p>\n  <p>{{ const name = 'Vue' }}</p>\n\n  <!-- ERROR: if statement not allowed -->\n  <p>{{ if (ok) { return message } }}</p>\n  <p>{{ if (user) return user.name }}</p>\n\n  <!-- ERROR: Multiple statements not allowed -->\n  <p>{{ count++; return count }}</p>\n  <p>{{ items.push(newItem); items.length }}</p>\n\n  <!-- ERROR: for/while loops not allowed -->\n  <p>{{ for (let i = 0; i < 5; i++) { } }}</p>\n</template>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- OK: Simple expressions -->\n  <p>{{ message }}</p>\n  <p>{{ count + 1 }}</p>\n  <p>{{ items.length }}</p>\n\n  <!-- OK: Ternary operators for conditionals -->\n  <p>{{ ok ? 'YES' : 'NO' }}</p>\n  <p>{{ user ? user.name : 'Guest' }}</p>\n  <p>{{ score >= 60 ? 'Pass' : 'Fail' }}</p>\n\n  <!-- OK: Method/function calls -->\n  <p>{{ formatDate(date) }}</p>\n  <p>{{ items.filter(i => i.active).length }}</p>\n\n  <!-- OK: Chained expressions -->\n  <p>{{ message.split('').reverse().join('') }}</p>\n\n  <!-- OK: Template literals -->\n  <p>{{ `Hello, ${name}!` }}</p>\n\n  <!-- OK: Object/array expressions -->\n  <p>{{ { name: 'Vue', version: 3 } }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst ok = ref(true)\nconst message = ref('Hello')\nconst user = ref({ name: 'Alice' })\nconst score = ref(85)\n\n// Move complex logic to computed properties\nconst greeting = computed(() => {\n  if (user.value) {\n    return `Welcome back, ${user.value.name}!`\n  }\n  return 'Hello, Guest!'\n})\n\n// Or use methods for reusable logic\nfunction formatDate(date) {\n  return new Date(date).toLocaleDateString()\n}\n</script>\n```\n\n## Use Directives for Control Flow\n\n```vue\n<template>\n  <!-- Instead of if/else in expressions, use v-if/v-else -->\n  <p v-if=\"user\">Welcome, {{ user.name }}!</p>\n  <p v-else>Please log in</p>\n\n  <!-- Instead of loops in expressions, use v-for -->\n  <ul>\n    <li v-for=\"item in items\" :key=\"item.id\">{{ item.name }}</li>\n  </ul>\n\n  <!-- Conditional display without removing from DOM -->\n  <p v-show=\"isVisible\">This toggles visibility</p>\n</template>\n```\n\n## Reference\n- [Vue.js Template Syntax - Using JavaScript Expressions](https://vuejs.org/guide/essentials/template-syntax.html#using-javascript-expressions)\n- [Vue.js Conditional Rendering](https://vuejs.org/guide/essentials/conditional.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Template Expressions Must Be Single Expressions
+
+
+    **Impact: MEDIUM** - Vue templates only support single JavaScript expressions, not statements. Using variable declarations, if statements, or multiple statements will cause template compilation errors.
+
+
+    Template interpolation `{{ }}` and directive bindings evaluate JavaScript expressions that produce a value. Statements like `if`, `for`, variable declarations, or multi-line code blocks are not allowed.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Use only single expressions in `{{ }}` interpolation\n- [ ] Use ternary operators instead of if/else statements\n- [ ] Move complex logic to computed properties or methods\n- [ ] Avoid variable declarations in templates\n- [ ] Use `v-if`/`v-else` directives for conditional rendering\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Variable declaration is a statement, not expression -->\n  <p>{{ var greeting = 'Hello' }}</p>\n  <p>{{ let x = 1 }}</p>\n  <p>{{ const name = 'Vue' }}</p>\n\n  <!-- ERROR: if statement not allowed -->\n  <p>{{ if (ok) { return message } }}</p>\n  <p>{{ if (user) return user.name }}</p>\n\n  <!-- ERROR: Multiple statements not allowed -->\n  <p>{{ count++; return count }}</p>\n  <p>{{ items.push(newItem); items.length }}</p>\n\n  <!-- ERROR: for/while loops not allowed -->\n  <p>{{ for (let i = 0; i < 5; i++) { } }}</p>\n</template>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- OK: Simple expressions -->\n  <p>{{ message }}</p>\n  <p>{{ count + 1 }}</p>\n  <p>{{ items.length }}</p>\n\n  <!-- OK: Ternary operators for conditionals -->\n  <p>{{ ok ? 'YES' : 'NO' }}</p>\n  <p>{{ user ? user.name : 'Guest' }}</p>\n  <p>{{ score >= 60 ? 'Pass' : 'Fail' }}</p>\n\n  <!-- OK: Method/function calls -->\n  <p>{{ formatDate(date) }}</p>\n  <p>{{ items.filter(i => i.active).length }}</p>\n\n  <!-- OK: Chained expressions -->\n  <p>{{ message.split('').reverse().join('') }}</p>\n\n  <!-- OK: Template literals -->\n  <p>{{ `Hello, ${name}!` }}</p>\n\n  <!-- OK: Object/array expressions -->\n  <p>{{ { name: 'Vue', version: 3 } }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst ok = ref(true)\nconst message = ref('Hello')\nconst user = ref({ name: 'Alice' })\nconst score = ref(85)\n\n// Move complex logic to computed properties\nconst greeting = computed(() => {\n  if (user.value) {\n    return `Welcome back, ${user.value.name}!`\n  }\n  return 'Hello, Guest!'\n})\n\n// Or use methods for reusable logic\nfunction formatDate(date) {\n  return new Date(date).toLocaleDateString()\n}\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Use Directives for Control Flow\n\n```vue\n<template>\n  <!-- Instead of if/else in expressions, use v-if/v-else -->\n  <p v-if=\"user\">Welcome, {{ user.name }}!</p>\n  <p v-else>Please log in</p>\n\n  <!-- Instead of loops in expressions, use v-for -->\n  <ul>\n    <li v-for=\"item in items\" :key=\"item.id\">{{ item.name }}</li>\n  </ul>\n\n  <!-- Conditional display without removing from DOM -->\n  <p v-show=\"isVisible\">This toggles visibility</p>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Template Syntax - Using JavaScript Expressions](https://vuejs.org/guide/essentials/template-syntax.html#using-javascript-expressions)
+
+    - [Vue.js Conditional Rendering](https://vuejs.org/guide/essentials/conditional.html)'

@@ -1,0 +1,81 @@
+skill_type: domain
+skill_id: vue-debug-guides-watcheffect-flush-post-for-refs
+canonical_name: Use flush post for watchEffect with Template Refs
+category: engineering
+skill_class: domain
+domain_tags:
+- flush
+- watchEffect
+- vue-debug-guides
+- vue
+- template-refs
+- vue3
+- dom-timing
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/watcheffect-flush-post-for-refs.md
+raw_prose: "# Use flush post for watchEffect with Template Refs\n\n**Impact: MEDIUM** - By default, `watchEffect` runs before the DOM is updated. When watching template refs, this means the effect may run with stale or null ref values. Use `flush: 'post'` to ensure the effect runs after DOM updates when refs are current.\n\nThis timing issue is particularly confusing because the watcher runs, but the ref doesn't yet reflect the current DOM state.\n\n## Task Checklist\n\n- [ ] Use `{ flush: 'post' }` when watchEffect accesses template refs\n- [ ] Alternatively, use `watchPostEffect` helper for cleaner syntax\n- [ ] Still include null checks as refs can be unmounted\n- [ ] Consider using `watch` with explicit ref watching instead\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst text = ref('')\n\n// WRONG: Runs BEFORE DOM update - ref may be null or stale\nwatchEffect(() => {\n  // On first run: inputEl.value is null (DOM not rendered yet)\n  // On updates: May reference old element state\n  if (inputEl.value) {\n    console.log('Input value:', inputEl.value.value) // Stale!\n    inputEl.value.focus()\n  }\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-model=\"text\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst items = ref([1, 2, 3])\nconst itemRefs = ref([])\n\n// WRONG: Refs array not yet populated when this runs\nwatchEffect(() => {\n  console.log('Number of refs:', itemRefs.value.length) // Always 0!\n})\n</script>\n\n<template>\n  <div v-for=\"item in items\" :key=\"item\" :ref=\"el => itemRefs.value.push(el)\">\n    {{ item }}\n  </div>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst text = ref('')\n\n// CORRECT: flush: 'post' runs AFTER DOM update\nwatchEffect(() => {\n  if (inputEl.value) {\n    console.log('Input value:', inputEl.value.value) // Current!\n    inputEl.value.focus()\n  }\n}, { flush: 'post' })\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-model=\"text\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watchPostEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: watchPostEffect is shorthand for flush: 'post'\nwatchPostEffect(() => {\n  if (inputEl.value) {\n    inputEl.value.focus()\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watch, onMounted } from 'vue'\n\nconst inputEl = ref(null)\n\n// ALTERNATIVE: Use watch on the ref directly\nwatch(inputEl, (el) => {\n  if (el) {\n    el.focus()\n  }\n}, { flush: 'post' })\n\n// ALTERNATIVE: For one-time setup, onMounted is sufficient\nonMounted(() => {\n  inputEl.value?.focus()\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { useTemplateRef, watchPostEffect } from 'vue'\n\n// Vue 3.5+ with useTemplateRef\nconst input = useTemplateRef('my-input')\n\n// CORRECT: watchPostEffect with useTemplateRef\nwatchPostEffect(() => {\n  input.value?.focus()\n})\n</script>\n\n<template>\n  <input ref=\"my-input\" />\n</template>\n```\n\n## Flush Options Explained\n\n```javascript\n// Default: 'pre' - runs before DOM update\nwatchEffect(() => { ... }) // Same as { flush: 'pre' }\n\n// 'post' - runs after DOM update (use for refs)\nwatchEffect(() => { ... }, { flush: 'post' })\nwatchPostEffect(() => { ... }) // Shorthand\n\n// 'sync' - runs synchronously (rarely needed, can cause issues)\nwatchEffect(() => { ... }, { flush: 'sync' })\nwatchSyncEffect(() => { ... }) // Shorthand\n```\n\n## When to Use Each Flush Mode\n\n| Scenario | Recommended Flush |\n|----------|-------------------|\n| Accessing template refs | `post` |\n| Reading updated DOM | `post` |\n| Triggering before render | `pre` (default) |\n| Performance-critical sync updates | `sync` (with caution) |\n\n## Reference\n- [Vue.js Watchers - Callback Flush Timing](https://vuejs.org/guide/essentials/watchers.html#callback-flush-timing)\n- [Vue.js watchEffect API](https://vuejs.org/api/reactivity-core.html#watcheffect)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Use flush post for watchEffect with Template Refs
+
+
+    **Impact: MEDIUM** - By default, `watchEffect` runs before the DOM is updated. When watching template refs, this means the effect may run with stale or null ref values. Use `flush: ''post''` to ensure the effect runs after DOM updates when refs are current.
+
+
+    This timing issue is particularly confusing because the watcher runs, but the ref doesn''t yet reflect the current DOM state.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Use `{ flush: 'post' }` when watchEffect accesses template refs\n- [ ] Alternatively, use `watchPostEffect` helper for cleaner syntax\n- [ ] Still include null checks as refs can be unmounted\n- [ ] Consider using `watch` with explicit ref watching instead\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst text = ref('')\n\n// WRONG: Runs BEFORE DOM update - ref may be null or stale\nwatchEffect(() => {\n  // On first run: inputEl.value is null (DOM not rendered yet)\n  // On updates: May reference old element state\n  if (inputEl.value) {\n    console.log('Input value:', inputEl.value.value) // Stale!\n    inputEl.value.focus()\n  }\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-model=\"text\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst items = ref([1, 2, 3])\nconst itemRefs = ref([])\n\n// WRONG: Refs array not yet populated when this runs\nwatchEffect(() => {\n  console.log('Number of refs:', itemRefs.value.length) // Always 0!\n})\n</script>\n\n<template>\n  <div v-for=\"item in items\" :key=\"item\" :ref=\"el => itemRefs.value.push(el)\">\n    {{ item }}\n  </div>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watchEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst text = ref('')\n\n// CORRECT: flush: 'post' runs AFTER DOM update\nwatchEffect(() => {\n  if (inputEl.value) {\n    console.log('Input value:', inputEl.value.value) // Current!\n    inputEl.value.focus()\n  }\n}, { flush: 'post' })\n</script>\n\n<template>\n  <input ref=\"inputEl\" v-model=\"text\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watchPostEffect } from 'vue'\n\nconst inputEl = ref(null)\nconst showInput = ref(true)\n\n// CORRECT: watchPostEffect is shorthand for flush: 'post'\nwatchPostEffect(() => {\n  if (inputEl.value) {\n    inputEl.value.focus()\n  }\n})\n</script>\n\n<template>\n  <input v-if=\"showInput\" ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, watch, onMounted } from 'vue'\n\nconst inputEl = ref(null)\n\n// ALTERNATIVE: Use watch on the ref directly\nwatch(inputEl, (el) => {\n  if (el) {\n    el.focus()\n  }\n}, { flush: 'post' })\n\n// ALTERNATIVE: For one-time setup, onMounted is sufficient\nonMounted(() => {\n  inputEl.value?.focus()\n})\n</script>\n\n<template>\n  <input ref=\"inputEl\" />\n</template>\n```\n\n```vue\n<script setup>\nimport { useTemplateRef, watchPostEffect } from 'vue'\n\n// Vue 3.5+ with useTemplateRef\nconst input = useTemplateRef('my-input')\n\n// CORRECT: watchPostEffect with useTemplateRef\nwatchPostEffect(() => {\n  input.value?.focus()\n})\n</script>\n\n<template>\n  <input ref=\"my-input\" />\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Flush Options Explained
+
+
+    ```javascript
+
+    // Default: ''pre'' - runs before DOM update
+
+    watchEffect(() => { ... }) // Same as { flush: ''pre'' }
+
+
+    // ''post'' - runs after DOM update (use for refs)
+
+    watchEffect(() => { ... }, { flush: ''post'' })
+
+    watchPostEffect(() => { ... }) // Shorthand
+
+
+    // ''sync'' - runs synchronously (rarely needed, can cause issues)
+
+    watchEffect(() => { ... }, { flush: ''sync'' })
+
+    watchSyncEffect(() => { ... }) // Shorthand
+
+    ```'
+- sequence: 4
+  fragment_type: setup
+  content: '## When to Use Each Flush Mode
+
+
+    | Scenario | Recommended Flush |
+
+    |----------|-------------------|
+
+    | Accessing template refs | `post` |
+
+    | Reading updated DOM | `post` |
+
+    | Triggering before render | `pre` (default) |
+
+    | Performance-critical sync updates | `sync` (with caution) |'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Watchers - Callback Flush Timing](https://vuejs.org/guide/essentials/watchers.html#callback-flush-timing)
+
+    - [Vue.js watchEffect API](https://vuejs.org/api/reactivity-core.html#watcheffect)'

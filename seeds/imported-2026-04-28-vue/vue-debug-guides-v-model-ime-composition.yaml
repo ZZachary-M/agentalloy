@@ -1,0 +1,40 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-model-ime-composition
+canonical_name: v-model Does Not Update During IME Composition
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- vue-debug-guides
+- cjk
+- input
+- vue
+- internationalization
+- ime
+- v-model
+- vue3
+- i18n
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-model-ime-composition.md
+raw_prose: "# v-model Does Not Update During IME Composition\n\n**Impact: MEDIUM** - When users type in languages that require an Input Method Editor (Chinese, Japanese, Korean, etc.), v-model won't update until the composition is complete. This breaks real-time validation, character counters, and live search features for international users.\n\nIME (Input Method Editor) allows users to compose complex characters by typing multiple keystrokes. During this composition phase, v-model deliberately waits until the user confirms their selection before updating. This is usually desired, but can break features that need every keystroke.\n\n## Task Checklist\n\n- [ ] Test forms with IME input if your app serves CJK (Chinese, Japanese, Korean) users\n- [ ] For real-time features (live search, character counters), use manual event binding instead of v-model\n- [ ] Consider both behaviors when designing - sometimes waiting for composition completion IS correct\n- [ ] Document expected behavior for international users\n\n**Problem - v-model waits for composition:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst searchQuery = ref('')\nconst charCount = ref(0)\n</script>\n\n<template>\n  <!-- PROBLEM: During IME composition, searchQuery won't update -->\n  <!-- Chinese user types \"ni hao\" -> sees no results until they press space/enter -->\n  <input v-model=\"searchQuery\" placeholder=\"Live search...\">\n  <p>{{ searchQuery.length }} characters</p>\n\n  <!-- Character counter stays at 0 during IME input -->\n</template>\n```\n\n**Solution - Manual event binding for real-time updates:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst searchQuery = ref('')\n\n// This captures EVERY input event, including during IME composition\nfunction handleInput(event) {\n  searchQuery.value = event.target.value\n}\n</script>\n\n<template>\n  <!-- CORRECT: Manual binding captures all input, including IME composition -->\n  <input\n    :value=\"searchQuery\"\n    @input=\"handleInput\"\n    placeholder=\"Live search...\"\n  >\n  <p>{{ searchQuery.length }} characters</p>\n</template>\n```\n\n```html\n<!-- Shorter inline version -->\n<input\n  :value=\"searchQuery\"\n  @input=\"event => searchQuery = event.target.value\"\n>\n```\n\n**When v-model behavior IS correct:**\n```html\n<!-- For form submission, waiting for composition IS usually better -->\n<!-- User expects to confirm their character selection before it's \"official\" -->\n<input v-model=\"formName\" placeholder=\"Enter your name\">\n\n<!-- The final composed characters will be submitted, not intermediate states -->\n```\n\n## Reference\n- [Vue.js Form Input Bindings](https://vuejs.org/guide/essentials/forms.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-model Does Not Update During IME Composition
+
+
+    **Impact: MEDIUM** - When users type in languages that require an Input Method Editor (Chinese, Japanese, Korean, etc.), v-model won''t update until the composition is complete. This breaks real-time validation, character counters, and live search features for international users.
+
+
+    IME (Input Method Editor) allows users to compose complex characters by typing multiple keystrokes. During this composition phase, v-model deliberately waits until the user confirms their selection before updating. This is usually desired, but can break features that need every keystroke.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Test forms with IME input if your app serves CJK (Chinese, Japanese, Korean) users\n- [ ] For real-time features (live search, character counters), use manual event binding instead of v-model\n- [ ] Consider both behaviors when designing - sometimes waiting for composition completion IS correct\n- [ ] Document expected behavior for international users\n\n**Problem - v-model waits for composition:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst searchQuery = ref('')\nconst charCount = ref(0)\n</script>\n\n<template>\n  <!-- PROBLEM: During IME composition, searchQuery won't update -->\n  <!-- Chinese user types \"ni hao\" -> sees no results until they press space/enter -->\n  <input v-model=\"searchQuery\" placeholder=\"Live search...\">\n  <p>{{ searchQuery.length }} characters</p>\n\n  <!-- Character counter stays at 0 during IME input -->\n</template>\n```\n\n**Solution - Manual event binding for real-time updates:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst searchQuery = ref('')\n\n// This captures EVERY input event, including during IME composition\nfunction handleInput(event) {\n  searchQuery.value = event.target.value\n}\n</script>\n\n<template>\n  <!-- CORRECT: Manual binding captures all input, including IME composition -->\n  <input\n    :value=\"searchQuery\"\n    @input=\"handleInput\"\n    placeholder=\"Live search...\"\n  >\n  <p>{{ searchQuery.length }} characters</p>\n</template>\n```\n\n```html\n<!-- Shorter inline version -->\n<input\n  :value=\"searchQuery\"\n  @input=\"event => searchQuery = event.target.value\"\n>\n```\n\n**When v-model behavior IS correct:**\n```html\n<!-- For form submission, waiting for composition IS usually better -->\n<!-- User expects to confirm their character selection before it's \"official\" -->\n<input v-model=\"formName\" placeholder=\"Enter your name\">\n\n<!-- The final composed characters will be submitted, not intermediate states -->\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings](https://vuejs.org/guide/essentials/forms.html)'

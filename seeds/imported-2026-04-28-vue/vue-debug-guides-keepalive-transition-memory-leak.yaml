@@ -1,0 +1,38 @@
+skill_type: domain
+skill_id: vue-debug-guides-keepalive-transition-memory-leak
+canonical_name: KeepAlive with Transition Memory Leak
+category: engineering
+skill_class: domain
+domain_tags:
+- memory-leak
+- vue-debug-guides
+- keepalive
+- vue
+- animation
+- vue3
+- transition
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/keepalive-transition-memory-leak.md
+raw_prose: "# KeepAlive with Transition Memory Leak\n\n**Impact: MEDIUM** - There is a known memory leak when using `<Transition>` and `<KeepAlive>` together. Component instances may not be properly freed from memory when combining these features.\n\n## Task Checklist\n\n- [ ] Test memory behavior when using KeepAlive + Transition together\n- [ ] Consider if transition animation is necessary with cached components\n- [ ] Use browser DevTools Memory tab to verify no leak\n- [ ] Keep Vue updated to get latest bug fixes\n\n## The Problem\n\n```vue\n<template>\n  <!-- Known memory leak combination in some Vue versions -->\n  <Transition name=\"fade\">\n    <KeepAlive>\n      <component :is=\"currentView\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\nWhen switching between components repeatedly:\n- Component instances accumulate in memory\n- References prevent garbage collection\n- Memory usage grows with each switch\n\n## Diagnosis\n\nUse Chrome DevTools to detect the leak:\n\n1. Open DevTools > Memory tab\n2. Take heap snapshot\n3. Switch between components 10+ times\n4. Take another heap snapshot\n5. Compare: look for growing VueComponent count\n\n## Workarounds\n\n### Option 1: Remove Transition if Not Essential\n\n```vue\n<template>\n  <!-- No memory leak without Transition -->\n  <KeepAlive :max=\"5\">\n    <component :is=\"currentView\" />\n  </KeepAlive>\n</template>\n```\n\n### Option 2: Use CSS Animations Instead\n\n```vue\n<template>\n  <KeepAlive :max=\"5\">\n    <component\n      :is=\"currentView\"\n      :class=\"{ 'fade-enter': isTransitioning }\"\n    />\n  </KeepAlive>\n</template>\n\n<style>\n.fade-enter {\n  animation: fadeIn 0.3s ease-in;\n}\n\n@keyframes fadeIn {\n  from { opacity: 0; }\n  to { opacity: 1; }\n}\n</style>\n```\n\n### Option 3: Use Strict Cache Limits\n\nIf you must use both, minimize impact with strict limits:\n\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <KeepAlive :max=\"3\">\n      <component :is=\"currentView\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\n### Option 4: Key-Based Cache Invalidation\n\nForce fresh instances when needed:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst currentView = ref('Dashboard')\nconst cacheKey = ref(0)\n\nfunction switchViewFresh(view) {\n  currentView.value = view\n  cacheKey.value++ // Force new instance\n}\n</script>\n\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <KeepAlive :max=\"3\">\n      <component :is=\"currentView\" :key=\"cacheKey\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\n## Keep Vue Updated\n\nThis is a known issue tracked in Vue's GitHub repository. Memory leak fixes are periodically released, so ensure you're on the latest Vue version:\n\n```bash\nnpm update vue\n```\n\n## Key Points\n\n1. **Known issue** - Memory leaks with KeepAlive + Transition are documented\n2. **Test in DevTools** - Use Memory tab to verify your specific usage\n3. **Consider alternatives** - CSS animations may work without the leak\n4. **Set strict `max`** - Limit cache size to cap memory impact\n5. **Keep Vue updated** - Bug fixes are released periodically\n\n## Reference\n- [GitHub Issue #9842: Memory leak with transition and keep-alive](https://github.com/vuejs/vue/issues/9842)\n- [GitHub Issue #9840: Memory leak with transition and keep-alive](https://github.com/vuejs/vue/issues/9840)\n- [Vue.js KeepAlive Documentation](https://vuejs.org/guide/built-ins/keep-alive.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# KeepAlive with Transition Memory Leak
+
+
+    **Impact: MEDIUM** - There is a known memory leak when using `<Transition>` and `<KeepAlive>` together. Component instances may not be properly freed from memory when combining these features.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Task Checklist\n\n- [ ] Test memory behavior when using KeepAlive + Transition together\n- [ ] Consider if transition animation is necessary with cached components\n- [ ] Use browser DevTools Memory tab to verify no leak\n- [ ] Keep Vue updated to get latest bug fixes\n\n## The Problem\n\n```vue\n<template>\n  <!-- Known memory leak combination in some Vue versions -->\n  <Transition name=\"fade\">\n    <KeepAlive>\n      <component :is=\"currentView\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\nWhen switching between components repeatedly:\n- Component instances accumulate in memory\n- References prevent garbage collection\n- Memory usage grows with each switch\n\n## Diagnosis\n\nUse Chrome DevTools to detect the leak:\n\n1. Open DevTools > Memory tab\n2. Take heap snapshot\n3. Switch between components 10+ times\n4. Take another heap snapshot\n5. Compare: look for growing VueComponent count\n\n## Workarounds\n\n### Option 1: Remove Transition if Not Essential\n\n```vue\n<template>\n  <!-- No memory leak without Transition -->\n  <KeepAlive :max=\"5\">\n    <component :is=\"currentView\" />\n  </KeepAlive>\n</template>\n```\n\n### Option 2: Use CSS Animations Instead\n\n```vue\n<template>\n  <KeepAlive :max=\"5\">\n    <component\n      :is=\"currentView\"\n      :class=\"{ 'fade-enter': isTransitioning }\"\n    />\n  </KeepAlive>\n</template>\n\n<style>\n.fade-enter {\n  animation: fadeIn 0.3s ease-in;\n}\n\n@keyframes fadeIn {\n  from { opacity: 0; }\n  to { opacity: 1; }\n}\n</style>\n```\n\n### Option 3: Use Strict Cache Limits\n\nIf you must use both, minimize impact with strict limits:\n\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <KeepAlive :max=\"3\">\n      <component :is=\"currentView\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\n### Option 4: Key-Based Cache Invalidation\n\nForce fresh instances when needed:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst currentView = ref('Dashboard')\nconst cacheKey = ref(0)\n\nfunction switchViewFresh(view) {\n  currentView.value = view\n  cacheKey.value++ // Force new instance\n}\n</script>\n\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <KeepAlive :max=\"3\">\n      <component :is=\"currentView\" :key=\"cacheKey\" />\n    </KeepAlive>\n  </Transition>\n</template>\n```\n\n## Keep Vue Updated\n\nThis is a known issue tracked in Vue's GitHub repository. Memory leak fixes are periodically released, so ensure you're on the latest Vue version:\n\n```bash\nnpm update vue\n```\n\n## Key Points\n\n1. **Known issue** - Memory leaks with KeepAlive + Transition are documented\n2. **Test in DevTools** - Use Memory tab to verify your specific usage\n3. **Consider alternatives** - CSS animations may work without the leak\n4. **Set strict `max`** - Limit cache size to cap memory impact\n5. **Keep Vue updated** - Bug fixes are released periodically"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [GitHub Issue #9842: Memory leak with transition and keep-alive](https://github.com/vuejs/vue/issues/9842)
+
+    - [GitHub Issue #9840: Memory leak with transition and keep-alive](https://github.com/vuejs/vue/issues/9840)
+
+    - [Vue.js KeepAlive Documentation](https://vuejs.org/guide/built-ins/keep-alive.html)'

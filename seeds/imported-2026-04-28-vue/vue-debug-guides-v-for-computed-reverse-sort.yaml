@@ -1,0 +1,41 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-for-computed-reverse-sort
+canonical_name: Copy Arrays Before reverse() or sort() in Computed Properties
+category: engineering
+skill_class: domain
+domain_tags:
+- array
+- vue-debug-guides
+- vue
+- v-for
+- computed
+- vue3
+- list-rendering
+- mutation
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-for-computed-reverse-sort.md
+raw_prose: "# Copy Arrays Before reverse() or sort() in Computed Properties\n\n**Impact: MEDIUM** - The `reverse()` and `sort()` methods mutate the original array in-place. When used directly in a computed property getter, this causes the source array to be modified, leading to infinite reactivity loops or incorrect data state.\n\nComputed properties should be pure - they calculate a value without side effects. Mutating the source data inside a computed getter violates this principle and causes unpredictable behavior.\n\n## Task Checklist\n\n- [ ] Always create a copy of the array before calling `reverse()` or `sort()` in computed properties\n- [ ] Use spread operator `[...array]` or `Array.from(array)` or `array.slice()` to copy\n- [ ] This applies to any in-place mutation method used in computed getters\n- [ ] Consider using `toSorted()` and `toReversed()` (ES2023) which return new arrays\n\n**Incorrect:**\n```javascript\nconst numbers = ref([1, 2, 3, 4, 5])\n\n// WRONG: Mutates the original array\nconst reversedNumbers = computed(() => {\n  return numbers.value.reverse()  // Modifies numbers.value!\n})\n\n// WRONG: Same issue with sort\nconst sortedItems = computed(() => {\n  return items.value.sort((a, b) => a.name.localeCompare(b.name))\n})\n```\n\n**Correct:**\n```javascript\nconst numbers = ref([1, 2, 3, 4, 5])\n\n// CORRECT: Create a copy first with spread operator\nconst reversedNumbers = computed(() => {\n  return [...numbers.value].reverse()\n})\n\n// CORRECT: Create a copy before sorting\nconst sortedItems = computed(() => {\n  return [...items.value].sort((a, b) => a.name.localeCompare(b.name))\n})\n\n// CORRECT: Using slice() to copy\nconst reversedNumbers = computed(() => {\n  return numbers.value.slice().reverse()\n})\n\n// CORRECT: ES2023 non-mutating methods (if supported)\nconst reversedNumbers = computed(() => {\n  return numbers.value.toReversed()\n})\n\nconst sortedItems = computed(() => {\n  return items.value.toSorted((a, b) => a.price - b.price)\n})\n```\n\n## Also Applies to Methods Used in Templates\n\nWhen using methods to filter/sort in nested v-for loops, the same rule applies:\n\n```javascript\n// CORRECT: Method that doesn't mutate\nfunction getSortedChildren(parent) {\n  return [...parent.children].sort((a, b) => a.order - b.order)\n}\n```\n\n```html\n<ul v-for=\"parent in parents\" :key=\"parent.id\">\n  <li v-for=\"child in getSortedChildren(parent)\" :key=\"child.id\">\n    {{ child.name }}\n  </li>\n</ul>\n```\n\n## Reference\n- [Vue.js List Rendering - Displaying Filtered/Sorted Results](https://vuejs.org/guide/essentials/list.html#displaying-filtered-sorted-results)\n"
+fragments:
+- sequence: 1
+  fragment_type: example
+  content: '# Copy Arrays Before reverse() or sort() in Computed Properties
+
+
+    **Impact: MEDIUM** - The `reverse()` and `sort()` methods mutate the original array in-place. When used directly in a computed property getter, this causes the source array to be modified, leading to infinite reactivity loops or incorrect data state.
+
+
+    Computed properties should be pure - they calculate a value without side effects. Mutating the source data inside a computed getter violates this principle and causes unpredictable behavior.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always create a copy of the array before calling `reverse()` or `sort()` in computed properties\n- [ ] Use spread operator `[...array]` or `Array.from(array)` or `array.slice()` to copy\n- [ ] This applies to any in-place mutation method used in computed getters\n- [ ] Consider using `toSorted()` and `toReversed()` (ES2023) which return new arrays\n\n**Incorrect:**\n```javascript\nconst numbers = ref([1, 2, 3, 4, 5])\n\n// WRONG: Mutates the original array\nconst reversedNumbers = computed(() => {\n  return numbers.value.reverse()  // Modifies numbers.value!\n})\n\n// WRONG: Same issue with sort\nconst sortedItems = computed(() => {\n  return items.value.sort((a, b) => a.name.localeCompare(b.name))\n})\n```\n\n**Correct:**\n```javascript\nconst numbers = ref([1, 2, 3, 4, 5])\n\n// CORRECT: Create a copy first with spread operator\nconst reversedNumbers = computed(() => {\n  return [...numbers.value].reverse()\n})\n\n// CORRECT: Create a copy before sorting\nconst sortedItems = computed(() => {\n  return [...items.value].sort((a, b) => a.name.localeCompare(b.name))\n})\n\n// CORRECT: Using slice() to copy\nconst reversedNumbers = computed(() => {\n  return numbers.value.slice().reverse()\n})\n\n// CORRECT: ES2023 non-mutating methods (if supported)\nconst reversedNumbers = computed(() => {\n  return numbers.value.toReversed()\n})\n\nconst sortedItems = computed(() => {\n  return items.value.toSorted((a, b) => a.price - b.price)\n})\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Also Applies to Methods Used in Templates\n\nWhen using methods to filter/sort in nested v-for loops, the same rule applies:\n\n```javascript\n// CORRECT: Method that doesn't mutate\nfunction getSortedChildren(parent) {\n  return [...parent.children].sort((a, b) => a.order - b.order)\n}\n```\n\n```html\n<ul v-for=\"parent in parents\" :key=\"parent.id\">\n  <li v-for=\"child in getSortedChildren(parent)\" :key=\"child.id\">\n    {{ child.name }}\n  </li>\n</ul>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js List Rendering - Displaying Filtered/Sorted Results](https://vuejs.org/guide/essentials/list.html#displaying-filtered-sorted-results)'

@@ -1,0 +1,29 @@
+skill_type: domain
+skill_id: vue-debug-guides-async-component-suspense-control
+canonical_name: Suspense Overrides Async Component Loading and Error Options
+category: engineering
+skill_class: domain
+domain_tags:
+- suspense
+- loading
+- error-handling
+- vue-debug-guides
+- vue
+- async-components
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/async-component-suspense-control.md
+raw_prose: "# Suspense Overrides Async Component Loading and Error Options\n\n**Impact: MEDIUM** - When an async component renders inside a parent `<Suspense>`, its `loadingComponent`, `errorComponent`, `delay`, and `timeout` options do not run. The parent Suspense controls loading and error UX instead.\n\n## Task Checklist\n\n- [ ] Confirm whether the async component is inside a `<Suspense>` boundary\n- [ ] Use `suspensible: false` when the component must manage its own loading/error UI\n- [ ] Or move loading/error UI to the parent `<Suspense>` fallback and an error boundary (`onErrorCaptured`)\n- [ ] Provide a retry path for failed loads\n\n**Incorrect:**\n```vue\n<script setup>\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  timeout: 3000\n})\n</script>\n\n<template>\n  <Suspense>\n    <AsyncDashboard />\n    <template #fallback>Loading...</template>\n  </Suspense>\n</template>\n```\n\n**Correct (component handles its own states):**\n```vue\n<script setup>\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  timeout: 3000,\n  suspensible: false\n})\n</script>\n\n<template>\n  <AsyncDashboard />\n</template>\n```\n\n**Correct (parent Suspense owns loading/error UI):**\n```vue\n<script setup>\nimport { onErrorCaptured, ref } from 'vue'\nimport AsyncDashboard from './AsyncDashboard.vue'\n\nconst error = ref(null)\n\nonErrorCaptured((err) => {\n  error.value = err\n  return false\n})\n</script>\n\n<template>\n  <ErrorDisplay v-if=\"error\" :error=\"error\" />\n\n  <Suspense v-else>\n    <AsyncDashboard />\n    <template #fallback>\n      <LoadingSpinner />\n    </template>\n  </Suspense>\n</template>\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Suspense Overrides Async Component Loading and Error Options
+
+
+    **Impact: MEDIUM** - When an async component renders inside a parent `<Suspense>`, its `loadingComponent`, `errorComponent`, `delay`, and `timeout` options do not run. The parent Suspense controls loading and error UX instead.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Confirm whether the async component is inside a `<Suspense>` boundary\n- [ ] Use `suspensible: false` when the component must manage its own loading/error UI\n- [ ] Or move loading/error UI to the parent `<Suspense>` fallback and an error boundary (`onErrorCaptured`)\n- [ ] Provide a retry path for failed loads\n\n**Incorrect:**\n```vue\n<script setup>\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  timeout: 3000\n})\n</script>\n\n<template>\n  <Suspense>\n    <AsyncDashboard />\n    <template #fallback>Loading...</template>\n  </Suspense>\n</template>\n```\n\n**Correct (component handles its own states):**\n```vue\n<script setup>\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  timeout: 3000,\n  suspensible: false\n})\n</script>\n\n<template>\n  <AsyncDashboard />\n</template>\n```\n\n**Correct (parent Suspense owns loading/error UI):**\n```vue\n<script setup>\nimport { onErrorCaptured, ref } from 'vue'\nimport AsyncDashboard from './AsyncDashboard.vue'\n\nconst error = ref(null)\n\nonErrorCaptured((err) => {\n  error.value = err\n  return false\n})\n</script>\n\n<template>\n  <ErrorDisplay v-if=\"error\" :error=\"error\" />\n\n  <Suspense v-else>\n    <AsyncDashboard />\n    <template #fallback>\n      <LoadingSpinner />\n    </template>\n  </Suspense>\n</template>\n```"

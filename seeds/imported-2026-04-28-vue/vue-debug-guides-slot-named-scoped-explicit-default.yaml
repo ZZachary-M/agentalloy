@@ -1,0 +1,53 @@
+skill_type: domain
+skill_id: vue-debug-guides-slot-named-scoped-explicit-default
+canonical_name: Use Explicit Default Template When Mixing Named and Scoped Slots
+category: engineering
+skill_class: domain
+domain_tags:
+- compilation-error
+- named-slots
+- slots
+- vue-debug-guides
+- vue
+- vue3
+- scoped-slots
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/slot-named-scoped-explicit-default.md
+raw_prose: "# Use Explicit Default Template When Mixing Named and Scoped Slots\n\n**Impact: HIGH** - When a component uses both the default scoped slot and named slots, you must use an explicit `<template #default>` for the default slot. Using `v-slot` directly on the component while having nested named slot templates causes scope ambiguity and compilation errors.\n\n## Task Checklist\n\n- [ ] When using named slots alongside a default slot with props, always use explicit `<template #default>`\n- [ ] Never mix `v-slot` on the component element with `<template #name>` inside\n- [ ] Keep slot scope clear and unambiguous\n\n**Incorrect:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <!-- BAD: v-slot on component + named template inside causes ambiguity -->\n  <MyComponent v-slot=\"{ message }\">\n    <p>{{ message }}</p>\n\n    <template #footer>\n      <!-- Ambiguous: Is 'message' available here? Vue can't determine -->\n      <p>Footer: {{ message }}</p>\n    </template>\n  </MyComponent>\n</template>\n```\n\nThis causes a compilation error because Vue cannot determine:\n1. Whether `message` from the default slot should be available in the footer slot\n2. Which scope applies to the non-template content\n\n**Correct:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <!-- GOOD: Explicit template for each slot with clear scope -->\n  <MyComponent>\n    <template #default=\"{ message }\">\n      <p>{{ message }}</p>\n    </template>\n\n    <template #footer>\n      <!-- Clear: footer slot has its own scope, no access to default's 'message' -->\n      <p>Footer content here</p>\n    </template>\n  </MyComponent>\n</template>\n```\n\n**Correct - When Footer Also Has Props:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <MyComponent>\n    <template #default=\"{ message }\">\n      <p>{{ message }}</p>\n    </template>\n\n    <template #footer=\"{ year }\">\n      <!-- Each slot receives its own props -->\n      <p>Copyright {{ year }}</p>\n    </template>\n  </MyComponent>\n</template>\n```\n\n## The Rule\n\nWhen you have **any** named slots (`<template #name>`), always use explicit templates for **all** slots, including the default slot. This makes scope boundaries clear and prevents compilation errors.\n\n| Pattern | Valid? | Notes |\n|---------|--------|-------|\n| `v-slot` on component only | Yes | Single default scoped slot |\n| Named templates only | Yes | Multiple named slots |\n| `v-slot` on component + named templates | No | Ambiguous scope |\n| All explicit templates | Yes | Clear scope for each slot |\n\n## Reference\n- [Vue.js Slots - Named Scoped Slots](https://vuejs.org/guide/components/slots.html#named-scoped-slots)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Use Explicit Default Template When Mixing Named and Scoped Slots
+
+
+    **Impact: HIGH** - When a component uses both the default scoped slot and named slots, you must use an explicit `<template #default>` for the default slot. Using `v-slot` directly on the component while having nested named slot templates causes scope ambiguity and compilation errors.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] When using named slots alongside a default slot with props, always use explicit `<template #default>`\n- [ ] Never mix `v-slot` on the component element with `<template #name>` inside\n- [ ] Keep slot scope clear and unambiguous\n\n**Incorrect:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <!-- BAD: v-slot on component + named template inside causes ambiguity -->\n  <MyComponent v-slot=\"{ message }\">\n    <p>{{ message }}</p>\n\n    <template #footer>\n      <!-- Ambiguous: Is 'message' available here? Vue can't determine -->\n      <p>Footer: {{ message }}</p>\n    </template>\n  </MyComponent>\n</template>\n```\n\nThis causes a compilation error because Vue cannot determine:\n1. Whether `message` from the default slot should be available in the footer slot\n2. Which scope applies to the non-template content\n\n**Correct:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <!-- GOOD: Explicit template for each slot with clear scope -->\n  <MyComponent>\n    <template #default=\"{ message }\">\n      <p>{{ message }}</p>\n    </template>\n\n    <template #footer>\n      <!-- Clear: footer slot has its own scope, no access to default's 'message' -->\n      <p>Footer content here</p>\n    </template>\n  </MyComponent>\n</template>\n```\n\n**Correct - When Footer Also Has Props:**\n```vue\n<script setup>\nimport MyComponent from './MyComponent.vue'\n</script>\n\n<template>\n  <MyComponent>\n    <template #default=\"{ message }\">\n      <p>{{ message }}</p>\n    </template>\n\n    <template #footer=\"{ year }\">\n      <!-- Each slot receives its own props -->\n      <p>Copyright {{ year }}</p>\n    </template>\n  </MyComponent>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## The Rule
+
+
+    When you have **any** named slots (`<template #name>`), always use explicit templates for **all** slots, including the default slot. This makes scope boundaries clear and prevents compilation errors.
+
+
+    | Pattern | Valid? | Notes |
+
+    |---------|--------|-------|
+
+    | `v-slot` on component only | Yes | Single default scoped slot |
+
+    | Named templates only | Yes | Multiple named slots |
+
+    | `v-slot` on component + named templates | No | Ambiguous scope |
+
+    | All explicit templates | Yes | Clear scope for each slot |'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Slots - Named Scoped Slots](https://vuejs.org/guide/components/slots.html#named-scoped-slots)'

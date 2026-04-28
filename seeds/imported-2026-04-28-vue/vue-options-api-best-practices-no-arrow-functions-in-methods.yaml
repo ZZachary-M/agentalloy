@@ -1,0 +1,37 @@
+skill_type: domain
+skill_id: vue-options-api-best-practices-no-arrow-functions-in-methods
+canonical_name: Never Use Arrow Functions in Methods Option
+category: engineering
+skill_class: domain
+domain_tags:
+- methods
+- options-api
+- vue
+- this-binding
+- vue-options-api-best-practices
+- vue3
+- vue2
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-options-api-best-practices/reference/no-arrow-functions-in-methods.md
+raw_prose: "# Never Use Arrow Functions in Methods Option\n\n**Impact: HIGH** - Using arrow functions in the `methods` option causes `this` to be `undefined` or the wrong context, leading to runtime errors when trying to access component data, computed properties, or other methods.\n\nArrow functions lexically bind `this` from their enclosing scope, not from the object they're defined on. Vue's `methods` option requires regular functions so Vue can bind `this` to the component instance.\n\n## Task Checklist\n\n- [ ] Always use regular function syntax for methods in Options API\n- [ ] If using ES6 shorthand, use method shorthand (preferred)\n- [ ] Arrow functions ARE allowed inside methods for callbacks\n\n**Incorrect:**\n```javascript\nexport default {\n  data() {\n    return { count: 0 }\n  },\n  methods: {\n    // WRONG: Arrow function - `this` will be undefined\n    increment: () => {\n      this.count++ // Error: Cannot read property 'count' of undefined\n    },\n    // WRONG: Arrow function assigned to property\n    decrement: () => {\n      this.count--\n    }\n  }\n}\n```\n\n**Correct:**\n```javascript\nexport default {\n  data() {\n    return { count: 0 }\n  },\n  methods: {\n    // CORRECT: ES6 method shorthand (preferred)\n    increment() {\n      this.count++ // Works! this refers to component instance\n    },\n    // CORRECT: Traditional function expression\n    decrement: function() {\n      this.count--\n    },\n    // Arrow functions ARE fine for callbacks INSIDE methods\n    fetchData() {\n      fetch('/api/data')\n        .then(response => response.json())\n        .then(data => {\n          this.data = data // Arrow function inherits `this` from fetchData\n        })\n    }\n  }\n}\n```\n\n## Reference\n- [Vue.js Methods - Avoid Arrow Functions](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#methods)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Never Use Arrow Functions in Methods Option
+
+
+    **Impact: HIGH** - Using arrow functions in the `methods` option causes `this` to be `undefined` or the wrong context, leading to runtime errors when trying to access component data, computed properties, or other methods.
+
+
+    Arrow functions lexically bind `this` from their enclosing scope, not from the object they''re defined on. Vue''s `methods` option requires regular functions so Vue can bind `this` to the component instance.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always use regular function syntax for methods in Options API\n- [ ] If using ES6 shorthand, use method shorthand (preferred)\n- [ ] Arrow functions ARE allowed inside methods for callbacks\n\n**Incorrect:**\n```javascript\nexport default {\n  data() {\n    return { count: 0 }\n  },\n  methods: {\n    // WRONG: Arrow function - `this` will be undefined\n    increment: () => {\n      this.count++ // Error: Cannot read property 'count' of undefined\n    },\n    // WRONG: Arrow function assigned to property\n    decrement: () => {\n      this.count--\n    }\n  }\n}\n```\n\n**Correct:**\n```javascript\nexport default {\n  data() {\n    return { count: 0 }\n  },\n  methods: {\n    // CORRECT: ES6 method shorthand (preferred)\n    increment() {\n      this.count++ // Works! this refers to component instance\n    },\n    // CORRECT: Traditional function expression\n    decrement: function() {\n      this.count--\n    },\n    // Arrow functions ARE fine for callbacks INSIDE methods\n    fetchData() {\n      fetch('/api/data')\n        .then(response => response.json())\n        .then(data => {\n          this.data = data // Arrow function inherits `this` from fetchData\n        })\n    }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Methods - Avoid Arrow Functions](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#methods)'

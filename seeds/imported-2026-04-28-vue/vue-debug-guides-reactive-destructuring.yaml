@@ -1,0 +1,39 @@
+skill_type: domain
+skill_id: vue-debug-guides-reactive-destructuring
+canonical_name: Never Destructure reactive() Objects Directly
+category: engineering
+skill_class: domain
+domain_tags:
+- reactivity
+- destructuring
+- vue-debug-guides
+- vue
+- composition-api
+- vue3
+- reactive
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/reactive-destructuring.md
+raw_prose: "# Never Destructure reactive() Objects Directly\n\n**Impact: HIGH** - Destructuring a `reactive()` object breaks the reactive connection. Updates to destructured variables won't trigger UI updates, leading to stale data display.\n\nVue's `reactive()` uses JavaScript Proxies to track property access. When you destructure, you extract primitive values from the proxy, losing the reactive connection. This is especially dangerous when destructuring from composables or imported state.\n\n## Task Checklist\n\n- [ ] Never destructure reactive objects directly if you need reactivity\n- [ ] Use `toRefs()` to convert reactive object properties to refs before destructuring\n- [ ] Consider using `ref()` instead of `reactive()` to avoid this pitfall entirely\n- [ ] When importing state from composables, check if it's reactive before destructuring\n\n**Incorrect:**\n```javascript\nimport { reactive } from 'vue'\n\nconst state = reactive({\n  count: 0,\n  name: 'Vue'\n})\n\n// WRONG: Destructuring breaks reactivity\nconst { count, name } = state\n\n// These updates work on the original state...\nstate.count++  // state.count is now 1\n\n// ...but the destructured variables are NOT updated\nconsole.log(count)  // Still 0! Lost reactivity\n```\n\n```javascript\n// WRONG: Destructuring from a composable\nfunction useCounter() {\n  const state = reactive({ count: 0 })\n  return state\n}\n\nconst { count } = useCounter()  // count is now a non-reactive primitive\n```\n\n**Correct:**\n```javascript\nimport { reactive, toRefs } from 'vue'\n\nconst state = reactive({\n  count: 0,\n  name: 'Vue'\n})\n\n// CORRECT: Use toRefs() to maintain reactivity\nconst { count, name } = toRefs(state)\n\nstate.count++\nconsole.log(count.value)  // 1 - Reactivity preserved! (note: now needs .value)\n```\n\n```javascript\n// CORRECT: Return toRefs from composables\nfunction useCounter() {\n  const state = reactive({ count: 0 })\n  return toRefs(state)  // Now safe to destructure\n}\n\nconst { count } = useCounter()  // count is now a ref, reactivity preserved\n```\n\n```javascript\n// ALTERNATIVE: Just use ref() to avoid the issue entirely\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst name = ref('Vue')\n\n// No destructuring needed, no gotchas\n```\n\n## Reference\n- [Vue.js Reactivity Fundamentals - reactive()](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#reactive)\n- [Vue.js Reactivity API - toRefs()](https://vuejs.org/api/reactivity-utilities.html#torefs)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Never Destructure reactive() Objects Directly
+
+
+    **Impact: HIGH** - Destructuring a `reactive()` object breaks the reactive connection. Updates to destructured variables won''t trigger UI updates, leading to stale data display.
+
+
+    Vue''s `reactive()` uses JavaScript Proxies to track property access. When you destructure, you extract primitive values from the proxy, losing the reactive connection. This is especially dangerous when destructuring from composables or imported state.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never destructure reactive objects directly if you need reactivity\n- [ ] Use `toRefs()` to convert reactive object properties to refs before destructuring\n- [ ] Consider using `ref()` instead of `reactive()` to avoid this pitfall entirely\n- [ ] When importing state from composables, check if it's reactive before destructuring\n\n**Incorrect:**\n```javascript\nimport { reactive } from 'vue'\n\nconst state = reactive({\n  count: 0,\n  name: 'Vue'\n})\n\n// WRONG: Destructuring breaks reactivity\nconst { count, name } = state\n\n// These updates work on the original state...\nstate.count++  // state.count is now 1\n\n// ...but the destructured variables are NOT updated\nconsole.log(count)  // Still 0! Lost reactivity\n```\n\n```javascript\n// WRONG: Destructuring from a composable\nfunction useCounter() {\n  const state = reactive({ count: 0 })\n  return state\n}\n\nconst { count } = useCounter()  // count is now a non-reactive primitive\n```\n\n**Correct:**\n```javascript\nimport { reactive, toRefs } from 'vue'\n\nconst state = reactive({\n  count: 0,\n  name: 'Vue'\n})\n\n// CORRECT: Use toRefs() to maintain reactivity\nconst { count, name } = toRefs(state)\n\nstate.count++\nconsole.log(count.value)  // 1 - Reactivity preserved! (note: now needs .value)\n```\n\n```javascript\n// CORRECT: Return toRefs from composables\nfunction useCounter() {\n  const state = reactive({ count: 0 })\n  return toRefs(state)  // Now safe to destructure\n}\n\nconst { count } = useCounter()  // count is now a ref, reactivity preserved\n```\n\n```javascript\n// ALTERNATIVE: Just use ref() to avoid the issue entirely\nimport { ref } from 'vue'\n\nconst count = ref(0)\nconst name = ref('Vue')\n\n// No destructuring needed, no gotchas\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Reactivity Fundamentals - reactive()](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#reactive)
+
+    - [Vue.js Reactivity API - toRefs()](https://vuejs.org/api/reactivity-utilities.html#torefs)'

@@ -1,0 +1,49 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-for-component-props
+canonical_name: Always Pass v-for Data to Components via Props
+category: engineering
+skill_class: domain
+domain_tags:
+- components
+- vue-debug-guides
+- vue
+- v-for
+- vue3
+- props
+- list-rendering
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-for-component-props.md
+raw_prose: "# Always Pass v-for Data to Components via Props\n\n**Impact: MEDIUM** - Vue components have isolated scope by design. When using `v-for` to render components, the iteration variable (e.g., `item`) is NOT automatically available inside the child component. You must explicitly pass the data through props.\n\nThis isolation is intentional - it keeps components reusable and their data dependencies explicit. Forgetting to pass props results in `undefined` data or errors about missing properties.\n\n## Task Checklist\n\n- [ ] Always bind iteration data to component props explicitly\n- [ ] Pass both the item and index if the component needs them\n- [ ] Always include a unique `:key` when rendering components with v-for\n- [ ] Define corresponding props in the child component to receive the data\n\n**Incorrect:**\n```html\n<!-- WRONG: Component cannot access 'todo' - it's not in scope -->\n<TodoItem v-for=\"todo in todos\" :key=\"todo.id\" />\n\n<!-- Inside TodoItem.vue: this.todo or todo is undefined! -->\n```\n\n```html\n<!-- WRONG: Key provided but no data passed -->\n<UserCard\n  v-for=\"user in users\"\n  :key=\"user.id\"\n/>\n<!-- UserCard has no user data to display -->\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Explicitly pass the item as a prop -->\n<TodoItem\n  v-for=\"todo in todos\"\n  :key=\"todo.id\"\n  :todo=\"todo\"\n/>\n```\n\n```html\n<!-- CORRECT: Pass multiple pieces of data -->\n<UserCard\n  v-for=\"(user, index) in users\"\n  :key=\"user.id\"\n  :user=\"user\"\n  :index=\"index\"\n  :is-first=\"index === 0\"\n/>\n```\n\n```vue\n<!-- Child component: UserCard.vue -->\n<script setup>\ndefineProps({\n  user: {\n    type: Object,\n    required: true\n  },\n  index: {\n    type: Number,\n    required: true\n  },\n  isFirst: {\n    type: Boolean,\n    default: false\n  }\n})\n</script>\n\n<template>\n  <div class=\"user-card\">\n    <span>{{ index + 1 }}. {{ user.name }}</span>\n    <span v-if=\"isFirst\">(First User)</span>\n  </div>\n</template>\n```\n\n## Why Explicit Props?\n\n1. **Clear data flow**: Makes dependencies explicit and traceable\n2. **Reusability**: Components work anywhere, not just inside specific v-for loops\n3. **Type safety**: Props can be validated with type and required checks\n4. **Maintainability**: Easier to understand what data a component needs\n\n## Reference\n- [Vue.js List Rendering - v-for with Components](https://vuejs.org/guide/essentials/list.html#v-for-with-a-component)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Always Pass v-for Data to Components via Props
+
+
+    **Impact: MEDIUM** - Vue components have isolated scope by design. When using `v-for` to render components, the iteration variable (e.g., `item`) is NOT automatically available inside the child component. You must explicitly pass the data through props.
+
+
+    This isolation is intentional - it keeps components reusable and their data dependencies explicit. Forgetting to pass props results in `undefined` data or errors about missing properties.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always bind iteration data to component props explicitly\n- [ ] Pass both the item and index if the component needs them\n- [ ] Always include a unique `:key` when rendering components with v-for\n- [ ] Define corresponding props in the child component to receive the data\n\n**Incorrect:**\n```html\n<!-- WRONG: Component cannot access 'todo' - it's not in scope -->\n<TodoItem v-for=\"todo in todos\" :key=\"todo.id\" />\n\n<!-- Inside TodoItem.vue: this.todo or todo is undefined! -->\n```\n\n```html\n<!-- WRONG: Key provided but no data passed -->\n<UserCard\n  v-for=\"user in users\"\n  :key=\"user.id\"\n/>\n<!-- UserCard has no user data to display -->\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Explicitly pass the item as a prop -->\n<TodoItem\n  v-for=\"todo in todos\"\n  :key=\"todo.id\"\n  :todo=\"todo\"\n/>\n```\n\n```html\n<!-- CORRECT: Pass multiple pieces of data -->\n<UserCard\n  v-for=\"(user, index) in users\"\n  :key=\"user.id\"\n  :user=\"user\"\n  :index=\"index\"\n  :is-first=\"index === 0\"\n/>\n```\n\n```vue\n<!-- Child component: UserCard.vue -->\n<script setup>\ndefineProps({\n  user: {\n    type: Object,\n    required: true\n  },\n  index: {\n    type: Number,\n    required: true\n  },\n  isFirst: {\n    type: Boolean,\n    default: false\n  }\n})\n</script>\n\n<template>\n  <div class=\"user-card\">\n    <span>{{ index + 1 }}. {{ user.name }}</span>\n    <span v-if=\"isFirst\">(First User)</span>\n  </div>\n</template>\n```"
+- sequence: 3
+  fragment_type: rationale
+  content: '## Why Explicit Props?
+
+
+    1. **Clear data flow**: Makes dependencies explicit and traceable
+
+    2. **Reusability**: Components work anywhere, not just inside specific v-for loops
+
+    3. **Type safety**: Props can be validated with type and required checks
+
+    4. **Maintainability**: Easier to understand what data a component needs'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js List Rendering - v-for with Components](https://vuejs.org/guide/essentials/list.html#v-for-with-a-component)'

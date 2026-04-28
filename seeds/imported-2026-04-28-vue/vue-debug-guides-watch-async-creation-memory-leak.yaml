@@ -1,0 +1,48 @@
+skill_type: domain
+skill_id: vue-debug-guides-watch-async-creation-memory-leak
+canonical_name: Watchers Created Asynchronously Must Be Manually Stopped
+category: engineering
+skill_class: domain
+domain_tags:
+- memory-leak
+- async
+- vue-debug-guides
+- cleanup
+- lifecycle
+- vue
+- watch
+- vue3
+- watchers
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/watch-async-creation-memory-leak.md
+raw_prose: "# Watchers Created Asynchronously Must Be Manually Stopped\n\n**Impact: HIGH** - Watchers created inside async callbacks (setTimeout, Promise.then, async/await) are not automatically bound to the component instance. They continue running after the component unmounts, causing memory leaks and errors.\n\nAlways manually stop watchers that are created asynchronously, or restructure your code to create watchers synchronously with conditional logic.\n\n## Task Checklist\n\n- [ ] Create watchers synchronously in setup() or lifecycle hooks when possible\n- [ ] If async creation is unavoidable, store and call the unwatch function\n- [ ] Use `onUnmounted` to clean up async-created watchers\n- [ ] Consider using conditional logic inside a sync watcher instead\n- [ ] Watch for this pattern in setTimeout, Promise callbacks, and after await\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watch, watchEffect, onMounted } from 'vue'\n\nconst data = ref(null)\n\n// BAD: Watcher created in setTimeout won't auto-stop\nonMounted(() => {\n  setTimeout(() => {\n    watchEffect(() => {\n      console.log(data.value)  // Keeps running after unmount!\n    })\n  }, 1000)\n})\n\n// BAD: Watcher created after await won't auto-stop\nonMounted(async () => {\n  await loadInitialData()\n\n  // This watcher is NOT bound to component lifecycle\n  watch(data, (newVal) => {\n    processData(newVal)  // Memory leak!\n  })\n})\n\n// BAD: Watcher in Promise callback\nfetch('/api/config').then(() => {\n  watch(data, () => {\n    // Leaks memory!\n  })\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watch, watchEffect, onMounted, onUnmounted } from 'vue'\n\nconst data = ref(null)\nconst isDataLoaded = ref(false)\nlet asyncWatcherCleanup = null\n\n// CORRECT: Synchronous watcher with conditional logic\nwatch(\n  data,\n  (newVal) => {\n    if (isDataLoaded.value && newVal) {\n      processData(newVal)\n    }\n  }\n)\n\nonMounted(async () => {\n  await loadInitialData()\n  isDataLoaded.value = true\n})\n\n// CORRECT: Manual cleanup for async-created watcher\nonMounted(() => {\n  setTimeout(() => {\n    const unwatch = watchEffect(() => {\n      console.log(data.value)\n    })\n\n    // Store for cleanup\n    asyncWatcherCleanup = unwatch\n  }, 1000)\n})\n\nonUnmounted(() => {\n  // Clean up async watcher\n  if (asyncWatcherCleanup) {\n    asyncWatcherCleanup()\n  }\n})\n</script>\n```\n\n## Preferred Pattern: Conditional Watch Logic\n\n```vue\n<script setup>\nimport { ref, watch, onMounted } from 'vue'\n\nconst config = ref(null)\nconst userData = ref(null)\n\n// BEST: Create watcher synchronously, handle async condition inside\nwatch(\n  userData,\n  (newData) => {\n    // Only process when config is loaded\n    if (config.value && newData) {\n      applyUserSettings(config.value, newData)\n    }\n  }\n)\n\nonMounted(async () => {\n  config.value = await fetchConfig()\n  // Watcher will start processing once config is loaded\n})\n</script>\n```\n\n## Using watchEffect with Conditional Logic\n\n```vue\n<script setup>\nimport { ref, watchEffect, onMounted } from 'vue'\n\nconst apiData = ref(null)\nconst isReady = ref(false)\n\n// GOOD: Synchronous watchEffect with condition\nwatchEffect(() => {\n  if (isReady.value && apiData.value) {\n    // This pattern avoids async watcher creation\n    doSomethingWithData(apiData.value)\n  }\n})\n\nonMounted(async () => {\n  apiData.value = await fetchData()\n  isReady.value = true\n})\n</script>\n```\n\n## Tracking Multiple Async Watchers\n\n```vue\n<script setup>\nimport { ref, watch, onUnmounted } from 'vue'\n\nconst unwatchers = []\n\nfunction createDynamicWatcher(source, callback) {\n  const unwatch = watch(source, callback)\n  unwatchers.push(unwatch)\n  return unwatch\n}\n\n// Clean up all dynamic watchers\nonUnmounted(() => {\n  unwatchers.forEach(unwatch => unwatch())\n})\n</script>\n```\n\n## Reference\n- [Vue.js Watchers - Stopping a Watcher](https://vuejs.org/guide/essentials/watchers.html#stopping-a-watcher)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Watchers Created Asynchronously Must Be Manually Stopped
+
+
+    **Impact: HIGH** - Watchers created inside async callbacks (setTimeout, Promise.then, async/await) are not automatically bound to the component instance. They continue running after the component unmounts, causing memory leaks and errors.
+
+
+    Always manually stop watchers that are created asynchronously, or restructure your code to create watchers synchronously with conditional logic.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Create watchers synchronously in setup() or lifecycle hooks when possible\n- [ ] If async creation is unavoidable, store and call the unwatch function\n- [ ] Use `onUnmounted` to clean up async-created watchers\n- [ ] Consider using conditional logic inside a sync watcher instead\n- [ ] Watch for this pattern in setTimeout, Promise callbacks, and after await\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, watch, watchEffect, onMounted } from 'vue'\n\nconst data = ref(null)\n\n// BAD: Watcher created in setTimeout won't auto-stop\nonMounted(() => {\n  setTimeout(() => {\n    watchEffect(() => {\n      console.log(data.value)  // Keeps running after unmount!\n    })\n  }, 1000)\n})\n\n// BAD: Watcher created after await won't auto-stop\nonMounted(async () => {\n  await loadInitialData()\n\n  // This watcher is NOT bound to component lifecycle\n  watch(data, (newVal) => {\n    processData(newVal)  // Memory leak!\n  })\n})\n\n// BAD: Watcher in Promise callback\nfetch('/api/config').then(() => {\n  watch(data, () => {\n    // Leaks memory!\n  })\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, watch, watchEffect, onMounted, onUnmounted } from 'vue'\n\nconst data = ref(null)\nconst isDataLoaded = ref(false)\nlet asyncWatcherCleanup = null\n\n// CORRECT: Synchronous watcher with conditional logic\nwatch(\n  data,\n  (newVal) => {\n    if (isDataLoaded.value && newVal) {\n      processData(newVal)\n    }\n  }\n)\n\nonMounted(async () => {\n  await loadInitialData()\n  isDataLoaded.value = true\n})\n\n// CORRECT: Manual cleanup for async-created watcher\nonMounted(() => {\n  setTimeout(() => {\n    const unwatch = watchEffect(() => {\n      console.log(data.value)\n    })\n\n    // Store for cleanup\n    asyncWatcherCleanup = unwatch\n  }, 1000)\n})\n\nonUnmounted(() => {\n  // Clean up async watcher\n  if (asyncWatcherCleanup) {\n    asyncWatcherCleanup()\n  }\n})\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Preferred Pattern: Conditional Watch Logic\n\n```vue\n<script setup>\nimport { ref, watch, onMounted } from 'vue'\n\nconst config = ref(null)\nconst userData = ref(null)\n\n// BEST: Create watcher synchronously, handle async condition inside\nwatch(\n  userData,\n  (newData) => {\n    // Only process when config is loaded\n    if (config.value && newData) {\n      applyUserSettings(config.value, newData)\n    }\n  }\n)\n\nonMounted(async () => {\n  config.value = await fetchConfig()\n  // Watcher will start processing once config is loaded\n})\n</script>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Using watchEffect with Conditional Logic\n\n```vue\n<script setup>\nimport { ref, watchEffect, onMounted } from 'vue'\n\nconst apiData = ref(null)\nconst isReady = ref(false)\n\n// GOOD: Synchronous watchEffect with condition\nwatchEffect(() => {\n  if (isReady.value && apiData.value) {\n    // This pattern avoids async watcher creation\n    doSomethingWithData(apiData.value)\n  }\n})\n\nonMounted(async () => {\n  apiData.value = await fetchData()\n  isReady.value = true\n})\n</script>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Tracking Multiple Async Watchers\n\n```vue\n<script setup>\nimport { ref, watch, onUnmounted } from 'vue'\n\nconst unwatchers = []\n\nfunction createDynamicWatcher(source, callback) {\n  const unwatch = watch(source, callback)\n  unwatchers.push(unwatch)\n  return unwatch\n}\n\n// Clean up all dynamic watchers\nonUnmounted(() => {\n  unwatchers.forEach(unwatch => unwatch())\n})\n</script>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Watchers - Stopping a Watcher](https://vuejs.org/guide/essentials/watchers.html#stopping-a-watcher)'

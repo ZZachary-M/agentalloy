@@ -1,0 +1,36 @@
+skill_type: domain
+skill_id: vue-debug-guides-ref-value-access
+canonical_name: Always Use .value When Accessing ref() in JavaScript
+category: engineering
+skill_class: domain
+domain_tags:
+- reactivity
+- vue-debug-guides
+- vue
+- ref
+- composition-api
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/ref-value-access.md
+raw_prose: "# Always Use .value When Accessing ref() in JavaScript\n\n**Impact: HIGH** - Forgetting `.value` causes silent failures where state updates don't trigger reactivity, leading to hard-to-debug issues.\n\nWhen using `ref()` in Vue 3's Composition API, the reactive value is wrapped in an object and must be accessed via `.value` in JavaScript code. However, in templates, Vue automatically unwraps refs so `.value` is not needed there. This inconsistency is a common source of bugs.\n\n## Task Checklist\n\n- [ ] Always use `.value` when reading or writing ref values in `<script>` or `.js`/`.ts` files\n- [ ] Never use `.value` in `<template>` - Vue unwraps refs automatically there\n- [ ] When passing refs to functions, decide whether to pass the ref object or `.value`\n- [ ] Use IDE/TypeScript to catch missing `.value` errors early\n\n**Incorrect:**\n```javascript\nimport { ref } from 'vue'\n\nconst count = ref(0)\n\n// These do NOT work as expected\ncount++           // Tries to increment the ref object, not the value\ncount = 5         // Reassigns the variable, loses reactivity\nconsole.log(count) // Logs \"[object Object]\", not the number\n\nconst items = ref([1, 2, 3])\nitems.push(4)     // Error: push is not a function\n```\n\n**Correct:**\n```javascript\nimport { ref } from 'vue'\n\nconst count = ref(0)\n\n// Always use .value in JavaScript\ncount.value++           // Correctly increments to 1\ncount.value = 5         // Correctly sets value to 5\nconsole.log(count.value) // Logs \"5\"\n\nconst items = ref([1, 2, 3])\nitems.value.push(4)     // Correctly adds 4 to the array\n```\n\n```vue\n<template>\n  <!-- In templates, NO .value needed - Vue unwraps automatically -->\n  <p>{{ count }}</p>\n  <button @click=\"count++\">Increment</button>\n</template>\n```\n\n## Reference\n- [Vue.js Reactivity Fundamentals - ref()](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#ref)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Always Use .value When Accessing ref() in JavaScript
+
+
+    **Impact: HIGH** - Forgetting `.value` causes silent failures where state updates don''t trigger reactivity, leading to hard-to-debug issues.
+
+
+    When using `ref()` in Vue 3''s Composition API, the reactive value is wrapped in an object and must be accessed via `.value` in JavaScript code. However, in templates, Vue automatically unwraps refs so `.value` is not needed there. This inconsistency is a common source of bugs.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always use `.value` when reading or writing ref values in `<script>` or `.js`/`.ts` files\n- [ ] Never use `.value` in `<template>` - Vue unwraps refs automatically there\n- [ ] When passing refs to functions, decide whether to pass the ref object or `.value`\n- [ ] Use IDE/TypeScript to catch missing `.value` errors early\n\n**Incorrect:**\n```javascript\nimport { ref } from 'vue'\n\nconst count = ref(0)\n\n// These do NOT work as expected\ncount++           // Tries to increment the ref object, not the value\ncount = 5         // Reassigns the variable, loses reactivity\nconsole.log(count) // Logs \"[object Object]\", not the number\n\nconst items = ref([1, 2, 3])\nitems.push(4)     // Error: push is not a function\n```\n\n**Correct:**\n```javascript\nimport { ref } from 'vue'\n\nconst count = ref(0)\n\n// Always use .value in JavaScript\ncount.value++           // Correctly increments to 1\ncount.value = 5         // Correctly sets value to 5\nconsole.log(count.value) // Logs \"5\"\n\nconst items = ref([1, 2, 3])\nitems.value.push(4)     // Correctly adds 4 to the array\n```\n\n```vue\n<template>\n  <!-- In templates, NO .value needed - Vue unwraps automatically -->\n  <p>{{ count }}</p>\n  <button @click=\"count++\">Increment</button>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Reactivity Fundamentals - ref()](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#ref)'

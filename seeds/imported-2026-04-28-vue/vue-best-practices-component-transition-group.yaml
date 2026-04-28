@@ -1,0 +1,52 @@
+skill_type: domain
+skill_id: vue-best-practices-component-transition-group
+canonical_name: TransitionGroup Component Best Practices
+category: engineering
+skill_class: domain
+domain_tags:
+- transition-group
+- lists
+- keys
+- vue
+- vue-best-practices
+- animation
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/component-transition-group.md
+raw_prose: "# TransitionGroup Component Best Practices\n\n**Impact: MEDIUM** - `<TransitionGroup>` animates lists of items entering, leaving, and moving. Use it for `v-for` lists or dynamic collections where individual items change over time.\n\n## Task List\n\n- Use `<TransitionGroup>` only for lists and repeated items\n- Provide unique, stable keys for every direct child\n- Use `tag` when you need semantic or layout wrappers\n- Avoid the `mode` prop (not supported)\n- Use JavaScript hooks for staggered effects\n\n## Use TransitionGroup for Lists\n\n`<TransitionGroup>` is designed for list items. Use `tag` to control the wrapper element when needed.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"fade\">\n    <ComponentA />\n    <ComponentB />\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```\n\n## Always Provide Stable Keys\n\nKeys are required. Without stable keys, Vue cannot track item positions and animations break.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"(item, index) in items\" :key=\"index\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```\n\n## Do Not Use `mode` on TransitionGroup\n\n`mode` is only for `<Transition>` because it swaps a single element. Use `<Transition>` if you need in/out sequencing.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"div\" mode=\"out-in\">\n    <div v-for=\"item in items\" :key=\"item.id\">{{ item.name }}</div>\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <component :is=\"currentView\" :key=\"currentView\" />\n  </Transition>\n</template>\n```\n\n## Stagger List Animations with Data Attributes\n\nFor cascading list animations, pass the index to JavaScript hooks and compute delay per item.\n\n```vue\n<template>\n  <TransitionGroup\n    tag=\"ul\"\n    :css=\"false\"\n    @before-enter=\"onBeforeEnter\"\n    @enter=\"onEnter\"\n  >\n    <li v-for=\"(item, index) in items\" :key=\"item.id\" :data-index=\"index\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<script setup>\nfunction onBeforeEnter(el) {\n  el.style.opacity = 0\n  el.style.transform = 'translateY(12px)'\n}\n\nfunction onEnter(el, done) {\n  const delay = Number(el.dataset.index) * 80\n  setTimeout(() => {\n    el.style.transition = 'all 0.25s ease'\n    el.style.opacity = 1\n    el.style.transform = 'translateY(0)'\n    setTimeout(done, 250)\n  }, delay)\n}\n</script>\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# TransitionGroup Component Best Practices
+
+
+    **Impact: MEDIUM** - `<TransitionGroup>` animates lists of items entering, leaving, and moving. Use it for `v-for` lists or dynamic collections where individual items change over time.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Use `<TransitionGroup>` only for lists and repeated items
+
+    - Provide unique, stable keys for every direct child
+
+    - Use `tag` when you need semantic or layout wrappers
+
+    - Avoid the `mode` prop (not supported)
+
+    - Use JavaScript hooks for staggered effects'
+- sequence: 3
+  fragment_type: execution
+  content: "## Use TransitionGroup for Lists\n\n`<TransitionGroup>` is designed for list items. Use `tag` to control the wrapper element when needed.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"fade\">\n    <ComponentA />\n    <ComponentB />\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Always Provide Stable Keys\n\nKeys are required. Without stable keys, Vue cannot track item positions and animations break.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"(item, index) in items\" :key=\"index\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n```"
+- sequence: 5
+  fragment_type: guardrail
+  content: "## Do Not Use `mode` on TransitionGroup\n\n`mode` is only for `<Transition>` because it swaps a single element. Use `<Transition>` if you need in/out sequencing.\n\n**BAD:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"div\" mode=\"out-in\">\n    <div v-for=\"item in items\" :key=\"item.id\">{{ item.name }}</div>\n  </TransitionGroup>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <component :is=\"currentView\" :key=\"currentView\" />\n  </Transition>\n</template>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Stagger List Animations with Data Attributes\n\nFor cascading list animations, pass the index to JavaScript hooks and compute delay per item.\n\n```vue\n<template>\n  <TransitionGroup\n    tag=\"ul\"\n    :css=\"false\"\n    @before-enter=\"onBeforeEnter\"\n    @enter=\"onEnter\"\n  >\n    <li v-for=\"(item, index) in items\" :key=\"item.id\" :data-index=\"index\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<script setup>\nfunction onBeforeEnter(el) {\n  el.style.opacity = 0\n  el.style.transform = 'translateY(12px)'\n}\n\nfunction onEnter(el, done) {\n  const delay = Number(el.dataset.index) * 80\n  setTimeout(() => {\n    el.style.transition = 'all 0.25s ease'\n    el.style.opacity = 1\n    el.style.transform = 'translateY(0)'\n    setTimeout(done, 250)\n  }, delay)\n}\n</script>\n```"

@@ -1,0 +1,53 @@
+skill_type: domain
+skill_id: vue-best-practices-component-teleport
+canonical_name: Teleport Component Best Practices
+category: engineering
+skill_class: domain
+domain_tags:
+- modal
+- overlay
+- positioning
+- vue
+- vue-best-practices
+- responsive
+- vue3
+- teleport
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/component-teleport.md
+raw_prose: "# Teleport Component Best Practices\n\n**Impact: MEDIUM** - `<Teleport>` renders part of a component's template in a different place in the DOM while preserving the Vue component hierarchy. Use it for overlays (modals, toasts, tooltips) or any UI that must escape stacking contexts, overflow, or fixed positioning constraints.\n\n## Task List\n\n- Teleport overlays to `body` or a dedicated container outside the app root\n- Keep a shared target for similar UI (`#modals`, `#notifications`) and control layering with order or z-index\n- Use `:disabled` for responsive layouts that should render inline on small screens\n- Remember props, emits, and provide/inject still work through teleport\n- Avoid relying on parent stacking contexts or transforms for teleported UI\n\n## Teleport Overlays Out of Transformed Containers\n\nWhen an ancestor has `transform`, `filter`, or `perspective`, fixed-position overlays can behave like they are locally positioned. Teleport escapes that context.\n\n**BAD:**\n```vue\n<template>\n  <div class=\"animated-container\">\n    <button @click=\"open = true\">Open</button>\n\n    <!-- Broken: fixed positioning is scoped to the transformed parent -->\n    <div v-if=\"open\" class=\"modal\">Modal</div>\n  </div>\n</template>\n\n<style>\n.animated-container {\n  transform: translateZ(0);\n}\n\n.modal {\n  position: fixed;\n  inset: 0;\n  z-index: 9999;\n}\n</style>\n```\n\n**GOOD:**\n```vue\n<template>\n  <div class=\"animated-container\">\n    <button @click=\"open = true\">Open</button>\n\n    <Teleport to=\"body\">\n      <div v-if=\"open\" class=\"modal\">Modal</div>\n    </Teleport>\n  </div>\n</template>\n```\n\n## Responsive Layouts with `disabled`\n\nUse `:disabled` to render inline on mobile and teleport on larger screens:\n\n```vue\n<script setup>\nimport { useMediaQuery } from '@vueuse/core'\n\nconst isMobile = useMediaQuery('(max-width: 768px)')\n</script>\n\n<template>\n  <Teleport to=\"body\" :disabled=\"isMobile\">\n    <nav class=\"sidebar\">Navigation</nav>\n  </Teleport>\n</template>\n```\n\n## Logical Hierarchy Is Preserved\n\nTeleport changes DOM position, not the Vue component tree. Props, emits, slots, and provide/inject still work:\n\n```vue\n<template>\n  <Teleport to=\"body\">\n    <ChildPanel :message=\"message\" @close=\"open = false\" />\n  </Teleport>\n</template>\n```\n\n## Multiple Teleports to the Same Target\n\nTeleports to the same target append in declaration order:\n\n```vue\n<template>\n  <Teleport to=\"#notifications\">\n    <div>First</div>\n  </Teleport>\n\n  <Teleport to=\"#notifications\">\n    <div>Second</div>\n  </Teleport>\n</template>\n```\n\nUse a shared container to keep stacking predictable, and apply z-index only when you need explicit layering.\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Teleport Component Best Practices
+
+
+    **Impact: MEDIUM** - `<Teleport>` renders part of a component''s template in a different place in the DOM while preserving the Vue component hierarchy. Use it for overlays (modals, toasts, tooltips) or any UI that must escape stacking contexts, overflow, or fixed positioning constraints.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Teleport overlays to `body` or a dedicated container outside the app root
+
+    - Keep a shared target for similar UI (`#modals`, `#notifications`) and control layering with order or z-index
+
+    - Use `:disabled` for responsive layouts that should render inline on small screens
+
+    - Remember props, emits, and provide/inject still work through teleport
+
+    - Avoid relying on parent stacking contexts or transforms for teleported UI'
+- sequence: 3
+  fragment_type: execution
+  content: "## Teleport Overlays Out of Transformed Containers\n\nWhen an ancestor has `transform`, `filter`, or `perspective`, fixed-position overlays can behave like they are locally positioned. Teleport escapes that context.\n\n**BAD:**\n```vue\n<template>\n  <div class=\"animated-container\">\n    <button @click=\"open = true\">Open</button>\n\n    <!-- Broken: fixed positioning is scoped to the transformed parent -->\n    <div v-if=\"open\" class=\"modal\">Modal</div>\n  </div>\n</template>\n\n<style>\n.animated-container {\n  transform: translateZ(0);\n}\n\n.modal {\n  position: fixed;\n  inset: 0;\n  z-index: 9999;\n}\n</style>\n```\n\n**GOOD:**\n```vue\n<template>\n  <div class=\"animated-container\">\n    <button @click=\"open = true\">Open</button>\n\n    <Teleport to=\"body\">\n      <div v-if=\"open\" class=\"modal\">Modal</div>\n    </Teleport>\n  </div>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Responsive Layouts with `disabled`\n\nUse `:disabled` to render inline on mobile and teleport on larger screens:\n\n```vue\n<script setup>\nimport { useMediaQuery } from '@vueuse/core'\n\nconst isMobile = useMediaQuery('(max-width: 768px)')\n</script>\n\n<template>\n  <Teleport to=\"body\" :disabled=\"isMobile\">\n    <nav class=\"sidebar\">Navigation</nav>\n  </Teleport>\n</template>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Logical Hierarchy Is Preserved\n\nTeleport changes DOM position, not the Vue component tree. Props, emits, slots, and provide/inject still work:\n\n```vue\n<template>\n  <Teleport to=\"body\">\n    <ChildPanel :message=\"message\" @close=\"open = false\" />\n  </Teleport>\n</template>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Multiple Teleports to the Same Target\n\nTeleports to the same target append in declaration order:\n\n```vue\n<template>\n  <Teleport to=\"#notifications\">\n    <div>First</div>\n  </Teleport>\n\n  <Teleport to=\"#notifications\">\n    <div>Second</div>\n  </Teleport>\n</template>\n```\n\nUse a shared container to keep stacking predictable, and apply z-index only when you need explicit layering."

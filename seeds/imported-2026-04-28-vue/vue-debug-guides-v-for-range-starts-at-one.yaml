@@ -1,0 +1,48 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-for-range-starts-at-one
+canonical_name: v-for Range Iteration Starts at 1, Not 0
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- vue
+- v-for
+- vue3
+- range
+- list-rendering
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-for-range-starts-at-one.md
+raw_prose: "# v-for Range Iteration Starts at 1, Not 0\n\n**Impact: LOW** - When using `v-for` with a number (range iteration), the iteration starts at `1`, not `0`. This differs from typical JavaScript behavior where arrays are 0-indexed.\n\nThis gotcha commonly causes off-by-one errors when the generated numbers are used for calculations or array indexing.\n\n## Task Checklist\n\n- [ ] Remember `v-for=\"n in 10\"` produces 1 through 10, not 0 through 9\n- [ ] When using range values for array indexing, subtract 1: `items[n - 1]`\n- [ ] Consider creating a computed array if you need 0-based indices\n\n**Incorrect Assumption:**\n```html\n<!-- Developer expects 0-9, but gets 1-10 -->\n<span v-for=\"n in 10\">{{ n }}</span>\n<!-- Output: 1 2 3 4 5 6 7 8 9 10 -->\n\n<!-- WRONG: Off-by-one error when used for array access -->\n<li v-for=\"n in items.length\" :key=\"n\">\n  {{ items[n].name }}  <!-- Error! items[10] is undefined when length is 10 -->\n</li>\n```\n\n**Correct:**\n```html\n<!-- Correct understanding: 1-based range -->\n<span v-for=\"n in 10\" :key=\"n\">{{ n }}</span>\n<!-- Output: 1 2 3 4 5 6 7 8 9 10 -->\n\n<!-- CORRECT: Adjust index for array access -->\n<li v-for=\"n in items.length\" :key=\"n\">\n  {{ items[n - 1].name }}  <!-- n-1 converts to 0-based -->\n</li>\n\n<!-- BETTER: Just iterate the array directly -->\n<li v-for=\"(item, index) in items\" :key=\"item.id\">\n  {{ index + 1 }}. {{ item.name }}  <!-- index is 0-based, add 1 for display -->\n</li>\n```\n\n```html\n<!-- Range for repeating elements (no array involved) -->\n<div v-for=\"n in 3\" :key=\"n\" class=\"skeleton-row\">\n  Loading placeholder {{ n }} of 3...\n</div>\n<!-- Output: Loading placeholder 1 of 3, 2 of 3, 3 of 3 -->\n```\n\n## When Range Iteration Is Useful\n\n- Rendering a fixed number of placeholder/skeleton elements\n- Creating pagination buttons: `v-for=\"page in totalPages\"`\n- Generating star ratings: `v-for=\"star in 5\"`\n- Repeating template structures a set number of times\n\n## Reference\n- [Vue.js List Rendering - v-for with a Range](https://vuejs.org/guide/essentials/list.html#v-for-with-a-range)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-for Range Iteration Starts at 1, Not 0
+
+
+    **Impact: LOW** - When using `v-for` with a number (range iteration), the iteration starts at `1`, not `0`. This differs from typical JavaScript behavior where arrays are 0-indexed.
+
+
+    This gotcha commonly causes off-by-one errors when the generated numbers are used for calculations or array indexing.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Remember `v-for=\"n in 10\"` produces 1 through 10, not 0 through 9\n- [ ] When using range values for array indexing, subtract 1: `items[n - 1]`\n- [ ] Consider creating a computed array if you need 0-based indices\n\n**Incorrect Assumption:**\n```html\n<!-- Developer expects 0-9, but gets 1-10 -->\n<span v-for=\"n in 10\">{{ n }}</span>\n<!-- Output: 1 2 3 4 5 6 7 8 9 10 -->\n\n<!-- WRONG: Off-by-one error when used for array access -->\n<li v-for=\"n in items.length\" :key=\"n\">\n  {{ items[n].name }}  <!-- Error! items[10] is undefined when length is 10 -->\n</li>\n```\n\n**Correct:**\n```html\n<!-- Correct understanding: 1-based range -->\n<span v-for=\"n in 10\" :key=\"n\">{{ n }}</span>\n<!-- Output: 1 2 3 4 5 6 7 8 9 10 -->\n\n<!-- CORRECT: Adjust index for array access -->\n<li v-for=\"n in items.length\" :key=\"n\">\n  {{ items[n - 1].name }}  <!-- n-1 converts to 0-based -->\n</li>\n\n<!-- BETTER: Just iterate the array directly -->\n<li v-for=\"(item, index) in items\" :key=\"item.id\">\n  {{ index + 1 }}. {{ item.name }}  <!-- index is 0-based, add 1 for display -->\n</li>\n```\n\n```html\n<!-- Range for repeating elements (no array involved) -->\n<div v-for=\"n in 3\" :key=\"n\" class=\"skeleton-row\">\n  Loading placeholder {{ n }} of 3...\n</div>\n<!-- Output: Loading placeholder 1 of 3, 2 of 3, 3 of 3 -->\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## When Range Iteration Is Useful
+
+
+    - Rendering a fixed number of placeholder/skeleton elements
+
+    - Creating pagination buttons: `v-for="page in totalPages"`
+
+    - Generating star ratings: `v-for="star in 5"`
+
+    - Repeating template structures a set number of times'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js List Rendering - v-for with a Range](https://vuejs.org/guide/essentials/list.html#v-for-with-a-range)'

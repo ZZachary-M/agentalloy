@@ -1,0 +1,70 @@
+skill_type: domain
+skill_id: vue-best-practices-animation-class-based-technique
+canonical_name: Use Class-based Animations for Non-Enter/Leave Effects
+category: engineering
+skill_class: domain
+domain_tags:
+- class-binding
+- vue
+- vue-best-practices
+- animation
+- vue3
+- state
+- css
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/animation-class-based-technique.md
+raw_prose: "# Use Class-based Animations for Non-Enter/Leave Effects\n\n**Impact: LOW** - For animations on elements that are not entering or leaving the DOM, use CSS class-based animations triggered by Vue's reactive state. This is simpler than `<Transition>` and more appropriate for feedback animations like shake, pulse, or highlight effects.\n\n## Task List\n\n- Use class-based animations for elements staying in the DOM\n- Use `<Transition>` only for enter/leave animations\n- Combine CSS animations with Vue's class bindings (`:class`)\n- Consider using `setTimeout` to auto-remove animation classes\n\n**When to Use Class-based Animations:**\n- User feedback (shake on error, pulse on success)\n- Attention-grabbing effects (highlight changes)\n- Hover/focus states that need more than CSS transitions\n- Any animation where the element stays mounted\n\n**When to Use Transition Component:**\n- Elements entering/leaving the DOM (v-if/v-show)\n- Route transitions\n- List item additions/removals\n\n## Basic Pattern\n\n```vue\n<template>\n  <div :class=\"{ shake: showError }\">\n    <button @click=\"submitForm\">Submit</button>\n    <span v-if=\"showError\">This feature is disabled!</span>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst showError = ref(false)\n\nfunction submitForm() {\n  if (!isValid()) {\n    // Trigger shake animation\n    showError.value = true\n\n    // Auto-remove class after animation completes\n    setTimeout(() => {\n      showError.value = false\n    }, 820)  // Match animation duration\n  }\n}\n</script>\n\n<style>\n.shake {\n  animation: shake 0.82s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;\n  transform: translate3d(0, 0, 0);  /* Enable GPU acceleration */\n}\n\n@keyframes shake {\n  10%, 90% { transform: translate3d(-1px, 0, 0); }\n  20%, 80% { transform: translate3d(2px, 0, 0); }\n  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }\n  40%, 60% { transform: translate3d(4px, 0, 0); }\n}\n</style>\n```\n\n## Common Animation Patterns\n\n### Pulse on Success\n\n```vue\n<template>\n  <button\n    @click=\"save\"\n    :class=\"{ pulse: saved }\"\n  >\n    {{ saved ? 'Saved!' : 'Save' }}\n  </button>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst saved = ref(false)\n\nasync function save() {\n  await saveData()\n  saved.value = true\n  setTimeout(() => saved.value = false, 1000)\n}\n</script>\n\n<style>\n.pulse {\n  animation: pulse 0.5s ease-in-out;\n}\n\n@keyframes pulse {\n  0%, 100% { transform: scale(1); }\n  50% { transform: scale(1.05); }\n}\n</style>\n```\n\n### Highlight on Change\n\n```vue\n<template>\n  <div\n    :class=\"{ highlight: justUpdated }\"\n  >\n    Value: {{ value }}\n  </div>\n</template>\n\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst value = ref(0)\nconst justUpdated = ref(false)\n\nwatch(value, () => {\n  justUpdated.value = true\n  setTimeout(() => justUpdated.value = false, 1000)\n})\n</script>\n\n<style>\n.highlight {\n  animation: highlight 1s ease-out;\n}\n\n@keyframes highlight {\n  0% { background-color: yellow; }\n  100% { background-color: transparent; }\n}\n</style>\n```\n\n### Bounce Attention\n\n```vue\n<template>\n  <div\n    :class=\"{ bounce: needsAttention }\"\n    @animationend=\"needsAttention = false\"\n  >\n    <BellIcon />\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst needsAttention = ref(false)\n\nfunction notifyUser() {\n  needsAttention.value = true\n  // No setTimeout needed - using animationend event\n}\n</script>\n\n<style>\n.bounce {\n  animation: bounce 0.5s ease;\n}\n\n@keyframes bounce {\n  0%, 100% { transform: translateY(0); }\n  50% { transform: translateY(-10px); }\n}\n</style>\n```\n\n## Using animationend Event\n\nInstead of `setTimeout`, use the `animationend` event for cleaner code:\n\n```vue\n<template>\n  <div\n    :class=\"{ animate: isAnimating }\"\n    @animationend=\"isAnimating = false\"\n  >\n    Content\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst isAnimating = ref(false)\n\nfunction triggerAnimation() {\n  isAnimating.value = true\n  // Class is automatically removed when animation ends\n}\n</script>\n```\n\n## Composable for Reusable Animations\n\n```javascript\n// composables/useAnimation.js\nimport { ref } from 'vue'\n\nexport function useAnimation(duration = 500) {\n  const isAnimating = ref(false)\n\n  function trigger() {\n    isAnimating.value = true\n    setTimeout(() => {\n      isAnimating.value = false\n    }, duration)\n  }\n\n  return {\n    isAnimating,\n    trigger\n  }\n}\n```\n\n```vue\n<script setup>\nimport { useAnimation } from '@/composables/useAnimation'\n\nconst shake = useAnimation(820)\nconst pulse = useAnimation(500)\n</script>\n\n<template>\n  <button\n    :class=\"{ shake: shake.isAnimating.value }\"\n    @click=\"shake.trigger()\"\n  >\n    Shake me\n  </button>\n\n  <button\n    :class=\"{ pulse: pulse.isAnimating.value }\"\n    @click=\"pulse.trigger()\"\n  >\n    Pulse me\n  </button>\n</template>\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Use Class-based Animations for Non-Enter/Leave Effects
+
+
+    **Impact: LOW** - For animations on elements that are not entering or leaving the DOM, use CSS class-based animations triggered by Vue''s reactive state. This is simpler than `<Transition>` and more appropriate for feedback animations like shake, pulse, or highlight effects.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Use class-based animations for elements staying in the DOM
+
+    - Use `<Transition>` only for enter/leave animations
+
+    - Combine CSS animations with Vue''s class bindings (`:class`)
+
+    - Consider using `setTimeout` to auto-remove animation classes
+
+
+    **When to Use Class-based Animations:**
+
+    - User feedback (shake on error, pulse on success)
+
+    - Attention-grabbing effects (highlight changes)
+
+    - Hover/focus states that need more than CSS transitions
+
+    - Any animation where the element stays mounted
+
+
+    **When to Use Transition Component:**
+
+    - Elements entering/leaving the DOM (v-if/v-show)
+
+    - Route transitions
+
+    - List item additions/removals'
+- sequence: 3
+  fragment_type: execution
+  content: "## Basic Pattern\n\n```vue\n<template>\n  <div :class=\"{ shake: showError }\">\n    <button @click=\"submitForm\">Submit</button>\n    <span v-if=\"showError\">This feature is disabled!</span>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst showError = ref(false)\n\nfunction submitForm() {\n  if (!isValid()) {\n    // Trigger shake animation\n    showError.value = true\n\n    // Auto-remove class after animation completes\n    setTimeout(() => {\n      showError.value = false\n    }, 820)  // Match animation duration\n  }\n}\n</script>\n\n<style>\n.shake {\n  animation: shake 0.82s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;\n  transform: translate3d(0, 0, 0);  /* Enable GPU acceleration */\n}\n\n@keyframes shake {\n  10%, 90% { transform: translate3d(-1px, 0, 0); }\n  20%, 80% { transform: translate3d(2px, 0, 0); }\n  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }\n  40%, 60% { transform: translate3d(4px, 0, 0); }\n}\n</style>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Common Animation Patterns\n\n### Pulse on Success\n\n```vue\n<template>\n  <button\n    @click=\"save\"\n    :class=\"{ pulse: saved }\"\n  >\n    {{ saved ? 'Saved!' : 'Save' }}\n  </button>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst saved = ref(false)\n\nasync function save() {\n  await saveData()\n  saved.value = true\n  setTimeout(() => saved.value = false, 1000)\n}\n</script>\n\n<style>\n.pulse {\n  animation: pulse 0.5s ease-in-out;\n}\n\n@keyframes pulse {\n  0%, 100% { transform: scale(1); }\n  50% { transform: scale(1.05); }\n}\n</style>\n```\n\n### Highlight on Change\n\n```vue\n<template>\n  <div\n    :class=\"{ highlight: justUpdated }\"\n  >\n    Value: {{ value }}\n  </div>\n</template>\n\n<script setup>\nimport { ref, watch } from 'vue'\n\nconst value = ref(0)\nconst justUpdated = ref(false)\n\nwatch(value, () => {\n  justUpdated.value = true\n  setTimeout(() => justUpdated.value = false, 1000)\n})\n</script>\n\n<style>\n.highlight {\n  animation: highlight 1s ease-out;\n}\n\n@keyframes highlight {\n  0% { background-color: yellow; }\n  100% { background-color: transparent; }\n}\n</style>\n```\n\n### Bounce Attention\n\n```vue\n<template>\n  <div\n    :class=\"{ bounce: needsAttention }\"\n    @animationend=\"needsAttention = false\"\n  >\n    <BellIcon />\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst needsAttention = ref(false)\n\nfunction notifyUser() {\n  needsAttention.value = true\n  // No setTimeout needed - using animationend event\n}\n</script>\n\n<style>\n.bounce {\n  animation: bounce 0.5s ease;\n}\n\n@keyframes bounce {\n  0%, 100% { transform: translateY(0); }\n  50% { transform: translateY(-10px); }\n}\n</style>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Using animationend Event\n\nInstead of `setTimeout`, use the `animationend` event for cleaner code:\n\n```vue\n<template>\n  <div\n    :class=\"{ animate: isAnimating }\"\n    @animationend=\"isAnimating = false\"\n  >\n    Content\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst isAnimating = ref(false)\n\nfunction triggerAnimation() {\n  isAnimating.value = true\n  // Class is automatically removed when animation ends\n}\n</script>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Composable for Reusable Animations\n\n```javascript\n// composables/useAnimation.js\nimport { ref } from 'vue'\n\nexport function useAnimation(duration = 500) {\n  const isAnimating = ref(false)\n\n  function trigger() {\n    isAnimating.value = true\n    setTimeout(() => {\n      isAnimating.value = false\n    }, duration)\n  }\n\n  return {\n    isAnimating,\n    trigger\n  }\n}\n```\n\n```vue\n<script setup>\nimport { useAnimation } from '@/composables/useAnimation'\n\nconst shake = useAnimation(820)\nconst pulse = useAnimation(500)\n</script>\n\n<template>\n  <button\n    :class=\"{ shake: shake.isAnimating.value }\"\n    @click=\"shake.trigger()\"\n  >\n    Shake me\n  </button>\n\n  <button\n    :class=\"{ pulse: pulse.isAnimating.value }\"\n    @click=\"pulse.trigger()\"\n  >\n    Pulse me\n  </button>\n</template>\n```"

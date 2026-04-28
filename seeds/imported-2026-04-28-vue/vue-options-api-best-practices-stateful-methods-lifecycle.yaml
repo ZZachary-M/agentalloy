@@ -1,0 +1,38 @@
+skill_type: domain
+skill_id: vue-options-api-best-practices-stateful-methods-lifecycle
+canonical_name: Create Stateful Methods in Lifecycle Hooks
+category: engineering
+skill_class: domain
+domain_tags:
+- throttle
+- options-api
+- cleanup
+- lifecycle
+- vue
+- vue-options-api-best-practices
+- vue3
+- debounce
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-options-api-best-practices/reference/stateful-methods-lifecycle.md
+raw_prose: "# Create Stateful Methods in Lifecycle Hooks\n\n**Impact: MEDIUM** - If you define debounced, throttled, or other stateful functions directly in the `methods` option, all instances of the component share the same function state. This causes race conditions and bugs in lists of components.\n\nWhen a component is reused (e.g., in v-for), each instance needs its own debounced/throttled function. Define these in the `created()` hook and clean them up in `unmounted()` to prevent memory leaks.\n\n## Task Checklist\n\n- [ ] Never define debounced/throttled functions directly in `methods`\n- [ ] Create stateful functions in `created()` lifecycle hook\n- [ ] Always clean up (cancel timers) in `unmounted()`\n\n**Incorrect:**\n```javascript\nimport { debounce } from 'lodash-es'\n\nexport default {\n  methods: {\n    // WRONG: All component instances share this debounced function!\n    // If used in a v-for, clicking one button affects all instances\n    handleClick: debounce(function() {\n      this.performSearch()\n    }, 500)\n  }\n}\n```\n\n**Correct:**\n```javascript\nimport { debounce } from 'lodash-es'\n\nexport default {\n  created() {\n    // CORRECT: Each instance gets its own debounced function\n    this.debouncedSearch = debounce(this.performSearch, 500)\n  },\n  unmounted() {\n    // CORRECT: Clean up to prevent memory leaks and stale calls\n    this.debouncedSearch.cancel()\n  },\n  methods: {\n    handleClick() {\n      this.debouncedSearch()\n    },\n    performSearch() {\n      // Actual search logic\n    }\n  }\n}\n```\n\n## Reference\n- [Vue.js Reactivity Fundamentals - Stateful Methods](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#stateful-methods)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Create Stateful Methods in Lifecycle Hooks
+
+
+    **Impact: MEDIUM** - If you define debounced, throttled, or other stateful functions directly in the `methods` option, all instances of the component share the same function state. This causes race conditions and bugs in lists of components.
+
+
+    When a component is reused (e.g., in v-for), each instance needs its own debounced/throttled function. Define these in the `created()` hook and clean them up in `unmounted()` to prevent memory leaks.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never define debounced/throttled functions directly in `methods`\n- [ ] Create stateful functions in `created()` lifecycle hook\n- [ ] Always clean up (cancel timers) in `unmounted()`\n\n**Incorrect:**\n```javascript\nimport { debounce } from 'lodash-es'\n\nexport default {\n  methods: {\n    // WRONG: All component instances share this debounced function!\n    // If used in a v-for, clicking one button affects all instances\n    handleClick: debounce(function() {\n      this.performSearch()\n    }, 500)\n  }\n}\n```\n\n**Correct:**\n```javascript\nimport { debounce } from 'lodash-es'\n\nexport default {\n  created() {\n    // CORRECT: Each instance gets its own debounced function\n    this.debouncedSearch = debounce(this.performSearch, 500)\n  },\n  unmounted() {\n    // CORRECT: Clean up to prevent memory leaks and stale calls\n    this.debouncedSearch.cancel()\n  },\n  methods: {\n    handleClick() {\n      this.debouncedSearch()\n    },\n    performSearch() {\n      // Actual search logic\n    }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Reactivity Fundamentals - Stateful Methods](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#stateful-methods)'

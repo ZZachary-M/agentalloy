@@ -1,0 +1,57 @@
+skill_type: domain
+skill_id: vue-debug-guides-slot-v-slot-on-components-or-templates-only
+canonical_name: v-slot Can Only Be Used on Components or Template Tags
+category: engineering
+skill_class: domain
+domain_tags:
+- compilation-error
+- slots
+- vue-debug-guides
+- vue
+- v-slot
+- common-mistake
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/slot-v-slot-on-components-or-templates-only.md
+raw_prose: "# v-slot Can Only Be Used on Components or Template Tags\n\n**Impact: HIGH** - The `v-slot` directive (and its shorthand `#`) can only be used on Vue components or `<template>` tags. Using it on native HTML elements like `<div>` or `<span>` causes a Vue compilation error.\n\n## Task Checklist\n\n- [ ] Only use `v-slot` on component elements or `<template>` tags\n- [ ] When using default scoped slot shorthand, apply to the component itself\n- [ ] For named slots, always use `<template #name>` syntax\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: v-slot on a native HTML element -->\n  <div v-slot:header>\n    <h1>Title</h1>\n  </div>\n\n  <!-- BAD: Shorthand on HTML element -->\n  <span #default=\"{ item }\">\n    {{ item.name }}\n  </span>\n\n  <!-- BAD: v-slot inside a plain HTML element -->\n  <div>\n    <p v-slot:content>Some text</p>\n  </div>\n</template>\n```\n\nThese cause the error: `v-slot can only be used on components or <template> tags`\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: v-slot on component element (default scoped slot) -->\n  <MyComponent v-slot=\"{ item }\">\n    {{ item.name }}\n  </MyComponent>\n\n  <!-- GOOD: Named slots use template tags -->\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <template #default>\n      <p>Main content</p>\n    </template>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n\n  <!-- GOOD: Shorthand on component for default slot -->\n  <FancyList #default=\"{ item }\">\n    <div>{{ item.name }}</div>\n  </FancyList>\n</template>\n```\n\n## Common Scenarios\n\n### Wrapping Slot Content in HTML\nIf you need HTML wrappers around slot content, put them inside the template:\n\n```vue\n<!-- WRONG -->\n<MyComponent>\n  <div v-slot:header class=\"header-wrapper\">\n    <h1>Title</h1>\n  </div>\n</MyComponent>\n\n<!-- CORRECT -->\n<MyComponent>\n  <template #header>\n    <div class=\"header-wrapper\">\n      <h1>Title</h1>\n    </div>\n  </template>\n</MyComponent>\n```\n\n### Multiple v-slot on Same Element\nAnother error occurs when you have multiple v-slot directives - only the first is recognized:\n\n```vue\n<!-- BAD: Multiple v-slot directives -->\n<MyComponent v-slot:header v-slot:footer>\n  Content\n</MyComponent>\n\n<!-- GOOD: Separate template for each slot -->\n<MyComponent>\n  <template #header>Header</template>\n  <template #footer>Footer</template>\n</MyComponent>\n```\n\n## Valid v-slot Locations\n\n| Element Type | v-slot Allowed? | Example |\n|--------------|-----------------|---------|\n| Component | Yes | `<MyComponent v-slot=\"props\">` |\n| `<template>` | Yes | `<template #header>` |\n| `<div>` | No | Compilation error |\n| `<span>` | No | Compilation error |\n| Any HTML element | No | Compilation error |\n\n## Reference\n- [Vue.js Slots](https://vuejs.org/guide/components/slots.html)\n- [DeepScan - vue-misused-v-slot](https://deepscan.io/docs/rules/vue-misused-v-slot)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-slot Can Only Be Used on Components or Template Tags
+
+
+    **Impact: HIGH** - The `v-slot` directive (and its shorthand `#`) can only be used on Vue components or `<template>` tags. Using it on native HTML elements like `<div>` or `<span>` causes a Vue compilation error.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Only use `v-slot` on component elements or `<template>` tags\n- [ ] When using default scoped slot shorthand, apply to the component itself\n- [ ] For named slots, always use `<template #name>` syntax\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: v-slot on a native HTML element -->\n  <div v-slot:header>\n    <h1>Title</h1>\n  </div>\n\n  <!-- BAD: Shorthand on HTML element -->\n  <span #default=\"{ item }\">\n    {{ item.name }}\n  </span>\n\n  <!-- BAD: v-slot inside a plain HTML element -->\n  <div>\n    <p v-slot:content>Some text</p>\n  </div>\n</template>\n```\n\nThese cause the error: `v-slot can only be used on components or <template> tags`\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: v-slot on component element (default scoped slot) -->\n  <MyComponent v-slot=\"{ item }\">\n    {{ item.name }}\n  </MyComponent>\n\n  <!-- GOOD: Named slots use template tags -->\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <template #default>\n      <p>Main content</p>\n    </template>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n\n  <!-- GOOD: Shorthand on component for default slot -->\n  <FancyList #default=\"{ item }\">\n    <div>{{ item.name }}</div>\n  </FancyList>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Common Scenarios\n\n### Wrapping Slot Content in HTML\nIf you need HTML wrappers around slot content, put them inside the template:\n\n```vue\n<!-- WRONG -->\n<MyComponent>\n  <div v-slot:header class=\"header-wrapper\">\n    <h1>Title</h1>\n  </div>\n</MyComponent>\n\n<!-- CORRECT -->\n<MyComponent>\n  <template #header>\n    <div class=\"header-wrapper\">\n      <h1>Title</h1>\n    </div>\n  </template>\n</MyComponent>\n```\n\n### Multiple v-slot on Same Element\nAnother error occurs when you have multiple v-slot directives - only the first is recognized:\n\n```vue\n<!-- BAD: Multiple v-slot directives -->\n<MyComponent v-slot:header v-slot:footer>\n  Content\n</MyComponent>\n\n<!-- GOOD: Separate template for each slot -->\n<MyComponent>\n  <template #header>Header</template>\n  <template #footer>Footer</template>\n</MyComponent>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Valid v-slot Locations
+
+
+    | Element Type | v-slot Allowed? | Example |
+
+    |--------------|-----------------|---------|
+
+    | Component | Yes | `<MyComponent v-slot="props">` |
+
+    | `<template>` | Yes | `<template #header>` |
+
+    | `<div>` | No | Compilation error |
+
+    | `<span>` | No | Compilation error |
+
+    | Any HTML element | No | Compilation error |'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Slots](https://vuejs.org/guide/components/slots.html)
+
+    - [DeepScan - vue-misused-v-slot](https://deepscan.io/docs/rules/vue-misused-v-slot)'

@@ -1,0 +1,75 @@
+skill_type: domain
+skill_id: vue-debug-guides-exact-modifier-for-precise-shortcuts
+canonical_name: Use .exact Modifier for Precise Keyboard/Mouse Shortcuts
+category: engineering
+skill_class: domain
+domain_tags:
+- accessibility
+- vue-debug-guides
+- vue
+- keyboard
+- shortcuts
+- events
+- modifiers
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/exact-modifier-for-precise-shortcuts.md
+raw_prose: "# Use .exact Modifier for Precise Keyboard/Mouse Shortcuts\n\n**Impact: MEDIUM** - By default, Vue's modifier key handlers (`.ctrl`, `.alt`, `.shift`, `.meta`) fire even when other modifier keys are also pressed. Use `.exact` to require that ONLY the specified modifiers are pressed, preventing accidental triggering of shortcuts.\n\n## Task Checklist\n\n- [ ] Use `.exact` when you need precise modifier combinations\n- [ ] Without `.exact`: `@click.ctrl` fires for Ctrl+Click AND Ctrl+Shift+Click\n- [ ] With `.exact`: `@click.ctrl.exact` fires ONLY for Ctrl+Click\n- [ ] Use `@click.exact` for plain clicks with no modifiers\n\n**Incorrect:**\n```html\n<!-- WRONG: Fires even with additional modifiers -->\n<template>\n  <button @click.ctrl=\"copyItem\">Copy</button>\n  <!-- Also fires on Ctrl+Shift+Click, Ctrl+Alt+Click, etc. -->\n\n  <button @click.ctrl.shift=\"copyAll\">Copy All</button>\n  <!-- User expects Ctrl+Shift, but also fires on Ctrl+Shift+Alt -->\n</template>\n```\n\n```html\n<!-- WRONG: Conflicting shortcuts without .exact -->\n<template>\n  <div>\n    <button @click.ctrl=\"copy\">Copy (Ctrl+Click)</button>\n    <button @click.ctrl.shift=\"copyAll\">Copy All (Ctrl+Shift+Click)</button>\n    <!-- Both fire when user does Ctrl+Shift+Click! -->\n  </div>\n</template>\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Precise modifier matching with .exact -->\n<template>\n  <button @click.ctrl.exact=\"copyItem\">Copy (Ctrl only)</button>\n  <!-- Only fires on Ctrl+Click, not Ctrl+Shift+Click -->\n\n  <button @click.ctrl.shift.exact=\"copyAll\">Copy All (Ctrl+Shift only)</button>\n  <!-- Only fires on Ctrl+Shift+Click, not Ctrl+Shift+Alt+Click -->\n</template>\n```\n\n```html\n<!-- CORRECT: Plain click without any modifiers -->\n<template>\n  <button @click.exact=\"selectItem\">Select</button>\n  <!-- Only fires when NO modifier keys are pressed -->\n  <!-- Ctrl+Click, Shift+Click, etc. will NOT trigger this -->\n</template>\n```\n\n```html\n<!-- CORRECT: Non-conflicting shortcuts -->\n<template>\n  <div class=\"editor\">\n    <div\n      @click.exact=\"selectItem\"\n      @click.ctrl.exact=\"addToSelection\"\n      @click.shift.exact=\"extendSelection\"\n      @click.ctrl.shift.exact=\"selectRange\"\n    >\n      Click, Ctrl+Click, Shift+Click, or Ctrl+Shift+Click\n    </div>\n  </div>\n</template>\n```\n\n## Behavior Comparison\n\n```javascript\n// WITHOUT .exact\n@click.ctrl=\"handler\"\n// Fires when: Ctrl+Click, Ctrl+Shift+Click, Ctrl+Alt+Click, Ctrl+Shift+Alt+Click\n// Does NOT fire: Click (without Ctrl)\n\n// WITH .exact\n@click.ctrl.exact=\"handler\"\n// Fires when: ONLY Ctrl+Click\n// Does NOT fire: Ctrl+Shift+Click, Ctrl+Alt+Click, Click\n\n// ONLY .exact (no other modifiers)\n@click.exact=\"handler\"\n// Fires when: Plain click with NO modifiers\n// Does NOT fire: Ctrl+Click, Shift+Click, Alt+Click\n```\n\n## Practical Example: File Browser Selection\n\n```vue\n<template>\n  <ul class=\"file-list\">\n    <li\n      v-for=\"file in files\"\n      :key=\"file.id\"\n      @click.exact=\"selectSingle(file)\"\n      @click.ctrl.exact=\"toggleSelection(file)\"\n      @click.shift.exact=\"selectRange(file)\"\n      @click.ctrl.shift.exact=\"addRangeToSelection(file)\"\n      :class=\"{ selected: isSelected(file) }\"\n    >\n      {{ file.name }}\n    </li>\n  </ul>\n</template>\n\n<script setup>\n// Each click type has distinct, non-overlapping behavior\nfunction selectSingle(file) {\n  // Clear selection and select only this file\n}\n\nfunction toggleSelection(file) {\n  // Add or remove this file from current selection\n}\n\nfunction selectRange(file) {\n  // Select all files from last selected to this one\n}\n\nfunction addRangeToSelection(file) {\n  // Add range to existing selection\n}\n</script>\n```\n\n## Keyboard Shortcuts with .exact\n\n```html\n<template>\n  <div\n    tabindex=\"0\"\n    @keydown.ctrl.s.exact.prevent=\"save\"\n    @keydown.ctrl.shift.s.exact.prevent=\"saveAs\"\n    @keydown.ctrl.z.exact.prevent=\"undo\"\n    @keydown.ctrl.shift.z.exact.prevent=\"redo\"\n  >\n    <!-- Each shortcut is precisely defined -->\n  </div>\n</template>\n```\n\n## Reference\n- [Vue.js Event Handling - .exact Modifier](https://vuejs.org/guide/essentials/event-handling.html#exact-modifier)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Use .exact Modifier for Precise Keyboard/Mouse Shortcuts
+
+
+    **Impact: MEDIUM** - By default, Vue''s modifier key handlers (`.ctrl`, `.alt`, `.shift`, `.meta`) fire even when other modifier keys are also pressed. Use `.exact` to require that ONLY the specified modifiers are pressed, preventing accidental triggering of shortcuts.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Use `.exact` when you need precise modifier combinations\n- [ ] Without `.exact`: `@click.ctrl` fires for Ctrl+Click AND Ctrl+Shift+Click\n- [ ] With `.exact`: `@click.ctrl.exact` fires ONLY for Ctrl+Click\n- [ ] Use `@click.exact` for plain clicks with no modifiers\n\n**Incorrect:**\n```html\n<!-- WRONG: Fires even with additional modifiers -->\n<template>\n  <button @click.ctrl=\"copyItem\">Copy</button>\n  <!-- Also fires on Ctrl+Shift+Click, Ctrl+Alt+Click, etc. -->\n\n  <button @click.ctrl.shift=\"copyAll\">Copy All</button>\n  <!-- User expects Ctrl+Shift, but also fires on Ctrl+Shift+Alt -->\n</template>\n```\n\n```html\n<!-- WRONG: Conflicting shortcuts without .exact -->\n<template>\n  <div>\n    <button @click.ctrl=\"copy\">Copy (Ctrl+Click)</button>\n    <button @click.ctrl.shift=\"copyAll\">Copy All (Ctrl+Shift+Click)</button>\n    <!-- Both fire when user does Ctrl+Shift+Click! -->\n  </div>\n</template>\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Precise modifier matching with .exact -->\n<template>\n  <button @click.ctrl.exact=\"copyItem\">Copy (Ctrl only)</button>\n  <!-- Only fires on Ctrl+Click, not Ctrl+Shift+Click -->\n\n  <button @click.ctrl.shift.exact=\"copyAll\">Copy All (Ctrl+Shift only)</button>\n  <!-- Only fires on Ctrl+Shift+Click, not Ctrl+Shift+Alt+Click -->\n</template>\n```\n\n```html\n<!-- CORRECT: Plain click without any modifiers -->\n<template>\n  <button @click.exact=\"selectItem\">Select</button>\n  <!-- Only fires when NO modifier keys are pressed -->\n  <!-- Ctrl+Click, Shift+Click, etc. will NOT trigger this -->\n</template>\n```\n\n```html\n<!-- CORRECT: Non-conflicting shortcuts -->\n<template>\n  <div class=\"editor\">\n    <div\n      @click.exact=\"selectItem\"\n      @click.ctrl.exact=\"addToSelection\"\n      @click.shift.exact=\"extendSelection\"\n      @click.ctrl.shift.exact=\"selectRange\"\n    >\n      Click, Ctrl+Click, Shift+Click, or Ctrl+Shift+Click\n    </div>\n  </div>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Behavior Comparison
+
+
+    ```javascript
+
+    // WITHOUT .exact
+
+    @click.ctrl="handler"
+
+    // Fires when: Ctrl+Click, Ctrl+Shift+Click, Ctrl+Alt+Click, Ctrl+Shift+Alt+Click
+
+    // Does NOT fire: Click (without Ctrl)
+
+
+    // WITH .exact
+
+    @click.ctrl.exact="handler"
+
+    // Fires when: ONLY Ctrl+Click
+
+    // Does NOT fire: Ctrl+Shift+Click, Ctrl+Alt+Click, Click
+
+
+    // ONLY .exact (no other modifiers)
+
+    @click.exact="handler"
+
+    // Fires when: Plain click with NO modifiers
+
+    // Does NOT fire: Ctrl+Click, Shift+Click, Alt+Click
+
+    ```'
+- sequence: 4
+  fragment_type: example
+  content: "## Practical Example: File Browser Selection\n\n```vue\n<template>\n  <ul class=\"file-list\">\n    <li\n      v-for=\"file in files\"\n      :key=\"file.id\"\n      @click.exact=\"selectSingle(file)\"\n      @click.ctrl.exact=\"toggleSelection(file)\"\n      @click.shift.exact=\"selectRange(file)\"\n      @click.ctrl.shift.exact=\"addRangeToSelection(file)\"\n      :class=\"{ selected: isSelected(file) }\"\n    >\n      {{ file.name }}\n    </li>\n  </ul>\n</template>\n\n<script setup>\n// Each click type has distinct, non-overlapping behavior\nfunction selectSingle(file) {\n  // Clear selection and select only this file\n}\n\nfunction toggleSelection(file) {\n  // Add or remove this file from current selection\n}\n\nfunction selectRange(file) {\n  // Select all files from last selected to this one\n}\n\nfunction addRangeToSelection(file) {\n  // Add range to existing selection\n}\n</script>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Keyboard Shortcuts with .exact\n\n```html\n<template>\n  <div\n    tabindex=\"0\"\n    @keydown.ctrl.s.exact.prevent=\"save\"\n    @keydown.ctrl.shift.s.exact.prevent=\"saveAs\"\n    @keydown.ctrl.z.exact.prevent=\"undo\"\n    @keydown.ctrl.shift.z.exact.prevent=\"redo\"\n  >\n    <!-- Each shortcut is precisely defined -->\n  </div>\n</template>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Event Handling - .exact Modifier](https://vuejs.org/guide/essentials/event-handling.html#exact-modifier)'

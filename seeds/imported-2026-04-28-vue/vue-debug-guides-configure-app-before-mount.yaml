@@ -1,0 +1,42 @@
+skill_type: domain
+skill_id: vue-debug-guides-configure-app-before-mount
+canonical_name: Configure Vue App Before Calling mount()
+category: engineering
+skill_class: domain
+domain_tags:
+- createApp
+- vue-debug-guides
+- vue
+- configuration
+- mount
+- setup
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/configure-app-before-mount.md
+raw_prose: "# Configure Vue App Before Calling mount()\n\n**Impact: HIGH** - Any app configurations applied after `.mount()` is called are silently ignored. This includes error handlers, global components, directives, and plugins, leading to mysterious missing functionality.\n\nThe `.mount()` method should always be called after all app configurations and asset registrations are done. This is a critical ordering requirement that, when violated, produces no errors but causes features to silently fail.\n\n## Task Checklist\n\n- [ ] Register all plugins (router, store, etc.) before mount()\n- [ ] Configure error handlers before mount()\n- [ ] Register global components and directives before mount()\n- [ ] Set all `app.config` properties before mount()\n- [ ] Call `.mount()` as the final step in app initialization\n\n**Incorrect:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\nimport router from './router'\n\nconst app = createApp(App)\n\n// WRONG: Mounting first, then configuring\napp.mount('#app')\n\n// These are silently IGNORED - app is already mounted!\napp.use(router)\napp.config.errorHandler = (err) => {\n  console.error('Global error:', err)\n}\napp.component('GlobalButton', GlobalButton)\n```\n\n**Correct:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\nimport router from './router'\nimport { createPinia } from 'pinia'\nimport GlobalButton from './components/GlobalButton.vue'\n\nconst app = createApp(App)\n\n// Configure everything FIRST\napp.use(router)\napp.use(createPinia())\n\n// Set up error handling\napp.config.errorHandler = (err, instance, info) => {\n  console.error('Global error:', err)\n  console.log('Component:', instance)\n  console.log('Error info:', info)\n}\n\n// Register global components\napp.component('GlobalButton', GlobalButton)\n\n// Mount LAST - after all configuration is complete\napp.mount('#app')\n```\n\n## Common Mistake: Chaining with Mount\n\n```javascript\n// WRONG: Chaining mount in the middle of configuration\ncreateApp(App)\n  .use(router)\n  .mount('#app')  // Everything after this line is a problem\n  .use(pinia)     // This doesn't even work - mount returns component instance!\n\n// CORRECT: Either complete chain before mount, or use intermediate variable\ncreateApp(App)\n  .use(router)\n  .use(pinia)\n  .component('GlobalButton', GlobalButton)\n  .mount('#app')  // Mount at the very end\n```\n\n## Reference\n- [Vue.js - Creating a Vue Application](https://vuejs.org/guide/essentials/application.html)\n- [Vue.js Application API](https://vuejs.org/api/application.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: example
+  content: '# Configure Vue App Before Calling mount()
+
+
+    **Impact: HIGH** - Any app configurations applied after `.mount()` is called are silently ignored. This includes error handlers, global components, directives, and plugins, leading to mysterious missing functionality.
+
+
+    The `.mount()` method should always be called after all app configurations and asset registrations are done. This is a critical ordering requirement that, when violated, produces no errors but causes features to silently fail.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Register all plugins (router, store, etc.) before mount()\n- [ ] Configure error handlers before mount()\n- [ ] Register global components and directives before mount()\n- [ ] Set all `app.config` properties before mount()\n- [ ] Call `.mount()` as the final step in app initialization\n\n**Incorrect:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\nimport router from './router'\n\nconst app = createApp(App)\n\n// WRONG: Mounting first, then configuring\napp.mount('#app')\n\n// These are silently IGNORED - app is already mounted!\napp.use(router)\napp.config.errorHandler = (err) => {\n  console.error('Global error:', err)\n}\napp.component('GlobalButton', GlobalButton)\n```\n\n**Correct:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\nimport router from './router'\nimport { createPinia } from 'pinia'\nimport GlobalButton from './components/GlobalButton.vue'\n\nconst app = createApp(App)\n\n// Configure everything FIRST\napp.use(router)\napp.use(createPinia())\n\n// Set up error handling\napp.config.errorHandler = (err, instance, info) => {\n  console.error('Global error:', err)\n  console.log('Component:', instance)\n  console.log('Error info:', info)\n}\n\n// Register global components\napp.component('GlobalButton', GlobalButton)\n\n// Mount LAST - after all configuration is complete\napp.mount('#app')\n```"
+- sequence: 3
+  fragment_type: guardrail
+  content: "## Common Mistake: Chaining with Mount\n\n```javascript\n// WRONG: Chaining mount in the middle of configuration\ncreateApp(App)\n  .use(router)\n  .mount('#app')  // Everything after this line is a problem\n  .use(pinia)     // This doesn't even work - mount returns component instance!\n\n// CORRECT: Either complete chain before mount, or use intermediate variable\ncreateApp(App)\n  .use(router)\n  .use(pinia)\n  .component('GlobalButton', GlobalButton)\n  .mount('#app')  // Mount at the very end\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js - Creating a Vue Application](https://vuejs.org/guide/essentials/application.html)
+
+    - [Vue.js Application API](https://vuejs.org/api/application.html)'

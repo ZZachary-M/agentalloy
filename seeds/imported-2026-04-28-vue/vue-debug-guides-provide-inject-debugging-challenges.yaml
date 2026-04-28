@@ -1,0 +1,97 @@
+skill_type: domain
+skill_id: vue-debug-guides-provide-inject-debugging-challenges
+canonical_name: Provide/Inject Has Limited DevTools Support - Plan for Debugging
+category: engineering
+skill_class: domain
+domain_tags:
+- devtools
+- architecture
+- debugging
+- provide-inject
+- vue-debug-guides
+- vue
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/provide-inject-debugging-challenges.md
+raw_prose: "# Provide/Inject Has Limited DevTools Support - Plan for Debugging\n\n**Impact: LOW** - While provide/inject is powerful for avoiding prop drilling, it creates less visible data flow than props. Provided values are not as easily inspectable in Vue DevTools, and tracing where a value comes from requires navigating the component tree manually.\n\n## Task Checklist\n\n- [ ] Document provided values at the provider component level\n- [ ] Use descriptive Symbol descriptions for easier identification\n- [ ] Consider adding development-only logging for provided state changes\n- [ ] Keep provide/inject chains shallow when possible\n- [ ] Prefer Pinia for complex state that needs DevTools integration\n\n## The Challenge\n\nUnlike props which are clearly visible in Vue DevTools for each component, provided values:\n\n1. Don't show which ancestor provided them\n2. Require manual navigation to find the provider\n3. Don't show in the standard props/data panels\n4. Can be shadowed by closer ancestors using the same key\n\n## Strategies for Better Debugging\n\n### 1. Use Descriptive Symbol Names\n\n```js\n// injection-keys.js\n\n// BETTER: Descriptive names appear in errors and debugging\nexport const UserAuthKey = Symbol('UserAuthenticationState')\nexport const ThemeConfigKey = Symbol('ThemeConfiguration')\nexport const FormContextKey = Symbol('FormValidationContext')\n\n// WORSE: Generic names are harder to trace\nexport const UserKey = Symbol()\nexport const ThemeKey = Symbol('theme')\n```\n\n### 2. Document Providers Clearly\n\n```vue\n<!-- AuthProvider.vue -->\n<script setup>\n/**\n * Authentication Provider\n *\n * Provides:\n * - UserAuthKey: Current user state (Ref<User | null>)\n * - AuthActionsKey: { login, logout, refresh }\n *\n * Must wrap any component that needs authentication state.\n */\nimport { provide, ref, readonly } from 'vue'\nimport { UserAuthKey, AuthActionsKey } from '@/injection-keys'\n\nconst user = ref(null)\n\n// ... implementation\n\nprovide(UserAuthKey, readonly(user))\nprovide(AuthActionsKey, { login, logout, refresh })\n</script>\n```\n\n### 3. Development-Only Logging\n\n```js\n// composables/useProvideWithLogging.js\nimport { provide, watch, getCurrentInstance } from 'vue'\n\nexport function useProvideWithLogging(key, value, name) {\n  provide(key, value)\n\n  if (import.meta.env.DEV) {\n    const instance = getCurrentInstance()\n    const componentName = instance?.type?.name || 'Unknown'\n\n    console.log(`[Provide] ${name} provided by <${componentName}>`)\n\n    // Log reactive changes\n    if (value && typeof value === 'object' && 'value' in value) {\n      watch(value, (newVal) => {\n        console.log(`[Provide] ${name} changed:`, newVal)\n      }, { deep: true })\n    }\n  }\n}\n```\n\n```vue\n<script setup>\nimport { ref } from 'vue'\nimport { useProvideWithLogging } from '@/composables/useProvideWithLogging'\nimport { ThemeKey } from '@/injection-keys'\n\nconst theme = ref('dark')\n\n// In development, logs when provided and when changed\nuseProvideWithLogging(ThemeKey, theme, 'Theme')\n</script>\n```\n\n### 4. Inject with Missing Provider Warnings\n\n```js\n// composables/useSafeInject.js\nimport { inject, getCurrentInstance } from 'vue'\n\nexport function useSafeInject(key, fallback, keyName) {\n  const value = inject(key, undefined)\n\n  if (value === undefined) {\n    const instance = getCurrentInstance()\n    const componentName = instance?.type?.name || 'Unknown'\n\n    if (import.meta.env.DEV) {\n      console.warn(\n        `[Inject] ${keyName || String(key)} not provided. ` +\n        `Component <${componentName}> is using fallback value. ` +\n        `Ensure a provider exists in the ancestor chain.`\n      )\n    }\n\n    return typeof fallback === 'function' ? fallback() : fallback\n  }\n\n  return value\n}\n```\n\n```vue\n<script setup>\nimport { useSafeInject } from '@/composables/useSafeInject'\nimport { ThemeKey } from '@/injection-keys'\n\n// Warns in dev if no provider found\nconst theme = useSafeInject(ThemeKey, () => ({ mode: 'light' }), 'ThemeConfig')\n</script>\n```\n\n### 5. Create Provider Registry for Complex Apps\n\n```js\n// utils/provider-registry.js\nconst providerRegistry = new Map()\n\nexport function registerProvider(key, componentName, value) {\n  if (import.meta.env.DEV) {\n    providerRegistry.set(key, {\n      componentName,\n      value,\n      timestamp: Date.now()\n    })\n  }\n}\n\nexport function getProviderInfo(key) {\n  return providerRegistry.get(key)\n}\n\n// For DevTools custom plugin or debugging\nexport function getAllProviders() {\n  return Object.fromEntries(providerRegistry)\n}\n\n// Expose to window for console debugging\nif (import.meta.env.DEV) {\n  window.__VUE_PROVIDERS__ = {\n    getAll: getAllProviders,\n    get: getProviderInfo\n  }\n}\n```\n\n## When to Use Pinia Instead\n\nIf you find yourself needing extensive debugging for state:\n\n| Use Provide/Inject | Use Pinia |\n|-------------------|-----------|\n| Component library internals | Application-wide state |\n| Theme/locale configuration | User session data |\n| Form context | Shopping cart |\n| Simple parent-child sharing | Complex state with actions |\n| Plugin configuration | State that needs time-travel debugging |\n\nPinia provides excellent DevTools integration with:\n- State inspection\n- Time-travel debugging\n- Action logging\n- Hot module replacement\n\n## Reference\n- [Vue DevTools](https://devtools.vuejs.org/)\n- [Pinia DevTools](https://pinia.vuejs.org/core-concepts/index.html#devtools)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Provide/Inject Has Limited DevTools Support - Plan for Debugging
+
+
+    **Impact: LOW** - While provide/inject is powerful for avoiding prop drilling, it creates less visible data flow than props. Provided values are not as easily inspectable in Vue DevTools, and tracing where a value comes from requires navigating the component tree manually.'
+- sequence: 2
+  fragment_type: setup
+  content: '## Task Checklist
+
+
+    - [ ] Document provided values at the provider component level
+
+    - [ ] Use descriptive Symbol descriptions for easier identification
+
+    - [ ] Consider adding development-only logging for provided state changes
+
+    - [ ] Keep provide/inject chains shallow when possible
+
+    - [ ] Prefer Pinia for complex state that needs DevTools integration'
+- sequence: 3
+  fragment_type: execution
+  content: '## The Challenge
+
+
+    Unlike props which are clearly visible in Vue DevTools for each component, provided values:
+
+
+    1. Don''t show which ancestor provided them
+
+    2. Require manual navigation to find the provider
+
+    3. Don''t show in the standard props/data panels
+
+    4. Can be shadowed by closer ancestors using the same key'
+- sequence: 4
+  fragment_type: execution
+  content: "## Strategies for Better Debugging\n\n### 1. Use Descriptive Symbol Names\n\n```js\n// injection-keys.js\n\n// BETTER: Descriptive names appear in errors and debugging\nexport const UserAuthKey = Symbol('UserAuthenticationState')\nexport const ThemeConfigKey = Symbol('ThemeConfiguration')\nexport const FormContextKey = Symbol('FormValidationContext')\n\n// WORSE: Generic names are harder to trace\nexport const UserKey = Symbol()\nexport const ThemeKey = Symbol('theme')\n```\n\n### 2. Document Providers Clearly\n\n```vue\n<!-- AuthProvider.vue -->\n<script setup>\n/**\n * Authentication Provider\n *\n * Provides:\n * - UserAuthKey: Current user state (Ref<User | null>)\n * - AuthActionsKey: { login, logout, refresh }\n *\n * Must wrap any component that needs authentication state.\n */\nimport { provide, ref, readonly } from 'vue'\nimport { UserAuthKey, AuthActionsKey } from '@/injection-keys'\n\nconst user = ref(null)\n\n// ... implementation\n\nprovide(UserAuthKey, readonly(user))\nprovide(AuthActionsKey, { login, logout, refresh })\n</script>\n```\n\n### 3. Development-Only Logging\n\n```js\n// composables/useProvideWithLogging.js\nimport { provide, watch, getCurrentInstance } from 'vue'\n\nexport function useProvideWithLogging(key, value, name) {\n  provide(key, value)\n\n  if (import.meta.env.DEV) {\n    const instance = getCurrentInstance()\n    const componentName = instance?.type?.name || 'Unknown'\n\n    console.log(`[Provide] ${name} provided by <${componentName}>`)\n\n    // Log reactive changes\n    if (value && typeof value === 'object' && 'value' in value) {\n      watch(value, (newVal) => {\n        console.log(`[Provide] ${name} changed:`, newVal)\n      }, { deep: true })\n    }\n  }\n}\n```\n\n```vue\n<script setup>\nimport { ref } from 'vue'\nimport { useProvideWithLogging } from '@/composables/useProvideWithLogging'\nimport { ThemeKey } from '@/injection-keys'\n\nconst theme = ref('dark')\n\n// In development, logs when provided and when changed\nuseProvideWithLogging(ThemeKey, theme, 'Theme')\n</script>\n```\n\n### 4. Inject with Missing Provider Warnings\n\n```js\n// composables/useSafeInject.js\nimport { inject, getCurrentInstance } from 'vue'\n\nexport function useSafeInject(key, fallback, keyName) {\n  const value = inject(key, undefined)\n\n  if (value === undefined) {\n    const instance = getCurrentInstance()\n    const componentName = instance?.type?.name || 'Unknown'\n\n    if (import.meta.env.DEV) {\n      console.warn(\n        `[Inject] ${keyName || String(key)} not provided. ` +\n        `Component <${componentName}> is using fallback value. ` +\n        `Ensure a provider exists in the ancestor chain.`\n      )\n    }\n\n    return typeof fallback === 'function' ? fallback() : fallback\n  }\n\n  return value\n}\n```\n\n```vue\n<script setup>\nimport { useSafeInject } from '@/composables/useSafeInject'\nimport { ThemeKey } from '@/injection-keys'\n\n// Warns in dev if no provider found\nconst theme = useSafeInject(ThemeKey, () => ({ mode: 'light' }), 'ThemeConfig')\n</script>\n```\n\n### 5. Create Provider Registry for Complex Apps\n\n```js\n// utils/provider-registry.js\nconst providerRegistry = new Map()\n\nexport function registerProvider(key, componentName, value) {\n  if (import.meta.env.DEV) {\n    providerRegistry.set(key, {\n      componentName,\n      value,\n      timestamp: Date.now()\n    })\n  }\n}\n\nexport function getProviderInfo(key) {\n  return providerRegistry.get(key)\n}\n\n// For DevTools custom plugin or debugging\nexport function getAllProviders() {\n  return Object.fromEntries(providerRegistry)\n}\n\n// Expose to window for console debugging\nif (import.meta.env.DEV) {\n  window.__VUE_PROVIDERS__ = {\n    getAll: getAllProviders,\n    get: getProviderInfo\n  }\n}\n```"
+- sequence: 5
+  fragment_type: setup
+  content: '## When to Use Pinia Instead
+
+
+    If you find yourself needing extensive debugging for state:
+
+
+    | Use Provide/Inject | Use Pinia |
+
+    |-------------------|-----------|
+
+    | Component library internals | Application-wide state |
+
+    | Theme/locale configuration | User session data |
+
+    | Form context | Shopping cart |
+
+    | Simple parent-child sharing | Complex state with actions |
+
+    | Plugin configuration | State that needs time-travel debugging |
+
+
+    Pinia provides excellent DevTools integration with:
+
+    - State inspection
+
+    - Time-travel debugging
+
+    - Action logging
+
+    - Hot module replacement'
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue DevTools](https://devtools.vuejs.org/)
+
+    - [Pinia DevTools](https://pinia.vuejs.org/core-concepts/index.html#devtools)'

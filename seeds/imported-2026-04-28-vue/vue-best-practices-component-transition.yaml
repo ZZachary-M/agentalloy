@@ -1,0 +1,50 @@
+skill_type: domain
+skill_id: vue-best-practices-component-transition
+canonical_name: Transition Component Best Practices
+category: engineering
+skill_class: domain
+domain_tags:
+- keys
+- vue
+- performance
+- vue-best-practices
+- animation
+- vue3
+- transition
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/component-transition.md
+raw_prose: "# Transition Component Best Practices\n\n**Impact: MEDIUM** - `<Transition>` animates entering/leaving of a single element or component. It is ideal for toggling UI states, swapping views, or animating one component at a time.\n\n## Task List\n\n- Wrap a single element or component inside `<Transition>`\n- Provide a `key` when switching between same element types\n- Use `mode=\"out-in\"` when you need sequential swaps\n- Prefer `transform` and `opacity` for smooth animations\n\n## Use Transition for a Single Root Element\n\n`<Transition>` only supports one direct child. Wrap multiple nodes in a single element or component.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <h3>Title</h3>\n    <p>Description</p>\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <div>\n      <h3>Title</h3>\n      <p>Description</p>\n    </div>\n  </Transition>\n</template>\n```\n\n## Force Transitions Between Same Element Types\n\nVue reuses the same DOM element when the tag type does not change. Add `key` so Vue treats it as a new element and triggers enter/leave.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <p v-if=\"isActive\">Active</p>\n    <p v-else>Inactive</p>\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <p v-if=\"isActive\" key=\"active\">Active</p>\n    <p v-else key=\"inactive\">Inactive</p>\n  </Transition>\n</template>\n```\n\n## Use `mode` to Avoid Overlap During Swaps\n\nWhen swapping components or views, use `mode=\"out-in\"` to prevent both from being visible at the same time.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <component :is=\"currentView\" />\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <component :is=\"currentView\" :key=\"currentView\" />\n  </Transition>\n</template>\n```\n\n## Animate `transform` and `opacity` for Performance\n\nAvoid layout-triggering properties such as `height`, `margin`, or `top`. Use `transform` and `opacity` for smooth, GPU-friendly transitions.\n\n**BAD:**\n```css\n.slide-enter-active,\n.slide-leave-active {\n  transition: height 0.3s ease;\n}\n\n.slide-enter-from,\n.slide-leave-to {\n  height: 0;\n}\n```\n\n**GOOD:**\n```css\n.slide-enter-active,\n.slide-leave-active {\n  transition: transform 0.3s ease, opacity 0.3s ease;\n}\n\n.slide-enter-from {\n  transform: translateX(-12px);\n  opacity: 0;\n}\n\n.slide-leave-to {\n  transform: translateX(12px);\n  opacity: 0;\n}\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Transition Component Best Practices
+
+
+    **Impact: MEDIUM** - `<Transition>` animates entering/leaving of a single element or component. It is ideal for toggling UI states, swapping views, or animating one component at a time.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Wrap a single element or component inside `<Transition>`
+
+    - Provide a `key` when switching between same element types
+
+    - Use `mode="out-in"` when you need sequential swaps
+
+    - Prefer `transform` and `opacity` for smooth animations'
+- sequence: 3
+  fragment_type: execution
+  content: "## Use Transition for a Single Root Element\n\n`<Transition>` only supports one direct child. Wrap multiple nodes in a single element or component.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <h3>Title</h3>\n    <p>Description</p>\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <div>\n      <h3>Title</h3>\n      <p>Description</p>\n    </div>\n  </Transition>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Force Transitions Between Same Element Types\n\nVue reuses the same DOM element when the tag type does not change. Add `key` so Vue treats it as a new element and triggers enter/leave.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <p v-if=\"isActive\">Active</p>\n    <p v-else>Inactive</p>\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <p v-if=\"isActive\" key=\"active\">Active</p>\n    <p v-else key=\"inactive\">Inactive</p>\n  </Transition>\n</template>\n```"
+- sequence: 5
+  fragment_type: guardrail
+  content: "## Use `mode` to Avoid Overlap During Swaps\n\nWhen swapping components or views, use `mode=\"out-in\"` to prevent both from being visible at the same time.\n\n**BAD:**\n```vue\n<template>\n  <Transition name=\"fade\">\n    <component :is=\"currentView\" />\n  </Transition>\n</template>\n```\n\n**GOOD:**\n```vue\n<template>\n  <Transition name=\"fade\" mode=\"out-in\">\n    <component :is=\"currentView\" :key=\"currentView\" />\n  </Transition>\n</template>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Animate `transform` and `opacity` for Performance\n\nAvoid layout-triggering properties such as `height`, `margin`, or `top`. Use `transform` and `opacity` for smooth, GPU-friendly transitions.\n\n**BAD:**\n```css\n.slide-enter-active,\n.slide-leave-active {\n  transition: height 0.3s ease;\n}\n\n.slide-enter-from,\n.slide-leave-to {\n  height: 0;\n}\n```\n\n**GOOD:**\n```css\n.slide-enter-active,\n.slide-leave-active {\n  transition: transform 0.3s ease, opacity 0.3s ease;\n}\n\n.slide-enter-from {\n  transform: translateX(-12px);\n  opacity: 0;\n}\n\n.slide-leave-to {\n  transform: translateX(12px);\n  opacity: 0;\n}\n```"

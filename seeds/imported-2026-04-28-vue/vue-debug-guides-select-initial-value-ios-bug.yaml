@@ -1,0 +1,39 @@
+skill_type: domain
+skill_id: vue-debug-guides-select-initial-value-ios-bug
+canonical_name: Select Element iOS Bug - Always Include Disabled Placeholder Option
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- accessibility
+- ios
+- vue-debug-guides
+- mobile
+- vue
+- v-model
+- vue3
+- select
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/select-initial-value-ios-bug.md
+raw_prose: "# Select Element iOS Bug - Always Include Disabled Placeholder Option\n\n**Impact: HIGH** - When a `<select>` element's v-model initial value doesn't match any option, iOS renders it as \"unselected\" and users CANNOT select the first item. iOS doesn't fire a change event when selecting an already-visually-selected option, leaving users stuck.\n\nThis is a platform-specific bug that only manifests on iOS Safari. Desktop browsers and Android handle this gracefully, making it easy to miss during development. The fix is simple: always include a disabled placeholder option.\n\n## Task Checklist\n\n- [ ] Always add a disabled placeholder option with empty value to select elements\n- [ ] Ensure v-model initial value is empty string to match the placeholder\n- [ ] Test select inputs on iOS devices or simulators\n- [ ] Consider this for any user-facing forms, especially on mobile-first apps\n\n**Problem - iOS users cannot select first option:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\n// Initial value is empty string, doesn't match any option\nconst selected = ref('')\n</script>\n\n<template>\n  <!-- PROBLEM: On iOS, \"Apple\" appears selected but user cannot actually select it -->\n  <!-- Tapping \"Apple\" does nothing because iOS doesn't fire change event -->\n  <select v-model=\"selected\">\n    <option value=\"apple\">Apple</option>\n    <option value=\"banana\">Banana</option>\n    <option value=\"orange\">Orange</option>\n  </select>\n\n  <!-- selected remains '' even though \"Apple\" appears highlighted -->\n</template>\n```\n\n**Solution - Add disabled placeholder option:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst selected = ref('')  // Matches the placeholder option\n</script>\n\n<template>\n  <!-- CORRECT: Disabled placeholder ensures user must actively select -->\n  <select v-model=\"selected\">\n    <option disabled value=\"\">Please select a fruit</option>\n    <option value=\"apple\">Apple</option>\n    <option value=\"banana\">Banana</option>\n    <option value=\"orange\">Orange</option>\n  </select>\n</template>\n```\n\n```html\n<!-- Variant with required attribute for form validation -->\n<select v-model=\"selected\" required>\n  <option disabled value=\"\">-- Select an option --</option>\n  <option value=\"a\">Option A</option>\n  <option value=\"b\">Option B</option>\n</select>\n```\n\n```html\n<!-- If you MUST have a pre-selected default, set the initial value to match -->\n<script setup>\nimport { ref } from 'vue'\n\n// Set initial value to match an actual option\nconst country = ref('us')  // Pre-selects \"United States\"\n</script>\n\n<template>\n  <select v-model=\"country\">\n    <option value=\"us\">United States</option>\n    <option value=\"uk\">United Kingdom</option>\n    <option value=\"ca\">Canada</option>\n  </select>\n</template>\n```\n\n## Reference\n- [Vue.js Form Input Bindings - Select](https://vuejs.org/guide/essentials/forms.html#select)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Select Element iOS Bug - Always Include Disabled Placeholder Option
+
+
+    **Impact: HIGH** - When a `<select>` element''s v-model initial value doesn''t match any option, iOS renders it as "unselected" and users CANNOT select the first item. iOS doesn''t fire a change event when selecting an already-visually-selected option, leaving users stuck.
+
+
+    This is a platform-specific bug that only manifests on iOS Safari. Desktop browsers and Android handle this gracefully, making it easy to miss during development. The fix is simple: always include a disabled placeholder option.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always add a disabled placeholder option with empty value to select elements\n- [ ] Ensure v-model initial value is empty string to match the placeholder\n- [ ] Test select inputs on iOS devices or simulators\n- [ ] Consider this for any user-facing forms, especially on mobile-first apps\n\n**Problem - iOS users cannot select first option:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\n// Initial value is empty string, doesn't match any option\nconst selected = ref('')\n</script>\n\n<template>\n  <!-- PROBLEM: On iOS, \"Apple\" appears selected but user cannot actually select it -->\n  <!-- Tapping \"Apple\" does nothing because iOS doesn't fire change event -->\n  <select v-model=\"selected\">\n    <option value=\"apple\">Apple</option>\n    <option value=\"banana\">Banana</option>\n    <option value=\"orange\">Orange</option>\n  </select>\n\n  <!-- selected remains '' even though \"Apple\" appears highlighted -->\n</template>\n```\n\n**Solution - Add disabled placeholder option:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst selected = ref('')  // Matches the placeholder option\n</script>\n\n<template>\n  <!-- CORRECT: Disabled placeholder ensures user must actively select -->\n  <select v-model=\"selected\">\n    <option disabled value=\"\">Please select a fruit</option>\n    <option value=\"apple\">Apple</option>\n    <option value=\"banana\">Banana</option>\n    <option value=\"orange\">Orange</option>\n  </select>\n</template>\n```\n\n```html\n<!-- Variant with required attribute for form validation -->\n<select v-model=\"selected\" required>\n  <option disabled value=\"\">-- Select an option --</option>\n  <option value=\"a\">Option A</option>\n  <option value=\"b\">Option B</option>\n</select>\n```\n\n```html\n<!-- If you MUST have a pre-selected default, set the initial value to match -->\n<script setup>\nimport { ref } from 'vue'\n\n// Set initial value to match an actual option\nconst country = ref('us')  // Pre-selects \"United States\"\n</script>\n\n<template>\n  <select v-model=\"country\">\n    <option value=\"us\">United States</option>\n    <option value=\"uk\">United Kingdom</option>\n    <option value=\"ca\">Canada</option>\n  </select>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings - Select](https://vuejs.org/guide/essentials/forms.html#select)'

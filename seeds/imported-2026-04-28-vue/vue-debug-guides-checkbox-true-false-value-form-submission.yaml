@@ -1,0 +1,37 @@
+skill_type: domain
+skill_id: vue-debug-guides-checkbox-true-false-value-form-submission
+canonical_name: Checkbox true-value/false-value Not Submitted in Forms
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- checkbox
+- vue-debug-guides
+- vue
+- v-model
+- vue3
+- form-submission
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/checkbox-true-false-value-form-submission.md
+raw_prose: "# Checkbox true-value/false-value Not Submitted in Forms\n\n**Impact: MEDIUM** - Vue's `true-value` and `false-value` attributes only affect the JavaScript binding, NOT the actual form submission. Unchecked checkboxes are never included in form submissions by browsers, regardless of `false-value`.\n\nThis is a browser limitation, not a Vue issue. If you need to submit one of two values (like \"yes\"/\"no\" or \"active\"/\"inactive\"), use radio buttons instead of a checkbox.\n\n## Task Checklist\n\n- [ ] Don't rely on `false-value` for form submissions - it won't be sent\n- [ ] Use radio buttons when you need to submit one of exactly two values\n- [ ] Remember `true-value`/`false-value` are for JavaScript state only\n- [ ] For form submissions with custom values, handle the transformation server-side or in submit handler\n\n**Problem - false-value not submitted:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst status = ref('no')  // JavaScript value works correctly\n</script>\n\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- PROBLEM: When unchecked, nothing is submitted for this field -->\n    <!-- Server receives no \"status\" field at all, not \"no\" -->\n    <input\n      type=\"checkbox\"\n      v-model=\"status\"\n      true-value=\"yes\"\n      false-value=\"no\"\n      name=\"status\"\n    >\n    <label>Active</label>\n\n    <!-- status.value correctly shows \"yes\" or \"no\" in Vue -->\n    <!-- But form submission only sends \"status=yes\" when checked -->\n    <!-- When unchecked, \"status\" field is completely missing -->\n  </form>\n</template>\n```\n\n**Solution 1 - Use radio buttons for two-value submission:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst status = ref('no')\n</script>\n\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- CORRECT: Radio buttons always submit a value -->\n    <label>\n      <input type=\"radio\" v-model=\"status\" value=\"yes\" name=\"status\">\n      Active\n    </label>\n    <label>\n      <input type=\"radio\" v-model=\"status\" value=\"no\" name=\"status\">\n      Inactive\n    </label>\n\n    <!-- Form always submits \"status=yes\" or \"status=no\" -->\n  </form>\n</template>\n```\n\n**Solution 2 - Handle in submit handler (for SPA/AJAX):**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst isActive = ref(false)\n\nasync function submitForm() {\n  // Transform checkbox state to desired value before sending\n  const payload = {\n    status: isActive.value ? 'yes' : 'no'\n  }\n\n  await fetch('/api/update', {\n    method: 'POST',\n    body: JSON.stringify(payload)\n  })\n}\n</script>\n\n<template>\n  <!-- For AJAX submission, checkbox is fine - transform in handler -->\n  <input type=\"checkbox\" v-model=\"isActive\">\n  <label>Active</label>\n\n  <button @click=\"submitForm\">Save</button>\n</template>\n```\n\n**Solution 3 - Hidden input fallback:**\n```html\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- Hidden input provides fallback value -->\n    <input type=\"hidden\" name=\"status\" value=\"no\">\n    <!-- Checkbox overrides with \"yes\" when checked -->\n    <input type=\"checkbox\" name=\"status\" value=\"yes\" v-model=\"isActive\">\n    <label>Active</label>\n  </form>\n</template>\n```\n\n## Reference\n- [Vue.js Form Input Bindings - Checkbox](https://vuejs.org/guide/essentials/forms.html#checkbox)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Checkbox true-value/false-value Not Submitted in Forms
+
+
+    **Impact: MEDIUM** - Vue''s `true-value` and `false-value` attributes only affect the JavaScript binding, NOT the actual form submission. Unchecked checkboxes are never included in form submissions by browsers, regardless of `false-value`.
+
+
+    This is a browser limitation, not a Vue issue. If you need to submit one of two values (like "yes"/"no" or "active"/"inactive"), use radio buttons instead of a checkbox.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Don't rely on `false-value` for form submissions - it won't be sent\n- [ ] Use radio buttons when you need to submit one of exactly two values\n- [ ] Remember `true-value`/`false-value` are for JavaScript state only\n- [ ] For form submissions with custom values, handle the transformation server-side or in submit handler\n\n**Problem - false-value not submitted:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst status = ref('no')  // JavaScript value works correctly\n</script>\n\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- PROBLEM: When unchecked, nothing is submitted for this field -->\n    <!-- Server receives no \"status\" field at all, not \"no\" -->\n    <input\n      type=\"checkbox\"\n      v-model=\"status\"\n      true-value=\"yes\"\n      false-value=\"no\"\n      name=\"status\"\n    >\n    <label>Active</label>\n\n    <!-- status.value correctly shows \"yes\" or \"no\" in Vue -->\n    <!-- But form submission only sends \"status=yes\" when checked -->\n    <!-- When unchecked, \"status\" field is completely missing -->\n  </form>\n</template>\n```\n\n**Solution 1 - Use radio buttons for two-value submission:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst status = ref('no')\n</script>\n\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- CORRECT: Radio buttons always submit a value -->\n    <label>\n      <input type=\"radio\" v-model=\"status\" value=\"yes\" name=\"status\">\n      Active\n    </label>\n    <label>\n      <input type=\"radio\" v-model=\"status\" value=\"no\" name=\"status\">\n      Inactive\n    </label>\n\n    <!-- Form always submits \"status=yes\" or \"status=no\" -->\n  </form>\n</template>\n```\n\n**Solution 2 - Handle in submit handler (for SPA/AJAX):**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst isActive = ref(false)\n\nasync function submitForm() {\n  // Transform checkbox state to desired value before sending\n  const payload = {\n    status: isActive.value ? 'yes' : 'no'\n  }\n\n  await fetch('/api/update', {\n    method: 'POST',\n    body: JSON.stringify(payload)\n  })\n}\n</script>\n\n<template>\n  <!-- For AJAX submission, checkbox is fine - transform in handler -->\n  <input type=\"checkbox\" v-model=\"isActive\">\n  <label>Active</label>\n\n  <button @click=\"submitForm\">Save</button>\n</template>\n```\n\n**Solution 3 - Hidden input fallback:**\n```html\n<template>\n  <form action=\"/api/update\" method=\"POST\">\n    <!-- Hidden input provides fallback value -->\n    <input type=\"hidden\" name=\"status\" value=\"no\">\n    <!-- Checkbox overrides with \"yes\" when checked -->\n    <input type=\"checkbox\" name=\"status\" value=\"yes\" v-model=\"isActive\">\n    <label>Active</label>\n  </form>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings - Checkbox](https://vuejs.org/guide/essentials/forms.html#checkbox)'

@@ -1,0 +1,86 @@
+skill_type: domain
+skill_id: vue-debug-guides-perf-computed-object-stability
+canonical_name: Return Stable Object References from Computed Properties
+category: engineering
+skill_class: domain
+domain_tags:
+- reactivity
+- vue3.4
+- vue-debug-guides
+- vue
+- performance
+- computed
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/perf-computed-object-stability.md
+raw_prose: "# Return Stable Object References from Computed Properties\n\n**Impact: MEDIUM** - In Vue 3.4+, computed properties only trigger effects when their value changes. However, if a computed returns a new object each time, Vue cannot detect that the values inside are the same. This causes unnecessary effect re-runs.\n\nFor primitive values, Vue 3.4+ handles this automatically. For objects, manually compare and return the previous value when nothing meaningful has changed.\n\n## Task Checklist\n\n- [ ] For computed properties returning primitives, Vue 3.4+ handles stability automatically\n- [ ] For computed properties returning objects, compare with previous value and return old reference if unchanged\n- [ ] Always perform the full computation before comparing (to track dependencies correctly)\n- [ ] Consider if you really need to return an object, or if primitives would suffice\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed, watchEffect } from 'vue'\n\nconst count = ref(0)\n\n// BAD: Returns new object every time, always triggers effects\nconst stats = computed(() => {\n  return {\n    isEven: count.value % 2 === 0,\n    doubleValue: count.value * 2\n  }\n})\n\nwatchEffect(() => {\n  console.log('Stats changed:', stats.value)\n  // Logs on EVERY count change, even when isEven hasn't changed\n  // count: 0 -> 2 -> 4: isEven is always true, but effect runs each time\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed, watchEffect } from 'vue'\n\nconst count = ref(0)\n\n// GOOD (Vue 3.4+): Primitive computed - automatic stability\nconst isEven = computed(() => count.value % 2 === 0)\n\nwatchEffect(() => {\n  console.log('isEven:', isEven.value)\n  // Only logs when isEven actually changes (0, 2, 4 won't re-trigger)\n})\n\n// GOOD (Vue 3.4+): Manual comparison for object returns\nconst stats = computed((oldValue) => {\n  // Step 1: Always compute the new value first (to track dependencies)\n  const newValue = {\n    isEven: count.value % 2 === 0,\n    category: count.value < 10 ? 'small' : 'large'\n  }\n\n  // Step 2: Compare with previous value\n  if (oldValue &&\n      oldValue.isEven === newValue.isEven &&\n      oldValue.category === newValue.category) {\n    return oldValue  // Return old reference - no effect triggers\n  }\n\n  return newValue\n})\n\nwatchEffect(() => {\n  console.log('Stats changed:', stats.value)\n  // Now only logs when isEven or category actually changes\n})\n</script>\n```\n\n## Primitive vs Object Computed Behavior (Vue 3.4+)\n\n```javascript\nimport { ref, computed, watchEffect } from 'vue'\n\nconst count = ref(0)\n\n// PRIMITIVE: Vue automatically detects value hasn't changed\nconst isEven = computed(() => count.value % 2 === 0)\n\nwatchEffect(() => console.log(isEven.value))  // true\n\ncount.value = 2  // isEven still true - NO log\ncount.value = 4  // isEven still true - NO log\ncount.value = 3  // isEven now false - logs: false\n\n// OBJECT: New reference every time (without manual comparison)\nconst obj = computed(() => ({ isEven: count.value % 2 === 0 }))\n\nwatchEffect(() => console.log(obj.value))  // { isEven: true }\n\ncount.value = 2  // Logs again! New object reference\ncount.value = 4  // Logs again! New object reference\n```\n\n## Advanced: Deep Object Comparison\n\n```javascript\nimport { ref, computed } from 'vue'\nimport { isEqual } from 'lodash-es'  // For deep comparison\n\nconst filters = ref({ category: 'all', sortBy: 'date', page: 1 })\n\n// For complex objects, use deep comparison\nconst activeFilters = computed((oldValue) => {\n  const newValue = {\n    ...filters.value,\n    hasFilters: filters.value.category !== 'all' || filters.value.sortBy !== 'date'\n  }\n\n  // Deep compare for complex objects\n  if (oldValue && isEqual(oldValue, newValue)) {\n    return oldValue\n  }\n\n  return newValue\n})\n```\n\n## Important: Always Compute Before Comparing\n\n```javascript\n// BAD: Early return prevents dependency tracking\nconst optimized = computed((oldValue) => {\n  if (oldValue && someCondition) {\n    return oldValue  // Dependencies not tracked!\n  }\n  return computeExpensiveValue()\n})\n\n// GOOD: Compute first, then compare\nconst optimized = computed((oldValue) => {\n  const newValue = computeExpensiveValue()  // Always track dependencies\n  if (oldValue && newValue === oldValue) {\n    return oldValue\n  }\n  return newValue\n})\n```\n\n## Reference\n- [Vue.js Performance - Computed Stability](https://vuejs.org/guide/best-practices/performance.html#computed-stability)\n- [Vue.js Computed Properties](https://vuejs.org/guide/essentials/computed.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Return Stable Object References from Computed Properties
+
+
+    **Impact: MEDIUM** - In Vue 3.4+, computed properties only trigger effects when their value changes. However, if a computed returns a new object each time, Vue cannot detect that the values inside are the same. This causes unnecessary effect re-runs.
+
+
+    For primitive values, Vue 3.4+ handles this automatically. For objects, manually compare and return the previous value when nothing meaningful has changed.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] For computed properties returning primitives, Vue 3.4+ handles stability automatically\n- [ ] For computed properties returning objects, compare with previous value and return old reference if unchanged\n- [ ] Always perform the full computation before comparing (to track dependencies correctly)\n- [ ] Consider if you really need to return an object, or if primitives would suffice\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed, watchEffect } from 'vue'\n\nconst count = ref(0)\n\n// BAD: Returns new object every time, always triggers effects\nconst stats = computed(() => {\n  return {\n    isEven: count.value % 2 === 0,\n    doubleValue: count.value * 2\n  }\n})\n\nwatchEffect(() => {\n  console.log('Stats changed:', stats.value)\n  // Logs on EVERY count change, even when isEven hasn't changed\n  // count: 0 -> 2 -> 4: isEven is always true, but effect runs each time\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed, watchEffect } from 'vue'\n\nconst count = ref(0)\n\n// GOOD (Vue 3.4+): Primitive computed - automatic stability\nconst isEven = computed(() => count.value % 2 === 0)\n\nwatchEffect(() => {\n  console.log('isEven:', isEven.value)\n  // Only logs when isEven actually changes (0, 2, 4 won't re-trigger)\n})\n\n// GOOD (Vue 3.4+): Manual comparison for object returns\nconst stats = computed((oldValue) => {\n  // Step 1: Always compute the new value first (to track dependencies)\n  const newValue = {\n    isEven: count.value % 2 === 0,\n    category: count.value < 10 ? 'small' : 'large'\n  }\n\n  // Step 2: Compare with previous value\n  if (oldValue &&\n      oldValue.isEven === newValue.isEven &&\n      oldValue.category === newValue.category) {\n    return oldValue  // Return old reference - no effect triggers\n  }\n\n  return newValue\n})\n\nwatchEffect(() => {\n  console.log('Stats changed:', stats.value)\n  // Now only logs when isEven or category actually changes\n})\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Primitive vs Object Computed Behavior (Vue 3.4+)
+
+
+    ```javascript
+
+    import { ref, computed, watchEffect } from ''vue''
+
+
+    const count = ref(0)
+
+
+    // PRIMITIVE: Vue automatically detects value hasn''t changed
+
+    const isEven = computed(() => count.value % 2 === 0)
+
+
+    watchEffect(() => console.log(isEven.value))  // true
+
+
+    count.value = 2  // isEven still true - NO log
+
+    count.value = 4  // isEven still true - NO log
+
+    count.value = 3  // isEven now false - logs: false
+
+
+    // OBJECT: New reference every time (without manual comparison)
+
+    const obj = computed(() => ({ isEven: count.value % 2 === 0 }))
+
+
+    watchEffect(() => console.log(obj.value))  // { isEven: true }
+
+
+    count.value = 2  // Logs again! New object reference
+
+    count.value = 4  // Logs again! New object reference
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: "## Advanced: Deep Object Comparison\n\n```javascript\nimport { ref, computed } from 'vue'\nimport { isEqual } from 'lodash-es'  // For deep comparison\n\nconst filters = ref({ category: 'all', sortBy: 'date', page: 1 })\n\n// For complex objects, use deep comparison\nconst activeFilters = computed((oldValue) => {\n  const newValue = {\n    ...filters.value,\n    hasFilters: filters.value.category !== 'all' || filters.value.sortBy !== 'date'\n  }\n\n  // Deep compare for complex objects\n  if (oldValue && isEqual(oldValue, newValue)) {\n    return oldValue\n  }\n\n  return newValue\n})\n```"
+- sequence: 5
+  fragment_type: example
+  content: "## Important: Always Compute Before Comparing\n\n```javascript\n// BAD: Early return prevents dependency tracking\nconst optimized = computed((oldValue) => {\n  if (oldValue && someCondition) {\n    return oldValue  // Dependencies not tracked!\n  }\n  return computeExpensiveValue()\n})\n\n// GOOD: Compute first, then compare\nconst optimized = computed((oldValue) => {\n  const newValue = computeExpensiveValue()  // Always track dependencies\n  if (oldValue && newValue === oldValue) {\n    return oldValue\n  }\n  return newValue\n})\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Performance - Computed Stability](https://vuejs.org/guide/best-practices/performance.html#computed-stability)
+
+    - [Vue.js Computed Properties](https://vuejs.org/guide/essentials/computed.html)'

@@ -1,0 +1,64 @@
+skill_type: domain
+skill_id: vue-debug-guides-template-ref-v-for-order
+canonical_name: Template Ref Array Order Not Guaranteed in v-for
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- vue
+- arrays
+- v-for
+- ordering
+- template-refs
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/template-ref-v-for-order.md
+raw_prose: "# Template Ref Array Order Not Guaranteed in v-for\n\n**Impact: MEDIUM** - When using template refs inside `v-for`, Vue collects the element references into an array. However, this array does NOT guarantee the same order as the source array. Relying on index-based access can lead to subtle bugs.\n\nThis caveat is not obvious and can cause hard-to-debug issues when you assume the ref array matches your data order.\n\n> **Warning: `useTemplateRef()` does NOT work with v-for refs in Vue 3.5**\n>\n> The `useTemplateRef()` API returns `null` when used with refs inside `v-for`. This is a known limitation. You must use the legacy pattern with `ref()` and a matching template ref name:\n>\n> ```ts\n> // Does NOT work with v-for - returns null\n> const itemRefs = useTemplateRef('items')\n>\n> // Works with v-for - use this pattern instead\n> const items = ref([])  // name must match ref=\"items\" in template\n> ```\n>\n> The examples in this rule show `useTemplateRef()` for illustration, but in practice you should use the legacy `ref()` pattern for v-for scenarios until this limitation is addressed.\n\n## Task Checklist\n\n- [ ] Never assume ref array indices match source data array indices\n- [ ] Use data attributes or other identifiers to correlate refs with data\n- [ ] Consider function refs for complex scenarios requiring ordered access\n- [ ] Test with dynamic list operations (add, remove, reorder) to verify behavior\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = useTemplateRef('items')\n\nonMounted(() => {\n  // WRONG: Assuming itemRefs[0] corresponds to items[0]\n  // The order is NOT guaranteed to match!\n  items.value.forEach((item, index) => {\n    console.log(`${item}: `, itemRefs.value[index]) // May be wrong element!\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li v-for=\"item in items\" ref=\"items\" :key=\"item\">\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref([\n  { id: 1, text: 'First' },\n  { id: 2, text: 'Second' },\n  { id: 3, text: 'Third' }\n])\nconst itemRefs = useTemplateRef('items')\n\nonMounted(() => {\n  // CORRECT: Use data attributes to identify elements\n  itemRefs.value.forEach(el => {\n    const id = el.dataset.id\n    const item = items.value.find(i => i.id === Number(id))\n    console.log(`${item.text}: `, el)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li\n      v-for=\"item in items\"\n      ref=\"items\"\n      :key=\"item.id\"\n      :data-id=\"item.id\"\n    >\n      {{ item.text }}\n    </li>\n  </ul>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, onMounted, onBeforeUpdate } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = ref(new Map())\n\n// CORRECT: Use function refs for precise control\nfunction setItemRef(el, item) {\n  if (el) {\n    itemRefs.value.set(item, el)\n  } else {\n    itemRefs.value.delete(item)\n  }\n}\n\n// Reset before each update to handle removed items\nonBeforeUpdate(() => {\n  itemRefs.value.clear()\n})\n\nonMounted(() => {\n  // Access refs by their associated data item\n  items.value.forEach(item => {\n    const el = itemRefs.value.get(item)\n    console.log(`${item}: `, el)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li\n      v-for=\"item in items\"\n      :key=\"item\"\n      :ref=\"(el) => setItemRef(el, item)\"\n    >\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = useTemplateRef('items')\n\n// CORRECT: If order matters, sort refs by DOM position\nonMounted(() => {\n  const sortedRefs = [...itemRefs.value].sort((a, b) => {\n    // Sort by DOM order using compareDocumentPosition\n    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1\n  })\n\n  // Now sortedRefs matches visual/DOM order\n  sortedRefs.forEach((el, index) => {\n    console.log(`Position ${index}: `, el.textContent)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li v-for=\"item in items\" ref=\"items\" :key=\"item\">\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```\n\n## Reference\n- [Vue.js Template Refs - Refs inside v-for](https://vuejs.org/guide/essentials/template-refs.html#refs-inside-v-for)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Template Ref Array Order Not Guaranteed in v-for
+
+
+    **Impact: MEDIUM** - When using template refs inside `v-for`, Vue collects the element references into an array. However, this array does NOT guarantee the same order as the source array. Relying on index-based access can lead to subtle bugs.
+
+
+    This caveat is not obvious and can cause hard-to-debug issues when you assume the ref array matches your data order.
+
+
+    > **Warning: `useTemplateRef()` does NOT work with v-for refs in Vue 3.5**
+
+    >
+
+    > The `useTemplateRef()` API returns `null` when used with refs inside `v-for`. This is a known limitation. You must use the legacy pattern with `ref()` and a matching template ref name:
+
+    >
+
+    > ```ts
+
+    > // Does NOT work with v-for - returns null
+
+    > const itemRefs = useTemplateRef(''items'')
+
+    >
+
+    > // Works with v-for - use this pattern instead
+
+    > const items = ref([])  // name must match ref="items" in template
+
+    > ```
+
+    >
+
+    > The examples in this rule show `useTemplateRef()` for illustration, but in practice you should use the legacy `ref()` pattern for v-for scenarios until this limitation is addressed.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never assume ref array indices match source data array indices\n- [ ] Use data attributes or other identifiers to correlate refs with data\n- [ ] Consider function refs for complex scenarios requiring ordered access\n- [ ] Test with dynamic list operations (add, remove, reorder) to verify behavior\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = useTemplateRef('items')\n\nonMounted(() => {\n  // WRONG: Assuming itemRefs[0] corresponds to items[0]\n  // The order is NOT guaranteed to match!\n  items.value.forEach((item, index) => {\n    console.log(`${item}: `, itemRefs.value[index]) // May be wrong element!\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li v-for=\"item in items\" ref=\"items\" :key=\"item\">\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref([\n  { id: 1, text: 'First' },\n  { id: 2, text: 'Second' },\n  { id: 3, text: 'Third' }\n])\nconst itemRefs = useTemplateRef('items')\n\nonMounted(() => {\n  // CORRECT: Use data attributes to identify elements\n  itemRefs.value.forEach(el => {\n    const id = el.dataset.id\n    const item = items.value.find(i => i.id === Number(id))\n    console.log(`${item.text}: `, el)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li\n      v-for=\"item in items\"\n      ref=\"items\"\n      :key=\"item.id\"\n      :data-id=\"item.id\"\n    >\n      {{ item.text }}\n    </li>\n  </ul>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, onMounted, onBeforeUpdate } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = ref(new Map())\n\n// CORRECT: Use function refs for precise control\nfunction setItemRef(el, item) {\n  if (el) {\n    itemRefs.value.set(item, el)\n  } else {\n    itemRefs.value.delete(item)\n  }\n}\n\n// Reset before each update to handle removed items\nonBeforeUpdate(() => {\n  itemRefs.value.clear()\n})\n\nonMounted(() => {\n  // Access refs by their associated data item\n  items.value.forEach(item => {\n    const el = itemRefs.value.get(item)\n    console.log(`${item}: `, el)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li\n      v-for=\"item in items\"\n      :key=\"item\"\n      :ref=\"(el) => setItemRef(el, item)\"\n    >\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```\n\n```vue\n<script setup>\nimport { ref, useTemplateRef, onMounted } from 'vue'\n\nconst items = ref(['First', 'Second', 'Third'])\nconst itemRefs = useTemplateRef('items')\n\n// CORRECT: If order matters, sort refs by DOM position\nonMounted(() => {\n  const sortedRefs = [...itemRefs.value].sort((a, b) => {\n    // Sort by DOM order using compareDocumentPosition\n    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1\n  })\n\n  // Now sortedRefs matches visual/DOM order\n  sortedRefs.forEach((el, index) => {\n    console.log(`Position ${index}: `, el.textContent)\n  })\n})\n</script>\n\n<template>\n  <ul>\n    <li v-for=\"item in items\" ref=\"items\" :key=\"item\">\n      {{ item }}\n    </li>\n  </ul>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Template Refs - Refs inside v-for](https://vuejs.org/guide/essentials/template-refs.html#refs-inside-v-for)'

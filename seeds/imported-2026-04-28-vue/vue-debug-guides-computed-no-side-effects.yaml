@@ -1,0 +1,57 @@
+skill_type: domain
+skill_id: vue-debug-guides-computed-no-side-effects
+canonical_name: Computed Property Getters Must Be Side-Effect Free
+category: engineering
+skill_class: domain
+domain_tags:
+- side-effects
+- reactivity
+- vue-debug-guides
+- vue
+- computed
+- best-practices
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/computed-no-side-effects.md
+raw_prose: "# Computed Property Getters Must Be Side-Effect Free\n\n**Impact: HIGH** - Computed getter functions should only perform pure computation. Side effects in computed getters break Vue's reactivity model and cause bugs that are difficult to trace.\n\nComputed properties are designed to declaratively describe how to derive a value from other reactive state. They are not meant to perform actions or modify state.\n\n## Task Checklist\n\n- [ ] Never mutate other reactive state inside a computed getter\n- [ ] Never make async requests or API calls inside a computed getter\n- [ ] Never perform DOM mutations inside a computed getter\n- [ ] Use watchers for reacting to state changes with side effects\n- [ ] Use event handlers for user-triggered actions\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([])\nconst count = ref(0)\nconst lastFetch = ref(null)\n\n// BAD: Mutates other state\nconst doubledCount = computed(() => {\n  count.value++  // Side effect - modifying state!\n  return count.value * 2\n})\n\n// BAD: Makes async request\nconst userData = computed(async () => {\n  const response = await fetch('/api/user')  // Side effect - API call!\n  return response.json()\n})\n\n// BAD: Modifies DOM\nconst highlightedItems = computed(() => {\n  document.title = `${items.value.length} items`  // Side effect - DOM mutation!\n  return items.value.filter(i => i.highlighted)\n})\n\n// BAD: Writes to external state\nconst processedData = computed(() => {\n  lastFetch.value = new Date()  // Side effect - modifying state!\n  return items.value.map(i => i.name)\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed, watch, onMounted } from 'vue'\n\nconst items = ref([])\nconst count = ref(0)\nconst userData = ref(null)\n\n// GOOD: Pure computation only\nconst doubledCount = computed(() => {\n  return count.value * 2\n})\n\n// GOOD: Use lifecycle hook for initial fetch\nonMounted(async () => {\n  const response = await fetch('/api/user')\n  userData.value = await response.json()\n})\n\n// GOOD: Pure filtering\nconst highlightedItems = computed(() => {\n  return items.value.filter(i => i.highlighted)\n})\n\n// GOOD: Use watcher for side effects\nwatch(items, (newItems) => {\n  document.title = `${newItems.length} items`\n}, { immediate: true })\n\n// Increment count through event handler, not computed\nfunction increment() {\n  count.value++\n}\n</script>\n```\n\n## What Counts as a Side Effect\n\n| Side Effect Type | Example | Alternative |\n|-----------------|---------|-------------|\n| State mutation | `otherRef.value = x` | Use watcher |\n| API calls | `fetch()`, `axios()` | Use watcher or lifecycle hook |\n| DOM manipulation | `document.title = x` | Use watcher |\n| Console logging | `console.log()` | Remove or use watcher |\n| Storage access | `localStorage.setItem()` | Use watcher |\n| Timer setup | `setTimeout()` | Use lifecycle hook |\n\n## Reference\n- [Vue.js Computed Properties - Getters Should Be Side-Effect Free](https://vuejs.org/guide/essentials/computed.html#getters-should-be-side-effect-free)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Computed Property Getters Must Be Side-Effect Free
+
+
+    **Impact: HIGH** - Computed getter functions should only perform pure computation. Side effects in computed getters break Vue''s reactivity model and cause bugs that are difficult to trace.
+
+
+    Computed properties are designed to declaratively describe how to derive a value from other reactive state. They are not meant to perform actions or modify state.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never mutate other reactive state inside a computed getter\n- [ ] Never make async requests or API calls inside a computed getter\n- [ ] Never perform DOM mutations inside a computed getter\n- [ ] Use watchers for reacting to state changes with side effects\n- [ ] Use event handlers for user-triggered actions\n\n**Incorrect:**\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([])\nconst count = ref(0)\nconst lastFetch = ref(null)\n\n// BAD: Mutates other state\nconst doubledCount = computed(() => {\n  count.value++  // Side effect - modifying state!\n  return count.value * 2\n})\n\n// BAD: Makes async request\nconst userData = computed(async () => {\n  const response = await fetch('/api/user')  // Side effect - API call!\n  return response.json()\n})\n\n// BAD: Modifies DOM\nconst highlightedItems = computed(() => {\n  document.title = `${items.value.length} items`  // Side effect - DOM mutation!\n  return items.value.filter(i => i.highlighted)\n})\n\n// BAD: Writes to external state\nconst processedData = computed(() => {\n  lastFetch.value = new Date()  // Side effect - modifying state!\n  return items.value.map(i => i.name)\n})\n</script>\n```\n\n**Correct:**\n```vue\n<script setup>\nimport { ref, computed, watch, onMounted } from 'vue'\n\nconst items = ref([])\nconst count = ref(0)\nconst userData = ref(null)\n\n// GOOD: Pure computation only\nconst doubledCount = computed(() => {\n  return count.value * 2\n})\n\n// GOOD: Use lifecycle hook for initial fetch\nonMounted(async () => {\n  const response = await fetch('/api/user')\n  userData.value = await response.json()\n})\n\n// GOOD: Pure filtering\nconst highlightedItems = computed(() => {\n  return items.value.filter(i => i.highlighted)\n})\n\n// GOOD: Use watcher for side effects\nwatch(items, (newItems) => {\n  document.title = `${newItems.length} items`\n}, { immediate: true })\n\n// Increment count through event handler, not computed\nfunction increment() {\n  count.value++\n}\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## What Counts as a Side Effect
+
+
+    | Side Effect Type | Example | Alternative |
+
+    |-----------------|---------|-------------|
+
+    | State mutation | `otherRef.value = x` | Use watcher |
+
+    | API calls | `fetch()`, `axios()` | Use watcher or lifecycle hook |
+
+    | DOM manipulation | `document.title = x` | Use watcher |
+
+    | Console logging | `console.log()` | Remove or use watcher |
+
+    | Storage access | `localStorage.setItem()` | Use watcher |
+
+    | Timer setup | `setTimeout()` | Use lifecycle hook |'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Computed Properties - Getters Should Be Side-Effect Free](https://vuejs.org/guide/essentials/computed.html#getters-should-be-side-effect-free)'

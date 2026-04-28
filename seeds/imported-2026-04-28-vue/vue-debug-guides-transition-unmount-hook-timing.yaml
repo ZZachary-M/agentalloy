@@ -1,0 +1,46 @@
+skill_type: domain
+skill_id: vue-debug-guides-transition-unmount-hook-timing
+canonical_name: Unmount Hooks May Not Fire Inside Transitions During Fast Replacement
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- cleanup
+- unmounted
+- lifecycle
+- vue
+- onUnmounted
+- vue3
+- race-condition
+- transition
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/transition-unmount-hook-timing.md
+raw_prose: "# Unmount Hooks May Not Fire Inside Transitions During Fast Replacement\n\n**Impact: MEDIUM** - When a component inside a `<transition>` is replaced by another component during the transition's loading phase, the unmount hooks (`onBeforeUnmount`, `onUnmounted`) may not be called even though the component is removed from the DOM. This can cause memory leaks and resource leaks from unclean side effects.\n\nThis is a known edge case that occurs when the timing is specific - if a parent component with a child inside a transition is replaced while the child is still mounting. The child's mount hooks fire, but unmount hooks never do.\n\n## Task Checklist\n\n- [ ] Be aware that unmount hooks are not 100% guaranteed inside transitions\n- [ ] For critical cleanup, consider alternative cleanup strategies\n- [ ] Use `mode=\"out-in\"` on transitions to ensure old component fully unmounts before new mounts\n- [ ] For essential resources, consider cleanup at parent component level\n- [ ] Test component replacement scenarios during development\n\n**Problematic Scenario:**\n```vue\n<!-- Parent component with lazy-loaded child in transition -->\n<template>\n  <transition>\n    <Suspense>\n      <component :is=\"currentComponent\" />\n    </Suspense>\n  </transition>\n</template>\n```\n\n```javascript\n// Child component - unmount hooks may not fire if parent changes quickly\nexport default {\n  setup() {\n    const socket = new WebSocket('wss://example.com')\n\n    onMounted(() => {\n      console.log('Mounted - this will run')\n      socket.connect()\n    })\n\n    onUnmounted(() => {\n      // WARNING: This may NOT run if component is inside transition\n      // and parent navigates away during mounting phase!\n      console.log('Unmounted - might not run')\n      socket.close()\n    })\n  }\n}\n```\n\n**Safer Patterns:**\n```vue\n<!-- SAFER: Use out-in mode to ensure proper sequencing -->\n<template>\n  <transition mode=\"out-in\">\n    <component :is=\"currentComponent\" :key=\"currentKey\" />\n  </transition>\n</template>\n```\n\n```javascript\n// SAFER: Cleanup at parent level for critical resources\n// Parent component\nexport default {\n  setup() {\n    const childSocket = ref(null)\n\n    // Parent controls resource lifecycle\n    provide('registerSocket', (socket) => {\n      childSocket.value = socket\n    })\n\n    onUnmounted(() => {\n      // Parent ensures cleanup even if child unmount hook doesn't fire\n      childSocket.value?.close()\n    })\n  }\n}\n\n// Child component\nexport default {\n  setup() {\n    const registerSocket = inject('registerSocket')\n    const socket = new WebSocket('wss://example.com')\n\n    // Register with parent for backup cleanup\n    registerSocket(socket)\n\n    onMounted(() => {\n      socket.connect()\n    })\n\n    onUnmounted(() => {\n      socket.close() // Still attempt cleanup here\n    })\n  }\n}\n```\n\n```javascript\n// SAFER: Use AbortController pattern for cancellable operations\nexport default {\n  setup() {\n    const abortController = new AbortController()\n\n    onMounted(() => {\n      fetch('/api/data', { signal: abortController.signal })\n        .then(handleData)\n        .catch(err => {\n          if (err.name !== 'AbortError') {\n            handleError(err)\n          }\n        })\n    })\n\n    onUnmounted(() => {\n      // If this doesn't fire, request continues but response is ignored\n      // Not a memory leak - just potentially wasted network call\n      abortController.abort()\n    })\n  }\n}\n```\n\n## Testing for This Issue\n\n```javascript\n// Test by rapidly switching components during async loading\nasync function testUnmountHooks() {\n  // Mount component A (has async setup)\n  await mountComponent('A')\n\n  // Immediately switch to B before A finishes mounting\n  await mountComponent('B')\n\n  // Check if A's unmount hooks fired\n  // They may not have!\n}\n```\n\n## Reference\n- [Vue.js GitHub Issue #6260](https://github.com/vuejs/core/issues/6260)\n- [Vue.js Transition](https://vuejs.org/guide/built-ins/transition.html)\n- [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Unmount Hooks May Not Fire Inside Transitions During Fast Replacement
+
+
+    **Impact: MEDIUM** - When a component inside a `<transition>` is replaced by another component during the transition''s loading phase, the unmount hooks (`onBeforeUnmount`, `onUnmounted`) may not be called even though the component is removed from the DOM. This can cause memory leaks and resource leaks from unclean side effects.
+
+
+    This is a known edge case that occurs when the timing is specific - if a parent component with a child inside a transition is replaced while the child is still mounting. The child''s mount hooks fire, but unmount hooks never do.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Be aware that unmount hooks are not 100% guaranteed inside transitions\n- [ ] For critical cleanup, consider alternative cleanup strategies\n- [ ] Use `mode=\"out-in\"` on transitions to ensure old component fully unmounts before new mounts\n- [ ] For essential resources, consider cleanup at parent component level\n- [ ] Test component replacement scenarios during development\n\n**Problematic Scenario:**\n```vue\n<!-- Parent component with lazy-loaded child in transition -->\n<template>\n  <transition>\n    <Suspense>\n      <component :is=\"currentComponent\" />\n    </Suspense>\n  </transition>\n</template>\n```\n\n```javascript\n// Child component - unmount hooks may not fire if parent changes quickly\nexport default {\n  setup() {\n    const socket = new WebSocket('wss://example.com')\n\n    onMounted(() => {\n      console.log('Mounted - this will run')\n      socket.connect()\n    })\n\n    onUnmounted(() => {\n      // WARNING: This may NOT run if component is inside transition\n      // and parent navigates away during mounting phase!\n      console.log('Unmounted - might not run')\n      socket.close()\n    })\n  }\n}\n```\n\n**Safer Patterns:**\n```vue\n<!-- SAFER: Use out-in mode to ensure proper sequencing -->\n<template>\n  <transition mode=\"out-in\">\n    <component :is=\"currentComponent\" :key=\"currentKey\" />\n  </transition>\n</template>\n```\n\n```javascript\n// SAFER: Cleanup at parent level for critical resources\n// Parent component\nexport default {\n  setup() {\n    const childSocket = ref(null)\n\n    // Parent controls resource lifecycle\n    provide('registerSocket', (socket) => {\n      childSocket.value = socket\n    })\n\n    onUnmounted(() => {\n      // Parent ensures cleanup even if child unmount hook doesn't fire\n      childSocket.value?.close()\n    })\n  }\n}\n\n// Child component\nexport default {\n  setup() {\n    const registerSocket = inject('registerSocket')\n    const socket = new WebSocket('wss://example.com')\n\n    // Register with parent for backup cleanup\n    registerSocket(socket)\n\n    onMounted(() => {\n      socket.connect()\n    })\n\n    onUnmounted(() => {\n      socket.close() // Still attempt cleanup here\n    })\n  }\n}\n```\n\n```javascript\n// SAFER: Use AbortController pattern for cancellable operations\nexport default {\n  setup() {\n    const abortController = new AbortController()\n\n    onMounted(() => {\n      fetch('/api/data', { signal: abortController.signal })\n        .then(handleData)\n        .catch(err => {\n          if (err.name !== 'AbortError') {\n            handleError(err)\n          }\n        })\n    })\n\n    onUnmounted(() => {\n      // If this doesn't fire, request continues but response is ignored\n      // Not a memory leak - just potentially wasted network call\n      abortController.abort()\n    })\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Testing for This Issue\n\n```javascript\n// Test by rapidly switching components during async loading\nasync function testUnmountHooks() {\n  // Mount component A (has async setup)\n  await mountComponent('A')\n\n  // Immediately switch to B before A finishes mounting\n  await mountComponent('B')\n\n  // Check if A's unmount hooks fired\n  // They may not have!\n}\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js GitHub Issue #6260](https://github.com/vuejs/core/issues/6260)
+
+    - [Vue.js Transition](https://vuejs.org/guide/built-ins/transition.html)
+
+    - [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)'

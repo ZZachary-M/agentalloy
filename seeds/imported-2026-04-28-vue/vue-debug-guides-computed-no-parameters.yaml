@@ -1,0 +1,60 @@
+skill_type: domain
+skill_id: vue-debug-guides-computed-no-parameters
+canonical_name: Computed Properties Cannot Accept Parameters
+category: engineering
+skill_class: domain
+domain_tags:
+- methods
+- vue-debug-guides
+- vue
+- parameters
+- computed
+- common-mistake
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/computed-no-parameters.md
+raw_prose: "# Computed Properties Cannot Accept Parameters\n\n**Impact: MEDIUM** - Computed properties are designed to derive values from reactive state without parameters. Attempting to pass arguments defeats the caching mechanism or causes errors. Use methods or computed properties that return functions instead.\n\n## Task Checklist\n\n- [ ] Use methods when you need to pass parameters\n- [ ] Consider if the parameter can be reactive state instead\n- [ ] If you must parameterize, understand that returning a function loses caching benefits\n- [ ] Prefer method calls in templates for parameterized operations\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: Computed properties don't accept parameters like this -->\n  <p>{{ filteredItems('active') }}</p>\n  <p>{{ formattedPrice(100, 'USD') }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// BAD: This won't work as expected\n// Computed is called once, not per parameter\nconst filteredItems = computed((status) => {  // status will be undefined or previous value\n  return items.value.filter(i => i.status === status)\n})\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return { items: [/* ... */] }\n  },\n  computed: {\n    // BAD: Computed doesn't receive arguments\n    filteredItems(status) {  // 'status' is actually 'this' or undefined\n      return this.items.filter(i => i.status === status)\n    }\n  }\n}\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: Use method for parameterized operations -->\n  <p>{{ getFilteredItems('active') }}</p>\n  <p>{{ formatPrice(100, 'USD') }}</p>\n\n  <!-- GOOD: Or use computed with reactive filter state -->\n  <select v-model=\"statusFilter\">\n    <option value=\"active\">Active</option>\n    <option value=\"inactive\">Inactive</option>\n  </select>\n  <p>{{ filteredItems }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\nconst statusFilter = ref('active')\n\n// GOOD: Method for parameterized operations\nfunction getFilteredItems(status) {\n  return items.value.filter(i => i.status === status)\n}\n\nfunction formatPrice(amount, currency) {\n  return new Intl.NumberFormat('en-US', {\n    style: 'currency',\n    currency\n  }).format(amount)\n}\n\n// GOOD: Computed with reactive parameter\nconst filteredItems = computed(() => {\n  return items.value.filter(i => i.status === statusFilter.value)\n})\n</script>\n```\n\n## Workaround: Computed Returning a Function\n\nIf you need something computed-like with parameters, you can return a function. **However, this defeats the caching benefit:**\n\n```vue\n<template>\n  <p>{{ getItemsByStatus('active') }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// This works but provides NO caching benefit\n// The inner function runs every time it's called\nconst getItemsByStatus = computed(() => {\n  return (status) => items.value.filter(i => i.status === status)\n})\n\n// This is essentially equivalent to just using a method\n// Only useful if you need to compose with other computed properties\n</script>\n```\n\n## When to Use Each Approach\n\n| Scenario | Approach | Caching |\n|----------|----------|---------|\n| Fixed filter based on reactive state | Computed | Yes |\n| Dynamic filter passed as argument | Method | No |\n| Filter options from user selection | Computed + reactive param | Yes |\n| Formatting with variable parameters | Method | No |\n| Composed derivation with argument | Computed returning function | Partial |\n\n## Make Parameters Reactive\n\nThe best pattern is often to make the \"parameter\" a reactive value:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// Instead of passing 'status' as a parameter:\nconst currentStatus = ref('active')\n\n// Make a computed that uses the reactive status\nconst filteredItems = computed(() => {\n  return items.value.filter(i => i.status === currentStatus.value)\n})\n\n// Change the filter by updating the ref\nfunction filterByStatus(status) {\n  currentStatus.value = status\n}\n</script>\n```\n\n## Reference\n- [Vue.js Computed Properties](https://vuejs.org/guide/essentials/computed.html)\n- [Vue.js Methods](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#declaring-methods)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Computed Properties Cannot Accept Parameters
+
+
+    **Impact: MEDIUM** - Computed properties are designed to derive values from reactive state without parameters. Attempting to pass arguments defeats the caching mechanism or causes errors. Use methods or computed properties that return functions instead.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Use methods when you need to pass parameters\n- [ ] Consider if the parameter can be reactive state instead\n- [ ] If you must parameterize, understand that returning a function loses caching benefits\n- [ ] Prefer method calls in templates for parameterized operations\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: Computed properties don't accept parameters like this -->\n  <p>{{ filteredItems('active') }}</p>\n  <p>{{ formattedPrice(100, 'USD') }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// BAD: This won't work as expected\n// Computed is called once, not per parameter\nconst filteredItems = computed((status) => {  // status will be undefined or previous value\n  return items.value.filter(i => i.status === status)\n})\n</script>\n```\n\n```vue\n<script>\nexport default {\n  data() {\n    return { items: [/* ... */] }\n  },\n  computed: {\n    // BAD: Computed doesn't receive arguments\n    filteredItems(status) {  // 'status' is actually 'this' or undefined\n      return this.items.filter(i => i.status === status)\n    }\n  }\n}\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: Use method for parameterized operations -->\n  <p>{{ getFilteredItems('active') }}</p>\n  <p>{{ formatPrice(100, 'USD') }}</p>\n\n  <!-- GOOD: Or use computed with reactive filter state -->\n  <select v-model=\"statusFilter\">\n    <option value=\"active\">Active</option>\n    <option value=\"inactive\">Inactive</option>\n  </select>\n  <p>{{ filteredItems }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\nconst statusFilter = ref('active')\n\n// GOOD: Method for parameterized operations\nfunction getFilteredItems(status) {\n  return items.value.filter(i => i.status === status)\n}\n\nfunction formatPrice(amount, currency) {\n  return new Intl.NumberFormat('en-US', {\n    style: 'currency',\n    currency\n  }).format(amount)\n}\n\n// GOOD: Computed with reactive parameter\nconst filteredItems = computed(() => {\n  return items.value.filter(i => i.status === statusFilter.value)\n})\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Workaround: Computed Returning a Function\n\nIf you need something computed-like with parameters, you can return a function. **However, this defeats the caching benefit:**\n\n```vue\n<template>\n  <p>{{ getItemsByStatus('active') }}</p>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// This works but provides NO caching benefit\n// The inner function runs every time it's called\nconst getItemsByStatus = computed(() => {\n  return (status) => items.value.filter(i => i.status === status)\n})\n\n// This is essentially equivalent to just using a method\n// Only useful if you need to compose with other computed properties\n</script>\n```"
+- sequence: 4
+  fragment_type: setup
+  content: '## When to Use Each Approach
+
+
+    | Scenario | Approach | Caching |
+
+    |----------|----------|---------|
+
+    | Fixed filter based on reactive state | Computed | Yes |
+
+    | Dynamic filter passed as argument | Method | No |
+
+    | Filter options from user selection | Computed + reactive param | Yes |
+
+    | Formatting with variable parameters | Method | No |
+
+    | Composed derivation with argument | Computed returning function | Partial |'
+- sequence: 5
+  fragment_type: execution
+  content: "## Make Parameters Reactive\n\nThe best pattern is often to make the \"parameter\" a reactive value:\n\n```vue\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst items = ref([/* ... */])\n\n// Instead of passing 'status' as a parameter:\nconst currentStatus = ref('active')\n\n// Make a computed that uses the reactive status\nconst filteredItems = computed(() => {\n  return items.value.filter(i => i.status === currentStatus.value)\n})\n\n// Change the filter by updating the ref\nfunction filterByStatus(status) {\n  currentStatus.value = status\n}\n</script>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Computed Properties](https://vuejs.org/guide/essentials/computed.html)
+
+    - [Vue.js Methods](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#declaring-methods)'

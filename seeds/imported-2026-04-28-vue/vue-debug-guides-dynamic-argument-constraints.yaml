@@ -1,0 +1,92 @@
+skill_type: domain
+skill_id: vue-debug-guides-dynamic-argument-constraints
+canonical_name: Dynamic Directive Arguments Have Syntax Constraints
+category: engineering
+skill_class: domain
+domain_tags:
+- template
+- vue-debug-guides
+- v-on
+- vue
+- v-bind
+- vue3
+- dynamic-arguments
+- directives
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/dynamic-argument-constraints.md
+raw_prose: "# Dynamic Directive Arguments Have Syntax Constraints\n\n**Impact: MEDIUM** - Dynamic directive arguments (e.g., `:[attributeName]`, `@[eventName]`) have value and syntax constraints that can cause silent failures. In-DOM templates also have case sensitivity issues with browsers lowercasing attribute names.\n\nDynamic arguments allow runtime determination of which attribute or event to bind, but they have restrictions that differ from static arguments.\n\n## Task Checklist\n\n- [ ] Ensure dynamic arguments evaluate to strings or `null`\n- [ ] Avoid spaces and quotes inside dynamic argument brackets\n- [ ] Use computed properties for complex dynamic argument expressions\n- [ ] In in-DOM templates, use lowercase attribute names or switch to SFCs\n- [ ] Use `null` to explicitly remove a binding\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Spaces and quotes not allowed in dynamic arguments -->\n  <a :[' foo' + bar]=\"value\">Link</a>\n  <a :[\"data-\" + name]=\"value\">Link</a>\n\n  <!-- WARNING: Non-string values (except null) trigger warnings -->\n  <a :[123]=\"value\">Link</a>\n  <a :[someObject]=\"value\">Link</a>\n\n  <!-- BUG in in-DOM templates: Browsers lowercase attribute names -->\n  <!-- This becomes :[someattr] which won't match someAttr -->\n  <a :[someAttr]=\"url\">Link</a>\n</template>\n\n<script setup>\n// If component expects someAttr but browser lowercases to someattr\n// the binding silently fails\nconst someAttr = 'href'\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- OK: Simple variable reference -->\n  <a :[attributeName]=\"url\">Link</a>\n\n  <!-- OK: Use computed property for complex expressions -->\n  <a :[dynamicAttr]=\"value\">Link</a>\n\n  <!-- OK: null removes the binding -->\n  <button :[disabledAttr]=\"isDisabled\">Submit</button>\n\n  <!-- OK: Dynamic event names -->\n  <button @[eventName]=\"handler\">Click</button>\n\n  <!-- OK: In SFCs, case is preserved -->\n  <a :[someAttr]=\"url\">Link</a>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\n// Simple string variable\nconst attributeName = ref('href')\nconst url = ref('https://vuejs.org')\n\n// Complex expression via computed property\nconst prefix = ref('data')\nconst name = ref('id')\nconst dynamicAttr = computed(() => `${prefix.value}-${name.value}`)\n\n// Conditional binding with null\nconst isDisabled = ref(false)\nconst disabledAttr = computed(() => isDisabled.value ? 'disabled' : null)\n\n// Dynamic events\nconst useTouch = ref(false)\nconst eventName = computed(() => useTouch.value ? 'touchstart' : 'click')\n\nfunction handler() {\n  console.log('Event triggered')\n}\n</script>\n```\n\n## In-DOM Template Workaround\n\nWhen writing templates directly in HTML (not SFCs), use lowercase:\n\n```html\n<!-- In-DOM template (index.html) -->\n<div id=\"app\">\n  <!-- Use lowercase to avoid browser issues -->\n  <a :[attrname]=\"url\">Link</a>\n</div>\n\n<script type=\"module\">\nimport { createApp, ref } from 'vue'\n\ncreateApp({\n  setup() {\n    // Match the lowercase used in template\n    const attrname = ref('href')\n    const url = ref('https://vuejs.org')\n    return { attrname, url }\n  }\n}).mount('#app')\n</script>\n```\n\n## SFC vs In-DOM Templates\n\n| Feature | SFC (.vue files) | In-DOM (HTML) |\n|---------|------------------|---------------|\n| Case sensitivity | Preserved | Lowercased by browser |\n| Dynamic arguments | Full support | Lowercase only |\n| Recommendation | Preferred | Use for progressive enhancement |\n\n## Valid Dynamic Argument Values\n\n```vue\n<script setup>\n// String values - OK\nconst attr1 = 'href'\nconst attr2 = 'data-custom'\n\n// null - OK (removes binding)\nconst attr3 = null\n\n// undefined - OK (removes binding)\nconst attr4 = undefined\n\n// Numbers, objects, arrays - WARNING\nconst attr5 = 123        // Warning: should be string\nconst attr6 = { foo: 1 } // Warning: should be string\n</script>\n```\n\n## Reference\n- [Vue.js Template Syntax - Dynamic Arguments](https://vuejs.org/guide/essentials/template-syntax.html#dynamic-arguments)\n- [Vue.js Template Syntax - Dynamic Argument Value Constraints](https://vuejs.org/guide/essentials/template-syntax.html#dynamic-argument-value-constraints)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Dynamic Directive Arguments Have Syntax Constraints
+
+
+    **Impact: MEDIUM** - Dynamic directive arguments (e.g., `:[attributeName]`, `@[eventName]`) have value and syntax constraints that can cause silent failures. In-DOM templates also have case sensitivity issues with browsers lowercasing attribute names.
+
+
+    Dynamic arguments allow runtime determination of which attribute or event to bind, but they have restrictions that differ from static arguments.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Ensure dynamic arguments evaluate to strings or `null`\n- [ ] Avoid spaces and quotes inside dynamic argument brackets\n- [ ] Use computed properties for complex dynamic argument expressions\n- [ ] In in-DOM templates, use lowercase attribute names or switch to SFCs\n- [ ] Use `null` to explicitly remove a binding\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Spaces and quotes not allowed in dynamic arguments -->\n  <a :[' foo' + bar]=\"value\">Link</a>\n  <a :[\"data-\" + name]=\"value\">Link</a>\n\n  <!-- WARNING: Non-string values (except null) trigger warnings -->\n  <a :[123]=\"value\">Link</a>\n  <a :[someObject]=\"value\">Link</a>\n\n  <!-- BUG in in-DOM templates: Browsers lowercase attribute names -->\n  <!-- This becomes :[someattr] which won't match someAttr -->\n  <a :[someAttr]=\"url\">Link</a>\n</template>\n\n<script setup>\n// If component expects someAttr but browser lowercases to someattr\n// the binding silently fails\nconst someAttr = 'href'\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- OK: Simple variable reference -->\n  <a :[attributeName]=\"url\">Link</a>\n\n  <!-- OK: Use computed property for complex expressions -->\n  <a :[dynamicAttr]=\"value\">Link</a>\n\n  <!-- OK: null removes the binding -->\n  <button :[disabledAttr]=\"isDisabled\">Submit</button>\n\n  <!-- OK: Dynamic event names -->\n  <button @[eventName]=\"handler\">Click</button>\n\n  <!-- OK: In SFCs, case is preserved -->\n  <a :[someAttr]=\"url\">Link</a>\n</template>\n\n<script setup>\nimport { ref, computed } from 'vue'\n\n// Simple string variable\nconst attributeName = ref('href')\nconst url = ref('https://vuejs.org')\n\n// Complex expression via computed property\nconst prefix = ref('data')\nconst name = ref('id')\nconst dynamicAttr = computed(() => `${prefix.value}-${name.value}`)\n\n// Conditional binding with null\nconst isDisabled = ref(false)\nconst disabledAttr = computed(() => isDisabled.value ? 'disabled' : null)\n\n// Dynamic events\nconst useTouch = ref(false)\nconst eventName = computed(() => useTouch.value ? 'touchstart' : 'click')\n\nfunction handler() {\n  console.log('Event triggered')\n}\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## In-DOM Template Workaround\n\nWhen writing templates directly in HTML (not SFCs), use lowercase:\n\n```html\n<!-- In-DOM template (index.html) -->\n<div id=\"app\">\n  <!-- Use lowercase to avoid browser issues -->\n  <a :[attrname]=\"url\">Link</a>\n</div>\n\n<script type=\"module\">\nimport { createApp, ref } from 'vue'\n\ncreateApp({\n  setup() {\n    // Match the lowercase used in template\n    const attrname = ref('href')\n    const url = ref('https://vuejs.org')\n    return { attrname, url }\n  }\n}).mount('#app')\n</script>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## SFC vs In-DOM Templates
+
+
+    | Feature | SFC (.vue files) | In-DOM (HTML) |
+
+    |---------|------------------|---------------|
+
+    | Case sensitivity | Preserved | Lowercased by browser |
+
+    | Dynamic arguments | Full support | Lowercase only |
+
+    | Recommendation | Preferred | Use for progressive enhancement |'
+- sequence: 5
+  fragment_type: execution
+  content: '## Valid Dynamic Argument Values
+
+
+    ```vue
+
+    <script setup>
+
+    // String values - OK
+
+    const attr1 = ''href''
+
+    const attr2 = ''data-custom''
+
+
+    // null - OK (removes binding)
+
+    const attr3 = null
+
+
+    // undefined - OK (removes binding)
+
+    const attr4 = undefined
+
+
+    // Numbers, objects, arrays - WARNING
+
+    const attr5 = 123        // Warning: should be string
+
+    const attr6 = { foo: 1 } // Warning: should be string
+
+    </script>
+
+    ```'
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Template Syntax - Dynamic Arguments](https://vuejs.org/guide/essentials/template-syntax.html#dynamic-arguments)
+
+    - [Vue.js Template Syntax - Dynamic Argument Value Constraints](https://vuejs.org/guide/essentials/template-syntax.html#dynamic-argument-value-constraints)'

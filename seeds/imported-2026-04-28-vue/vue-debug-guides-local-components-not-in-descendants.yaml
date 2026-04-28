@@ -1,0 +1,49 @@
+skill_type: domain
+skill_id: vue-debug-guides-local-components-not-in-descendants
+canonical_name: Locally Registered Components Are Not Available in Descendants
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- vue
+- local-registration
+- scope
+- vue3
+- nested-components
+- component-registration
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/local-components-not-in-descendants.md
+raw_prose: "# Locally Registered Components Are Not Available in Descendants\n\n**Impact: HIGH** - Locally registered components are only available in the component where they are registered, NOT in its child or descendant components. This is a common source of \"Unknown component\" or \"Failed to resolve component\" errors when developers expect a component registered in a parent to be available in children.\n\n## Task Checklist\n\n- [ ] Import and register components in every file where they are used\n- [ ] Do not expect parent's local components to be available in children\n- [ ] If a component is needed in many places, consider global registration only as a last resort\n- [ ] Use IDE auto-import features to simplify repeated imports\n\n**Incorrect:**\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport Card from './Card.vue'\nimport ChildComponent from './ChildComponent.vue'\n</script>\n\n<template>\n  <Card>Parent content</Card>\n  <ChildComponent />\n</template>\n```\n\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\n// WRONG: Expecting Card to be available because parent imported it\n// This will cause \"Failed to resolve component: Card\" error\n</script>\n\n<template>\n  <!-- ERROR: Card is not available here! -->\n  <Card>\n    Child content\n  </Card>\n</template>\n```\n\n**Correct:**\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport Card from './Card.vue'\nimport ChildComponent from './ChildComponent.vue'\n</script>\n\n<template>\n  <Card>Parent content</Card>\n  <ChildComponent />\n</template>\n```\n\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\n// CORRECT: Each component must import what it uses\nimport Card from './Card.vue'\n</script>\n\n<template>\n  <Card>\n    Child content\n  </Card>\n</template>\n```\n\n## Common Scenarios\n\n### Scenario 1: Deeply Nested Components\n```vue\n<!-- GrandchildComponent.vue -->\n<script setup>\n// Even if parent and grandparent both use Card,\n// grandchild must import it separately\nimport Card from '@/components/Card.vue'\nimport Button from '@/components/Button.vue'\n</script>\n\n<template>\n  <Card>\n    <Button>Click me</Button>\n  </Card>\n</template>\n```\n\n### Scenario 2: Slot Content with Components\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport Modal from './Modal.vue'\nimport Form from './Form.vue'\n</script>\n\n<template>\n  <!-- Form is registered in Parent, so it works in slot content -->\n  <Modal>\n    <Form /> <!-- This works because slot content is compiled in Parent's scope -->\n  </Modal>\n</template>\n```\n\n```vue\n<!-- Modal.vue -->\n<script setup>\n// Modal doesn't need to import Form because slot content\n// is compiled in the parent's scope, not Modal's scope\n</script>\n\n<template>\n  <div class=\"modal\">\n    <slot /> <!-- Form component works here because it's parent's slot content -->\n  </div>\n</template>\n```\n\n### Scenario 3: Dynamic Components\n```vue\n<!-- Container.vue -->\n<script setup>\nimport TabA from './TabA.vue'\nimport TabB from './TabB.vue'\nimport { ref, shallowRef } from 'vue'\n\n// When using dynamic components, all possible components must be imported\nconst currentTab = shallowRef(TabA)\n</script>\n\n<template>\n  <component :is=\"currentTab\" />\n</template>\n```\n\n## Why This Design?\n\nLocal registration provides:\n1. **Explicit dependencies** - You can see exactly what each component uses\n2. **Tree-shaking** - Unused components are removed from bundles\n3. **Clear scope** - No magic or implicit behavior\n\n## Reference\n- [Vue.js Component Registration - Local Registration](https://vuejs.org/guide/components/registration.html#local-registration)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Locally Registered Components Are Not Available in Descendants
+
+
+    **Impact: HIGH** - Locally registered components are only available in the component where they are registered, NOT in its child or descendant components. This is a common source of "Unknown component" or "Failed to resolve component" errors when developers expect a component registered in a parent to be available in children.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Import and register components in every file where they are used\n- [ ] Do not expect parent's local components to be available in children\n- [ ] If a component is needed in many places, consider global registration only as a last resort\n- [ ] Use IDE auto-import features to simplify repeated imports\n\n**Incorrect:**\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport Card from './Card.vue'\nimport ChildComponent from './ChildComponent.vue'\n</script>\n\n<template>\n  <Card>Parent content</Card>\n  <ChildComponent />\n</template>\n```\n\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\n// WRONG: Expecting Card to be available because parent imported it\n// This will cause \"Failed to resolve component: Card\" error\n</script>\n\n<template>\n  <!-- ERROR: Card is not available here! -->\n  <Card>\n    Child content\n  </Card>\n</template>\n```\n\n**Correct:**\n```vue\n<!-- ParentComponent.vue -->\n<script setup>\nimport Card from './Card.vue'\nimport ChildComponent from './ChildComponent.vue'\n</script>\n\n<template>\n  <Card>Parent content</Card>\n  <ChildComponent />\n</template>\n```\n\n```vue\n<!-- ChildComponent.vue -->\n<script setup>\n// CORRECT: Each component must import what it uses\nimport Card from './Card.vue'\n</script>\n\n<template>\n  <Card>\n    Child content\n  </Card>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Common Scenarios\n\n### Scenario 1: Deeply Nested Components\n```vue\n<!-- GrandchildComponent.vue -->\n<script setup>\n// Even if parent and grandparent both use Card,\n// grandchild must import it separately\nimport Card from '@/components/Card.vue'\nimport Button from '@/components/Button.vue'\n</script>\n\n<template>\n  <Card>\n    <Button>Click me</Button>\n  </Card>\n</template>\n```\n\n### Scenario 2: Slot Content with Components\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport Modal from './Modal.vue'\nimport Form from './Form.vue'\n</script>\n\n<template>\n  <!-- Form is registered in Parent, so it works in slot content -->\n  <Modal>\n    <Form /> <!-- This works because slot content is compiled in Parent's scope -->\n  </Modal>\n</template>\n```\n\n```vue\n<!-- Modal.vue -->\n<script setup>\n// Modal doesn't need to import Form because slot content\n// is compiled in the parent's scope, not Modal's scope\n</script>\n\n<template>\n  <div class=\"modal\">\n    <slot /> <!-- Form component works here because it's parent's slot content -->\n  </div>\n</template>\n```\n\n### Scenario 3: Dynamic Components\n```vue\n<!-- Container.vue -->\n<script setup>\nimport TabA from './TabA.vue'\nimport TabB from './TabB.vue'\nimport { ref, shallowRef } from 'vue'\n\n// When using dynamic components, all possible components must be imported\nconst currentTab = shallowRef(TabA)\n</script>\n\n<template>\n  <component :is=\"currentTab\" />\n</template>\n```"
+- sequence: 4
+  fragment_type: rationale
+  content: '## Why This Design?
+
+
+    Local registration provides:
+
+    1. **Explicit dependencies** - You can see exactly what each component uses
+
+    2. **Tree-shaking** - Unused components are removed from bundles
+
+    3. **Clear scope** - No magic or implicit behavior'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Component Registration - Local Registration](https://vuejs.org/guide/components/registration.html#local-registration)'

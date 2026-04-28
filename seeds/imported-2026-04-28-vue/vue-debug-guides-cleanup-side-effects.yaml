@@ -1,0 +1,46 @@
+skill_type: domain
+skill_id: vue-debug-guides-cleanup-side-effects
+canonical_name: Clean Up Event Listeners and Intervals in onUnmounted
+category: engineering
+skill_class: domain
+domain_tags:
+- memory-leak
+- vue-debug-guides
+- cleanup
+- intervals
+- lifecycle
+- vue
+- event-listeners
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/cleanup-side-effects.md
+raw_prose: "# Clean Up Event Listeners and Intervals in onUnmounted\n\n**Impact: HIGH** - Failing to clean up event listeners, intervals, timeouts, and subscriptions when a component unmounts causes memory leaks and ghost handlers that continue running, leading to performance degradation and subtle bugs in Single Page Applications.\n\nWhen using custom events, timers, WebSocket connections, or third-party libraries, always clean up in `onUnmounted` (Composition API) or `unmounted` (Options API).\n\n## Task Checklist\n\n- [ ] Track all addEventListener calls and remove them in onUnmounted\n- [ ] Clear all setInterval and setTimeout calls in onUnmounted\n- [ ] Unsubscribe from external event emitters and observables\n- [ ] Disconnect WebSocket connections and third-party library instances\n- [ ] Use `onBeforeUnmount` if cleanup must happen before DOM removal\n\n**Incorrect:**\n```javascript\n// Composition API - WRONG: No cleanup\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    onMounted(() => {\n      // These keep running after component unmounts!\n      window.addEventListener('resize', handleResize)\n      setInterval(pollServer, 5000)\n      socket.on('message', handleMessage)\n    })\n  }\n}\n```\n\n```javascript\n// Options API - WRONG: No cleanup\nexport default {\n  mounted() {\n    window.addEventListener('scroll', this.handleScroll)\n    this.timer = setInterval(this.refresh, 10000)\n  }\n  // Component unmounts, but listeners and timers persist!\n}\n```\n\n**Correct:**\n```javascript\n// Composition API - CORRECT: Proper cleanup\nimport { onMounted, onUnmounted, ref } from 'vue'\n\nexport default {\n  setup() {\n    const intervalId = ref(null)\n\n    const handleResize = () => {\n      // handle resize\n    }\n\n    const handleMessage = (msg) => {\n      // handle message\n    }\n\n    onMounted(() => {\n      window.addEventListener('resize', handleResize)\n      intervalId.value = setInterval(pollServer, 5000)\n      socket.on('message', handleMessage)\n    })\n\n    onUnmounted(() => {\n      // Clean up everything!\n      window.removeEventListener('resize', handleResize)\n\n      if (intervalId.value) {\n        clearInterval(intervalId.value)\n      }\n\n      socket.off('message', handleMessage)\n    })\n  }\n}\n```\n\n```javascript\n// Options API - CORRECT: Proper cleanup\nexport default {\n  data() {\n    return {\n      timer: null\n    }\n  },\n  mounted() {\n    window.addEventListener('scroll', this.handleScroll)\n    this.timer = setInterval(this.refresh, 10000)\n  },\n  unmounted() {\n    window.removeEventListener('scroll', this.handleScroll)\n    if (this.timer) {\n      clearInterval(this.timer)\n    }\n  },\n  methods: {\n    handleScroll() { /* ... */ },\n    refresh() { /* ... */ }\n  }\n}\n```\n\n## Using Composable Pattern for Auto-Cleanup\n\n```javascript\n// Reusable composable with automatic cleanup\nimport { onMounted, onUnmounted } from 'vue'\n\nexport function useEventListener(target, event, handler) {\n  onMounted(() => {\n    target.addEventListener(event, handler)\n  })\n\n  onUnmounted(() => {\n    target.removeEventListener(event, handler)\n  })\n}\n\nexport function useInterval(callback, delay) {\n  let intervalId = null\n\n  onMounted(() => {\n    intervalId = setInterval(callback, delay)\n  })\n\n  onUnmounted(() => {\n    if (intervalId) clearInterval(intervalId)\n  })\n}\n\n// Usage - cleanup is automatic\nimport { useEventListener, useInterval } from './composables'\n\nexport default {\n  setup() {\n    useEventListener(window, 'resize', handleResize)\n    useInterval(pollServer, 5000)\n    // No manual cleanup needed!\n  }\n}\n```\n\n## VueUse Alternative\n\n```javascript\n// VueUse provides cleanup-aware composables\nimport { useEventListener, useIntervalFn } from '@vueuse/core'\n\nexport default {\n  setup() {\n    // Automatically cleaned up on unmount\n    useEventListener(window, 'resize', handleResize)\n\n    const { pause, resume } = useIntervalFn(pollServer, 5000)\n    // Also provides pause/resume controls\n  }\n}\n```\n\n## Reference\n- [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)\n- [VueUse - useEventListener](https://vueuse.org/core/useEventListener/)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Clean Up Event Listeners and Intervals in onUnmounted
+
+
+    **Impact: HIGH** - Failing to clean up event listeners, intervals, timeouts, and subscriptions when a component unmounts causes memory leaks and ghost handlers that continue running, leading to performance degradation and subtle bugs in Single Page Applications.
+
+
+    When using custom events, timers, WebSocket connections, or third-party libraries, always clean up in `onUnmounted` (Composition API) or `unmounted` (Options API).'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Track all addEventListener calls and remove them in onUnmounted\n- [ ] Clear all setInterval and setTimeout calls in onUnmounted\n- [ ] Unsubscribe from external event emitters and observables\n- [ ] Disconnect WebSocket connections and third-party library instances\n- [ ] Use `onBeforeUnmount` if cleanup must happen before DOM removal\n\n**Incorrect:**\n```javascript\n// Composition API - WRONG: No cleanup\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    onMounted(() => {\n      // These keep running after component unmounts!\n      window.addEventListener('resize', handleResize)\n      setInterval(pollServer, 5000)\n      socket.on('message', handleMessage)\n    })\n  }\n}\n```\n\n```javascript\n// Options API - WRONG: No cleanup\nexport default {\n  mounted() {\n    window.addEventListener('scroll', this.handleScroll)\n    this.timer = setInterval(this.refresh, 10000)\n  }\n  // Component unmounts, but listeners and timers persist!\n}\n```\n\n**Correct:**\n```javascript\n// Composition API - CORRECT: Proper cleanup\nimport { onMounted, onUnmounted, ref } from 'vue'\n\nexport default {\n  setup() {\n    const intervalId = ref(null)\n\n    const handleResize = () => {\n      // handle resize\n    }\n\n    const handleMessage = (msg) => {\n      // handle message\n    }\n\n    onMounted(() => {\n      window.addEventListener('resize', handleResize)\n      intervalId.value = setInterval(pollServer, 5000)\n      socket.on('message', handleMessage)\n    })\n\n    onUnmounted(() => {\n      // Clean up everything!\n      window.removeEventListener('resize', handleResize)\n\n      if (intervalId.value) {\n        clearInterval(intervalId.value)\n      }\n\n      socket.off('message', handleMessage)\n    })\n  }\n}\n```\n\n```javascript\n// Options API - CORRECT: Proper cleanup\nexport default {\n  data() {\n    return {\n      timer: null\n    }\n  },\n  mounted() {\n    window.addEventListener('scroll', this.handleScroll)\n    this.timer = setInterval(this.refresh, 10000)\n  },\n  unmounted() {\n    window.removeEventListener('scroll', this.handleScroll)\n    if (this.timer) {\n      clearInterval(this.timer)\n    }\n  },\n  methods: {\n    handleScroll() { /* ... */ },\n    refresh() { /* ... */ }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Using Composable Pattern for Auto-Cleanup\n\n```javascript\n// Reusable composable with automatic cleanup\nimport { onMounted, onUnmounted } from 'vue'\n\nexport function useEventListener(target, event, handler) {\n  onMounted(() => {\n    target.addEventListener(event, handler)\n  })\n\n  onUnmounted(() => {\n    target.removeEventListener(event, handler)\n  })\n}\n\nexport function useInterval(callback, delay) {\n  let intervalId = null\n\n  onMounted(() => {\n    intervalId = setInterval(callback, delay)\n  })\n\n  onUnmounted(() => {\n    if (intervalId) clearInterval(intervalId)\n  })\n}\n\n// Usage - cleanup is automatic\nimport { useEventListener, useInterval } from './composables'\n\nexport default {\n  setup() {\n    useEventListener(window, 'resize', handleResize)\n    useInterval(pollServer, 5000)\n    // No manual cleanup needed!\n  }\n}\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## VueUse Alternative\n\n```javascript\n// VueUse provides cleanup-aware composables\nimport { useEventListener, useIntervalFn } from '@vueuse/core'\n\nexport default {\n  setup() {\n    // Automatically cleaned up on unmount\n    useEventListener(window, 'resize', handleResize)\n\n    const { pause, resume } = useIntervalFn(pollServer, 5000)\n    // Also provides pause/resume controls\n  }\n}\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)
+
+    - [VueUse - useEventListener](https://vueuse.org/core/useEventListener/)'

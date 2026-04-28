@@ -1,0 +1,70 @@
+skill_type: domain
+skill_id: vue-debug-guides-mount-return-value
+canonical_name: mount() Returns Component Instance, Not App Instance
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- createApp
+- api
+- vue
+- mount
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/mount-return-value.md
+raw_prose: "# mount() Returns Component Instance, Not App Instance\n\n**Impact: MEDIUM** - The `.mount()` method returns the root component instance, not the application instance. Attempting to chain app configuration methods after mount() will fail or produce unexpected behavior.\n\nThis is a subtle API detail that catches developers who assume mount() returns the app for continued chaining.\n\n## Task Checklist\n\n- [ ] Never chain app configuration methods after mount()\n- [ ] If you need both instances, store them separately\n- [ ] Use the component instance for accessing root component state or methods\n- [ ] Use the app instance for configuration, plugins, and global registration\n\n**Incorrect:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\n\n// WRONG: Assuming mount returns app instance\nconst app = createApp(App).mount('#app')\n\n// This fails! app is actually the root component instance\napp.use(router)  // TypeError: app.use is not a function\napp.config.errorHandler = fn  // app.config is undefined\n```\n\n```javascript\n// WRONG: Trying to save both in one line\nconst { app, component } = createApp(App).mount('#app')  // Doesn't work this way\n```\n\n**Correct:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\n\n// Store app instance separately\nconst app = createApp(App)\n\n// Configure the app\napp.use(router)\napp.config.errorHandler = (err) => console.error(err)\n\n// Store component instance if needed\nconst rootComponent = app.mount('#app')\n\n// Now you have access to both:\n// - app: the application instance (for config, plugins)\n// - rootComponent: the root component instance (for state, methods)\n```\n\n```javascript\n// If you only need the app configured and mounted (most common case):\ncreateApp(App)\n  .use(router)\n  .use(pinia)\n  .mount('#app')  // Return value (component instance) discarded - that's fine\n```\n\n## When You Need the Root Component Instance\n\n```javascript\nconst app = createApp(App)\nconst vm = app.mount('#app')\n\n// Access root component's exposed state/methods\nconsole.log(vm.someExposedProperty)\nvm.someExposedMethod()\n\n// In Vue 3 with <script setup>, use defineExpose to expose:\n// <script setup>\n// import { ref } from 'vue'\n// const count = ref(0)\n// defineExpose({ count })\n// </script>\n```\n\n## Reference\n- [Vue.js - Mounting the App](https://vuejs.org/guide/essentials/application.html#mounting-the-app)\n- [Vue.js Application API - mount()](https://vuejs.org/api/application.html#app-mount)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# mount() Returns Component Instance, Not App Instance
+
+
+    **Impact: MEDIUM** - The `.mount()` method returns the root component instance, not the application instance. Attempting to chain app configuration methods after mount() will fail or produce unexpected behavior.
+
+
+    This is a subtle API detail that catches developers who assume mount() returns the app for continued chaining.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never chain app configuration methods after mount()\n- [ ] If you need both instances, store them separately\n- [ ] Use the component instance for accessing root component state or methods\n- [ ] Use the app instance for configuration, plugins, and global registration\n\n**Incorrect:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\n\n// WRONG: Assuming mount returns app instance\nconst app = createApp(App).mount('#app')\n\n// This fails! app is actually the root component instance\napp.use(router)  // TypeError: app.use is not a function\napp.config.errorHandler = fn  // app.config is undefined\n```\n\n```javascript\n// WRONG: Trying to save both in one line\nconst { app, component } = createApp(App).mount('#app')  // Doesn't work this way\n```\n\n**Correct:**\n```javascript\nimport { createApp } from 'vue'\nimport App from './App.vue'\n\n// Store app instance separately\nconst app = createApp(App)\n\n// Configure the app\napp.use(router)\napp.config.errorHandler = (err) => console.error(err)\n\n// Store component instance if needed\nconst rootComponent = app.mount('#app')\n\n// Now you have access to both:\n// - app: the application instance (for config, plugins)\n// - rootComponent: the root component instance (for state, methods)\n```\n\n```javascript\n// If you only need the app configured and mounted (most common case):\ncreateApp(App)\n  .use(router)\n  .use(pinia)\n  .mount('#app')  // Return value (component instance) discarded - that's fine\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## When You Need the Root Component Instance
+
+
+    ```javascript
+
+    const app = createApp(App)
+
+    const vm = app.mount(''#app'')
+
+
+    // Access root component''s exposed state/methods
+
+    console.log(vm.someExposedProperty)
+
+    vm.someExposedMethod()
+
+
+    // In Vue 3 with <script setup>, use defineExpose to expose:
+
+    // <script setup>
+
+    // import { ref } from ''vue''
+
+    // const count = ref(0)
+
+    // defineExpose({ count })
+
+    // </script>
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js - Mounting the App](https://vuejs.org/guide/essentials/application.html#mounting-the-app)
+
+    - [Vue.js Application API - mount()](https://vuejs.org/api/application.html#app-mount)'

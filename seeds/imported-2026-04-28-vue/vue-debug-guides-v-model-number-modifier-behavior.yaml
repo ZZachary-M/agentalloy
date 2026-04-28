@@ -1,0 +1,39 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-model-number-modifier-behavior
+canonical_name: v-model.number Uses parseFloat Not valueAsNumber
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- number
+- type-coercion
+- vue-debug-guides
+- input
+- vue
+- modifiers
+- v-model
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-model-number-modifier-behavior.md
+raw_prose: "# v-model.number Uses parseFloat Not valueAsNumber\n\n**Impact: MEDIUM** - The `.number` modifier doesn't behave like the native `valueAsNumber` property. It returns an empty string (not NaN) for empty inputs, and uses `parseFloat()` which has different parsing rules. This can cause unexpected type issues in calculations and validations.\n\nUnderstanding these differences is crucial when working with numeric forms, especially for calculations, min/max validation, or when interfacing with APIs that expect strict number types.\n\n## Task Checklist\n\n- [ ] Expect empty string (not 0 or NaN) when input is cleared with `.number` modifier\n- [ ] Handle the empty string case in your validation and calculations\n- [ ] Remember `.number` uses parseFloat - \"123abc\" becomes 123, not NaN\n- [ ] For strict numeric parsing, add custom validation\n\n**Key Differences:**\n\n| Scenario | `.number` modifier | Native `valueAsNumber` |\n|----------|-------------------|----------------------|\n| Empty input | `''` (empty string) | `NaN` |\n| `\"123\"` | `123` | `123` |\n| `\"123.45\"` | `123.45` | `123.45` |\n| `\"123abc\"` | `123` | `NaN` |\n| `\"abc\"` | `'abc'` (original string) | `NaN` |\n\n**Problem - Unexpected types:**\n```html\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst price = ref(0)\nconst quantity = ref(1)\n\nconst total = computed(() => {\n  // PROBLEM: price might be '' (empty string) when input is cleared\n  return price.value * quantity.value  // '' * 1 = 0, but typeof is still number\n})\n\nfunction validatePrice() {\n  // PROBLEM: This check fails when input is empty\n  if (typeof price.value !== 'number') {\n    // Never enters here! '' is still treated as \"processed\"\n  }\n\n  // PROBLEM: parseFloat(\"$100\") returns NaN, but \"100abc\" returns 100\n}\n</script>\n\n<template>\n  <input v-model.number=\"price\" type=\"number\">\n  <!-- When user clears input, price.value becomes '' not 0 or NaN -->\n</template>\n```\n\n**Solution - Handle empty string explicitly:**\n```html\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst price = ref(0)\nconst quantity = ref(1)\n\nconst total = computed(() => {\n  // CORRECT: Handle empty string case\n  const priceNum = price.value === '' ? 0 : price.value\n  return priceNum * quantity.value\n})\n\n// Or use a wrapper computed for safer access\nconst safePrice = computed(() => {\n  if (price.value === '' || price.value === null) return 0\n  return Number(price.value) || 0\n})\n</script>\n\n<template>\n  <input v-model.number=\"price\" type=\"number\" min=\"0\">\n  <p>Total: ${{ total.toFixed(2) }}</p>\n</template>\n```\n\n**Solution - Custom input handling for strict parsing:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst price = ref(0)\n\nfunction handlePriceInput(event) {\n  const value = event.target.value\n\n  // Strict parsing - only accept valid numbers\n  const parsed = parseFloat(value)\n\n  if (value === '') {\n    price.value = 0  // Or null, depending on your needs\n  } else if (!isNaN(parsed) && isFinite(parsed)) {\n    // Additional check: ensure entire string is numeric\n    if (/^-?\\d*\\.?\\d+$/.test(value.trim())) {\n      price.value = parsed\n    }\n  }\n  // Invalid input - keep previous value\n}\n</script>\n\n<template>\n  <!-- Manual binding for strict numeric control -->\n  <input\n    :value=\"price\"\n    @input=\"handlePriceInput\"\n    type=\"number\"\n  >\n</template>\n```\n\n## Reference\n- [Vue.js Form Input Bindings - .number](https://vuejs.org/guide/essentials/forms.html#number)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-model.number Uses parseFloat Not valueAsNumber
+
+
+    **Impact: MEDIUM** - The `.number` modifier doesn''t behave like the native `valueAsNumber` property. It returns an empty string (not NaN) for empty inputs, and uses `parseFloat()` which has different parsing rules. This can cause unexpected type issues in calculations and validations.
+
+
+    Understanding these differences is crucial when working with numeric forms, especially for calculations, min/max validation, or when interfacing with APIs that expect strict number types.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Expect empty string (not 0 or NaN) when input is cleared with `.number` modifier\n- [ ] Handle the empty string case in your validation and calculations\n- [ ] Remember `.number` uses parseFloat - \"123abc\" becomes 123, not NaN\n- [ ] For strict numeric parsing, add custom validation\n\n**Key Differences:**\n\n| Scenario | `.number` modifier | Native `valueAsNumber` |\n|----------|-------------------|----------------------|\n| Empty input | `''` (empty string) | `NaN` |\n| `\"123\"` | `123` | `123` |\n| `\"123.45\"` | `123.45` | `123.45` |\n| `\"123abc\"` | `123` | `NaN` |\n| `\"abc\"` | `'abc'` (original string) | `NaN` |\n\n**Problem - Unexpected types:**\n```html\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst price = ref(0)\nconst quantity = ref(1)\n\nconst total = computed(() => {\n  // PROBLEM: price might be '' (empty string) when input is cleared\n  return price.value * quantity.value  // '' * 1 = 0, but typeof is still number\n})\n\nfunction validatePrice() {\n  // PROBLEM: This check fails when input is empty\n  if (typeof price.value !== 'number') {\n    // Never enters here! '' is still treated as \"processed\"\n  }\n\n  // PROBLEM: parseFloat(\"$100\") returns NaN, but \"100abc\" returns 100\n}\n</script>\n\n<template>\n  <input v-model.number=\"price\" type=\"number\">\n  <!-- When user clears input, price.value becomes '' not 0 or NaN -->\n</template>\n```\n\n**Solution - Handle empty string explicitly:**\n```html\n<script setup>\nimport { ref, computed } from 'vue'\n\nconst price = ref(0)\nconst quantity = ref(1)\n\nconst total = computed(() => {\n  // CORRECT: Handle empty string case\n  const priceNum = price.value === '' ? 0 : price.value\n  return priceNum * quantity.value\n})\n\n// Or use a wrapper computed for safer access\nconst safePrice = computed(() => {\n  if (price.value === '' || price.value === null) return 0\n  return Number(price.value) || 0\n})\n</script>\n\n<template>\n  <input v-model.number=\"price\" type=\"number\" min=\"0\">\n  <p>Total: ${{ total.toFixed(2) }}</p>\n</template>\n```\n\n**Solution - Custom input handling for strict parsing:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst price = ref(0)\n\nfunction handlePriceInput(event) {\n  const value = event.target.value\n\n  // Strict parsing - only accept valid numbers\n  const parsed = parseFloat(value)\n\n  if (value === '') {\n    price.value = 0  // Or null, depending on your needs\n  } else if (!isNaN(parsed) && isFinite(parsed)) {\n    // Additional check: ensure entire string is numeric\n    if (/^-?\\d*\\.?\\d+$/.test(value.trim())) {\n      price.value = parsed\n    }\n  }\n  // Invalid input - keep previous value\n}\n</script>\n\n<template>\n  <!-- Manual binding for strict numeric control -->\n  <input\n    :value=\"price\"\n    @input=\"handlePriceInput\"\n    type=\"number\"\n  >\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings - .number](https://vuejs.org/guide/essentials/forms.html#number)'

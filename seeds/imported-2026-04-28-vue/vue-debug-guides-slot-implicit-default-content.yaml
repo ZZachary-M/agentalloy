@@ -1,0 +1,56 @@
+skill_type: domain
+skill_id: vue-debug-guides-slot-implicit-default-content
+canonical_name: Non-Template Content Is Implicitly Default Slot Content
+category: engineering
+skill_class: domain
+domain_tags:
+- named-slots
+- slots
+- vue-debug-guides
+- implicit-behavior
+- default-slot
+- vue
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/slot-implicit-default-content.md
+raw_prose: "# Non-Template Content Is Implicitly Default Slot Content\n\n**Impact: LOW** - When using named slots, any top-level content not wrapped in a `<template>` tag is automatically treated as default slot content. This implicit behavior can cause confusion about where content will render.\n\n## Task Checklist\n\n- [ ] Understand that loose content goes to the default slot\n- [ ] Use explicit `<template #default>` when clarity matters\n- [ ] Keep slot content organization intentional\n\n**The Implicit Behavior:**\n```vue\n<script setup>\nimport BaseLayout from './BaseLayout.vue'\n</script>\n\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Page Title</h1>\n    </template>\n\n    <!-- These are IMPLICITLY in the default slot -->\n    <p>First paragraph of main content.</p>\n    <p>Second paragraph of main content.</p>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n</template>\n```\n\nThe two `<p>` elements are automatically placed in `<slot>` (the default slot) in the child component.\n\n**Equivalent Explicit Version:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Page Title</h1>\n    </template>\n\n    <!-- Explicit default slot -->\n    <template #default>\n      <p>First paragraph of main content.</p>\n      <p>Second paragraph of main content.</p>\n    </template>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n</template>\n```\n\n## When Implicit Behavior Causes Confusion\n\n**Scattered Content:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <p>Content A</p>  <!-- Goes to default slot -->\n\n    <template #sidebar>\n      <nav>Navigation</nav>\n    </template>\n\n    <p>Content B</p>  <!-- Also goes to default slot! -->\n\n    <template #footer>\n      <p>Footer</p>\n    </template>\n\n    <p>Content C</p>  <!-- Also goes to default slot! -->\n  </BaseLayout>\n</template>\n```\n\nAll three `<p>` elements end up in the default slot together, which may not be the intended order or grouping.\n\n**Clearer with Explicit Default:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <template #default>\n      <p>Content A</p>\n      <p>Content B</p>\n      <p>Content C</p>\n    </template>\n\n    <template #sidebar>\n      <nav>Navigation</nav>\n    </template>\n\n    <template #footer>\n      <p>Footer</p>\n    </template>\n  </BaseLayout>\n</template>\n```\n\n## Best Practices\n\n| Scenario | Recommendation |\n|----------|---------------|\n| Only default slot used | Implicit is fine |\n| Mixed named + default slots | Consider explicit `#default` |\n| Complex layouts | Always use explicit templates |\n| Team/shared codebase | Prefer explicit for clarity |\n\n## The Child Component\n\n```vue\n<!-- BaseLayout.vue -->\n<template>\n  <div class=\"layout\">\n    <header>\n      <slot name=\"header\"></slot>\n    </header>\n\n    <aside>\n      <slot name=\"sidebar\"></slot>\n    </aside>\n\n    <main>\n      <!-- All implicit content ends up here -->\n      <slot></slot>\n    </main>\n\n    <footer>\n      <slot name=\"footer\"></slot>\n    </footer>\n  </div>\n</template>\n```\n\n## Reference\n- [Vue.js Slots - Named Slots](https://vuejs.org/guide/components/slots.html#named-slots)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Non-Template Content Is Implicitly Default Slot Content
+
+
+    **Impact: LOW** - When using named slots, any top-level content not wrapped in a `<template>` tag is automatically treated as default slot content. This implicit behavior can cause confusion about where content will render.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Understand that loose content goes to the default slot\n- [ ] Use explicit `<template #default>` when clarity matters\n- [ ] Keep slot content organization intentional\n\n**The Implicit Behavior:**\n```vue\n<script setup>\nimport BaseLayout from './BaseLayout.vue'\n</script>\n\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Page Title</h1>\n    </template>\n\n    <!-- These are IMPLICITLY in the default slot -->\n    <p>First paragraph of main content.</p>\n    <p>Second paragraph of main content.</p>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n</template>\n```\n\nThe two `<p>` elements are automatically placed in `<slot>` (the default slot) in the child component.\n\n**Equivalent Explicit Version:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Page Title</h1>\n    </template>\n\n    <!-- Explicit default slot -->\n    <template #default>\n      <p>First paragraph of main content.</p>\n      <p>Second paragraph of main content.</p>\n    </template>\n\n    <template #footer>\n      <p>Footer content</p>\n    </template>\n  </BaseLayout>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## When Implicit Behavior Causes Confusion\n\n**Scattered Content:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <p>Content A</p>  <!-- Goes to default slot -->\n\n    <template #sidebar>\n      <nav>Navigation</nav>\n    </template>\n\n    <p>Content B</p>  <!-- Also goes to default slot! -->\n\n    <template #footer>\n      <p>Footer</p>\n    </template>\n\n    <p>Content C</p>  <!-- Also goes to default slot! -->\n  </BaseLayout>\n</template>\n```\n\nAll three `<p>` elements end up in the default slot together, which may not be the intended order or grouping.\n\n**Clearer with Explicit Default:**\n```vue\n<template>\n  <BaseLayout>\n    <template #header>\n      <h1>Title</h1>\n    </template>\n\n    <template #default>\n      <p>Content A</p>\n      <p>Content B</p>\n      <p>Content C</p>\n    </template>\n\n    <template #sidebar>\n      <nav>Navigation</nav>\n    </template>\n\n    <template #footer>\n      <p>Footer</p>\n    </template>\n  </BaseLayout>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Best Practices
+
+
+    | Scenario | Recommendation |
+
+    |----------|---------------|
+
+    | Only default slot used | Implicit is fine |
+
+    | Mixed named + default slots | Consider explicit `#default` |
+
+    | Complex layouts | Always use explicit templates |
+
+    | Team/shared codebase | Prefer explicit for clarity |'
+- sequence: 5
+  fragment_type: execution
+  content: "## The Child Component\n\n```vue\n<!-- BaseLayout.vue -->\n<template>\n  <div class=\"layout\">\n    <header>\n      <slot name=\"header\"></slot>\n    </header>\n\n    <aside>\n      <slot name=\"sidebar\"></slot>\n    </aside>\n\n    <main>\n      <!-- All implicit content ends up here -->\n      <slot></slot>\n    </main>\n\n    <footer>\n      <slot name=\"footer\"></slot>\n    </footer>\n  </div>\n</template>\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Slots - Named Slots](https://vuejs.org/guide/components/slots.html#named-slots)'

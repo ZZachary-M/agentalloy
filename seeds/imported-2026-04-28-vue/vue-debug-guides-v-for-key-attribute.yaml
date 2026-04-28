@@ -1,0 +1,56 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-for-key-attribute
+canonical_name: Always Provide Unique Keys in v-for Loops
+category: engineering
+skill_class: domain
+domain_tags:
+- components
+- vue-debug-guides
+- vue
+- v-for
+- vue3
+- key
+- list-rendering
+- state
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-for-key-attribute.md
+raw_prose: "# Always Provide Unique Keys in v-for Loops\n\n**Impact: HIGH** - Without proper keys, Vue cannot track element identity when lists change. This causes component state loss, incorrect animations, form input values jumping between items, and bugs that are extremely difficult to debug.\n\nThe `key` attribute tells Vue how your data relates to the DOM elements it renders. When data ordering changes (via sort, filter, add, or remove), Vue uses keys to determine what to update, remove, or create. Without unique keys, Vue reuses DOM elements in-place which can cause one item's state to incorrectly appear on another item.\n\n## Task Checklist\n\n- [ ] Always provide `:key` with unique, stable identifiers (database IDs, UUIDs)\n- [ ] Never use array index as key - indices shift when items are added/removed\n- [ ] Use primitive values only (strings or numbers) - never use objects as keys\n- [ ] On `<template v-for>`, place the key on the `<template>` tag itself (Vue 3 change)\n- [ ] When using components in v-for, keys are mandatory, not optional\n\n**Incorrect:**\n```html\n<!-- WRONG: No key provided -->\n<li v-for=\"item in items\">{{ item.name }}</li>\n\n<!-- WRONG: Using array index as key - shifts when list changes -->\n<li v-for=\"(item, index) in items\" :key=\"index\">\n  <input v-model=\"item.value\" />\n</li>\n\n<!-- WRONG: Object as key -->\n<li v-for=\"item in items\" :key=\"item\">{{ item.name }}</li>\n\n<!-- WRONG (Vue 3): Key on child instead of template -->\n<template v-for=\"item in items\">\n  <li :key=\"item.id\">{{ item.name }}</li>\n</template>\n```\n\n```javascript\n// Bug demonstration: Using index as key\n// Initial: ['Alice', 'Bob', 'Charlie'] at indices [0, 1, 2]\n// After removing 'Bob': ['Alice', 'Charlie'] at indices [0, 1]\n// Charlie now has index 1, so Vue reuses Bob's DOM/component state for Charlie!\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Unique identifier as key -->\n<li v-for=\"item in items\" :key=\"item.id\">\n  {{ item.name }}\n</li>\n\n<!-- CORRECT: With components -->\n<MyComponent\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :item=\"item\"\n/>\n\n<!-- CORRECT (Vue 3): Key on template tag -->\n<template v-for=\"item in items\" :key=\"item.id\">\n  <li>{{ item.name }}</li>\n  <span>{{ item.description }}</span>\n</template>\n\n<!-- CORRECT: With stateful elements -->\n<div v-for=\"user in users\" :key=\"user.id\">\n  <input v-model=\"user.email\" />\n  <select v-model=\"user.role\">\n    <option value=\"admin\">Admin</option>\n    <option value=\"user\">User</option>\n  </select>\n</div>\n```\n\n## When Keys Are Critical\n\nKeys are absolutely required when v-for loops contain:\n- Components with local state\n- Form elements (`<input>`, `<select>`, `<textarea>`)\n- Elements with initialization logic (mounted/created hooks)\n- Animations or transitions\n- Direct DOM manipulation\n\n## Reference\n- [Vue.js List Rendering - Key](https://vuejs.org/guide/essentials/list.html#maintaining-state-with-key)\n- [Vue 3 Migration Guide - Key on Template](https://v3-migration.vuejs.org/breaking-changes/key-attribute)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Always Provide Unique Keys in v-for Loops
+
+
+    **Impact: HIGH** - Without proper keys, Vue cannot track element identity when lists change. This causes component state loss, incorrect animations, form input values jumping between items, and bugs that are extremely difficult to debug.
+
+
+    The `key` attribute tells Vue how your data relates to the DOM elements it renders. When data ordering changes (via sort, filter, add, or remove), Vue uses keys to determine what to update, remove, or create. Without unique keys, Vue reuses DOM elements in-place which can cause one item''s state to incorrectly appear on another item.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always provide `:key` with unique, stable identifiers (database IDs, UUIDs)\n- [ ] Never use array index as key - indices shift when items are added/removed\n- [ ] Use primitive values only (strings or numbers) - never use objects as keys\n- [ ] On `<template v-for>`, place the key on the `<template>` tag itself (Vue 3 change)\n- [ ] When using components in v-for, keys are mandatory, not optional\n\n**Incorrect:**\n```html\n<!-- WRONG: No key provided -->\n<li v-for=\"item in items\">{{ item.name }}</li>\n\n<!-- WRONG: Using array index as key - shifts when list changes -->\n<li v-for=\"(item, index) in items\" :key=\"index\">\n  <input v-model=\"item.value\" />\n</li>\n\n<!-- WRONG: Object as key -->\n<li v-for=\"item in items\" :key=\"item\">{{ item.name }}</li>\n\n<!-- WRONG (Vue 3): Key on child instead of template -->\n<template v-for=\"item in items\">\n  <li :key=\"item.id\">{{ item.name }}</li>\n</template>\n```\n\n```javascript\n// Bug demonstration: Using index as key\n// Initial: ['Alice', 'Bob', 'Charlie'] at indices [0, 1, 2]\n// After removing 'Bob': ['Alice', 'Charlie'] at indices [0, 1]\n// Charlie now has index 1, so Vue reuses Bob's DOM/component state for Charlie!\n```\n\n**Correct:**\n```html\n<!-- CORRECT: Unique identifier as key -->\n<li v-for=\"item in items\" :key=\"item.id\">\n  {{ item.name }}\n</li>\n\n<!-- CORRECT: With components -->\n<MyComponent\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :item=\"item\"\n/>\n\n<!-- CORRECT (Vue 3): Key on template tag -->\n<template v-for=\"item in items\" :key=\"item.id\">\n  <li>{{ item.name }}</li>\n  <span>{{ item.description }}</span>\n</template>\n\n<!-- CORRECT: With stateful elements -->\n<div v-for=\"user in users\" :key=\"user.id\">\n  <input v-model=\"user.email\" />\n  <select v-model=\"user.role\">\n    <option value=\"admin\">Admin</option>\n    <option value=\"user\">User</option>\n  </select>\n</div>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## When Keys Are Critical
+
+
+    Keys are absolutely required when v-for loops contain:
+
+    - Components with local state
+
+    - Form elements (`<input>`, `<select>`, `<textarea>`)
+
+    - Elements with initialization logic (mounted/created hooks)
+
+    - Animations or transitions
+
+    - Direct DOM manipulation'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js List Rendering - Key](https://vuejs.org/guide/essentials/list.html#maintaining-state-with-key)
+
+    - [Vue 3 Migration Guide - Key on Template](https://v3-migration.vuejs.org/breaking-changes/key-attribute)'

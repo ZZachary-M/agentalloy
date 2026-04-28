@@ -1,0 +1,68 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-else-must-follow-v-if
+canonical_name: v-else Must Immediately Follow v-if or v-else-if
+category: engineering
+skill_class: domain
+domain_tags:
+- conditional-rendering
+- v-if
+- vue-debug-guides
+- v-else
+- vue
+- v-else-if
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-else-must-follow-v-if.md
+raw_prose: "# v-else Must Immediately Follow v-if or v-else-if\n\n**Impact: MEDIUM** - A `v-else` or `v-else-if` element must immediately follow a `v-if` or `v-else-if` element in the DOM. If there's any element in between:\n\n- **SFC compilation (Vite/vue-loader):** Vue throws a **compile-time SyntaxError** - the code won't build at all\n- **Runtime template compilation:** The element renders unconditionally (always visible), losing its conditional behavior\n\nIn most modern Vue projects using Single File Components, this is caught at build time.\n\n## Task Checklist\n\n- [ ] Place v-else immediately after the v-if element (no elements in between)\n- [ ] Place v-else-if immediately after v-if or another v-else-if\n- [ ] Use `<template>` wrapper if you need to group multiple elements within a branch\n- [ ] If you need content between conditions, restructure using nested conditionals or computed\n\n**Incorrect:**\n```html\n<!-- WRONG: v-else not immediately after v-if -->\n<template>\n  <div v-if=\"isLoggedIn\">\n    Welcome back!\n  </div>\n\n  <p>Some other content in between</p>\n\n  <div v-else>\n    <!-- This v-else is NOT recognized! It will ALWAYS render (unconditionally) -->\n    Please log in\n  </div>\n</template>\n```\n\n```html\n<!-- WRONG: Comment or whitespace element between -->\n<template>\n  <span v-if=\"status === 'loading'\">Loading...</span>\n  <!-- This comment breaks the chain! -->\n  <span v-else-if=\"status === 'error'\">Error occurred</span>\n  <span v-else>Done</span>\n</template>\n```\n\n```html\n<!-- WRONG: Text node between conditions -->\n<template>\n  <div v-if=\"showA\">A</div>\n  Just some text here\n  <div v-else>B</div>  <!-- Not recognized, always renders -->\n</template>\n```\n\n**Correct:**\n```html\n<!-- CORRECT: v-else immediately follows v-if -->\n<template>\n  <div v-if=\"isLoggedIn\">\n    Welcome back!\n  </div>\n  <div v-else>\n    Please log in\n  </div>\n\n  <p>Some other content (placed after the conditional block)</p>\n</template>\n```\n\n```html\n<!-- CORRECT: Full v-if/v-else-if/v-else chain -->\n<template>\n  <span v-if=\"status === 'loading'\">Loading...</span>\n  <span v-else-if=\"status === 'error'\">Error: {{ errorMessage }}</span>\n  <span v-else-if=\"status === 'empty'\">No data found</span>\n  <span v-else>{{ data }}</span>\n</template>\n```\n\n```html\n<!-- CORRECT: Using <template> for multiple elements per branch -->\n<template>\n  <template v-if=\"isLoggedIn\">\n    <h1>Welcome back!</h1>\n    <p>Your dashboard</p>\n    <UserStats />\n  </template>\n  <template v-else>\n    <h1>Please log in</h1>\n    <LoginForm />\n  </template>\n</template>\n```\n\n```html\n<!-- CORRECT: Restructure if you need content between conditions -->\n<template>\n  <div class=\"conditional-section\">\n    <div v-if=\"isLoggedIn\">Welcome back!</div>\n    <div v-else>Please log in</div>\n  </div>\n\n  <div class=\"always-shown\">\n    Some other content\n  </div>\n\n  <div class=\"another-conditional\">\n    <div v-if=\"showMore\">More info</div>\n    <div v-else>Click to expand</div>\n  </div>\n</template>\n```\n\n## Debugging Tips\n\n```html\n<!-- If v-else is always visible (rendering unconditionally), check for: -->\n\n<!-- 1. Elements between v-if and v-else -->\n<!-- 2. HTML comments that break the chain -->\n<!-- 3. Text nodes (including whitespace in some cases) -->\n<!-- 4. Component tags that render content between -->\n\n<!-- SFC compilation throws: \"v-else/v-else-if has no adjacent v-if or v-else-if\" (build fails) -->\n<!-- Runtime template compilation shows a warning but renders the element unconditionally -->\n<!-- Vue DevTools will show the v-else element as not part of the condition chain -->\n```\n\n## Reference\n- [Vue.js Conditional Rendering - v-else](https://vuejs.org/guide/essentials/conditional.html#v-else)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-else Must Immediately Follow v-if or v-else-if
+
+
+    **Impact: MEDIUM** - A `v-else` or `v-else-if` element must immediately follow a `v-if` or `v-else-if` element in the DOM. If there''s any element in between:
+
+
+    - **SFC compilation (Vite/vue-loader):** Vue throws a **compile-time SyntaxError** - the code won''t build at all
+
+    - **Runtime template compilation:** The element renders unconditionally (always visible), losing its conditional behavior
+
+
+    In most modern Vue projects using Single File Components, this is caught at build time.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Place v-else immediately after the v-if element (no elements in between)\n- [ ] Place v-else-if immediately after v-if or another v-else-if\n- [ ] Use `<template>` wrapper if you need to group multiple elements within a branch\n- [ ] If you need content between conditions, restructure using nested conditionals or computed\n\n**Incorrect:**\n```html\n<!-- WRONG: v-else not immediately after v-if -->\n<template>\n  <div v-if=\"isLoggedIn\">\n    Welcome back!\n  </div>\n\n  <p>Some other content in between</p>\n\n  <div v-else>\n    <!-- This v-else is NOT recognized! It will ALWAYS render (unconditionally) -->\n    Please log in\n  </div>\n</template>\n```\n\n```html\n<!-- WRONG: Comment or whitespace element between -->\n<template>\n  <span v-if=\"status === 'loading'\">Loading...</span>\n  <!-- This comment breaks the chain! -->\n  <span v-else-if=\"status === 'error'\">Error occurred</span>\n  <span v-else>Done</span>\n</template>\n```\n\n```html\n<!-- WRONG: Text node between conditions -->\n<template>\n  <div v-if=\"showA\">A</div>\n  Just some text here\n  <div v-else>B</div>  <!-- Not recognized, always renders -->\n</template>\n```\n\n**Correct:**\n```html\n<!-- CORRECT: v-else immediately follows v-if -->\n<template>\n  <div v-if=\"isLoggedIn\">\n    Welcome back!\n  </div>\n  <div v-else>\n    Please log in\n  </div>\n\n  <p>Some other content (placed after the conditional block)</p>\n</template>\n```\n\n```html\n<!-- CORRECT: Full v-if/v-else-if/v-else chain -->\n<template>\n  <span v-if=\"status === 'loading'\">Loading...</span>\n  <span v-else-if=\"status === 'error'\">Error: {{ errorMessage }}</span>\n  <span v-else-if=\"status === 'empty'\">No data found</span>\n  <span v-else>{{ data }}</span>\n</template>\n```\n\n```html\n<!-- CORRECT: Using <template> for multiple elements per branch -->\n<template>\n  <template v-if=\"isLoggedIn\">\n    <h1>Welcome back!</h1>\n    <p>Your dashboard</p>\n    <UserStats />\n  </template>\n  <template v-else>\n    <h1>Please log in</h1>\n    <LoginForm />\n  </template>\n</template>\n```\n\n```html\n<!-- CORRECT: Restructure if you need content between conditions -->\n<template>\n  <div class=\"conditional-section\">\n    <div v-if=\"isLoggedIn\">Welcome back!</div>\n    <div v-else>Please log in</div>\n  </div>\n\n  <div class=\"always-shown\">\n    Some other content\n  </div>\n\n  <div class=\"another-conditional\">\n    <div v-if=\"showMore\">More info</div>\n    <div v-else>Click to expand</div>\n  </div>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Debugging Tips
+
+
+    ```html
+
+    <!-- If v-else is always visible (rendering unconditionally), check for: -->
+
+
+    <!-- 1. Elements between v-if and v-else -->
+
+    <!-- 2. HTML comments that break the chain -->
+
+    <!-- 3. Text nodes (including whitespace in some cases) -->
+
+    <!-- 4. Component tags that render content between -->
+
+
+    <!-- SFC compilation throws: "v-else/v-else-if has no adjacent v-if or v-else-if" (build fails) -->
+
+    <!-- Runtime template compilation shows a warning but renders the element unconditionally -->
+
+    <!-- Vue DevTools will show the v-else element as not part of the condition chain -->
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Conditional Rendering - v-else](https://vuejs.org/guide/essentials/conditional.html#v-else)'

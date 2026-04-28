@@ -1,0 +1,60 @@
+skill_type: domain
+skill_id: vue-best-practices-perf-avoid-component-abstraction-in-lists
+canonical_name: Avoid Excessive Component Abstraction in Large Lists
+category: engineering
+skill_class: domain
+domain_tags:
+- components
+- lists
+- vue
+- performance
+- optimization
+- vue-best-practices
+- vue3
+- abstraction
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/perf-avoid-component-abstraction-in-lists.md
+raw_prose: "# Avoid Excessive Component Abstraction in Large Lists\n\n**Impact: MEDIUM** - Component instances are more expensive than plain DOM nodes. While abstractions improve code organization, unnecessary nesting creates overhead. In large lists, this overhead multiplies - 100 items with 3 levels of abstraction means 300+ component instances instead of 100.\n\nDon't avoid abstraction entirely, but be mindful of component depth in frequently-rendered elements like list items.\n\n## Task List\n\n- Review list item components for unnecessary wrapper components\n- Consider flattening component hierarchies in hot paths\n- Use native elements when a component adds no value\n- Profile component counts using Vue DevTools\n- Focus optimization efforts on the most-rendered components\n\n**BAD:**\n```vue\n<!-- BAD: Deep abstraction in list items -->\n<template>\n  <div class=\"user-list\">\n    <!-- For 100 users: Creates 400 component instances -->\n    <UserCard v-for=\"user in users\" :key=\"user.id\" :user=\"user\" />\n  </div>\n</template>\n\n<!-- UserCard.vue -->\n<template>\n  <Card>  <!-- Wrapper component #1 -->\n    <CardHeader>  <!-- Wrapper component #2 -->\n      <UserAvatar :src=\"user.avatar\" />  <!-- Wrapper component #3 -->\n    </CardHeader>\n    <CardBody>  <!-- Wrapper component #4 -->\n      <Text>{{ user.name }}</Text>\n    </CardBody>\n  </Card>\n</template>\n\n<!-- Each UserCard creates: Card + CardHeader + CardBody + UserAvatar + Text\n     100 users = 500+ component instances -->\n```\n\n**GOOD:**\n```vue\n<!-- GOOD: Flattened structure in list items -->\n<template>\n  <div class=\"user-list\">\n    <!-- For 100 users: Creates 100 component instances -->\n    <UserCard v-for=\"user in users\" :key=\"user.id\" :user=\"user\" />\n  </div>\n</template>\n\n<!-- UserCard.vue - Flattened, uses native elements -->\n<template>\n  <div class=\"card\">\n    <div class=\"card-header\">\n      <img :src=\"user.avatar\" :alt=\"user.name\" class=\"avatar\" />\n    </div>\n    <div class=\"card-body\">\n      <span class=\"user-name\">{{ user.name }}</span>\n    </div>\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  user: Object\n})\n</script>\n\n<style scoped>\n/* Styles that would have been in Card, CardHeader, etc. */\n.card { /* ... */ }\n.card-header { /* ... */ }\n.card-body { /* ... */ }\n.avatar { /* ... */ }\n</style>\n```\n\n## When Abstraction Is Still Worth It\n\n```vue\n<!-- Component abstraction is valuable when: -->\n\n<!-- 1. Complex behavior is encapsulated -->\n<UserStatusIndicator :user=\"user\" />  <!-- Has logic, tooltips, etc. -->\n\n<!-- 2. Reused outside of the hot path -->\n<Card>  <!-- OK to use in one-off places, not in 100-item lists -->\n\n<!-- 3. The list itself is small -->\n<template v-if=\"items.length < 20\">\n  <FancyItem v-for=\"item in items\" :key=\"item.id\" />\n</template>\n\n<!-- 4. Virtualization is used (only ~20 items rendered at once) -->\n<RecycleScroller :items=\"items\">\n  <template #default=\"{ item }\">\n    <ComplexItem :item=\"item\" />  <!-- OK - only 20 instances exist -->\n  </template>\n</RecycleScroller>\n```\n\n## Measuring Component Overhead\n\n```javascript\n// In development, profile component counts\nimport { onMounted, getCurrentInstance } from 'vue'\n\nonMounted(() => {\n  const instance = getCurrentInstance()\n  let count = 0\n\n  function countComponents(vnode) {\n    if (vnode.component) count++\n    if (vnode.children) {\n      vnode.children.forEach(child => {\n        if (child.component || child.children) countComponents(child)\n      })\n    }\n  }\n\n  // Use Vue DevTools instead for accurate counts\n  console.log('Check Vue DevTools Components tab for instance counts')\n})\n```\n\n## Alternatives to Wrapper Components\n\n```vue\n<!-- Instead of a <Button> component for styling: -->\n<button class=\"btn btn-primary\">Click</button>\n\n<!-- Instead of a <Text> component: -->\n<span class=\"text-body\">{{ content }}</span>\n\n<!-- Instead of layout wrapper components in lists: -->\n<div class=\"flex items-center gap-2\">\n  <!-- content -->\n</div>\n\n<!-- Use CSS classes or Tailwind instead of component abstractions for styling -->\n```\n\n## Impact Calculation\n\n| List Size | Components per Item | Total Instances | Memory Impact |\n|-----------|---------------------|-----------------|---------------|\n| 100 items | 1 (flat) | 100 | Baseline |\n| 100 items | 3 (nested) | 300 | ~3x memory |\n| 100 items | 5 (deeply nested) | 500 | ~5x memory |\n| 1000 items | 1 (flat) | 1000 | High |\n| 1000 items | 5 (deeply nested) | 5000 | Very High |\n"
+fragments:
+- sequence: 1
+  fragment_type: guardrail
+  content: '# Avoid Excessive Component Abstraction in Large Lists
+
+
+    **Impact: MEDIUM** - Component instances are more expensive than plain DOM nodes. While abstractions improve code organization, unnecessary nesting creates overhead. In large lists, this overhead multiplies - 100 items with 3 levels of abstraction means 300+ component instances instead of 100.
+
+
+    Don''t avoid abstraction entirely, but be mindful of component depth in frequently-rendered elements like list items.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Task List\n\n- Review list item components for unnecessary wrapper components\n- Consider flattening component hierarchies in hot paths\n- Use native elements when a component adds no value\n- Profile component counts using Vue DevTools\n- Focus optimization efforts on the most-rendered components\n\n**BAD:**\n```vue\n<!-- BAD: Deep abstraction in list items -->\n<template>\n  <div class=\"user-list\">\n    <!-- For 100 users: Creates 400 component instances -->\n    <UserCard v-for=\"user in users\" :key=\"user.id\" :user=\"user\" />\n  </div>\n</template>\n\n<!-- UserCard.vue -->\n<template>\n  <Card>  <!-- Wrapper component #1 -->\n    <CardHeader>  <!-- Wrapper component #2 -->\n      <UserAvatar :src=\"user.avatar\" />  <!-- Wrapper component #3 -->\n    </CardHeader>\n    <CardBody>  <!-- Wrapper component #4 -->\n      <Text>{{ user.name }}</Text>\n    </CardBody>\n  </Card>\n</template>\n\n<!-- Each UserCard creates: Card + CardHeader + CardBody + UserAvatar + Text\n     100 users = 500+ component instances -->\n```\n\n**GOOD:**\n```vue\n<!-- GOOD: Flattened structure in list items -->\n<template>\n  <div class=\"user-list\">\n    <!-- For 100 users: Creates 100 component instances -->\n    <UserCard v-for=\"user in users\" :key=\"user.id\" :user=\"user\" />\n  </div>\n</template>\n\n<!-- UserCard.vue - Flattened, uses native elements -->\n<template>\n  <div class=\"card\">\n    <div class=\"card-header\">\n      <img :src=\"user.avatar\" :alt=\"user.name\" class=\"avatar\" />\n    </div>\n    <div class=\"card-body\">\n      <span class=\"user-name\">{{ user.name }}</span>\n    </div>\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  user: Object\n})\n</script>\n\n<style scoped>\n/* Styles that would have been in Card, CardHeader, etc. */\n.card { /* ... */ }\n.card-header { /* ... */ }\n.card-body { /* ... */ }\n.avatar { /* ... */ }\n</style>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## When Abstraction Is Still Worth It\n\n```vue\n<!-- Component abstraction is valuable when: -->\n\n<!-- 1. Complex behavior is encapsulated -->\n<UserStatusIndicator :user=\"user\" />  <!-- Has logic, tooltips, etc. -->\n\n<!-- 2. Reused outside of the hot path -->\n<Card>  <!-- OK to use in one-off places, not in 100-item lists -->\n\n<!-- 3. The list itself is small -->\n<template v-if=\"items.length < 20\">\n  <FancyItem v-for=\"item in items\" :key=\"item.id\" />\n</template>\n\n<!-- 4. Virtualization is used (only ~20 items rendered at once) -->\n<RecycleScroller :items=\"items\">\n  <template #default=\"{ item }\">\n    <ComplexItem :item=\"item\" />  <!-- OK - only 20 instances exist -->\n  </template>\n</RecycleScroller>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Measuring Component Overhead\n\n```javascript\n// In development, profile component counts\nimport { onMounted, getCurrentInstance } from 'vue'\n\nonMounted(() => {\n  const instance = getCurrentInstance()\n  let count = 0\n\n  function countComponents(vnode) {\n    if (vnode.component) count++\n    if (vnode.children) {\n      vnode.children.forEach(child => {\n        if (child.component || child.children) countComponents(child)\n      })\n    }\n  }\n\n  // Use Vue DevTools instead for accurate counts\n  console.log('Check Vue DevTools Components tab for instance counts')\n})\n```"
+- sequence: 5
+  fragment_type: execution
+  content: "## Alternatives to Wrapper Components\n\n```vue\n<!-- Instead of a <Button> component for styling: -->\n<button class=\"btn btn-primary\">Click</button>\n\n<!-- Instead of a <Text> component: -->\n<span class=\"text-body\">{{ content }}</span>\n\n<!-- Instead of layout wrapper components in lists: -->\n<div class=\"flex items-center gap-2\">\n  <!-- content -->\n</div>\n\n<!-- Use CSS classes or Tailwind instead of component abstractions for styling -->\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Impact Calculation
+
+
+    | List Size | Components per Item | Total Instances | Memory Impact |
+
+    |-----------|---------------------|-----------------|---------------|
+
+    | 100 items | 1 (flat) | 100 | Baseline |
+
+    | 100 items | 3 (nested) | 300 | ~3x memory |
+
+    | 100 items | 5 (deeply nested) | 500 | ~5x memory |
+
+    | 1000 items | 1 (flat) | 1000 | High |
+
+    | 1000 items | 5 (deeply nested) | 5000 | Very High |'

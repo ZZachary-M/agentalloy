@@ -1,0 +1,45 @@
+skill_type: domain
+skill_id: vue-debug-guides-teleport-target-must-exist
+canonical_name: Teleport Target Must Exist Before Mount
+category: engineering
+skill_class: domain
+domain_tags:
+- modal
+- vue-debug-guides
+- lifecycle
+- vue
+- dom
+- vue3
+- teleport
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/teleport-target-must-exist.md
+raw_prose: "# Teleport Target Must Exist Before Mount\n\n**Impact: HIGH** - The teleport `to` target must already exist in the DOM when the `<Teleport>` component is mounted. If the target doesn't exist, Vue will throw an error and the teleported content won't render.\n\nThis is a common source of bugs when using modals, tooltips, or other teleported UI elements, especially when targeting Vue-rendered elements.\n\n## Task Checklist\n\n- [ ] Ensure teleport target exists in the DOM before `<Teleport>` mounts\n- [ ] Place teleport containers (e.g., `#modals`, `#tooltips`) in `index.html` outside the Vue app\n- [ ] If targeting Vue-rendered elements, ensure they mount before the Teleport\n- [ ] Use Vue 3.5+ `defer` prop when target is rendered later in the same component tree\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Target doesn't exist yet when Teleport mounts -->\n  <Teleport to=\"#modal-container\">\n    <div class=\"modal\">Modal content</div>\n  </Teleport>\n\n  <!-- Target is defined after the Teleport -->\n  <div id=\"modal-container\"></div>\n</template>\n```\n\n**Correct - Option 1: External container in index.html:**\n```html\n<!-- index.html -->\n<body>\n  <div id=\"app\"></div>\n  <!-- Container exists before Vue app mounts -->\n  <div id=\"modals\"></div>\n  <div id=\"tooltips\"></div>\n</body>\n```\n\n```vue\n<template>\n  <!-- Safe: #modals exists before any Vue component mounts -->\n  <Teleport to=\"#modals\">\n    <div v-if=\"showModal\" class=\"modal\">Modal content</div>\n  </Teleport>\n</template>\n```\n\n**Correct - Option 2: Teleport to body:**\n```vue\n<template>\n  <!-- Safe: body always exists -->\n  <Teleport to=\"body\">\n    <div v-if=\"showModal\" class=\"modal\">Modal content</div>\n  </Teleport>\n</template>\n```\n\n**Correct - Option 3: Vue 3.5+ defer prop:**\n```vue\n<template>\n  <!-- Works in Vue 3.5+: defer resolves target after other parts mount -->\n  <Teleport defer to=\"#late-container\">\n    <div class=\"modal\">Modal content</div>\n  </Teleport>\n\n  <!-- Target rendered later in template -->\n  <div id=\"late-container\"></div>\n</template>\n```\n\n## Defer Prop Limitations (Vue 3.5+)\n\nThe `defer` prop only waits for elements rendered in the **same mount/update tick**:\n\n```vue\n<template>\n  <!-- ERROR: defer won't help if target mounts asynchronously -->\n  <Teleport defer to=\"#async-container\">\n    <div>Content</div>\n  </Teleport>\n\n  <!-- If this component loads asynchronously, defer won't work -->\n  <Suspense>\n    <AsyncComponent />  <!-- Contains #async-container -->\n  </Suspense>\n</template>\n```\n\n## Common Patterns\n\n### Recommended: Centralized Teleport Containers\n```html\n<!-- index.html -->\n<body>\n  <div id=\"app\"></div>\n\n  <!-- Teleport destinations outside Vue app -->\n  <div id=\"modals\" aria-live=\"polite\"></div>\n  <div id=\"notifications\" aria-live=\"assertive\"></div>\n  <div id=\"tooltips\"></div>\n</body>\n```\n\n## Reference\n- [Vue.js Teleport - Using with Vue-rendered Targets](https://vuejs.org/guide/built-ins/teleport.html#using-with-vue-rendered-targets)\n- [Vue.js Teleport - Deferred Teleport](https://vuejs.org/guide/built-ins/teleport.html#deferred-teleport)\n"
+fragments:
+- sequence: 1
+  fragment_type: example
+  content: '# Teleport Target Must Exist Before Mount
+
+
+    **Impact: HIGH** - The teleport `to` target must already exist in the DOM when the `<Teleport>` component is mounted. If the target doesn''t exist, Vue will throw an error and the teleported content won''t render.
+
+
+    This is a common source of bugs when using modals, tooltips, or other teleported UI elements, especially when targeting Vue-rendered elements.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Ensure teleport target exists in the DOM before `<Teleport>` mounts\n- [ ] Place teleport containers (e.g., `#modals`, `#tooltips`) in `index.html` outside the Vue app\n- [ ] If targeting Vue-rendered elements, ensure they mount before the Teleport\n- [ ] Use Vue 3.5+ `defer` prop when target is rendered later in the same component tree\n\n**Incorrect:**\n```vue\n<template>\n  <!-- ERROR: Target doesn't exist yet when Teleport mounts -->\n  <Teleport to=\"#modal-container\">\n    <div class=\"modal\">Modal content</div>\n  </Teleport>\n\n  <!-- Target is defined after the Teleport -->\n  <div id=\"modal-container\"></div>\n</template>\n```\n\n**Correct - Option 1: External container in index.html:**\n```html\n<!-- index.html -->\n<body>\n  <div id=\"app\"></div>\n  <!-- Container exists before Vue app mounts -->\n  <div id=\"modals\"></div>\n  <div id=\"tooltips\"></div>\n</body>\n```\n\n```vue\n<template>\n  <!-- Safe: #modals exists before any Vue component mounts -->\n  <Teleport to=\"#modals\">\n    <div v-if=\"showModal\" class=\"modal\">Modal content</div>\n  </Teleport>\n</template>\n```\n\n**Correct - Option 2: Teleport to body:**\n```vue\n<template>\n  <!-- Safe: body always exists -->\n  <Teleport to=\"body\">\n    <div v-if=\"showModal\" class=\"modal\">Modal content</div>\n  </Teleport>\n</template>\n```\n\n**Correct - Option 3: Vue 3.5+ defer prop:**\n```vue\n<template>\n  <!-- Works in Vue 3.5+: defer resolves target after other parts mount -->\n  <Teleport defer to=\"#late-container\">\n    <div class=\"modal\">Modal content</div>\n  </Teleport>\n\n  <!-- Target rendered later in template -->\n  <div id=\"late-container\"></div>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Defer Prop Limitations (Vue 3.5+)\n\nThe `defer` prop only waits for elements rendered in the **same mount/update tick**:\n\n```vue\n<template>\n  <!-- ERROR: defer won't help if target mounts asynchronously -->\n  <Teleport defer to=\"#async-container\">\n    <div>Content</div>\n  </Teleport>\n\n  <!-- If this component loads asynchronously, defer won't work -->\n  <Suspense>\n    <AsyncComponent />  <!-- Contains #async-container -->\n  </Suspense>\n</template>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Common Patterns\n\n### Recommended: Centralized Teleport Containers\n```html\n<!-- index.html -->\n<body>\n  <div id=\"app\"></div>\n\n  <!-- Teleport destinations outside Vue app -->\n  <div id=\"modals\" aria-live=\"polite\"></div>\n  <div id=\"notifications\" aria-live=\"assertive\"></div>\n  <div id=\"tooltips\"></div>\n</body>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Teleport - Using with Vue-rendered Targets](https://vuejs.org/guide/built-ins/teleport.html#using-with-vue-rendered-targets)
+
+    - [Vue.js Teleport - Deferred Teleport](https://vuejs.org/guide/built-ins/teleport.html#deferred-teleport)'

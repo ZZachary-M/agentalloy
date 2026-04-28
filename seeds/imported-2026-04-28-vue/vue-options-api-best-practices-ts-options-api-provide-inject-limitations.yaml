@@ -1,0 +1,37 @@
+skill_type: domain
+skill_id: vue-options-api-best-practices-ts-options-api-provide-inject-limitations
+canonical_name: Provide/Inject Has Limited Type Inference in Options API
+category: engineering
+skill_class: domain
+domain_tags:
+- type-safety
+- options-api
+- provide-inject
+- vue
+- typescript
+- vue-options-api-best-practices
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-options-api-best-practices/reference/ts-options-api-provide-inject-limitations.md
+raw_prose: "# Provide/Inject Has Limited Type Inference in Options API\n\n**Impact: MEDIUM** - When using `provide/inject` with the Options API and TypeScript, injected properties won't be automatically typed. TypeScript will show errors that the property doesn't exist on the component, even though it works at runtime.\n\n## Task Checklist\n\n- [ ] Be aware that Options API inject has limited type support\n- [ ] Use type augmentation to add types to injected values\n- [ ] Consider using typed computed wrappers for injected values\n\n## The Problem\n\n```typescript\n// Provider component (parent)\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  provide() {\n    return {\n      theme: 'dark',\n      user: { id: 1, name: 'John' }\n    }\n  }\n})\n```\n\n```typescript\n// Consumer component (child) - Options API\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  inject: ['theme', 'user'],\n\n  mounted() {\n    // TypeScript Error: Property 'theme' does not exist on type...\n    console.log(this.theme)\n\n    // TypeScript Error: Property 'user' does not exist on type...\n    console.log(this.user.name)\n  }\n})\n```\n\n## Solution 1: Type Augmentation\n\nAugment the component type to include injected properties:\n\n```typescript\n// types/injections.d.ts\nimport 'vue'\n\ndeclare module 'vue' {\n  interface ComponentCustomProperties {\n    theme: 'light' | 'dark'\n    user: { id: number; name: string }\n  }\n}\n\nexport {}\n```\n\n```typescript\n// Consumer component - now typed\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  inject: ['theme', 'user'],\n\n  mounted() {\n    // Now works - typed from ComponentCustomProperties\n    console.log(this.theme)  // 'light' | 'dark'\n    console.log(this.user.name)  // string\n  }\n})\n```\n\n**Note**: This adds types globally to ALL components, not just those that inject these values.\n\n## Solution 2: Typed Computed Wrappers\n\nUse the object syntax with computed property wrappers for type safety:\n\n```typescript\nimport { defineComponent } from 'vue'\n\ninterface User {\n  id: number\n  name: string\n}\n\nexport default defineComponent({\n  inject: {\n    theme: {\n      from: 'theme',\n      default: 'light'\n    },\n    user: {\n      from: 'user',\n      default: () => ({ id: 0, name: 'Guest' })\n    }\n  },\n\n  computed: {\n    // Type via computed wrapper\n    typedTheme(): 'light' | 'dark' {\n      return this.theme as 'light' | 'dark'\n    },\n    typedUser(): User {\n      return this.user as User\n    }\n  },\n\n  mounted() {\n    console.log(this.typedTheme)\n    console.log(this.typedUser.name)\n  }\n})\n```\n\n## Why This Happens\n\nThe Options API `inject` array syntax `inject: ['theme']` doesn't provide type information to TypeScript. Vue knows about the injection at runtime, but TypeScript's static analysis can't trace the provide/inject relationship across components.\n\n## Reference\n\n- [Vue.js Provide/Inject](https://vuejs.org/guide/components/provide-inject.html)\n- [GitHub Issue: Add type inference to Options API provide/inject](https://github.com/vuejs/core/issues/3031)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Provide/Inject Has Limited Type Inference in Options API
+
+
+    **Impact: MEDIUM** - When using `provide/inject` with the Options API and TypeScript, injected properties won''t be automatically typed. TypeScript will show errors that the property doesn''t exist on the component, even though it works at runtime.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Task Checklist\n\n- [ ] Be aware that Options API inject has limited type support\n- [ ] Use type augmentation to add types to injected values\n- [ ] Consider using typed computed wrappers for injected values\n\n## The Problem\n\n```typescript\n// Provider component (parent)\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  provide() {\n    return {\n      theme: 'dark',\n      user: { id: 1, name: 'John' }\n    }\n  }\n})\n```\n\n```typescript\n// Consumer component (child) - Options API\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  inject: ['theme', 'user'],\n\n  mounted() {\n    // TypeScript Error: Property 'theme' does not exist on type...\n    console.log(this.theme)\n\n    // TypeScript Error: Property 'user' does not exist on type...\n    console.log(this.user.name)\n  }\n})\n```\n\n## Solution 1: Type Augmentation\n\nAugment the component type to include injected properties:\n\n```typescript\n// types/injections.d.ts\nimport 'vue'\n\ndeclare module 'vue' {\n  interface ComponentCustomProperties {\n    theme: 'light' | 'dark'\n    user: { id: number; name: string }\n  }\n}\n\nexport {}\n```\n\n```typescript\n// Consumer component - now typed\nimport { defineComponent } from 'vue'\n\nexport default defineComponent({\n  inject: ['theme', 'user'],\n\n  mounted() {\n    // Now works - typed from ComponentCustomProperties\n    console.log(this.theme)  // 'light' | 'dark'\n    console.log(this.user.name)  // string\n  }\n})\n```\n\n**Note**: This adds types globally to ALL components, not just those that inject these values.\n\n## Solution 2: Typed Computed Wrappers\n\nUse the object syntax with computed property wrappers for type safety:\n\n```typescript\nimport { defineComponent } from 'vue'\n\ninterface User {\n  id: number\n  name: string\n}\n\nexport default defineComponent({\n  inject: {\n    theme: {\n      from: 'theme',\n      default: 'light'\n    },\n    user: {\n      from: 'user',\n      default: () => ({ id: 0, name: 'Guest' })\n    }\n  },\n\n  computed: {\n    // Type via computed wrapper\n    typedTheme(): 'light' | 'dark' {\n      return this.theme as 'light' | 'dark'\n    },\n    typedUser(): User {\n      return this.user as User\n    }\n  },\n\n  mounted() {\n    console.log(this.typedTheme)\n    console.log(this.typedUser.name)\n  }\n})\n```\n\n## Why This Happens\n\nThe Options API `inject` array syntax `inject: ['theme']` doesn't provide type information to TypeScript. Vue knows about the injection at runtime, but TypeScript's static analysis can't trace the provide/inject relationship across components."
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+
+    - [Vue.js Provide/Inject](https://vuejs.org/guide/components/provide-inject.html)
+
+    - [GitHub Issue: Add type inference to Options API provide/inject](https://github.com/vuejs/core/issues/3031)'

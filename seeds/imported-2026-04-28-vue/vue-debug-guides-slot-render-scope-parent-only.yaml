@@ -1,0 +1,40 @@
+skill_type: domain
+skill_id: vue-debug-guides-slot-render-scope-parent-only
+canonical_name: Slot Content Only Has Access to Parent Component Scope
+category: engineering
+skill_class: domain
+domain_tags:
+- slots
+- reactivity
+- vue-debug-guides
+- vue
+- common-mistake
+- scope
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/slot-render-scope-parent-only.md
+raw_prose: "# Slot Content Only Has Access to Parent Component Scope\n\n**Impact: HIGH** - Slot content is compiled in the parent component's scope and cannot access data defined in the child component. This follows JavaScript's lexical scoping rules and is a common source of confusion.\n\nWhen you provide content for a slot, that content is defined in your parent template and can only access data available in the parent component. The child component's internal state is not accessible unless explicitly passed via scoped slots.\n\n## Task Checklist\n\n- [ ] Remember that slot content is compiled in parent scope\n- [ ] Never try to access child component data directly in slot content\n- [ ] Use scoped slots when child data needs to be exposed to parent\n- [ ] Check that all template expressions reference data available in the current component\n\n**Incorrect:**\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport SubmitButton from './SubmitButton.vue'\n</script>\n\n<template>\n  <!-- BAD: Trying to access child's buttonText - this will be undefined -->\n  <SubmitButton>{{ buttonText }}</SubmitButton>\n\n  <!-- BAD: Trying to access child's isLoading state -->\n  <SubmitButton>\n    <span v-if=\"isLoading\">Loading...</span>\n    <span v-else>Submit</span>\n  </SubmitButton>\n</template>\n```\n\n```vue\n<!-- SubmitButton.vue (Child) -->\n<script setup>\nimport { ref } from 'vue'\n\nconst buttonText = ref('Click me')  // Not accessible in parent's slot content\nconst isLoading = ref(false)        // Not accessible in parent's slot content\n</script>\n\n<template>\n  <button>\n    <slot></slot>\n  </button>\n</template>\n```\n\n**Correct - Use Scoped Slots:**\n```vue\n<!-- SubmitButton.vue (Child) - Expose data via slot props -->\n<script setup>\nimport { ref } from 'vue'\n\nconst buttonText = ref('Click me')\nconst isLoading = ref(false)\n</script>\n\n<template>\n  <button>\n    <!-- Pass child data as slot props -->\n    <slot :text=\"buttonText\" :loading=\"isLoading\"></slot>\n  </button>\n</template>\n```\n\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport SubmitButton from './SubmitButton.vue'\n</script>\n\n<template>\n  <!-- GOOD: Receive child data via scoped slot -->\n  <SubmitButton v-slot=\"{ text, loading }\">\n    <span v-if=\"loading\">Loading...</span>\n    <span v-else>{{ text }}</span>\n  </SubmitButton>\n</template>\n```\n\n**Correct - Use Parent Data:**\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport { ref } from 'vue'\nimport SubmitButton from './SubmitButton.vue'\n\n// Define data in parent where slot content is compiled\nconst message = ref('Submit Form')\nconst isSubmitting = ref(false)\n</script>\n\n<template>\n  <!-- GOOD: Using parent's own data in slot content -->\n  <SubmitButton>\n    <span v-if=\"isSubmitting\">Processing...</span>\n    <span v-else>{{ message }}</span>\n  </SubmitButton>\n</template>\n```\n\n## The Function Analogy\n\nThink of slots as function parameters:\n\n```javascript\n// Slot content is like a callback defined in parent scope\nfunction Parent() {\n  const parentData = 'Hello'\n\n  // This callback can only see parentData, not childData\n  Child((slotProps) => {\n    return parentData + (slotProps?.text || '')\n  })\n}\n\nfunction Child(slotCallback) {\n  const childData = 'World'  // Not visible to callback\n\n  // Must explicitly pass data via slot props\n  return slotCallback({ text: childData })\n}\n```\n\n## Reference\n- [Vue.js Slots - Render Scope](https://vuejs.org/guide/components/slots.html#render-scope)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Slot Content Only Has Access to Parent Component Scope
+
+
+    **Impact: HIGH** - Slot content is compiled in the parent component''s scope and cannot access data defined in the child component. This follows JavaScript''s lexical scoping rules and is a common source of confusion.
+
+
+    When you provide content for a slot, that content is defined in your parent template and can only access data available in the parent component. The child component''s internal state is not accessible unless explicitly passed via scoped slots.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Remember that slot content is compiled in parent scope\n- [ ] Never try to access child component data directly in slot content\n- [ ] Use scoped slots when child data needs to be exposed to parent\n- [ ] Check that all template expressions reference data available in the current component\n\n**Incorrect:**\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport SubmitButton from './SubmitButton.vue'\n</script>\n\n<template>\n  <!-- BAD: Trying to access child's buttonText - this will be undefined -->\n  <SubmitButton>{{ buttonText }}</SubmitButton>\n\n  <!-- BAD: Trying to access child's isLoading state -->\n  <SubmitButton>\n    <span v-if=\"isLoading\">Loading...</span>\n    <span v-else>Submit</span>\n  </SubmitButton>\n</template>\n```\n\n```vue\n<!-- SubmitButton.vue (Child) -->\n<script setup>\nimport { ref } from 'vue'\n\nconst buttonText = ref('Click me')  // Not accessible in parent's slot content\nconst isLoading = ref(false)        // Not accessible in parent's slot content\n</script>\n\n<template>\n  <button>\n    <slot></slot>\n  </button>\n</template>\n```\n\n**Correct - Use Scoped Slots:**\n```vue\n<!-- SubmitButton.vue (Child) - Expose data via slot props -->\n<script setup>\nimport { ref } from 'vue'\n\nconst buttonText = ref('Click me')\nconst isLoading = ref(false)\n</script>\n\n<template>\n  <button>\n    <!-- Pass child data as slot props -->\n    <slot :text=\"buttonText\" :loading=\"isLoading\"></slot>\n  </button>\n</template>\n```\n\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport SubmitButton from './SubmitButton.vue'\n</script>\n\n<template>\n  <!-- GOOD: Receive child data via scoped slot -->\n  <SubmitButton v-slot=\"{ text, loading }\">\n    <span v-if=\"loading\">Loading...</span>\n    <span v-else>{{ text }}</span>\n  </SubmitButton>\n</template>\n```\n\n**Correct - Use Parent Data:**\n```vue\n<!-- Parent.vue -->\n<script setup>\nimport { ref } from 'vue'\nimport SubmitButton from './SubmitButton.vue'\n\n// Define data in parent where slot content is compiled\nconst message = ref('Submit Form')\nconst isSubmitting = ref(false)\n</script>\n\n<template>\n  <!-- GOOD: Using parent's own data in slot content -->\n  <SubmitButton>\n    <span v-if=\"isSubmitting\">Processing...</span>\n    <span v-else>{{ message }}</span>\n  </SubmitButton>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## The Function Analogy\n\nThink of slots as function parameters:\n\n```javascript\n// Slot content is like a callback defined in parent scope\nfunction Parent() {\n  const parentData = 'Hello'\n\n  // This callback can only see parentData, not childData\n  Child((slotProps) => {\n    return parentData + (slotProps?.text || '')\n  })\n}\n\nfunction Child(slotCallback) {\n  const childData = 'World'  // Not visible to callback\n\n  // Must explicitly pass data via slot props\n  return slotCallback({ text: childData })\n}\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Slots - Render Scope](https://vuejs.org/guide/components/slots.html#render-scope)'

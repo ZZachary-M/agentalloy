@@ -1,0 +1,39 @@
+skill_type: domain
+skill_id: vue-debug-guides-v-model-ignores-html-attributes
+canonical_name: v-model Ignores Initial HTML Attributes
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- checkbox
+- vue-debug-guides
+- initialization
+- input
+- vue
+- v-model
+- vue3
+- select
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/v-model-ignores-html-attributes.md
+raw_prose: "# v-model Ignores Initial HTML Attributes\n\n**Impact: HIGH** - Setting initial values via HTML `value`, `checked`, or `selected` attributes has no effect when using v-model. The form will appear empty or in an unexpected state, confusing users and potentially causing data loss.\n\nVue's v-model always treats the bound JavaScript state as the single source of truth. Any initial attributes in the HTML are completely ignored. This is a common mistake when migrating from plain HTML forms or when copying HTML templates.\n\n## Task Checklist\n\n- [ ] Never rely on HTML `value`, `checked`, or `selected` attributes when using v-model\n- [ ] Always declare initial values in JavaScript using `ref()` or `reactive()`\n- [ ] When migrating plain HTML forms to Vue, move all default values to JavaScript state\n- [ ] Audit existing forms for hardcoded HTML default values that may be silently ignored\n\n**Incorrect:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst username = ref('')  // Empty!\nconst isSubscribed = ref(false)  // Not checked!\nconst country = ref('')  // No default selection!\n</script>\n\n<template>\n  <!-- WRONG: These HTML attributes are completely ignored -->\n  <input v-model=\"username\" value=\"default_user\">\n\n  <input type=\"checkbox\" v-model=\"isSubscribed\" checked>\n\n  <select v-model=\"country\">\n    <option value=\"us\" selected>United States</option>\n    <option value=\"uk\">United Kingdom</option>\n  </select>\n</template>\n```\n\n**Correct:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\n// CORRECT: Set initial values in JavaScript\nconst username = ref('default_user')\nconst isSubscribed = ref(true)\nconst country = ref('us')\n</script>\n\n<template>\n  <!-- HTML attributes not needed - JavaScript state controls everything -->\n  <input v-model=\"username\">\n\n  <input type=\"checkbox\" v-model=\"isSubscribed\">\n\n  <select v-model=\"country\">\n    <option value=\"us\">United States</option>\n    <option value=\"uk\">United Kingdom</option>\n  </select>\n</template>\n```\n\n```javascript\n// Options API equivalent\nexport default {\n  data() {\n    return {\n      username: 'default_user',\n      isSubscribed: true,\n      country: 'us'\n    }\n  }\n}\n```\n\n## Reference\n- [Vue.js Form Input Bindings](https://vuejs.org/guide/essentials/forms.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# v-model Ignores Initial HTML Attributes
+
+
+    **Impact: HIGH** - Setting initial values via HTML `value`, `checked`, or `selected` attributes has no effect when using v-model. The form will appear empty or in an unexpected state, confusing users and potentially causing data loss.
+
+
+    Vue''s v-model always treats the bound JavaScript state as the single source of truth. Any initial attributes in the HTML are completely ignored. This is a common mistake when migrating from plain HTML forms or when copying HTML templates.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never rely on HTML `value`, `checked`, or `selected` attributes when using v-model\n- [ ] Always declare initial values in JavaScript using `ref()` or `reactive()`\n- [ ] When migrating plain HTML forms to Vue, move all default values to JavaScript state\n- [ ] Audit existing forms for hardcoded HTML default values that may be silently ignored\n\n**Incorrect:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst username = ref('')  // Empty!\nconst isSubscribed = ref(false)  // Not checked!\nconst country = ref('')  // No default selection!\n</script>\n\n<template>\n  <!-- WRONG: These HTML attributes are completely ignored -->\n  <input v-model=\"username\" value=\"default_user\">\n\n  <input type=\"checkbox\" v-model=\"isSubscribed\" checked>\n\n  <select v-model=\"country\">\n    <option value=\"us\" selected>United States</option>\n    <option value=\"uk\">United Kingdom</option>\n  </select>\n</template>\n```\n\n**Correct:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\n// CORRECT: Set initial values in JavaScript\nconst username = ref('default_user')\nconst isSubscribed = ref(true)\nconst country = ref('us')\n</script>\n\n<template>\n  <!-- HTML attributes not needed - JavaScript state controls everything -->\n  <input v-model=\"username\">\n\n  <input type=\"checkbox\" v-model=\"isSubscribed\">\n\n  <select v-model=\"country\">\n    <option value=\"us\">United States</option>\n    <option value=\"uk\">United Kingdom</option>\n  </select>\n</template>\n```\n\n```javascript\n// Options API equivalent\nexport default {\n  data() {\n    return {\n      username: 'default_user',\n      isSubscribed: true,\n      country: 'us'\n    }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings](https://vuejs.org/guide/essentials/forms.html)'

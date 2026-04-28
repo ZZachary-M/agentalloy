@@ -1,0 +1,65 @@
+skill_type: domain
+skill_id: vue-debug-guides-transition-nested-duration
+canonical_name: Specify Explicit Duration for Nested Transitions
+category: engineering
+skill_class: domain
+domain_tags:
+- timing
+- vue-debug-guides
+- vue
+- animation
+- duration
+- vue3
+- nested
+- transition
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/transition-nested-duration.md
+raw_prose: "# Specify Explicit Duration for Nested Transitions\n\n**Impact: MEDIUM** - When transitioning elements that contain nested child elements with different animation timings, Vue by default listens only for the first `transitionend` or `animationend` event on the **root** transition element. This means if inner elements have longer or delayed animations, they may be cut off when the root element's transition completes.\n\n## Task Checklist\n\n- [ ] Identify if your transition contains nested elements with different animation durations\n- [ ] Use the `:duration` prop to specify the total time Vue should wait\n- [ ] Consider using separate enter and leave durations if they differ\n- [ ] Test animations to ensure nested elements complete fully\n\n**Problematic Code:**\n```vue\n<template>\n  <!-- BAD: Inner element has longer animation that gets cut off -->\n  <Transition name=\"nested\">\n    <div v-if=\"show\" class=\"outer\">\n      <div class=\"inner\">Hello</div>\n    </div>\n  </Transition>\n</template>\n\n<style>\n.nested-enter-active .outer,\n.nested-leave-active .outer {\n  transition: opacity 0.3s ease;\n}\n\n.nested-enter-active .inner,\n.nested-leave-active .inner {\n  /* This 0.5s animation gets cut off at 0.3s when outer finishes! */\n  transition: transform 0.5s ease 0.2s; /* 0.2s delay + 0.5s = 0.7s total */\n}\n\n.nested-enter-from .outer,\n.nested-leave-to .outer {\n  opacity: 0;\n}\n\n.nested-enter-from .inner,\n.nested-leave-to .inner {\n  transform: translateX(-30px);\n}\n</style>\n```\n\n**Correct Code:**\n```vue\n<template>\n  <!-- GOOD: Explicit duration ensures all nested animations complete -->\n  <Transition name=\"nested\" :duration=\"700\">\n    <div v-if=\"show\" class=\"outer\">\n      <div class=\"inner\">Hello</div>\n    </div>\n  </Transition>\n</template>\n\n<style>\n.nested-enter-active .outer,\n.nested-leave-active .outer {\n  transition: opacity 0.3s ease;\n}\n\n.nested-enter-active .inner,\n.nested-leave-active .inner {\n  /* Now this animation completes fully */\n  transition: transform 0.5s ease 0.2s;\n}\n\n.nested-enter-from .outer,\n.nested-leave-to .outer {\n  opacity: 0;\n}\n\n.nested-enter-from .inner,\n.nested-leave-to .inner {\n  transform: translateX(-30px);\n}\n</style>\n```\n\n## Different Enter and Leave Durations\n\n```vue\n<template>\n  <!-- GOOD: Separate durations for enter and leave -->\n  <Transition\n    name=\"complex\"\n    :duration=\"{ enter: 500, leave: 800 }\"\n  >\n    <div v-if=\"show\" class=\"container\">\n      <h1 class=\"title\">Title</h1>\n      <p class=\"content\">Content with staggered animation</p>\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Enter: title first, then content */\n.complex-enter-active .title {\n  transition: opacity 0.3s ease, transform 0.3s ease;\n}\n\n.complex-enter-active .content {\n  transition: opacity 0.3s ease 0.2s, transform 0.3s ease 0.2s;\n}\n\n/* Leave: content first, then title (reverse order) */\n.complex-leave-active .content {\n  transition: opacity 0.3s ease, transform 0.3s ease;\n}\n\n.complex-leave-active .title {\n  transition: opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s;\n}\n\n.complex-enter-from .title,\n.complex-enter-from .content,\n.complex-leave-to .title,\n.complex-leave-to .content {\n  opacity: 0;\n  transform: translateY(20px);\n}\n</style>\n```\n\n## Choreographed Staggered Animations\n\n```vue\n<template>\n  <Transition name=\"stagger\" :duration=\"800\">\n    <div v-if=\"show\" class=\"card\">\n      <img class=\"card-image\" src=\"...\" />\n      <h2 class=\"card-title\">Title</h2>\n      <p class=\"card-body\">Body text...</p>\n      <button class=\"card-action\">Action</button>\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Staggered entrance: image -> title -> body -> action */\n.stagger-enter-active .card-image { transition: all 0.3s ease; }\n.stagger-enter-active .card-title { transition: all 0.3s ease 0.1s; }\n.stagger-enter-active .card-body { transition: all 0.3s ease 0.2s; }\n.stagger-enter-active .card-action { transition: all 0.3s ease 0.3s; }\n/* Total: 0.3s delay + 0.3s animation = 0.6s, but use 800ms for safety */\n\n.stagger-enter-from .card-image,\n.stagger-enter-from .card-title,\n.stagger-enter-from .card-body,\n.stagger-enter-from .card-action {\n  opacity: 0;\n  transform: translateY(10px);\n}\n</style>\n```\n\n## Calculating Duration\n\nUse this formula to calculate the correct duration:\n```\nduration = max(delay + animation_duration) for all nested elements\n```\n\nExample:\n- Element A: no delay, 300ms duration = 300ms total\n- Element B: 100ms delay, 300ms duration = 400ms total\n- Element C: 200ms delay, 500ms duration = 700ms total\n\n**Required `:duration`**: 700 (or slightly higher for safety margin)\n\n## Reference\n- [Vue.js Transition - Nested Transitions](https://vuejs.org/guide/built-ins/transition.html#nested-transitions-and-explicit-transition-durations)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Specify Explicit Duration for Nested Transitions
+
+
+    **Impact: MEDIUM** - When transitioning elements that contain nested child elements with different animation timings, Vue by default listens only for the first `transitionend` or `animationend` event on the **root** transition element. This means if inner elements have longer or delayed animations, they may be cut off when the root element''s transition completes.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Identify if your transition contains nested elements with different animation durations\n- [ ] Use the `:duration` prop to specify the total time Vue should wait\n- [ ] Consider using separate enter and leave durations if they differ\n- [ ] Test animations to ensure nested elements complete fully\n\n**Problematic Code:**\n```vue\n<template>\n  <!-- BAD: Inner element has longer animation that gets cut off -->\n  <Transition name=\"nested\">\n    <div v-if=\"show\" class=\"outer\">\n      <div class=\"inner\">Hello</div>\n    </div>\n  </Transition>\n</template>\n\n<style>\n.nested-enter-active .outer,\n.nested-leave-active .outer {\n  transition: opacity 0.3s ease;\n}\n\n.nested-enter-active .inner,\n.nested-leave-active .inner {\n  /* This 0.5s animation gets cut off at 0.3s when outer finishes! */\n  transition: transform 0.5s ease 0.2s; /* 0.2s delay + 0.5s = 0.7s total */\n}\n\n.nested-enter-from .outer,\n.nested-leave-to .outer {\n  opacity: 0;\n}\n\n.nested-enter-from .inner,\n.nested-leave-to .inner {\n  transform: translateX(-30px);\n}\n</style>\n```\n\n**Correct Code:**\n```vue\n<template>\n  <!-- GOOD: Explicit duration ensures all nested animations complete -->\n  <Transition name=\"nested\" :duration=\"700\">\n    <div v-if=\"show\" class=\"outer\">\n      <div class=\"inner\">Hello</div>\n    </div>\n  </Transition>\n</template>\n\n<style>\n.nested-enter-active .outer,\n.nested-leave-active .outer {\n  transition: opacity 0.3s ease;\n}\n\n.nested-enter-active .inner,\n.nested-leave-active .inner {\n  /* Now this animation completes fully */\n  transition: transform 0.5s ease 0.2s;\n}\n\n.nested-enter-from .outer,\n.nested-leave-to .outer {\n  opacity: 0;\n}\n\n.nested-enter-from .inner,\n.nested-leave-to .inner {\n  transform: translateX(-30px);\n}\n</style>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Different Enter and Leave Durations\n\n```vue\n<template>\n  <!-- GOOD: Separate durations for enter and leave -->\n  <Transition\n    name=\"complex\"\n    :duration=\"{ enter: 500, leave: 800 }\"\n  >\n    <div v-if=\"show\" class=\"container\">\n      <h1 class=\"title\">Title</h1>\n      <p class=\"content\">Content with staggered animation</p>\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Enter: title first, then content */\n.complex-enter-active .title {\n  transition: opacity 0.3s ease, transform 0.3s ease;\n}\n\n.complex-enter-active .content {\n  transition: opacity 0.3s ease 0.2s, transform 0.3s ease 0.2s;\n}\n\n/* Leave: content first, then title (reverse order) */\n.complex-leave-active .content {\n  transition: opacity 0.3s ease, transform 0.3s ease;\n}\n\n.complex-leave-active .title {\n  transition: opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s;\n}\n\n.complex-enter-from .title,\n.complex-enter-from .content,\n.complex-leave-to .title,\n.complex-leave-to .content {\n  opacity: 0;\n  transform: translateY(20px);\n}\n</style>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Choreographed Staggered Animations\n\n```vue\n<template>\n  <Transition name=\"stagger\" :duration=\"800\">\n    <div v-if=\"show\" class=\"card\">\n      <img class=\"card-image\" src=\"...\" />\n      <h2 class=\"card-title\">Title</h2>\n      <p class=\"card-body\">Body text...</p>\n      <button class=\"card-action\">Action</button>\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Staggered entrance: image -> title -> body -> action */\n.stagger-enter-active .card-image { transition: all 0.3s ease; }\n.stagger-enter-active .card-title { transition: all 0.3s ease 0.1s; }\n.stagger-enter-active .card-body { transition: all 0.3s ease 0.2s; }\n.stagger-enter-active .card-action { transition: all 0.3s ease 0.3s; }\n/* Total: 0.3s delay + 0.3s animation = 0.6s, but use 800ms for safety */\n\n.stagger-enter-from .card-image,\n.stagger-enter-from .card-title,\n.stagger-enter-from .card-body,\n.stagger-enter-from .card-action {\n  opacity: 0;\n  transform: translateY(10px);\n}\n</style>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Calculating Duration
+
+
+    Use this formula to calculate the correct duration:
+
+    ```
+
+    duration = max(delay + animation_duration) for all nested elements
+
+    ```
+
+
+    Example:
+
+    - Element A: no delay, 300ms duration = 300ms total
+
+    - Element B: 100ms delay, 300ms duration = 400ms total
+
+    - Element C: 200ms delay, 500ms duration = 700ms total
+
+
+    **Required `:duration`**: 700 (or slightly higher for safety margin)'
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Transition - Nested Transitions](https://vuejs.org/guide/built-ins/transition.html#nested-transitions-and-explicit-transition-durations)'

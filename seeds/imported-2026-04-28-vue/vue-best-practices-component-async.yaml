@@ -1,0 +1,59 @@
+skill_type: domain
+skill_id: vue-best-practices-component-async
+canonical_name: Async Component Best Practices
+category: engineering
+skill_class: domain
+domain_tags:
+- hydration
+- vue
+- async-components
+- performance
+- vue-best-practices
+- ux
+- ssr
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/component-async.md
+raw_prose: "# Async Component Best Practices\n\n**Impact: MEDIUM** - Async components should reduce JavaScript cost without degrading perceived performance. Focus on hydration timing in SSR and stable loading UX.\n\n## Task List\n\n- Use lazy hydration strategies for non-critical SSR component trees\n- Import only the hydration helpers you actually use\n- Keep `loadingComponent` delay near the default `200ms` unless real UX data suggests otherwise\n- Configure `delay` and `timeout` together for predictable loading behavior\n\n## Use Lazy Hydration Strategies in SSR\n\nIn Vue 3.5+, async components can delay hydration until idle time, visibility, media query match, or user interaction.\n\n**BAD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncComments = defineAsyncComponent({\n  loader: () => import('./Comments.vue')\n})\n</script>\n```\n\n**GOOD:**\n```vue\n<script setup lang=\"ts\">\nimport {\n  defineAsyncComponent,\n  hydrateOnVisible,\n  hydrateOnIdle\n} from 'vue'\n\nconst AsyncComments = defineAsyncComponent({\n  loader: () => import('./Comments.vue'),\n  hydrate: hydrateOnVisible({ rootMargin: '100px' })\n})\n\nconst AsyncFooter = defineAsyncComponent({\n  loader: () => import('./Footer.vue'),\n  hydrate: hydrateOnIdle(5000)\n})\n</script>\n```\n\n## Prevent Loading Spinner Flicker\n\nAvoid showing loading UI immediately for components that usually resolve quickly.\n\n**BAD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\nimport LoadingSpinner from './LoadingSpinner.vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  delay: 0\n})\n</script>\n```\n\n**GOOD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\nimport LoadingSpinner from './LoadingSpinner.vue'\nimport ErrorDisplay from './ErrorDisplay.vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  delay: 200,\n  timeout: 30000\n})\n</script>\n```\n\n## Delay Guidelines\n\n| Scenario | Recommended Delay |\n|----------|-------------------|\n| Small component, fast network | `200ms` |\n| Known heavy component | `100ms` |\n| Background or non-critical UI | `300-500ms` |\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Async Component Best Practices
+
+
+    **Impact: MEDIUM** - Async components should reduce JavaScript cost without degrading perceived performance. Focus on hydration timing in SSR and stable loading UX.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Use lazy hydration strategies for non-critical SSR component trees
+
+    - Import only the hydration helpers you actually use
+
+    - Keep `loadingComponent` delay near the default `200ms` unless real UX data suggests otherwise
+
+    - Configure `delay` and `timeout` together for predictable loading behavior'
+- sequence: 3
+  fragment_type: execution
+  content: "## Use Lazy Hydration Strategies in SSR\n\nIn Vue 3.5+, async components can delay hydration until idle time, visibility, media query match, or user interaction.\n\n**BAD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\n\nconst AsyncComments = defineAsyncComponent({\n  loader: () => import('./Comments.vue')\n})\n</script>\n```\n\n**GOOD:**\n```vue\n<script setup lang=\"ts\">\nimport {\n  defineAsyncComponent,\n  hydrateOnVisible,\n  hydrateOnIdle\n} from 'vue'\n\nconst AsyncComments = defineAsyncComponent({\n  loader: () => import('./Comments.vue'),\n  hydrate: hydrateOnVisible({ rootMargin: '100px' })\n})\n\nconst AsyncFooter = defineAsyncComponent({\n  loader: () => import('./Footer.vue'),\n  hydrate: hydrateOnIdle(5000)\n})\n</script>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Prevent Loading Spinner Flicker\n\nAvoid showing loading UI immediately for components that usually resolve quickly.\n\n**BAD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\nimport LoadingSpinner from './LoadingSpinner.vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  delay: 0\n})\n</script>\n```\n\n**GOOD:**\n```vue\n<script setup lang=\"ts\">\nimport { defineAsyncComponent } from 'vue'\nimport LoadingSpinner from './LoadingSpinner.vue'\nimport ErrorDisplay from './ErrorDisplay.vue'\n\nconst AsyncDashboard = defineAsyncComponent({\n  loader: () => import('./Dashboard.vue'),\n  loadingComponent: LoadingSpinner,\n  errorComponent: ErrorDisplay,\n  delay: 200,\n  timeout: 30000\n})\n</script>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Delay Guidelines
+
+
+    | Scenario | Recommended Delay |
+
+    |----------|-------------------|
+
+    | Small component, fast network | `200ms` |
+
+    | Known heavy component | `100ms` |
+
+    | Background or non-critical UI | `300-500ms` |'

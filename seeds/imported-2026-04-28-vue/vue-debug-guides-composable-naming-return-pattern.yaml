@@ -1,0 +1,88 @@
+skill_type: domain
+skill_id: vue-debug-guides-composable-naming-return-pattern
+canonical_name: Follow Composable Naming Convention and Return Pattern
+category: engineering
+skill_class: domain
+domain_tags:
+- refs
+- vue-debug-guides
+- vue
+- composables
+- naming
+- composition-api
+- vue3
+- conventions
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/composable-naming-return-pattern.md
+raw_prose: "# Follow Composable Naming Convention and Return Pattern\n\n**Impact: MEDIUM** - Vue composables should follow established conventions: prefix names with \"use\" and return plain objects containing refs (not reactive objects). Returning reactive objects causes reactivity loss when destructuring, while inconsistent naming makes code harder to understand.\n\n## Task Checklist\n\n- [ ] Name composables with \"use\" prefix (e.g., `useMouse`, `useFetch`, `useAuth`)\n- [ ] Return a plain object containing refs, not a reactive object\n- [ ] Allow both destructuring and object-style access\n- [ ] Document the returned refs for consumers\n\n**Incorrect:**\n```javascript\n// WRONG: No \"use\" prefix - unclear it's a composable\nexport function mousePosition() {\n  const x = ref(0)\n  const y = ref(0)\n  return { x, y }\n}\n\n// WRONG: Returning reactive object - destructuring loses reactivity\nexport function useMouse() {\n  const state = reactive({\n    x: 0,\n    y: 0\n  })\n  // When consumer destructures: const { x, y } = useMouse()\n  // x and y become plain values, not reactive!\n  return state\n}\n\n// WRONG: Returning single ref directly - inconsistent API\nexport function useCounter() {\n  const count = ref(0)\n  return count  // Consumer must use .value everywhere\n}\n```\n\n**Correct:**\n```javascript\n// CORRECT: \"use\" prefix and returns plain object with refs\nexport function useMouse() {\n  const x = ref(0)\n  const y = ref(0)\n\n  function update(event) {\n    x.value = event.pageX\n    y.value = event.pageY\n  }\n\n  onMounted(() => window.addEventListener('mousemove', update))\n  onUnmounted(() => window.removeEventListener('mousemove', update))\n\n  // Return plain object containing refs\n  return { x, y }\n}\n\n// Consumer can destructure and keep reactivity\nconst { x, y } = useMouse()\nwatch(x, (newX) => console.log('x changed:', newX))  // Works!\n\n// Or use as object if preferred\nconst mouse = useMouse()\nconsole.log(mouse.x.value)\n```\n\n## Using reactive() Wrapper for Auto-Unwrapping\n\nIf consumers prefer auto-unwrapping (no `.value`), they can wrap the result:\n\n```javascript\nimport { reactive } from 'vue'\nimport { useMouse } from './composables/useMouse'\n\n// Wrapping in reactive() links the refs\nconst mouse = reactive(useMouse())\n\n// Now access without .value\nconsole.log(mouse.x)  // Auto-unwrapped, still reactive\n\n// But DON'T destructure from this!\nconst { x } = reactive(useMouse())  // WRONG: loses reactivity again\n```\n\n## Pattern: Returning Both State and Actions\n\n```javascript\n// Composable with state AND methods\nexport function useCounter(initialValue = 0) {\n  const count = ref(initialValue)\n  const doubleCount = computed(() => count.value * 2)\n\n  function increment() {\n    count.value++\n  }\n\n  function decrement() {\n    count.value--\n  }\n\n  function reset() {\n    count.value = initialValue\n  }\n\n  // Return all refs and functions in plain object\n  return {\n    count,\n    doubleCount,\n    increment,\n    decrement,\n    reset\n  }\n}\n\n// Usage\nconst { count, doubleCount, increment, reset } = useCounter(10)\n```\n\n## Naming Convention Examples\n\n| Good Name | Bad Name | Reason |\n|-----------|----------|--------|\n| `useFetch` | `fetch` | Conflicts with native fetch |\n| `useAuth` | `authStore` | \"Store\" implies Pinia/Vuex |\n| `useLocalStorage` | `localStorage` | Conflicts with native API |\n| `useFormValidation` | `validateForm` | Sounds like a one-shot function |\n| `useWindowSize` | `getWindowSize` | \"get\" implies synchronous getter |\n\n## Reference\n- [Vue.js Composables - Conventions and Best Practices](https://vuejs.org/guide/reusability/composables.html#conventions-and-best-practices)\n- [Vue.js Composables - Return Values](https://vuejs.org/guide/reusability/composables.html#return-values)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Follow Composable Naming Convention and Return Pattern
+
+
+    **Impact: MEDIUM** - Vue composables should follow established conventions: prefix names with "use" and return plain objects containing refs (not reactive objects). Returning reactive objects causes reactivity loss when destructuring, while inconsistent naming makes code harder to understand.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Name composables with \"use\" prefix (e.g., `useMouse`, `useFetch`, `useAuth`)\n- [ ] Return a plain object containing refs, not a reactive object\n- [ ] Allow both destructuring and object-style access\n- [ ] Document the returned refs for consumers\n\n**Incorrect:**\n```javascript\n// WRONG: No \"use\" prefix - unclear it's a composable\nexport function mousePosition() {\n  const x = ref(0)\n  const y = ref(0)\n  return { x, y }\n}\n\n// WRONG: Returning reactive object - destructuring loses reactivity\nexport function useMouse() {\n  const state = reactive({\n    x: 0,\n    y: 0\n  })\n  // When consumer destructures: const { x, y } = useMouse()\n  // x and y become plain values, not reactive!\n  return state\n}\n\n// WRONG: Returning single ref directly - inconsistent API\nexport function useCounter() {\n  const count = ref(0)\n  return count  // Consumer must use .value everywhere\n}\n```\n\n**Correct:**\n```javascript\n// CORRECT: \"use\" prefix and returns plain object with refs\nexport function useMouse() {\n  const x = ref(0)\n  const y = ref(0)\n\n  function update(event) {\n    x.value = event.pageX\n    y.value = event.pageY\n  }\n\n  onMounted(() => window.addEventListener('mousemove', update))\n  onUnmounted(() => window.removeEventListener('mousemove', update))\n\n  // Return plain object containing refs\n  return { x, y }\n}\n\n// Consumer can destructure and keep reactivity\nconst { x, y } = useMouse()\nwatch(x, (newX) => console.log('x changed:', newX))  // Works!\n\n// Or use as object if preferred\nconst mouse = useMouse()\nconsole.log(mouse.x.value)\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Using reactive() Wrapper for Auto-Unwrapping
+
+
+    If consumers prefer auto-unwrapping (no `.value`), they can wrap the result:
+
+
+    ```javascript
+
+    import { reactive } from ''vue''
+
+    import { useMouse } from ''./composables/useMouse''
+
+
+    // Wrapping in reactive() links the refs
+
+    const mouse = reactive(useMouse())
+
+
+    // Now access without .value
+
+    console.log(mouse.x)  // Auto-unwrapped, still reactive
+
+
+    // But DON''T destructure from this!
+
+    const { x } = reactive(useMouse())  // WRONG: loses reactivity again
+
+    ```'
+- sequence: 4
+  fragment_type: execution
+  content: "## Pattern: Returning Both State and Actions\n\n```javascript\n// Composable with state AND methods\nexport function useCounter(initialValue = 0) {\n  const count = ref(initialValue)\n  const doubleCount = computed(() => count.value * 2)\n\n  function increment() {\n    count.value++\n  }\n\n  function decrement() {\n    count.value--\n  }\n\n  function reset() {\n    count.value = initialValue\n  }\n\n  // Return all refs and functions in plain object\n  return {\n    count,\n    doubleCount,\n    increment,\n    decrement,\n    reset\n  }\n}\n\n// Usage\nconst { count, doubleCount, increment, reset } = useCounter(10)\n```"
+- sequence: 5
+  fragment_type: example
+  content: '## Naming Convention Examples
+
+
+    | Good Name | Bad Name | Reason |
+
+    |-----------|----------|--------|
+
+    | `useFetch` | `fetch` | Conflicts with native fetch |
+
+    | `useAuth` | `authStore` | "Store" implies Pinia/Vuex |
+
+    | `useLocalStorage` | `localStorage` | Conflicts with native API |
+
+    | `useFormValidation` | `validateForm` | Sounds like a one-shot function |
+
+    | `useWindowSize` | `getWindowSize` | "get" implies synchronous getter |'
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Composables - Conventions and Best Practices](https://vuejs.org/guide/reusability/composables.html#conventions-and-best-practices)
+
+    - [Vue.js Composables - Return Values](https://vuejs.org/guide/reusability/composables.html#return-values)'

@@ -1,0 +1,31 @@
+skill_type: domain
+skill_id: vue-jsx-best-practices-overview
+canonical_name: vue-jsx-best-practices (overview)
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-jsx-best-practices
+- vue
+- overview
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-jsx-best-practices/SKILL.md
+raw_prose: 'Vue JSX best practices and differences from React JSX.
+
+
+  ### JSX
+
+  - Migrating React JSX code to Vue or getting attribute type errors → See [render-function-jsx-vue-vs-react](reference/render-function-jsx-vue-vs-react.md)
+
+  '
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: 'Vue JSX best practices and differences from React JSX.
+
+
+    ### JSX
+
+    - Migrating React JSX code to Vue or getting attribute type errors → See [render-function-jsx-vue-vs-react](reference/render-function-jsx-vue-vs-react.md)'

@@ -1,0 +1,57 @@
+skill_type: domain
+skill_id: vue-debug-guides-perf-props-stability-update-optimization
+canonical_name: Keep Props Stable to Minimize Child Re-renders
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- vue
+- performance
+- optimization
+- v-for
+- re-renders
+- vue3
+- props
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/perf-props-stability-update-optimization.md
+raw_prose: "# Keep Props Stable to Minimize Child Re-renders\n\n**Impact: HIGH** - When props passed to child components change, Vue must re-render those components. Passing derived values like `activeId` to every list item causes all items to re-render when activeId changes, even if only one item's active state actually changed.\n\nMove comparison logic to the parent and pass the boolean result instead. This is one of the most impactful update performance optimizations in Vue.\n\n## Task Checklist\n\n- [ ] Avoid passing parent-level state that all children compare against (like `activeId`)\n- [ ] Pre-compute derived boolean props in the parent (like `:active=\"item.id === activeId\"`)\n- [ ] Profile re-renders using Vue DevTools to identify prop stability issues\n- [ ] Consider this pattern especially critical for large lists\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: activeId changes -> ALL 100 ListItems re-render -->\n  <ListItem\n    v-for=\"item in list\"\n    :key=\"item.id\"\n    :id=\"item.id\"\n    :active-id=\"activeId\"\n  />\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst list = ref([/* 100 items */])\nconst activeId = ref(null)\n\n// When activeId changes from 1 to 2:\n// - ListItem 1 needs to re-render (was active, now not)\n// - ListItem 2 needs to re-render (was not active, now active)\n// - All other 98 ListItems ALSO re-render because activeId prop changed!\n</script>\n```\n\n```vue\n<!-- ListItem.vue - receives activeId and compares internally -->\n<template>\n  <div :class=\"{ active: id === activeId }\">\n    {{ id }}\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  id: Number,\n  activeId: Number  // This prop changes for ALL items\n})\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: Only items whose :active actually changed will re-render -->\n  <ListItem\n    v-for=\"item in list\"\n    :key=\"item.id\"\n    :id=\"item.id\"\n    :active=\"item.id === activeId\"\n  />\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst list = ref([/* 100 items */])\nconst activeId = ref(null)\n\n// When activeId changes from 1 to 2:\n// - ListItem 1: :active changed from true to false -> re-renders\n// - ListItem 2: :active changed from false to true -> re-renders\n// - All other 98 ListItems: :active is still false -> NO re-render!\n</script>\n```\n\n```vue\n<!-- ListItem.vue - receives pre-computed boolean -->\n<template>\n  <div :class=\"{ active }\">\n    {{ id }}\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  id: Number,\n  active: Boolean  // This only changes for items that truly changed\n})\n</script>\n```\n\n## Common Patterns That Cause Prop Instability\n\n```vue\n<!-- BAD: Passing index that could shift -->\n<Item\n  v-for=\"(item, index) in items\"\n  :key=\"item.id\"\n  :index=\"index\"\n  :total=\"items.length\"  <!-- Changes when list changes -->\n/>\n\n<!-- BAD: Passing entire selection set -->\n<Item\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :selected-ids=\"selectedIds\"  <!-- All items re-render on any selection -->\n/>\n\n<!-- GOOD: Pre-compute the boolean -->\n<Item\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :selected=\"selectedIds.includes(item.id)\"\n/>\n```\n\n## Performance Impact Example\n\n| Scenario | Props Changed | Components Re-rendered |\n|----------|---------------|------------------------|\n| 100 items, pass `activeId` | 100 | 100 (all) |\n| 100 items, pass `:active` boolean | 2 | 2 (only changed) |\n| 1000 items, pass `activeId` | 1000 | 1000 (all) |\n| 1000 items, pass `:active` boolean | 2 | 2 (only changed) |\n\n## Reference\n- [Vue.js Performance - Props Stability](https://vuejs.org/guide/best-practices/performance.html#props-stability)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Keep Props Stable to Minimize Child Re-renders
+
+
+    **Impact: HIGH** - When props passed to child components change, Vue must re-render those components. Passing derived values like `activeId` to every list item causes all items to re-render when activeId changes, even if only one item''s active state actually changed.
+
+
+    Move comparison logic to the parent and pass the boolean result instead. This is one of the most impactful update performance optimizations in Vue.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Avoid passing parent-level state that all children compare against (like `activeId`)\n- [ ] Pre-compute derived boolean props in the parent (like `:active=\"item.id === activeId\"`)\n- [ ] Profile re-renders using Vue DevTools to identify prop stability issues\n- [ ] Consider this pattern especially critical for large lists\n\n**Incorrect:**\n```vue\n<template>\n  <!-- BAD: activeId changes -> ALL 100 ListItems re-render -->\n  <ListItem\n    v-for=\"item in list\"\n    :key=\"item.id\"\n    :id=\"item.id\"\n    :active-id=\"activeId\"\n  />\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst list = ref([/* 100 items */])\nconst activeId = ref(null)\n\n// When activeId changes from 1 to 2:\n// - ListItem 1 needs to re-render (was active, now not)\n// - ListItem 2 needs to re-render (was not active, now active)\n// - All other 98 ListItems ALSO re-render because activeId prop changed!\n</script>\n```\n\n```vue\n<!-- ListItem.vue - receives activeId and compares internally -->\n<template>\n  <div :class=\"{ active: id === activeId }\">\n    {{ id }}\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  id: Number,\n  activeId: Number  // This prop changes for ALL items\n})\n</script>\n```\n\n**Correct:**\n```vue\n<template>\n  <!-- GOOD: Only items whose :active actually changed will re-render -->\n  <ListItem\n    v-for=\"item in list\"\n    :key=\"item.id\"\n    :id=\"item.id\"\n    :active=\"item.id === activeId\"\n  />\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst list = ref([/* 100 items */])\nconst activeId = ref(null)\n\n// When activeId changes from 1 to 2:\n// - ListItem 1: :active changed from true to false -> re-renders\n// - ListItem 2: :active changed from false to true -> re-renders\n// - All other 98 ListItems: :active is still false -> NO re-render!\n</script>\n```\n\n```vue\n<!-- ListItem.vue - receives pre-computed boolean -->\n<template>\n  <div :class=\"{ active }\">\n    {{ id }}\n  </div>\n</template>\n\n<script setup>\ndefineProps({\n  id: Number,\n  active: Boolean  // This only changes for items that truly changed\n})\n</script>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Common Patterns That Cause Prop Instability\n\n```vue\n<!-- BAD: Passing index that could shift -->\n<Item\n  v-for=\"(item, index) in items\"\n  :key=\"item.id\"\n  :index=\"index\"\n  :total=\"items.length\"  <!-- Changes when list changes -->\n/>\n\n<!-- BAD: Passing entire selection set -->\n<Item\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :selected-ids=\"selectedIds\"  <!-- All items re-render on any selection -->\n/>\n\n<!-- GOOD: Pre-compute the boolean -->\n<Item\n  v-for=\"item in items\"\n  :key=\"item.id\"\n  :selected=\"selectedIds.includes(item.id)\"\n/>\n```"
+- sequence: 4
+  fragment_type: example
+  content: '## Performance Impact Example
+
+
+    | Scenario | Props Changed | Components Re-rendered |
+
+    |----------|---------------|------------------------|
+
+    | 100 items, pass `activeId` | 100 | 100 (all) |
+
+    | 100 items, pass `:active` boolean | 2 | 2 (only changed) |
+
+    | 1000 items, pass `activeId` | 1000 | 1000 (all) |
+
+    | 1000 items, pass `:active` boolean | 2 | 2 (only changed) |'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Performance - Props Stability](https://vuejs.org/guide/best-practices/performance.html#props-stability)'

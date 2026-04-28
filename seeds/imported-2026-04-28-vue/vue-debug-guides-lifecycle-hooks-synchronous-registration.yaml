@@ -1,0 +1,44 @@
+skill_type: domain
+skill_id: vue-debug-guides-lifecycle-hooks-synchronous-registration
+canonical_name: Register Lifecycle Hooks Synchronously During Setup
+category: engineering
+skill_class: domain
+domain_tags:
+- async
+- vue-debug-guides
+- lifecycle
+- vue
+- onMounted
+- setup
+- onUnmounted
+- composition-api
+- vue3
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/lifecycle-hooks-synchronous-registration.md
+raw_prose: "# Register Lifecycle Hooks Synchronously During Setup\n\n**Impact: HIGH** - Lifecycle hooks registered asynchronously (e.g., inside setTimeout, after await) will never be called because Vue cannot associate them with the component instance. This leads to silent failures where expected initialization or cleanup code never runs.\n\nIn Vue 3's Composition API, lifecycle hooks like `onMounted`, `onUnmounted`, `onUpdated`, etc. must be registered synchronously during component setup. The hook registration doesn't need to be lexically inside `setup()` or `<script setup>`, but the call stack must be synchronous and originate from within setup.\n\n## Task Checklist\n\n- [ ] Register all lifecycle hooks at the top level of setup() or `<script setup>`\n- [ ] Never register hooks inside setTimeout, setInterval, or Promise callbacks\n- [ ] When calling composables that use lifecycle hooks, call them synchronously\n- [ ] Hooks CAN be in external functions if called synchronously from setup\n\n**Incorrect:**\n```javascript\n// WRONG: Hook registered asynchronously - will NEVER execute\nimport { onMounted } from 'vue'\n\nexport default {\n  async setup() {\n    // After await, we're in a different call stack\n    const data = await fetchInitialData()\n\n    // This hook will NOT be registered!\n    onMounted(() => {\n      console.log('This will never run')\n    })\n  }\n}\n```\n\n```javascript\n// WRONG: Hook registered in setTimeout - will NEVER execute\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    setTimeout(() => {\n      // This is asynchronous - hook won't be registered!\n      onMounted(() => {\n        initializeChart()\n      })\n    }, 100)\n  }\n}\n```\n\n```javascript\n// WRONG: Hook registered in Promise callback\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    fetchConfig().then(() => {\n      // Asynchronous! This will silently fail\n      onMounted(() => {\n        applyConfig()\n      })\n    })\n  }\n}\n```\n\n**Correct:**\n```javascript\n// CORRECT: Hook registered synchronously at top level\nimport { onMounted, ref } from 'vue'\n\nexport default {\n  setup() {\n    const data = ref(null)\n\n    // Register hook synchronously FIRST\n    onMounted(async () => {\n      // Async operations are fine INSIDE the hook\n      data.value = await fetchInitialData()\n      initializeChart()\n    })\n\n    return { data }\n  }\n}\n```\n\n```vue\n<!-- CORRECT: <script setup> - hooks at top level -->\n<script setup>\nimport { onMounted, onUnmounted, ref } from 'vue'\n\nconst isReady = ref(false)\n\n// These are synchronous during script setup execution\nonMounted(() => {\n  isReady.value = true\n})\n\nonUnmounted(() => {\n  cleanup()\n})\n</script>\n```\n\n```javascript\n// CORRECT: Hook in external function called synchronously from setup\nimport { onMounted, onUnmounted } from 'vue'\n\nfunction useWindowResize(callback) {\n  // This is fine - it's called synchronously from setup\n  onMounted(() => {\n    window.addEventListener('resize', callback)\n  })\n\n  onUnmounted(() => {\n    window.removeEventListener('resize', callback)\n  })\n}\n\nexport default {\n  setup() {\n    // Composable called synchronously - hooks will be registered\n    useWindowResize(handleResize)\n  }\n}\n```\n\n## Multiple Hooks Are Allowed\n\n```javascript\n// CORRECT: You can register the same hook multiple times\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    // Both will run, in order of registration\n    onMounted(() => {\n      initializeA()\n    })\n\n    onMounted(() => {\n      initializeB()\n    })\n  }\n}\n```\n\n## Reference\n- [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)\n- [Composition API Lifecycle Hooks](https://vuejs.org/api/composition-api-lifecycle.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '# Register Lifecycle Hooks Synchronously During Setup
+
+
+    **Impact: HIGH** - Lifecycle hooks registered asynchronously (e.g., inside setTimeout, after await) will never be called because Vue cannot associate them with the component instance. This leads to silent failures where expected initialization or cleanup code never runs.
+
+
+    In Vue 3''s Composition API, lifecycle hooks like `onMounted`, `onUnmounted`, `onUpdated`, etc. must be registered synchronously during component setup. The hook registration doesn''t need to be lexically inside `setup()` or `<script setup>`, but the call stack must be synchronous and originate from within setup.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Register all lifecycle hooks at the top level of setup() or `<script setup>`\n- [ ] Never register hooks inside setTimeout, setInterval, or Promise callbacks\n- [ ] When calling composables that use lifecycle hooks, call them synchronously\n- [ ] Hooks CAN be in external functions if called synchronously from setup\n\n**Incorrect:**\n```javascript\n// WRONG: Hook registered asynchronously - will NEVER execute\nimport { onMounted } from 'vue'\n\nexport default {\n  async setup() {\n    // After await, we're in a different call stack\n    const data = await fetchInitialData()\n\n    // This hook will NOT be registered!\n    onMounted(() => {\n      console.log('This will never run')\n    })\n  }\n}\n```\n\n```javascript\n// WRONG: Hook registered in setTimeout - will NEVER execute\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    setTimeout(() => {\n      // This is asynchronous - hook won't be registered!\n      onMounted(() => {\n        initializeChart()\n      })\n    }, 100)\n  }\n}\n```\n\n```javascript\n// WRONG: Hook registered in Promise callback\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    fetchConfig().then(() => {\n      // Asynchronous! This will silently fail\n      onMounted(() => {\n        applyConfig()\n      })\n    })\n  }\n}\n```\n\n**Correct:**\n```javascript\n// CORRECT: Hook registered synchronously at top level\nimport { onMounted, ref } from 'vue'\n\nexport default {\n  setup() {\n    const data = ref(null)\n\n    // Register hook synchronously FIRST\n    onMounted(async () => {\n      // Async operations are fine INSIDE the hook\n      data.value = await fetchInitialData()\n      initializeChart()\n    })\n\n    return { data }\n  }\n}\n```\n\n```vue\n<!-- CORRECT: <script setup> - hooks at top level -->\n<script setup>\nimport { onMounted, onUnmounted, ref } from 'vue'\n\nconst isReady = ref(false)\n\n// These are synchronous during script setup execution\nonMounted(() => {\n  isReady.value = true\n})\n\nonUnmounted(() => {\n  cleanup()\n})\n</script>\n```\n\n```javascript\n// CORRECT: Hook in external function called synchronously from setup\nimport { onMounted, onUnmounted } from 'vue'\n\nfunction useWindowResize(callback) {\n  // This is fine - it's called synchronously from setup\n  onMounted(() => {\n    window.addEventListener('resize', callback)\n  })\n\n  onUnmounted(() => {\n    window.removeEventListener('resize', callback)\n  })\n}\n\nexport default {\n  setup() {\n    // Composable called synchronously - hooks will be registered\n    useWindowResize(handleResize)\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Multiple Hooks Are Allowed\n\n```javascript\n// CORRECT: You can register the same hook multiple times\nimport { onMounted } from 'vue'\n\nexport default {\n  setup() {\n    // Both will run, in order of registration\n    onMounted(() => {\n      initializeA()\n    })\n\n    onMounted(() => {\n      initializeB()\n    })\n  }\n}\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)
+
+    - [Composition API Lifecycle Hooks](https://vuejs.org/api/composition-api-lifecycle.html)'

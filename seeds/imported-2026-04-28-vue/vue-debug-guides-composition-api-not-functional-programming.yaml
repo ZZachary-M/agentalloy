@@ -1,0 +1,73 @@
+skill_type: domain
+skill_id: vue-debug-guides-composition-api-not-functional-programming
+canonical_name: Composition API Uses Mutable Reactivity, Not Functional Programming
+category: engineering
+skill_class: domain
+domain_tags:
+- functional-programming
+- reactivity
+- vue-debug-guides
+- vue
+- composition-api
+- vue3
+- paradigm
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/composition-api-not-functional-programming.md
+raw_prose: "# Composition API Uses Mutable Reactivity, Not Functional Programming\n\n**Impact: MEDIUM** - Despite being function-based, the Composition API follows Vue's mutable, fine-grained reactivity paradigm—NOT functional programming principles. Treating it like a functional paradigm leads to incorrect patterns like unnecessary cloning, immutable-style updates, or avoiding mutation when mutation is the intended pattern.\n\nVue's Composition API leverages imported functions to organize code, but the underlying model is based on mutable reactive state that Vue tracks and responds to. This is fundamentally different from functional programming with immutability (like Redux reducers).\n\n## Task Checklist\n\n- [ ] Mutate reactive state directly - don't create new objects for every update\n- [ ] Don't apply immutability patterns unnecessarily (spreading, Object.assign for updates)\n- [ ] Understand that `ref()` and `reactive()` enable mutable state tracking\n- [ ] Use Vue's reactivity as intended: direct mutation with automatic tracking\n\n**Incorrect:**\n```javascript\nimport { ref } from 'vue'\n\nconst todos = ref([])\n\n// WRONG: Treating Vue like Redux/functional - unnecessary immutability\nfunction addTodo(todo) {\n  // Creating a new array every time is wasteful in Vue\n  todos.value = [...todos.value, todo]\n}\n\nfunction updateTodo(id, updates) {\n  // Unnecessary spread - Vue tracks mutations directly\n  todos.value = todos.value.map(t =>\n    t.id === id ? { ...t, ...updates } : t\n  )\n}\n\nconst user = ref({ name: 'John', age: 30 })\n\n// WRONG: Creating new object for simple update\nfunction updateName(newName) {\n  user.value = { ...user.value, name: newName }\n}\n```\n\n**Correct:**\n```javascript\nimport { ref, reactive } from 'vue'\n\nconst todos = ref([])\n\n// CORRECT: Mutate directly - Vue tracks the change\nfunction addTodo(todo) {\n  todos.value.push(todo)  // Direct mutation is the Vue way\n}\n\nfunction updateTodo(id, updates) {\n  const todo = todos.value.find(t => t.id === id)\n  if (todo) {\n    Object.assign(todo, updates)  // Direct mutation\n  }\n}\n\nconst user = ref({ name: 'John', age: 30 })\n\n// CORRECT: Mutate the property directly\nfunction updateName(newName) {\n  user.value.name = newName  // Vue tracks this!\n}\n\n// Or with reactive():\nconst state = reactive({ name: 'John', age: 30 })\n\nfunction updateNameReactive(newName) {\n  state.name = newName  // Direct mutation, reactivity preserved\n}\n```\n\n## When Immutability Patterns Make Sense\n\n```javascript\n// Immutability IS appropriate when:\n\n// 1. Replacing the entire state (e.g., from API response)\nconst users = ref([])\nasync function fetchUsers() {\n  users.value = await api.getUsers()  // Complete replacement is fine\n}\n\n// 2. When you need a snapshot for comparison\nconst previousState = { ...currentState }  // For undo/redo\n\n// 3. When passing data to external libraries expecting immutable data\nconst chartData = computed(() => [...rawData.value])  // Copy for chart lib\n```\n\n## The Vue Mental Model\n\n```javascript\n// Vue's reactivity is like a spreadsheet:\n// - Cell A1 contains a value (ref)\n// - Cell B1 has a formula referencing A1 (computed)\n// - Change A1, and B1 automatically updates\n\nconst a1 = ref(10)\nconst b1 = computed(() => a1.value * 2)\n\n// You CHANGE A1 (mutate), you don't create a new A1\na1.value = 20  // b1 automatically becomes 40\n\n// This is fundamentally different from:\n// state = reducer(state, action)  // Functional/Redux pattern\n```\n\n## Reference\n- [Composition API FAQ](https://vuejs.org/guide/extras/composition-api-faq.html)\n- [Reactivity Fundamentals](https://vuejs.org/guide/essentials/reactivity-fundamentals.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Composition API Uses Mutable Reactivity, Not Functional Programming
+
+
+    **Impact: MEDIUM** - Despite being function-based, the Composition API follows Vue''s mutable, fine-grained reactivity paradigm—NOT functional programming principles. Treating it like a functional paradigm leads to incorrect patterns like unnecessary cloning, immutable-style updates, or avoiding mutation when mutation is the intended pattern.
+
+
+    Vue''s Composition API leverages imported functions to organize code, but the underlying model is based on mutable reactive state that Vue tracks and responds to. This is fundamentally different from functional programming with immutability (like Redux reducers).'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Mutate reactive state directly - don't create new objects for every update\n- [ ] Don't apply immutability patterns unnecessarily (spreading, Object.assign for updates)\n- [ ] Understand that `ref()` and `reactive()` enable mutable state tracking\n- [ ] Use Vue's reactivity as intended: direct mutation with automatic tracking\n\n**Incorrect:**\n```javascript\nimport { ref } from 'vue'\n\nconst todos = ref([])\n\n// WRONG: Treating Vue like Redux/functional - unnecessary immutability\nfunction addTodo(todo) {\n  // Creating a new array every time is wasteful in Vue\n  todos.value = [...todos.value, todo]\n}\n\nfunction updateTodo(id, updates) {\n  // Unnecessary spread - Vue tracks mutations directly\n  todos.value = todos.value.map(t =>\n    t.id === id ? { ...t, ...updates } : t\n  )\n}\n\nconst user = ref({ name: 'John', age: 30 })\n\n// WRONG: Creating new object for simple update\nfunction updateName(newName) {\n  user.value = { ...user.value, name: newName }\n}\n```\n\n**Correct:**\n```javascript\nimport { ref, reactive } from 'vue'\n\nconst todos = ref([])\n\n// CORRECT: Mutate directly - Vue tracks the change\nfunction addTodo(todo) {\n  todos.value.push(todo)  // Direct mutation is the Vue way\n}\n\nfunction updateTodo(id, updates) {\n  const todo = todos.value.find(t => t.id === id)\n  if (todo) {\n    Object.assign(todo, updates)  // Direct mutation\n  }\n}\n\nconst user = ref({ name: 'John', age: 30 })\n\n// CORRECT: Mutate the property directly\nfunction updateName(newName) {\n  user.value.name = newName  // Vue tracks this!\n}\n\n// Or with reactive():\nconst state = reactive({ name: 'John', age: 30 })\n\nfunction updateNameReactive(newName) {\n  state.name = newName  // Direct mutation, reactivity preserved\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## When Immutability Patterns Make Sense\n\n```javascript\n// Immutability IS appropriate when:\n\n// 1. Replacing the entire state (e.g., from API response)\nconst users = ref([])\nasync function fetchUsers() {\n  users.value = await api.getUsers()  // Complete replacement is fine\n}\n\n// 2. When you need a snapshot for comparison\nconst previousState = { ...currentState }  // For undo/redo\n\n// 3. When passing data to external libraries expecting immutable data\nconst chartData = computed(() => [...rawData.value])  // Copy for chart lib\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## The Vue Mental Model
+
+
+    ```javascript
+
+    // Vue''s reactivity is like a spreadsheet:
+
+    // - Cell A1 contains a value (ref)
+
+    // - Cell B1 has a formula referencing A1 (computed)
+
+    // - Change A1, and B1 automatically updates
+
+
+    const a1 = ref(10)
+
+    const b1 = computed(() => a1.value * 2)
+
+
+    // You CHANGE A1 (mutate), you don''t create a new A1
+
+    a1.value = 20  // b1 automatically becomes 40
+
+
+    // This is fundamentally different from:
+
+    // state = reducer(state, action)  // Functional/Redux pattern
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Composition API FAQ](https://vuejs.org/guide/extras/composition-api-faq.html)
+
+    - [Reactivity Fundamentals](https://vuejs.org/guide/essentials/reactivity-fundamentals.html)'

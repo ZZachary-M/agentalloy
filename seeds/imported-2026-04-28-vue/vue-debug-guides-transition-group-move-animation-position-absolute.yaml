@@ -1,0 +1,91 @@
+skill_type: domain
+skill_id: vue-debug-guides-transition-group-move-animation-position-absolute
+canonical_name: TransitionGroup Move Animation Requires Position Absolute on Leaving Items
+category: engineering
+skill_class: domain
+domain_tags:
+- transition-group
+- list-animation
+- vue-debug-guides
+- vue
+- animation
+- move-transition
+- vue3
+- css
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/transition-group-move-animation-position-absolute.md
+raw_prose: "# TransitionGroup Move Animation Requires Position Absolute on Leaving Items\n\n**Impact: HIGH** - When items are added or removed from a list with `<TransitionGroup>`, surrounding items will instantly \"jump\" to their new positions instead of smoothly animating. This creates a jarring user experience and is one of the most common mistakes with list animations.\n\nThe fix is to set `position: absolute` on the `leave-active` class so leaving items are taken out of the layout flow, allowing other items to smoothly animate into their new positions.\n\n## Task Checklist\n\n- [ ] Add `.list-move` class (or `.[name]-move`) for smooth repositioning\n- [ ] Set `position: absolute` on `.list-leave-active` class\n- [ ] Ensure the parent container has `position: relative` if needed\n- [ ] Test with rapid add/remove operations to verify smooth animations\n\n**Incorrect - Items jump instead of moving:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<style>\n/* INCOMPLETE: Missing move class and position absolute */\n.list-enter-active,\n.list-leave-active {\n  transition: all 0.5s ease;\n}\n\n.list-enter-from,\n.list-leave-to {\n  opacity: 0;\n  transform: translateX(30px);\n}\n</style>\n```\n\n**Correct - Smooth move transitions:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<style>\n/* CORRECT: Full set of classes for smooth animations */\n\n/* Apply transition to moving elements */\n.list-move,\n.list-enter-active,\n.list-leave-active {\n  transition: all 0.5s ease;\n}\n\n.list-enter-from,\n.list-leave-to {\n  opacity: 0;\n  transform: translateX(30px);\n}\n\n/* CRITICAL: Take leaving items out of layout flow */\n.list-leave-active {\n  position: absolute;\n}\n</style>\n```\n\n## Why This Works\n\nThe FLIP animation technique Vue uses internally needs to calculate element positions. When an item leaves:\n\n1. Without `position: absolute`: The leaving item still occupies space in the DOM\n2. Other items can't move until the leaving item is fully removed\n3. Result: Items snap to new positions after leave animation completes\n\nWith `position: absolute`:\n\n1. Leaving item is removed from normal layout flow immediately\n2. Other items can begin moving into the vacated space\n3. Result: Leaving animation and move animation happen simultaneously\n\n## Visual Diagram\n\n```\nWithout position: absolute:\n[A] [B] [C] [D]  <- Remove B\n[A]     [C] [D]  <- B fading out, C/D waiting\n[A] [C] [D]      <- B gone, C/D jump instantly\n\nWith position: absolute:\n[A] [B] [C] [D]  <- Remove B\n[A][B][C] [D]    <- B fading (absolute), C/D sliding left\n[A] [C] [D]      <- Smooth completion\n```\n\n## Additional Considerations\n\n**Container Width:** When using `position: absolute`, items may need explicit widths:\n\n```css\n.list-leave-active {\n  position: absolute;\n  width: 100%; /* Or specific width to maintain layout during leave */\n}\n```\n\n**Stacking Context:** Leaving items with `position: absolute` may stack above other elements:\n\n```css\n.list-leave-active {\n  position: absolute;\n  z-index: -1; /* Optional: put behind other items */\n}\n```\n\n## Reference\n- [Vue.js TransitionGroup Move Transitions](https://vuejs.org/guide/built-ins/transition-group.html#move-transitions)\n- [FLIP Animation Technique](https://aerotwist.com/blog/flip-your-animations/)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# TransitionGroup Move Animation Requires Position Absolute on Leaving Items
+
+
+    **Impact: HIGH** - When items are added or removed from a list with `<TransitionGroup>`, surrounding items will instantly "jump" to their new positions instead of smoothly animating. This creates a jarring user experience and is one of the most common mistakes with list animations.
+
+
+    The fix is to set `position: absolute` on the `leave-active` class so leaving items are taken out of the layout flow, allowing other items to smoothly animate into their new positions.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Add `.list-move` class (or `.[name]-move`) for smooth repositioning\n- [ ] Set `position: absolute` on `.list-leave-active` class\n- [ ] Ensure the parent container has `position: relative` if needed\n- [ ] Test with rapid add/remove operations to verify smooth animations\n\n**Incorrect - Items jump instead of moving:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<style>\n/* INCOMPLETE: Missing move class and position absolute */\n.list-enter-active,\n.list-leave-active {\n  transition: all 0.5s ease;\n}\n\n.list-enter-from,\n.list-leave-to {\n  opacity: 0;\n  transform: translateX(30px);\n}\n</style>\n```\n\n**Correct - Smooth move transitions:**\n```vue\n<template>\n  <TransitionGroup name=\"list\" tag=\"ul\">\n    <li v-for=\"item in items\" :key=\"item.id\">\n      {{ item.name }}\n    </li>\n  </TransitionGroup>\n</template>\n\n<style>\n/* CORRECT: Full set of classes for smooth animations */\n\n/* Apply transition to moving elements */\n.list-move,\n.list-enter-active,\n.list-leave-active {\n  transition: all 0.5s ease;\n}\n\n.list-enter-from,\n.list-leave-to {\n  opacity: 0;\n  transform: translateX(30px);\n}\n\n/* CRITICAL: Take leaving items out of layout flow */\n.list-leave-active {\n  position: absolute;\n}\n</style>\n```"
+- sequence: 3
+  fragment_type: rationale
+  content: '## Why This Works
+
+
+    The FLIP animation technique Vue uses internally needs to calculate element positions. When an item leaves:
+
+
+    1. Without `position: absolute`: The leaving item still occupies space in the DOM
+
+    2. Other items can''t move until the leaving item is fully removed
+
+    3. Result: Items snap to new positions after leave animation completes
+
+
+    With `position: absolute`:
+
+
+    1. Leaving item is removed from normal layout flow immediately
+
+    2. Other items can begin moving into the vacated space
+
+    3. Result: Leaving animation and move animation happen simultaneously'
+- sequence: 4
+  fragment_type: execution
+  content: '## Visual Diagram
+
+
+    ```
+
+    Without position: absolute:
+
+    [A] [B] [C] [D]  <- Remove B
+
+    [A]     [C] [D]  <- B fading out, C/D waiting
+
+    [A] [C] [D]      <- B gone, C/D jump instantly
+
+
+    With position: absolute:
+
+    [A] [B] [C] [D]  <- Remove B
+
+    [A][B][C] [D]    <- B fading (absolute), C/D sliding left
+
+    [A] [C] [D]      <- Smooth completion
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: "## Additional Considerations\n\n**Container Width:** When using `position: absolute`, items may need explicit widths:\n\n```css\n.list-leave-active {\n  position: absolute;\n  width: 100%; /* Or specific width to maintain layout during leave */\n}\n```\n\n**Stacking Context:** Leaving items with `position: absolute` may stack above other elements:\n\n```css\n.list-leave-active {\n  position: absolute;\n  z-index: -1; /* Optional: put behind other items */\n}\n```"
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js TransitionGroup Move Transitions](https://vuejs.org/guide/built-ins/transition-group.html#move-transitions)
+
+    - [FLIP Animation Technique](https://aerotwist.com/blog/flip-your-animations/)'

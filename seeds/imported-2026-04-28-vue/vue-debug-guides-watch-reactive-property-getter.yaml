@@ -1,0 +1,44 @@
+skill_type: domain
+skill_id: vue-debug-guides-watch-reactive-property-getter
+canonical_name: Use Getter Function When Watching Reactive Object Properties
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-debug-guides
+- vue
+- watch
+- common-mistake
+- vue3
+- reactive
+- watchers
+- getter
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/watch-reactive-property-getter.md
+raw_prose: "# Use Getter Function When Watching Reactive Object Properties\n\n**Impact: HIGH** - Directly watching a property of a reactive object passes a primitive value to `watch()`, not a reactive reference. The watcher will never trigger because primitives are not reactive.\n\nWhen you need to watch a specific property of a reactive object, always wrap it in a getter function `() => obj.property`.\n\n## Task Checklist\n\n- [ ] Always use getter functions when watching properties of reactive objects\n- [ ] Remember that `watch(obj.count, ...)` passes the current value, not a reactive reference\n- [ ] For refs, you can watch directly: `watch(myRef, ...)`\n- [ ] For entire reactive objects, you can watch directly (creates implicit deep watcher)\n\n**Incorrect:**\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ count: 0, name: 'Vue' })\n\n// WRONG: Passes the number 0 to watch(), not a reactive reference\n// This watcher will NEVER fire!\nwatch(state.count, (newCount) => {\n  console.log(`Count changed to: ${newCount}`)\n})\n\n// WRONG: Same problem with string property\nwatch(state.name, (newName) => {\n  console.log(`Name changed to: ${newName}`)\n})\n```\n\n**Correct:**\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ count: 0, name: 'Vue' })\n\n// CORRECT: Use a getter function\nwatch(\n  () => state.count,\n  (newCount, oldCount) => {\n    console.log(`Count changed from ${oldCount} to ${newCount}`)\n  }\n)\n\n// CORRECT: Multiple properties with getter\nwatch(\n  () => state.name,\n  (newName) => {\n    console.log(`Name changed to: ${newName}`)\n  }\n)\n\n// CORRECT: Watching derived values\nwatch(\n  () => state.count * 2,\n  (doubledCount) => {\n    console.log(`Doubled count: ${doubledCount}`)\n  }\n)\n```\n\n## Watching Multiple Properties\n\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ firstName: 'John', lastName: 'Doe' })\n\n// Watch multiple properties with array of getters\nwatch(\n  [() => state.firstName, () => state.lastName],\n  ([newFirst, newLast], [oldFirst, oldLast]) => {\n    console.log(`Name changed from ${oldFirst} ${oldLast} to ${newFirst} ${newLast}`)\n  }\n)\n```\n\n## When Direct Watching Works\n\n```javascript\nimport { ref, reactive, watch } from 'vue'\n\nconst count = ref(0)\nconst state = reactive({ nested: { value: 1 } })\n\n// CORRECT: Refs can be watched directly\nwatch(count, (newVal) => {\n  console.log(`Count: ${newVal}`)\n})\n\n// CORRECT: Entire reactive objects create implicit deep watcher\nwatch(state, (newState) => {\n  // Fires on any nested change\n  // Note: newState === oldState (same object reference)\n})\n```\n\n## Reference\n- [Vue.js Watchers - Watch Source Types](https://vuejs.org/guide/essentials/watchers.html#watch-source-types)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Use Getter Function When Watching Reactive Object Properties
+
+
+    **Impact: HIGH** - Directly watching a property of a reactive object passes a primitive value to `watch()`, not a reactive reference. The watcher will never trigger because primitives are not reactive.
+
+
+    When you need to watch a specific property of a reactive object, always wrap it in a getter function `() => obj.property`.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always use getter functions when watching properties of reactive objects\n- [ ] Remember that `watch(obj.count, ...)` passes the current value, not a reactive reference\n- [ ] For refs, you can watch directly: `watch(myRef, ...)`\n- [ ] For entire reactive objects, you can watch directly (creates implicit deep watcher)\n\n**Incorrect:**\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ count: 0, name: 'Vue' })\n\n// WRONG: Passes the number 0 to watch(), not a reactive reference\n// This watcher will NEVER fire!\nwatch(state.count, (newCount) => {\n  console.log(`Count changed to: ${newCount}`)\n})\n\n// WRONG: Same problem with string property\nwatch(state.name, (newName) => {\n  console.log(`Name changed to: ${newName}`)\n})\n```\n\n**Correct:**\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ count: 0, name: 'Vue' })\n\n// CORRECT: Use a getter function\nwatch(\n  () => state.count,\n  (newCount, oldCount) => {\n    console.log(`Count changed from ${oldCount} to ${newCount}`)\n  }\n)\n\n// CORRECT: Multiple properties with getter\nwatch(\n  () => state.name,\n  (newName) => {\n    console.log(`Name changed to: ${newName}`)\n  }\n)\n\n// CORRECT: Watching derived values\nwatch(\n  () => state.count * 2,\n  (doubledCount) => {\n    console.log(`Doubled count: ${doubledCount}`)\n  }\n)\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Watching Multiple Properties\n\n```javascript\nimport { reactive, watch } from 'vue'\n\nconst state = reactive({ firstName: 'John', lastName: 'Doe' })\n\n// Watch multiple properties with array of getters\nwatch(\n  [() => state.firstName, () => state.lastName],\n  ([newFirst, newLast], [oldFirst, oldLast]) => {\n    console.log(`Name changed from ${oldFirst} ${oldLast} to ${newFirst} ${newLast}`)\n  }\n)\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## When Direct Watching Works\n\n```javascript\nimport { ref, reactive, watch } from 'vue'\n\nconst count = ref(0)\nconst state = reactive({ nested: { value: 1 } })\n\n// CORRECT: Refs can be watched directly\nwatch(count, (newVal) => {\n  console.log(`Count: ${newVal}`)\n})\n\n// CORRECT: Entire reactive objects create implicit deep watcher\nwatch(state, (newState) => {\n  // Fires on any nested change\n  // Note: newState === oldState (same object reference)\n})\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Watchers - Watch Source Types](https://vuejs.org/guide/essentials/watchers.html#watch-source-types)'

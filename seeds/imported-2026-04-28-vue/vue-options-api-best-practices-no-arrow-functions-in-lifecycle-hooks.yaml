@@ -1,0 +1,74 @@
+skill_type: domain
+skill_id: vue-options-api-best-practices-no-arrow-functions-in-lifecycle-hooks
+canonical_name: Never Use Arrow Functions for Options API Lifecycle Hooks
+category: engineering
+skill_class: domain
+domain_tags:
+- options-api
+- lifecycle
+- vue
+- arrow-functions
+- this-binding
+- mounted
+- vue-options-api-best-practices
+- vue3
+- created
+- vue2
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-options-api-best-practices/reference/no-arrow-functions-in-lifecycle-hooks.md
+raw_prose: "# Never Use Arrow Functions for Options API Lifecycle Hooks\n\n**Impact: HIGH** - Using arrow functions for lifecycle hooks in the Options API prevents Vue from binding `this` to the component instance. This causes `this` to be `undefined` or reference the wrong context, leading to runtime errors when accessing component data, methods, or other properties.\n\nArrow functions lexically bind `this` from their enclosing scope. Vue's Options API lifecycle hooks (created, mounted, updated, unmounted, etc.) require regular functions so Vue can set `this` to the component instance at runtime.\n\n## Task Checklist\n\n- [ ] Always use regular function syntax for Options API lifecycle hooks\n- [ ] Use ES6 method shorthand (preferred) for cleaner code\n- [ ] Arrow functions ARE allowed inside lifecycle hooks for callbacks\n\n**Incorrect:**\n```javascript\nexport default {\n  data() {\n    return { message: 'Hello' }\n  },\n  // WRONG: Arrow function - `this` will be undefined\n  created: () => {\n    console.log(this.message) // Error: Cannot read property 'message' of undefined\n  },\n  // WRONG: Arrow function for mounted\n  mounted: () => {\n    this.initializePlugin() // Error: this.initializePlugin is not a function\n  },\n  // WRONG: Arrow function for beforeUnmount\n  beforeUnmount: () => {\n    this.cleanup() // Will fail!\n  },\n  methods: {\n    initializePlugin() { /* ... */ },\n    cleanup() { /* ... */ }\n  }\n}\n```\n\n**Correct:**\n```javascript\nexport default {\n  data() {\n    return { message: 'Hello' }\n  },\n  // CORRECT: ES6 method shorthand (preferred)\n  created() {\n    console.log(this.message) // Works! this refers to component instance\n  },\n  // CORRECT: Regular function expression\n  mounted: function() {\n    this.initializePlugin() // Works!\n  },\n  // CORRECT: Method shorthand\n  beforeUnmount() {\n    this.cleanup() // Works!\n  },\n  methods: {\n    initializePlugin() {\n      // Arrow functions ARE fine for callbacks inside lifecycle hooks\n      this.$nextTick(() => {\n        this.isReady = true // Arrow inherits `this` from mounted\n      })\n    },\n    cleanup() { /* ... */ }\n  }\n}\n```\n\n## All Affected Lifecycle Hooks\n\nThe following Options API hooks must NOT use arrow functions:\n- `beforeCreate`\n- `created`\n- `beforeMount`\n- `mounted`\n- `beforeUpdate`\n- `updated`\n- `beforeUnmount` (Vue 3) / `beforeDestroy` (Vue 2)\n- `unmounted` (Vue 3) / `destroyed` (Vue 2)\n- `activated`\n- `deactivated`\n- `errorCaptured`\n- `renderTracked`\n- `renderTriggered`\n\n## Reference\n- [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)\n- [Vue.js Options Lifecycle](https://vuejs.org/api/options-lifecycle.html)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Never Use Arrow Functions for Options API Lifecycle Hooks
+
+
+    **Impact: HIGH** - Using arrow functions for lifecycle hooks in the Options API prevents Vue from binding `this` to the component instance. This causes `this` to be `undefined` or reference the wrong context, leading to runtime errors when accessing component data, methods, or other properties.
+
+
+    Arrow functions lexically bind `this` from their enclosing scope. Vue''s Options API lifecycle hooks (created, mounted, updated, unmounted, etc.) require regular functions so Vue can set `this` to the component instance at runtime.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Always use regular function syntax for Options API lifecycle hooks\n- [ ] Use ES6 method shorthand (preferred) for cleaner code\n- [ ] Arrow functions ARE allowed inside lifecycle hooks for callbacks\n\n**Incorrect:**\n```javascript\nexport default {\n  data() {\n    return { message: 'Hello' }\n  },\n  // WRONG: Arrow function - `this` will be undefined\n  created: () => {\n    console.log(this.message) // Error: Cannot read property 'message' of undefined\n  },\n  // WRONG: Arrow function for mounted\n  mounted: () => {\n    this.initializePlugin() // Error: this.initializePlugin is not a function\n  },\n  // WRONG: Arrow function for beforeUnmount\n  beforeUnmount: () => {\n    this.cleanup() // Will fail!\n  },\n  methods: {\n    initializePlugin() { /* ... */ },\n    cleanup() { /* ... */ }\n  }\n}\n```\n\n**Correct:**\n```javascript\nexport default {\n  data() {\n    return { message: 'Hello' }\n  },\n  // CORRECT: ES6 method shorthand (preferred)\n  created() {\n    console.log(this.message) // Works! this refers to component instance\n  },\n  // CORRECT: Regular function expression\n  mounted: function() {\n    this.initializePlugin() // Works!\n  },\n  // CORRECT: Method shorthand\n  beforeUnmount() {\n    this.cleanup() // Works!\n  },\n  methods: {\n    initializePlugin() {\n      // Arrow functions ARE fine for callbacks inside lifecycle hooks\n      this.$nextTick(() => {\n        this.isReady = true // Arrow inherits `this` from mounted\n      })\n    },\n    cleanup() { /* ... */ }\n  }\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## All Affected Lifecycle Hooks
+
+
+    The following Options API hooks must NOT use arrow functions:
+
+    - `beforeCreate`
+
+    - `created`
+
+    - `beforeMount`
+
+    - `mounted`
+
+    - `beforeUpdate`
+
+    - `updated`
+
+    - `beforeUnmount` (Vue 3) / `beforeDestroy` (Vue 2)
+
+    - `unmounted` (Vue 3) / `destroyed` (Vue 2)
+
+    - `activated`
+
+    - `deactivated`
+
+    - `errorCaptured`
+
+    - `renderTracked`
+
+    - `renderTriggered`'
+- sequence: 4
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Lifecycle Hooks](https://vuejs.org/guide/essentials/lifecycle.html)
+
+    - [Vue.js Options Lifecycle](https://vuejs.org/api/options-lifecycle.html)'

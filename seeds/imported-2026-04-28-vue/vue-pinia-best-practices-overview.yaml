@@ -1,0 +1,63 @@
+skill_type: domain
+skill_id: vue-pinia-best-practices-overview
+canonical_name: vue-pinia-best-practices (overview)
+category: engineering
+skill_class: domain
+domain_tags:
+- vue-pinia-best-practices
+- vue
+- overview
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-pinia-best-practices/SKILL.md
+raw_prose: 'Pinia best practices, common gotchas, and state management patterns.
+
+
+  ### Store Setup
+
+  - Getting "getActivePinia was called" error at startup → See [pinia-no-active-pinia-error](reference/pinia-no-active-pinia-error.md)
+
+  - Setup stores missing state in DevTools or SSR → See [pinia-setup-store-return-all-state](reference/pinia-setup-store-return-all-state.md)
+
+
+  ### Reactivity
+
+  - Store destructuring stops updating UI reactively → See [pinia-store-destructuring-breaks-reactivity](reference/pinia-store-destructuring-breaks-reactivity.md)
+
+  - Store methods lose context in template calls → See [store-method-binding-parentheses](reference/store-method-binding-parentheses.md)
+
+
+  ### State Patterns
+
+  - Filters reset on refresh or can''t be shared → See [state-url-for-ephemeral-filters](reference/state-url-for-ephemeral-filters.md)
+
+  - Building production app without DevTools or conventions → See [state-use-pinia-for-large-apps](reference/state-use-pinia-for-large-apps.md)
+
+  '
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: 'Pinia best practices, common gotchas, and state management patterns.
+
+
+    ### Store Setup
+
+    - Getting "getActivePinia was called" error at startup → See [pinia-no-active-pinia-error](reference/pinia-no-active-pinia-error.md)
+
+    - Setup stores missing state in DevTools or SSR → See [pinia-setup-store-return-all-state](reference/pinia-setup-store-return-all-state.md)
+
+
+    ### Reactivity
+
+    - Store destructuring stops updating UI reactively → See [pinia-store-destructuring-breaks-reactivity](reference/pinia-store-destructuring-breaks-reactivity.md)
+
+    - Store methods lose context in template calls → See [store-method-binding-parentheses](reference/store-method-binding-parentheses.md)
+
+
+    ### State Patterns
+
+    - Filters reset on refresh or can''t be shared → See [state-url-for-ephemeral-filters](reference/state-url-for-ephemeral-filters.md)
+
+    - Building production app without DevTools or conventions → See [state-use-pinia-for-large-apps](reference/state-use-pinia-for-large-apps.md)'

@@ -1,0 +1,38 @@
+skill_type: domain
+skill_id: vue-debug-guides-textarea-no-interpolation
+canonical_name: Textarea Interpolation is One-Way Only - Use v-model for Two-Way Binding
+category: engineering
+skill_class: domain
+domain_tags:
+- forms
+- template
+- vue-debug-guides
+- vue
+- interpolation
+- v-model
+- vue3
+- textarea
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/textarea-no-interpolation.md
+raw_prose: "# Textarea Interpolation is One-Way Only - Use v-model for Two-Way Binding\n\n**Impact: HIGH** - Interpolation in textarea (`{{ text }}`) provides one-way binding only - it displays the initial value but user input does NOT update the ref. This creates a confusing disconnect where the textarea shows content but edits are silently lost.\n\nUnlike v-model which provides two-way binding, interpolation only renders the initial ref value into the textarea. When users type, the ref remains unchanged, making form submissions return stale data. Always use v-model for two-way binding in textareas.\n\n## Task Checklist\n\n- [ ] Never use interpolation inside textarea tags\n- [ ] Always use v-model for textarea two-way binding\n- [ ] Search codebase for `<textarea>{{` patterns that may be silently broken\n- [ ] Add linting rules to catch this pattern if possible\n\n**Incorrect:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst message = ref('Hello World')\n</script>\n\n<template>\n  <!-- WRONG: One-way binding only! Shows initial value but edits don't update ref -->\n  <textarea>{{ message }}</textarea>\n\n  <!-- Also WRONG: User can type but changes are lost -->\n  <textarea>{{ userBio }}</textarea>\n\n  <!-- The textarea displays content but ref never updates -->\n</template>\n```\n\n**Correct:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst message = ref('Hello World')\n</script>\n\n<template>\n  <!-- CORRECT: Use v-model for textarea -->\n  <textarea v-model=\"message\"></textarea>\n\n  <!-- For read-only display, still use v-model or :value -->\n  <textarea v-model=\"message\" readonly></textarea>\n\n  <!-- Or one-way binding with :value -->\n  <textarea :value=\"message\" readonly></textarea>\n</template>\n```\n\n```html\n<!-- With placeholder and other attributes -->\n<textarea\n  v-model=\"message\"\n  placeholder=\"Enter your message...\"\n  rows=\"5\"\n  maxlength=\"500\"\n></textarea>\n```\n\n## Reference\n- [Vue.js Form Input Bindings - Multiline text](https://vuejs.org/guide/essentials/forms.html#multiline-text)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Textarea Interpolation is One-Way Only - Use v-model for Two-Way Binding
+
+
+    **Impact: HIGH** - Interpolation in textarea (`{{ text }}`) provides one-way binding only - it displays the initial value but user input does NOT update the ref. This creates a confusing disconnect where the textarea shows content but edits are silently lost.
+
+
+    Unlike v-model which provides two-way binding, interpolation only renders the initial ref value into the textarea. When users type, the ref remains unchanged, making form submissions return stale data. Always use v-model for two-way binding in textareas.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Never use interpolation inside textarea tags\n- [ ] Always use v-model for textarea two-way binding\n- [ ] Search codebase for `<textarea>{{` patterns that may be silently broken\n- [ ] Add linting rules to catch this pattern if possible\n\n**Incorrect:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst message = ref('Hello World')\n</script>\n\n<template>\n  <!-- WRONG: One-way binding only! Shows initial value but edits don't update ref -->\n  <textarea>{{ message }}</textarea>\n\n  <!-- Also WRONG: User can type but changes are lost -->\n  <textarea>{{ userBio }}</textarea>\n\n  <!-- The textarea displays content but ref never updates -->\n</template>\n```\n\n**Correct:**\n```html\n<script setup>\nimport { ref } from 'vue'\n\nconst message = ref('Hello World')\n</script>\n\n<template>\n  <!-- CORRECT: Use v-model for textarea -->\n  <textarea v-model=\"message\"></textarea>\n\n  <!-- For read-only display, still use v-model or :value -->\n  <textarea v-model=\"message\" readonly></textarea>\n\n  <!-- Or one-way binding with :value -->\n  <textarea :value=\"message\" readonly></textarea>\n</template>\n```\n\n```html\n<!-- With placeholder and other attributes -->\n<textarea\n  v-model=\"message\"\n  placeholder=\"Enter your message...\"\n  rows=\"5\"\n  maxlength=\"500\"\n></textarea>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Form Input Bindings - Multiline text](https://vuejs.org/guide/essentials/forms.html#multiline-text)'

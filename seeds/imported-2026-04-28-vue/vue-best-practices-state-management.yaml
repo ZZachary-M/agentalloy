@@ -1,0 +1,60 @@
+skill_type: domain
+skill_id: vue-best-practices-state-management
+canonical_name: State Management Strategy
+category: engineering
+skill_class: domain
+domain_tags:
+- vueuse
+- pinia
+- vue
+- vue-best-practices
+- composables
+- ssr
+- vue3
+- state-management
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-best-practices/references/state-management.md
+raw_prose: "# State Management Strategy\n\n**Impact: HIGH** - Use the lightest state solution that fits your app architecture. SPA-only apps can use lightweight global composables, while SSR/Nuxt apps should default to Pinia for request-safe isolation and predictable tooling.\n\n## Task List\n\n- Keep state local first, then promote to shared/global only when needed\n- Use singleton composables only in non-SSR applications\n- Expose global state as readonly and mutate through explicit actions\n- Prefer Pinia for SSR/Nuxt, large apps, and advanced debugging/plugin needs\n- Avoid exporting mutable module-level reactive state directly\n\n## Choose the Lightest Store Approach\n\n- **Feature composable:** Default for reusable logic with local/feature-level state.\n- **Singleton composable or VueUse `createGlobalState`:** Small non-SSR apps needing shared app state.\n- **Pinia:** SSR/Nuxt apps, medium-to-large apps, and cases requiring DevTools, plugins, or action tracing.\n\n## Avoid Exporting Mutable Module State\n\n**BAD:**\n```ts\n// store/cart.ts\nimport { reactive } from 'vue'\n\nexport const cart = reactive({\n  items: [] as Array<{ id: string; qty: number }>\n})\n```\n\n**GOOD:**\n```ts\n// composables/useCartStore.ts\nimport { reactive, readonly } from 'vue'\n\nlet _store: ReturnType<typeof createCartStore> | null = null\n\nfunction createCartStore() {\n  const state = reactive({\n    items: [] as Array<{ id: string; qty: number }>\n  })\n\n  function addItem(id: string, qty = 1) {\n    const existing = state.items.find((item) => item.id === id)\n    if (existing) {\n      existing.qty += qty\n      return\n    }\n    state.items.push({ id, qty })\n  }\n\n  return {\n    state: readonly(state),\n    addItem\n  }\n}\n\nexport function useCartStore() {\n  if (!_store) _store = createCartStore()\n  return _store\n}\n```\n\n## Do Not Use Runtime Singletons in SSR\n\nModule singletons live for the runtime lifetime. In SSR this can leak state between requests.\n\n**BAD:**\n```ts\n// shared singleton reused across requests\nconst cartStore = useCartStore()\n\nexport function useServerCart() {\n  return cartStore\n}\n```\n\n**GOOD:**\n\n> `pinia` dependency required.\n\n```ts\n// stores/cart.ts\nimport { defineStore } from 'pinia'\n\nexport const useCartStore = defineStore('cart', {\n  state: () => ({\n    items: [] as Array<{ id: string; qty: number }>\n  }),\n  actions: {\n    addItem(id: string, qty = 1) {\n      const existing = this.items.find((item) => item.id === id)\n      if (existing) {\n        existing.qty += qty\n        return\n      }\n      this.items.push({ id, qty })\n    }\n  }\n})\n```\n\n## Use `createGlobalState` for Small SPA Global State\n\n> `@vueuse/core` dependency required.\n\nIf the app is non-SSR and already uses VueUse, `createGlobalState` removes singleton boilerplate.\n\n```ts\nimport { createGlobalState } from '@vueuse/core'\nimport { computed, ref } from 'vue'\n\nexport const useAuthState = createGlobalState(() => {\n  const token = ref<string | null>(null)\n  const isAuthenticated = computed(() => token.value !== null)\n\n  function setToken(next: string | null) {\n    token.value = next\n  }\n\n  return {\n    token,\n    isAuthenticated,\n    setToken\n  }\n})\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# State Management Strategy
+
+
+    **Impact: HIGH** - Use the lightest state solution that fits your app architecture. SPA-only apps can use lightweight global composables, while SSR/Nuxt apps should default to Pinia for request-safe isolation and predictable tooling.'
+- sequence: 2
+  fragment_type: execution
+  content: '## Task List
+
+
+    - Keep state local first, then promote to shared/global only when needed
+
+    - Use singleton composables only in non-SSR applications
+
+    - Expose global state as readonly and mutate through explicit actions
+
+    - Prefer Pinia for SSR/Nuxt, large apps, and advanced debugging/plugin needs
+
+    - Avoid exporting mutable module-level reactive state directly'
+- sequence: 3
+  fragment_type: execution
+  content: '## Choose the Lightest Store Approach
+
+
+    - **Feature composable:** Default for reusable logic with local/feature-level state.
+
+    - **Singleton composable or VueUse `createGlobalState`:** Small non-SSR apps needing shared app state.
+
+    - **Pinia:** SSR/Nuxt apps, medium-to-large apps, and cases requiring DevTools, plugins, or action tracing.'
+- sequence: 4
+  fragment_type: guardrail
+  content: "## Avoid Exporting Mutable Module State\n\n**BAD:**\n```ts\n// store/cart.ts\nimport { reactive } from 'vue'\n\nexport const cart = reactive({\n  items: [] as Array<{ id: string; qty: number }>\n})\n```\n\n**GOOD:**\n```ts\n// composables/useCartStore.ts\nimport { reactive, readonly } from 'vue'\n\nlet _store: ReturnType<typeof createCartStore> | null = null\n\nfunction createCartStore() {\n  const state = reactive({\n    items: [] as Array<{ id: string; qty: number }>\n  })\n\n  function addItem(id: string, qty = 1) {\n    const existing = state.items.find((item) => item.id === id)\n    if (existing) {\n      existing.qty += qty\n      return\n    }\n    state.items.push({ id, qty })\n  }\n\n  return {\n    state: readonly(state),\n    addItem\n  }\n}\n\nexport function useCartStore() {\n  if (!_store) _store = createCartStore()\n  return _store\n}\n```"
+- sequence: 5
+  fragment_type: guardrail
+  content: "## Do Not Use Runtime Singletons in SSR\n\nModule singletons live for the runtime lifetime. In SSR this can leak state between requests.\n\n**BAD:**\n```ts\n// shared singleton reused across requests\nconst cartStore = useCartStore()\n\nexport function useServerCart() {\n  return cartStore\n}\n```\n\n**GOOD:**\n\n> `pinia` dependency required.\n\n```ts\n// stores/cart.ts\nimport { defineStore } from 'pinia'\n\nexport const useCartStore = defineStore('cart', {\n  state: () => ({\n    items: [] as Array<{ id: string; qty: number }>\n  }),\n  actions: {\n    addItem(id: string, qty = 1) {\n      const existing = this.items.find((item) => item.id === id)\n      if (existing) {\n        existing.qty += qty\n        return\n      }\n      this.items.push({ id, qty })\n    }\n  }\n})\n```"
+- sequence: 6
+  fragment_type: execution
+  content: "## Use `createGlobalState` for Small SPA Global State\n\n> `@vueuse/core` dependency required.\n\nIf the app is non-SSR and already uses VueUse, `createGlobalState` removes singleton boilerplate.\n\n```ts\nimport { createGlobalState } from '@vueuse/core'\nimport { computed, ref } from 'vue'\n\nexport const useAuthState = createGlobalState(() => {\n  const token = ref<string | null>(null)\n  const isAuthenticated = computed(() => token.value !== null)\n\n  function setToken(next: string | null) {\n    token.value = next\n  }\n\n  return {\n    token,\n    isAuthenticated,\n    setToken\n  }\n})\n```"

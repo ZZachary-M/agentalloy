@@ -1,0 +1,55 @@
+skill_type: domain
+skill_id: vue-debug-guides-teleport-ssr-hydration
+canonical_name: Handle Teleport SSR Hydration Carefully
+category: engineering
+skill_class: domain
+domain_tags:
+- hydration
+- vue-debug-guides
+- vue
+- nuxt
+- ssr
+- vue3
+- teleport
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/teleport-ssr-hydration.md
+raw_prose: "# Handle Teleport SSR Hydration Carefully\n\n**Impact: HIGH** - Teleports require special handling during SSR. The teleported content is not part of the server-rendered HTML string, causing hydration mismatches that can break the application or cause content to disappear.\n\nThis is a critical issue for Nuxt, Quasar SSR, and custom Vue SSR setups.\n\n## Task Checklist\n\n- [ ] Wrap Teleport in `<ClientOnly>` component (Nuxt) for client-only rendering\n- [ ] Use conditional rendering based on mount state for non-Nuxt SSR\n- [ ] Use `data-allow-mismatch` attribute in Vue 3.5+ when intentional\n- [ ] Test SSR applications thoroughly for hydration issues\n\n**Problem - SSR Hydration Mismatch:**\n```vue\n<template>\n  <!-- Server renders nothing for teleported content -->\n  <!-- Client expects teleported content at #modals -->\n  <!-- = Hydration mismatch -->\n  <Teleport to=\"#modals\">\n    <div v-if=\"showModal\" class=\"modal\">\n      Modal content\n    </div>\n  </Teleport>\n</template>\n```\n\nCommon error messages:\n```\n[Vue warn]: Hydration children mismatch in <div>:\nserver rendered element contains fewer child nodes than client vdom.\n```\n\n**Solution 1 - Nuxt ClientOnly:**\n```vue\n<template>\n  <button @click=\"showModal = true\">Open Modal</button>\n\n  <!-- Only render on client, avoiding SSR -->\n  <ClientOnly>\n    <Teleport to=\"body\">\n      <div v-if=\"showModal\" class=\"modal\">\n        Modal content\n      </div>\n    </Teleport>\n  </ClientOnly>\n</template>\n```\n\n**Solution 2 - Manual Client Detection:**\n```vue\n<template>\n  <button @click=\"showModal = true\">Open Modal</button>\n\n  <!-- Only render after component mounts on client -->\n  <Teleport v-if=\"isMounted\" to=\"body\">\n    <div v-if=\"showModal\" class=\"modal\">\n      Modal content\n    </div>\n  </Teleport>\n</template>\n\n<script setup>\nimport { ref, onMounted } from 'vue'\n\nconst showModal = ref(false)\nconst isMounted = ref(false)\n\nonMounted(() => {\n  isMounted.value = true\n})\n</script>\n```\n\n**Solution 3 - Vue 3.5+ data-allow-mismatch:**\n```vue\n<template>\n  <!-- Suppress hydration warnings for intentional mismatches -->\n  <div data-allow-mismatch>\n    <Teleport to=\"body\">\n      <div v-if=\"showModal\" class=\"modal\">\n        Modal content\n      </div>\n    </Teleport>\n  </div>\n</template>\n```\n\n## SSR with Multiple Teleports\n\nMultiple teleports to the same target can cause additional hydration issues:\n\n```vue\n<!-- Parent.vue -->\n<template>\n  <!-- First teleport -->\n  <Teleport to=\"#modals\">\n    <NotificationBanner />\n  </Teleport>\n\n  <ChildComponent />\n</template>\n\n<!-- ChildComponent.vue -->\n<template>\n  <!-- Second teleport to same target - order matters! -->\n  <Teleport to=\"#modals\">\n    <Modal />\n  </Teleport>\n</template>\n```\n\nFor SSR, ensure consistent ordering or wrap each in `ClientOnly`.\n\n## Element Plus and UI Library SSR\n\nMany UI libraries use Teleport internally. Element Plus components that use Teleport include:\n- ElDialog\n- ElDrawer\n- ElTooltip\n- ElDropdown\n- ElSelect\n- ElDatePicker\n\n```vue\n<template>\n  <!-- These need special SSR handling -->\n  <ClientOnly>\n    <ElDialog v-model=\"visible\">\n      Dialog content\n    </ElDialog>\n  </ClientOnly>\n</template>\n```\n\n## Known Vue Issues\n\n- Disabled teleports in fragments can cause hydration mismatches (Vue issue #6152)\n- Nested teleports may cause app to break on hydration (Vue issue #5242)\n\n## Reference\n- [Vue.js SSR - Teleports](https://vuejs.org/guide/scaling-up/ssr.html#teleports)\n- [Element Plus SSR Guide](https://element-plus.org/en-US/guide/ssr.html)\n- [Nuxt ClientOnly Component](https://nuxt.com/docs/api/components/client-only)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Handle Teleport SSR Hydration Carefully
+
+
+    **Impact: HIGH** - Teleports require special handling during SSR. The teleported content is not part of the server-rendered HTML string, causing hydration mismatches that can break the application or cause content to disappear.
+
+
+    This is a critical issue for Nuxt, Quasar SSR, and custom Vue SSR setups.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Wrap Teleport in `<ClientOnly>` component (Nuxt) for client-only rendering\n- [ ] Use conditional rendering based on mount state for non-Nuxt SSR\n- [ ] Use `data-allow-mismatch` attribute in Vue 3.5+ when intentional\n- [ ] Test SSR applications thoroughly for hydration issues\n\n**Problem - SSR Hydration Mismatch:**\n```vue\n<template>\n  <!-- Server renders nothing for teleported content -->\n  <!-- Client expects teleported content at #modals -->\n  <!-- = Hydration mismatch -->\n  <Teleport to=\"#modals\">\n    <div v-if=\"showModal\" class=\"modal\">\n      Modal content\n    </div>\n  </Teleport>\n</template>\n```\n\nCommon error messages:\n```\n[Vue warn]: Hydration children mismatch in <div>:\nserver rendered element contains fewer child nodes than client vdom.\n```\n\n**Solution 1 - Nuxt ClientOnly:**\n```vue\n<template>\n  <button @click=\"showModal = true\">Open Modal</button>\n\n  <!-- Only render on client, avoiding SSR -->\n  <ClientOnly>\n    <Teleport to=\"body\">\n      <div v-if=\"showModal\" class=\"modal\">\n        Modal content\n      </div>\n    </Teleport>\n  </ClientOnly>\n</template>\n```\n\n**Solution 2 - Manual Client Detection:**\n```vue\n<template>\n  <button @click=\"showModal = true\">Open Modal</button>\n\n  <!-- Only render after component mounts on client -->\n  <Teleport v-if=\"isMounted\" to=\"body\">\n    <div v-if=\"showModal\" class=\"modal\">\n      Modal content\n    </div>\n  </Teleport>\n</template>\n\n<script setup>\nimport { ref, onMounted } from 'vue'\n\nconst showModal = ref(false)\nconst isMounted = ref(false)\n\nonMounted(() => {\n  isMounted.value = true\n})\n</script>\n```\n\n**Solution 3 - Vue 3.5+ data-allow-mismatch:**\n```vue\n<template>\n  <!-- Suppress hydration warnings for intentional mismatches -->\n  <div data-allow-mismatch>\n    <Teleport to=\"body\">\n      <div v-if=\"showModal\" class=\"modal\">\n        Modal content\n      </div>\n    </Teleport>\n  </div>\n</template>\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## SSR with Multiple Teleports\n\nMultiple teleports to the same target can cause additional hydration issues:\n\n```vue\n<!-- Parent.vue -->\n<template>\n  <!-- First teleport -->\n  <Teleport to=\"#modals\">\n    <NotificationBanner />\n  </Teleport>\n\n  <ChildComponent />\n</template>\n\n<!-- ChildComponent.vue -->\n<template>\n  <!-- Second teleport to same target - order matters! -->\n  <Teleport to=\"#modals\">\n    <Modal />\n  </Teleport>\n</template>\n```\n\nFor SSR, ensure consistent ordering or wrap each in `ClientOnly`."
+- sequence: 4
+  fragment_type: execution
+  content: "## Element Plus and UI Library SSR\n\nMany UI libraries use Teleport internally. Element Plus components that use Teleport include:\n- ElDialog\n- ElDrawer\n- ElTooltip\n- ElDropdown\n- ElSelect\n- ElDatePicker\n\n```vue\n<template>\n  <!-- These need special SSR handling -->\n  <ClientOnly>\n    <ElDialog v-model=\"visible\">\n      Dialog content\n    </ElDialog>\n  </ClientOnly>\n</template>\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Known Vue Issues
+
+
+    - Disabled teleports in fragments can cause hydration mismatches (Vue issue #6152)
+
+    - Nested teleports may cause app to break on hydration (Vue issue #5242)'
+- sequence: 6
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js SSR - Teleports](https://vuejs.org/guide/scaling-up/ssr.html#teleports)
+
+    - [Element Plus SSR Guide](https://element-plus.org/en-US/guide/ssr.html)
+
+    - [Nuxt ClientOnly Component](https://nuxt.com/docs/api/components/client-only)'

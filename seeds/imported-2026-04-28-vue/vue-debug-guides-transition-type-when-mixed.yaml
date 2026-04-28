@@ -1,0 +1,50 @@
+skill_type: domain
+skill_id: vue-debug-guides-transition-type-when-mixed
+canonical_name: Specify Transition Type When Mixing CSS Transitions and Animations
+category: engineering
+skill_class: domain
+domain_tags:
+- timing
+- vue-debug-guides
+- vue
+- animation
+- type
+- vue3
+- css
+- transition
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from vue/skills/skills/vue-debug-guides/reference/transition-type-when-mixed.md
+raw_prose: "# Specify Transition Type When Mixing CSS Transitions and Animations\n\n**Impact: MEDIUM** - When you have both CSS transitions and CSS animations applied to the same element (for example, a Vue-triggered animation combined with a hover transition effect), Vue cannot automatically determine which end event to listen for. You must explicitly tell Vue which type to prioritize using the `type` attribute with a value of either `\"animation\"` or `\"transition\"`.\n\n## Task Checklist\n\n- [ ] Check if your element has both `transition` and `animation` CSS properties\n- [ ] Determine which timing should control when Vue considers the transition complete\n- [ ] Add `type=\"animation\"` or `type=\"transition\"` to the `<Transition>` component\n- [ ] The type should match whichever animation/transition is longer or more important\n\n**Problematic Code:**\n```vue\n<template>\n  <!-- BAD: Both transition and animation present, Vue might pick wrong end event -->\n  <Transition name=\"bounce\">\n    <div v-if=\"show\" class=\"box\">\n      Hover me for additional effect\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Vue-triggered CSS animation */\n.bounce-enter-active {\n  animation: bounce-in 0.5s;\n}\n\n.bounce-leave-active {\n  animation: bounce-out 0.3s;\n}\n\n@keyframes bounce-in {\n  0% { transform: scale(0); }\n  50% { transform: scale(1.2); }\n  100% { transform: scale(1); }\n}\n\n@keyframes bounce-out {\n  0% { transform: scale(1); }\n  100% { transform: scale(0); }\n}\n\n/* Additional hover transition on same element */\n.box {\n  transition: background-color 0.2s ease, box-shadow 0.2s ease;\n}\n\n.box:hover {\n  background-color: #f0f0f0;\n  box-shadow: 0 4px 8px rgba(0,0,0,0.1);\n}\n</style>\n```\n\n**Correct Code:**\n```vue\n<template>\n  <!-- GOOD: Explicitly specify that animation controls timing -->\n  <Transition name=\"bounce\" type=\"animation\">\n    <div v-if=\"show\" class=\"box\">\n      Hover me for additional effect\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Vue-triggered CSS animation - this is what we care about */\n.bounce-enter-active {\n  animation: bounce-in 0.5s;\n}\n\n.bounce-leave-active {\n  animation: bounce-out 0.3s;\n}\n\n@keyframes bounce-in {\n  0% { transform: scale(0); }\n  50% { transform: scale(1.2); }\n  100% { transform: scale(1); }\n}\n\n@keyframes bounce-out {\n  0% { transform: scale(1); }\n  100% { transform: scale(0); }\n}\n\n/* Additional hover transition - unrelated to Vue transition timing */\n.box {\n  transition: background-color 0.2s ease, box-shadow 0.2s ease;\n}\n\n.box:hover {\n  background-color: #f0f0f0;\n  box-shadow: 0 4px 8px rgba(0,0,0,0.1);\n}\n</style>\n```\n\n## When to Use Each Type\n\n### Use `type=\"animation\"` when:\n- Your enter/leave effects use `@keyframes` animations\n- The animation is longer than any transitions\n- You want precise control over multi-step animations\n\n```vue\n<Transition name=\"fancy\" type=\"animation\">\n  <div v-if=\"show\" class=\"animated-element\" />\n</Transition>\n\n<style>\n.fancy-enter-active {\n  animation: fancy-entrance 1s ease-out;\n}\n\n.animated-element {\n  /* This shorter transition should not affect timing */\n  transition: color 0.2s;\n}\n</style>\n```\n\n### Use `type=\"transition\"` when:\n- Your enter/leave effects use CSS `transition` property\n- You have decorative animations that shouldn't affect timing\n\n```vue\n<Transition name=\"slide\" type=\"transition\">\n  <div v-if=\"show\" class=\"sliding-element\" />\n</Transition>\n\n<style>\n.slide-enter-active,\n.slide-leave-active {\n  transition: transform 0.3s ease;\n}\n\n.slide-enter-from,\n.slide-leave-to {\n  transform: translateX(-100%);\n}\n\n/* Decorative infinite animation should not affect timing */\n.sliding-element {\n  animation: pulse 2s infinite;\n}\n\n@keyframes pulse {\n  0%, 100% { opacity: 1; }\n  50% { opacity: 0.8; }\n}\n</style>\n```\n\n## Common Symptoms Without Type Specification\n\n1. Transition ends too early (element snaps to final position)\n2. Transition hangs or takes too long to complete\n3. Element disappears before animation finishes\n4. CSS classes remain applied after transition should be complete\n\n## Reference\n- [Vue.js Transition Documentation](https://vuejs.org/guide/built-ins/transition.html#css-based-transitions)\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Specify Transition Type When Mixing CSS Transitions and Animations
+
+
+    **Impact: MEDIUM** - When you have both CSS transitions and CSS animations applied to the same element (for example, a Vue-triggered animation combined with a hover transition effect), Vue cannot automatically determine which end event to listen for. You must explicitly tell Vue which type to prioritize using the `type` attribute with a value of either `"animation"` or `"transition"`.'
+- sequence: 2
+  fragment_type: setup
+  content: "## Task Checklist\n\n- [ ] Check if your element has both `transition` and `animation` CSS properties\n- [ ] Determine which timing should control when Vue considers the transition complete\n- [ ] Add `type=\"animation\"` or `type=\"transition\"` to the `<Transition>` component\n- [ ] The type should match whichever animation/transition is longer or more important\n\n**Problematic Code:**\n```vue\n<template>\n  <!-- BAD: Both transition and animation present, Vue might pick wrong end event -->\n  <Transition name=\"bounce\">\n    <div v-if=\"show\" class=\"box\">\n      Hover me for additional effect\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Vue-triggered CSS animation */\n.bounce-enter-active {\n  animation: bounce-in 0.5s;\n}\n\n.bounce-leave-active {\n  animation: bounce-out 0.3s;\n}\n\n@keyframes bounce-in {\n  0% { transform: scale(0); }\n  50% { transform: scale(1.2); }\n  100% { transform: scale(1); }\n}\n\n@keyframes bounce-out {\n  0% { transform: scale(1); }\n  100% { transform: scale(0); }\n}\n\n/* Additional hover transition on same element */\n.box {\n  transition: background-color 0.2s ease, box-shadow 0.2s ease;\n}\n\n.box:hover {\n  background-color: #f0f0f0;\n  box-shadow: 0 4px 8px rgba(0,0,0,0.1);\n}\n</style>\n```\n\n**Correct Code:**\n```vue\n<template>\n  <!-- GOOD: Explicitly specify that animation controls timing -->\n  <Transition name=\"bounce\" type=\"animation\">\n    <div v-if=\"show\" class=\"box\">\n      Hover me for additional effect\n    </div>\n  </Transition>\n</template>\n\n<style>\n/* Vue-triggered CSS animation - this is what we care about */\n.bounce-enter-active {\n  animation: bounce-in 0.5s;\n}\n\n.bounce-leave-active {\n  animation: bounce-out 0.3s;\n}\n\n@keyframes bounce-in {\n  0% { transform: scale(0); }\n  50% { transform: scale(1.2); }\n  100% { transform: scale(1); }\n}\n\n@keyframes bounce-out {\n  0% { transform: scale(1); }\n  100% { transform: scale(0); }\n}\n\n/* Additional hover transition - unrelated to Vue transition timing */\n.box {\n  transition: background-color 0.2s ease, box-shadow 0.2s ease;\n}\n\n.box:hover {\n  background-color: #f0f0f0;\n  box-shadow: 0 4px 8px rgba(0,0,0,0.1);\n}\n</style>\n```"
+- sequence: 3
+  fragment_type: setup
+  content: "## When to Use Each Type\n\n### Use `type=\"animation\"` when:\n- Your enter/leave effects use `@keyframes` animations\n- The animation is longer than any transitions\n- You want precise control over multi-step animations\n\n```vue\n<Transition name=\"fancy\" type=\"animation\">\n  <div v-if=\"show\" class=\"animated-element\" />\n</Transition>\n\n<style>\n.fancy-enter-active {\n  animation: fancy-entrance 1s ease-out;\n}\n\n.animated-element {\n  /* This shorter transition should not affect timing */\n  transition: color 0.2s;\n}\n</style>\n```\n\n### Use `type=\"transition\"` when:\n- Your enter/leave effects use CSS `transition` property\n- You have decorative animations that shouldn't affect timing\n\n```vue\n<Transition name=\"slide\" type=\"transition\">\n  <div v-if=\"show\" class=\"sliding-element\" />\n</Transition>\n\n<style>\n.slide-enter-active,\n.slide-leave-active {\n  transition: transform 0.3s ease;\n}\n\n.slide-enter-from,\n.slide-leave-to {\n  transform: translateX(-100%);\n}\n\n/* Decorative infinite animation should not affect timing */\n.sliding-element {\n  animation: pulse 2s infinite;\n}\n\n@keyframes pulse {\n  0%, 100% { opacity: 1; }\n  50% { opacity: 0.8; }\n}\n</style>\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Common Symptoms Without Type Specification
+
+
+    1. Transition ends too early (element snaps to final position)
+
+    2. Transition hangs or takes too long to complete
+
+    3. Element disappears before animation finishes
+
+    4. CSS classes remain applied after transition should be complete'
+- sequence: 5
+  fragment_type: execution
+  content: '## Reference
+
+    - [Vue.js Transition Documentation](https://vuejs.org/guide/built-ins/transition.html#css-based-transitions)'
