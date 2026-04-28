@@ -1,0 +1,373 @@
+skill_type: domain
+skill_id: temporal-typescript
+canonical_name: Temporal TypeScript Workflows and Activities
+category: engineering
+skill_class: domain
+domain_tags: [temporal, typescript, workflow, activities, async, durable-execution, nodejs]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — covers @temporalio/* SDK packages, deterministic workflow constraints, activity patterns, signals/queries, worker setup, and testing.
+raw_prose: |
+  # Temporal TypeScript Workflows and Activities
+
+  ## Overview
+
+  Temporal is a durable execution platform: workflow code runs to completion despite worker restarts, network failures, and infrastructure changes. The TypeScript SDK (`@temporalio/*`) lets you author workflows and activities in TS while Temporal Server handles state, timers, retries, and history replay.
+
+  Key separation: **workflows are deterministic and run in a sandboxed isolate**; **activities are arbitrary code** (DB calls, HTTP, file I/O). Anything non-deterministic must live in an activity.
+
+  ## When to Use
+
+  - Long-running orchestrations (minutes → months) that must survive crashes
+  - Sagas / multi-step business flows where each step might fail and need compensation
+  - Scheduled jobs that need durable retries, not "best-effort cron"
+  - Background processing with strong "exactly-once-effect" semantics for side effects
+  - Anywhere you'd otherwise build ad-hoc state machines on Redis/Postgres queues
+
+  ## SDK Package Layout
+
+  | Package | Purpose | Where it runs |
+  |---|---|---|
+  | `@temporalio/client` | Start workflows, send signals/queries from app code | Your API/server |
+  | `@temporalio/worker` | Polls task queues, runs workflows + activities | Worker process |
+  | `@temporalio/workflow` | Workflow primitives: `proxyActivities`, `sleep`, `condition`, signals | Workflow code only |
+  | `@temporalio/activity` | Activity context: heartbeats, cancellation, info | Activity code only |
+  | `@temporalio/testing` | Time-skipping test environment | Tests |
+
+  Worker bundles workflows into a separate JS bundle; activities are imported normally.
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup
+
+      ```bash
+      pnpm add @temporalio/client @temporalio/worker @temporalio/workflow @temporalio/activity
+      pnpm add -D @temporalio/testing
+      ```
+
+      Project layout (recommended):
+
+      ```
+      src/
+        temporal/
+          activities/
+            index.ts          # export all activity functions
+            email.ts
+            payments.ts
+          workflows/
+            index.ts          # export all workflows (workflow bundle entry)
+            order-flow.ts
+          worker.ts           # Worker.create entry point
+          client.ts           # Client factory (used by API/server code)
+      ```
+
+      `tsconfig.json` for the workflows directory should set `"isolatedModules": true` and avoid Node-only types — the workflow bundle runs in an isolate, not Node.
+
+      Local dev server: `temporal server start-dev` (Temporal CLI). Connects on `127.0.0.1:7233` by default; UI at `:8233`.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Authoring Activities
+
+      Activities are plain async functions. Keep them **idempotent** — Temporal may retry them.
+
+      ```typescript
+      // src/temporal/activities/payments.ts
+      import { Context } from '@temporalio/activity';
+
+      export async function chargeCard(input: {
+        orderId: string;
+        amountCents: number;
+        idempotencyKey: string;
+      }): Promise<{ chargeId: string }> {
+        const ctx = Context.current();
+
+        // Heartbeat for long activities so the worker knows you're alive
+        ctx.heartbeat({ stage: 'calling-stripe' });
+
+        const charge = await stripe.charges.create(
+          { amount: input.amountCents, currency: 'usd', source: 'tok_x' },
+          { idempotencyKey: input.idempotencyKey },
+        );
+
+        return { chargeId: charge.id };
+      }
+      ```
+
+      Re-export from `activities/index.ts`:
+
+      ```typescript
+      export * from './payments';
+      export * from './email';
+      ```
+
+      ### Activity rules
+
+      - **Idempotent or use idempotency keys** — Temporal retries by default
+      - **Heartbeat** for any activity > a few seconds; let it `await ctx.sleep(...)` or check `ctx.cancelled` to honor cancellation
+      - **No workflow imports** — activities never call workflow APIs
+      - **Throw `ApplicationFailure.nonRetryable(...)` for permanent errors** (validation, 4xx) so retry policy stops
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Authoring Workflows (Deterministic Code)
+
+      Workflows are restartable from history — every line of workflow code may be re-executed during replay. **Anything non-deterministic must be done in an activity.**
+
+      ```typescript
+      // src/temporal/workflows/order-flow.ts
+      import {
+        proxyActivities,
+        sleep,
+        defineSignal,
+        defineQuery,
+        setHandler,
+        condition,
+        ApplicationFailure,
+      } from '@temporalio/workflow';
+      import type * as activities from '../activities';
+
+      const { chargeCard, sendReceipt, refundCharge } = proxyActivities<typeof activities>({
+        startToCloseTimeout: '1 minute',
+        retry: { maximumAttempts: 5, initialInterval: '2s' },
+      });
+
+      export const cancelOrderSignal = defineSignal('cancelOrder');
+      export const orderStatusQuery = defineQuery<string>('orderStatus');
+
+      export async function orderWorkflow(orderId: string, amountCents: number): Promise<void> {
+        let status = 'pending';
+        let cancelled = false;
+
+        setHandler(cancelOrderSignal, () => { cancelled = true; });
+        setHandler(orderStatusQuery, () => status);
+
+        // Wait up to 10 minutes for payment authorization OR cancel signal
+        const got = await condition(() => cancelled, '10 minutes');
+        if (cancelled) {
+          status = 'cancelled';
+          return;
+        }
+
+        status = 'charging';
+        const { chargeId } = await chargeCard({
+          orderId,
+          amountCents,
+          idempotencyKey: orderId, // workflow id is a stable idempotency key
+        });
+
+        try {
+          await sendReceipt({ orderId, chargeId });
+          status = 'complete';
+        } catch (err) {
+          // Compensate
+          await refundCharge({ chargeId });
+          status = 'refunded';
+          throw ApplicationFailure.nonRetryable('receipt-failed-refunded');
+        }
+      }
+      ```
+
+      ### Determinism rules — banned in workflow code
+
+      | Banned | Why | Replacement |
+      |---|---|---|
+      | `Date.now()`, `new Date()` | Wall clock differs on replay | `Workflow.workflowInfo().startTime` or activity |
+      | `Math.random()`, `crypto.randomUUID()` | Non-deterministic | `import { uuid4 } from '@temporalio/workflow'` then `uuid4()` |
+      | `setTimeout`, raw promises | Not tracked by Temporal | `sleep(...)`, `condition(...)` |
+      | `fetch`, DB clients, fs | I/O | Move to activity |
+      | Iterating a `Map`/`Set` if order matters | Insertion order not guaranteed across versions | Sort explicitly |
+      | Importing Node built-ins | Workflow runs in isolate | Pass data in via input |
+
+      Use `patched(...)` from `@temporalio/workflow` to roll out behavior changes to running workflows without breaking replay.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Worker Setup
+
+      ```typescript
+      // src/temporal/worker.ts
+      import { NativeConnection, Worker } from '@temporalio/worker';
+      import * as activities from './activities';
+
+      async function run() {
+        const connection = await NativeConnection.connect({
+          address: process.env.TEMPORAL_ADDRESS ?? 'localhost:7233',
+          tls: process.env.TEMPORAL_TLS === 'true' ? {} : false,
+        });
+
+        const worker = await Worker.create({
+          connection,
+          namespace: process.env.TEMPORAL_NAMESPACE ?? 'default',
+          taskQueue: 'orders',
+          workflowsPath: require.resolve('./workflows'),
+          activities,
+          // Resource caps
+          maxConcurrentActivityTaskExecutions: 50,
+          maxConcurrentWorkflowTaskExecutions: 20,
+        });
+
+        await worker.run(); // blocks until SIGINT/SIGTERM
+      }
+
+      run().catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+      ```
+
+      ## Starting Workflows from API Code
+
+      ```typescript
+      // src/temporal/client.ts
+      import { Client, Connection } from '@temporalio/client';
+      import { orderWorkflow, cancelOrderSignal } from './workflows/order-flow';
+
+      let _client: Client | undefined;
+
+      export async function getTemporalClient(): Promise<Client> {
+        if (_client) return _client;
+        const connection = await Connection.connect({
+          address: process.env.TEMPORAL_ADDRESS ?? 'localhost:7233',
+        });
+        _client = new Client({ connection, namespace: 'default' });
+        return _client;
+      }
+
+      // In your NestJS service / Express handler:
+      const client = await getTemporalClient();
+      const handle = await client.workflow.start(orderWorkflow, {
+        taskQueue: 'orders',
+        workflowId: `order-${orderId}`, // dedup key — second start with same id rejects
+        args: [orderId, amountCents],
+      });
+
+      // Send a signal later
+      await handle.signal(cancelOrderSignal);
+
+      // Query state
+      const status = await handle.query('orderStatus');
+      ```
+
+      Reuse a single `Client` across requests — `Connection.connect` is expensive.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Testing Workflows with the Time-Skipping Test Server
+
+      ```typescript
+      // src/temporal/workflows/order-flow.test.ts
+      import { TestWorkflowEnvironment } from '@temporalio/testing';
+      import { Worker } from '@temporalio/worker';
+      import { orderWorkflow } from './order-flow';
+
+      describe('orderWorkflow', () => {
+        let testEnv: TestWorkflowEnvironment;
+
+        beforeAll(async () => {
+          testEnv = await TestWorkflowEnvironment.createTimeSkipping();
+        });
+
+        afterAll(async () => {
+          await testEnv?.teardown();
+        });
+
+        it('charges and completes', async () => {
+          const { client, nativeConnection } = testEnv;
+
+          const worker = await Worker.create({
+            connection: nativeConnection,
+            taskQueue: 'test',
+            workflowsPath: require.resolve('./order-flow'),
+            activities: {
+              chargeCard: async () => ({ chargeId: 'ch_test' }),
+              sendReceipt: async () => {},
+              refundCharge: async () => {},
+            },
+          });
+
+          await worker.runUntil(
+            client.workflow.execute(orderWorkflow, {
+              taskQueue: 'test',
+              workflowId: 'test-1',
+              args: ['order-1', 1000],
+            }),
+          );
+
+          // Workflow returned without throwing — pass
+        });
+
+        it('cancels when signaled before charge', async () => {
+          const { client, nativeConnection } = testEnv;
+          const worker = await Worker.create({
+            connection: nativeConnection,
+            taskQueue: 'test',
+            workflowsPath: require.resolve('./order-flow'),
+            activities: { chargeCard: async () => ({ chargeId: 'x' }), sendReceipt: async () => {}, refundCharge: async () => {} },
+          });
+
+          await worker.runUntil(async () => {
+            const handle = await client.workflow.start(orderWorkflow, {
+              taskQueue: 'test',
+              workflowId: 'test-2',
+              args: ['order-2', 1000],
+            });
+            await handle.signal('cancelOrder');
+            await handle.result();
+            expect(await handle.query('orderStatus')).toBe('cancelled');
+          });
+        });
+      });
+      ```
+
+      Time-skipping fast-forwards through `sleep` and timer waits, so a workflow that waits 24 hours runs in milliseconds.
+
+  - sequence: 6
+    fragment_type: guardrail
+    content: |
+      ## Anti-Patterns and Red Flags
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | Calling `fetch`/DB directly inside workflow code | Non-deterministic — replay will diverge | Move to activity, call via `proxyActivities` |
+      | `new Date()` or `Date.now()` in workflow | Wall clock differs at replay | Pass timestamp via input or read from `workflowInfo()` |
+      | Long-running activity without heartbeats | Worker reports as failed; workflow retries | `Context.current().heartbeat()` periodically |
+      | Catching all errors in workflow with `try { activity() } catch {}` | Hides retryable failures from Temporal | Let it throw; configure retry policy |
+      | Random workflow IDs for "same logical operation" | Loses dedup; double charges | Stable workflow ID like `order-${id}` |
+      | One giant workflow with 100+ activities | Hard to reason about, big history | Split with child workflows or `continueAsNew` |
+      | Mutating shared state across activities via globals | Activities run on different workers | Pass state through workflow vars / inputs |
+      | Skipping `ApplicationFailure.nonRetryable` for 4xx | Wastes retries on permanent errors | Throw non-retryable for validation/4xx |
+
+      ### Workflow versioning
+
+      Once a workflow is in production, you cannot change its code in a way that breaks replay of in-flight executions. Use:
+
+      - `patched('change-name', () => newBehavior(), () => oldBehavior())` — gated branch
+      - `deprecatePatch('change-name')` — once all old executions drain
+      - Run separate worker pools during long migrations
+
+  - sequence: 7
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      Before merging Temporal code:
+
+      - [ ] Workflow file imports nothing from Node built-ins (`fs`, `crypto`, `http`, etc.)
+      - [ ] No `Date.now()`, `Math.random()`, `setTimeout` in workflow code
+      - [ ] All side effects are in activities, called via `proxyActivities`
+      - [ ] Each activity is idempotent OR uses an idempotency key derived from workflow input
+      - [ ] Activities > 5s call `Context.current().heartbeat()`
+      - [ ] Workflow IDs are deterministic strings tied to the business entity
+      - [ ] Retry policies set explicitly per activity (don't rely on defaults for $-side-effect calls)
+      - [ ] Tests use `TestWorkflowEnvironment.createTimeSkipping()` — not real time
+      - [ ] Worker process handles SIGTERM and lets `worker.run()` drain
+      - [ ] `TEMPORAL_ADDRESS`, namespace, task queue come from env vars, not hardcoded

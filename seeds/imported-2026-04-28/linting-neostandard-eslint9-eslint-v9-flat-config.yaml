@@ -1,0 +1,74 @@
+skill_type: domain
+skill_id: linting-neostandard-eslint9-eslint-v9-flat-config
+canonical_name: Eslint V9 Flat Config
+category: engineering
+skill_class: domain
+domain_tags:
+- eslint
+- eslint9
+- flat-config
+- javascript
+- linting
+- typescript
+- neostandard
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/linting-neostandard-eslint9/rules/eslint-v9-flat-config.md
+raw_prose: "ESLint v9 uses flat config by default. Prefer `eslint.config.js` or `eslint.config.mjs` over legacy `.eslintrc*` files.\n\n## Preferred setup in this skill: neostandard baseline\n\nInstall:\n\n```bash\nnpm install --save-dev eslint neostandard\n```\n\nCreate config (ESM helper):\n\n```bash\nnpx neostandard --esm > eslint.config.js\n```\n\nRun lint:\n\n```bash\nnpx eslint .\n```\n\n## Manual flat config (when not using neostandard)\n\nInstall (example):\n\n```bash\nnpm install --save-dev eslint @eslint/js typescript-eslint\n```\n\nBasic `eslint.config.mjs` (JS + TS):\n\n```js\nimport js from '@eslint/js'\nimport tseslint from 'typescript-eslint'\n\nexport default [\n  js.configs.recommended,\n  ...tseslint.configs.recommended,\n  {\n    files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],\n    languageOptions: {\n      ecmaVersion: 'latest',\n      sourceType: 'module'\n    },\n    rules: {\n      'no-unused-vars': 'off',\n      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]\n    }\n  }\n]\n```\n\n## Package scripts\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```\n\n## Good practices\n\n- Use a single root flat config unless package-level variance is required\n- Keep TypeScript-aware rules scoped to TS files\n- Avoid duplicate JS/TS rules; disable base rule when TS extension rule is used\n- Keep CI on non-fix lint runs; reserve `--fix` for local workflows\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: ESLint v9 uses flat config by default. Prefer `eslint.config.js` or `eslint.config.mjs` over legacy `.eslintrc*` files.
+- sequence: 2
+  fragment_type: setup
+  content: '## Preferred setup in this skill: neostandard baseline
+
+
+    Install:
+
+
+    ```bash
+
+    npm install --save-dev eslint neostandard
+
+    ```
+
+
+    Create config (ESM helper):
+
+
+    ```bash
+
+    npx neostandard --esm > eslint.config.js
+
+    ```
+
+
+    Run lint:
+
+
+    ```bash
+
+    npx eslint .
+
+    ```'
+- sequence: 3
+  fragment_type: execution
+  content: "## Manual flat config (when not using neostandard)\n\nInstall (example):\n\n```bash\nnpm install --save-dev eslint @eslint/js typescript-eslint\n```\n\nBasic `eslint.config.mjs` (JS + TS):\n\n```js\nimport js from '@eslint/js'\nimport tseslint from 'typescript-eslint'\n\nexport default [\n  js.configs.recommended,\n  ...tseslint.configs.recommended,\n  {\n    files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],\n    languageOptions: {\n      ecmaVersion: 'latest',\n      sourceType: 'module'\n    },\n    rules: {\n      'no-unused-vars': 'off',\n      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]\n    }\n  }\n]\n```"
+- sequence: 4
+  fragment_type: execution
+  content: "## Package scripts\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```"
+- sequence: 5
+  fragment_type: execution
+  content: '## Good practices
+
+
+    - Use a single root flat config unless package-level variance is required
+
+    - Keep TypeScript-aware rules scoped to TS files
+
+    - Avoid duplicate JS/TS rules; disable base rule when TS extension rule is used
+
+    - Keep CI on non-fix lint runs; reserve `--fix` for local workflows'

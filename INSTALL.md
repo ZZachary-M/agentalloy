@@ -55,6 +55,14 @@ You need:
 
 If `uv` is missing, **stop and ask the user to install it** with the official command at https://docs.astral.sh/uv/getting-started/installation/. Do not auto-execute the install script — that's a non-reversible action that requires the human in the loop.
 
+If step 4 picks **Ollama** as the runner and the `ollama` binary is missing (or `localhost:11434` is unreachable), step 5's pull will fail with a connection error. Same rule as `uv`: **stop and ask the user to install Ollama**. Do not auto-execute. Tell them:
+
+- **Linux:** `curl -fsSL https://ollama.com/install.sh | sh`
+- **macOS:** `brew install ollama`, or download from https://ollama.com/download/mac
+- **Windows / other:** see https://ollama.com/download
+
+After install, the user must have `ollama serve` running (the official installer sets this up as a service on macOS/Windows; on Linux the install script registers a systemd unit). Confirm with `curl -s http://localhost:11434/api/tags` before re-running step 5.
+
 ---
 
 ## Step 1: Pre-flight

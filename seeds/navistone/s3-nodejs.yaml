@@ -1,0 +1,366 @@
+skill_type: domain
+skill_id: s3-nodejs
+canonical_name: AWS S3 with Node.js (v3 SDK)
+category: engineering
+skill_class: domain
+domain_tags: [aws, s3, nodejs, typescript, file-storage, presigned-urls, multipart, streaming]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — covers @aws-sdk/client-s3 v3 patterns, presigned URLs, streaming uploads/downloads, multipart with lib-storage, error handling, and security.
+raw_prose: |
+  # AWS S3 with Node.js (v3 SDK)
+
+  ## Overview
+
+  The AWS SDK for JavaScript v3 (`@aws-sdk/client-s3`) is modular, command-based, and tree-shakeable. Each operation is a `Command` instance sent through an `S3Client`. v2 (`aws-sdk`) is end-of-life; new code uses v3 only.
+
+  Three distinct patterns dominate real-world use:
+
+  1. **Direct PutObject / GetObject** — small files, server-side
+  2. **Presigned URLs** — let the browser upload/download directly, your server only signs
+  3. **Multipart Upload via `@aws-sdk/lib-storage`** — large files (>100 MB) with automatic part splitting and parallel uploads
+
+  ## When to Use
+
+  - User-uploaded files (avatars, attachments, exports) — usually presigned URLs
+  - Server-generated artifacts (PDFs, reports, archives) — direct PutObject
+  - Large files / streaming uploads from the server — `Upload` from `lib-storage`
+  - Cross-environment configuration (staging vs prod buckets) — env vars
+
+  ## Configuration
+
+  Bucket names and region MUST come from env vars per environment. Never hardcode.
+
+  ```bash
+  AWS_REGION=us-east-1
+  S3_BUCKET=navistone-vendor-uploads-staging   # different per env
+  S3_PUBLIC_URL_BASE=https://cdn-staging.navistone.com  # if fronted by CloudFront
+  ```
+
+  Credentials: in AWS-hosted environments (ECS/EKS/Lambda), use the default credential chain (IAM role / IRSA). Locally, `~/.aws/credentials` profile via `AWS_PROFILE`. **Never put long-lived access keys in `.env`** for production.
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup
+
+      ```bash
+      pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner @aws-sdk/lib-storage
+      ```
+
+      Single client instance per process — the SDK pools HTTP connections internally:
+
+      ```typescript
+      // src/storage/s3-client.ts
+      import { S3Client } from '@aws-sdk/client-s3';
+
+      let _client: S3Client | undefined;
+
+      export function getS3Client(): S3Client {
+        if (_client) return _client;
+        _client = new S3Client({
+          region: process.env.AWS_REGION ?? 'us-east-1',
+          // In AWS environments, credentials resolve from the default chain.
+          // For local dev only, you can set credentials explicitly:
+          // credentials: { accessKeyId: ..., secretAccessKey: ... }
+          maxAttempts: 3,
+          requestHandler: { requestTimeout: 30_000 },
+        });
+        return _client;
+      }
+
+      export const S3_BUCKET = (() => {
+        const b = process.env.S3_BUCKET;
+        if (!b) throw new Error('S3_BUCKET env var is required');
+        return b;
+      })();
+      ```
+
+      Validate env at startup so missing config fails fast, not on first upload.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Direct Put / Get / Delete
+
+      ```typescript
+      import {
+        PutObjectCommand,
+        GetObjectCommand,
+        DeleteObjectCommand,
+        HeadObjectCommand,
+        S3ServiceException,
+      } from '@aws-sdk/client-s3';
+      import { getS3Client, S3_BUCKET } from './s3-client';
+
+      export async function putObject(key: string, body: Buffer | Uint8Array | string, contentType: string) {
+        const s3 = getS3Client();
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: key,
+            Body: body,
+            ContentType: contentType,
+            // Server-side encryption (use KMS in prod):
+            ServerSideEncryption: 'AES256',
+            // Cache control for CDN-fronted assets:
+            CacheControl: 'public, max-age=31536000, immutable',
+          }),
+        );
+      }
+
+      export async function getObjectBuffer(key: string): Promise<Buffer> {
+        const s3 = getS3Client();
+        const res = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        if (!res.Body) throw new Error(`empty body for s3://${S3_BUCKET}/${key}`);
+        // res.Body is a Readable stream in Node
+        return Buffer.from(await res.Body.transformToByteArray());
+      }
+
+      export async function deleteObject(key: string) {
+        const s3 = getS3Client();
+        await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+      }
+
+      export async function objectExists(key: string): Promise<boolean> {
+        try {
+          await getS3Client().send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+          return true;
+        } catch (err) {
+          if (err instanceof S3ServiceException && err.$metadata.httpStatusCode === 404) return false;
+          throw err;
+        }
+      }
+      ```
+
+      ### Streaming a download to the client (Express/Nest)
+
+      ```typescript
+      import { Readable } from 'node:stream';
+
+      app.get('/download/:key', async (req, res) => {
+        const out = await getS3Client().send(
+          new GetObjectCommand({ Bucket: S3_BUCKET, Key: req.params.key }),
+        );
+        res.setHeader('Content-Type', out.ContentType ?? 'application/octet-stream');
+        if (out.ContentLength) res.setHeader('Content-Length', String(out.ContentLength));
+        // out.Body is a Node Readable in Node runtimes
+        (out.Body as Readable).pipe(res);
+      });
+      ```
+
+      Don't load large objects fully into memory — pipe them.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Presigned URLs (Browser → S3 Direct Upload)
+
+      Best practice for user uploads: server signs a short-lived URL, browser PUTs directly to S3. Your server never touches the bytes.
+
+      ```typescript
+      import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+      import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+      import { randomUUID } from 'node:crypto';
+
+      export async function createUploadUrl(opts: {
+        userId: string;
+        contentType: string;
+        maxBytes: number;
+      }): Promise<{ uploadUrl: string; key: string; expiresAt: Date }> {
+        const key = `uploads/${opts.userId}/${randomUUID()}`;
+        const cmd = new PutObjectCommand({
+          Bucket: S3_BUCKET,
+          Key: key,
+          ContentType: opts.contentType,
+          ContentLength: opts.maxBytes, // signed in — browser must match
+        });
+        const uploadUrl = await getSignedUrl(getS3Client(), cmd, { expiresIn: 300 }); // 5 min
+        return { uploadUrl, key, expiresAt: new Date(Date.now() + 300_000) };
+      }
+
+      export async function createDownloadUrl(key: string): Promise<string> {
+        const cmd = new GetObjectCommand({
+          Bucket: S3_BUCKET,
+          Key: key,
+          ResponseContentDisposition: 'attachment', // force download
+        });
+        return getSignedUrl(getS3Client(), cmd, { expiresIn: 3600 });
+      }
+      ```
+
+      ### Browser-side upload
+
+      ```typescript
+      // From the browser, after calling your /upload-url endpoint:
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      ```
+
+      ### CORS
+
+      The bucket must have a CORS rule allowing PUT from your origins:
+
+      ```json
+      [
+        {
+          "AllowedOrigins": ["https://app.navistone.com", "https://staging.navistone.com"],
+          "AllowedMethods": ["PUT", "GET"],
+          "AllowedHeaders": ["*"],
+          "ExposeHeaders": ["ETag"],
+          "MaxAgeSeconds": 3000
+        }
+      ]
+      ```
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Large / Streaming Uploads with `lib-storage`
+
+      For files > 100 MB or when you have a stream (request body, transform stream), use `Upload` — it splits into parts, uploads in parallel, and aborts the multipart on error.
+
+      ```typescript
+      import { Upload } from '@aws-sdk/lib-storage';
+      import { Readable } from 'node:stream';
+
+      export async function uploadStream(
+        key: string,
+        body: Readable,
+        contentType: string,
+      ): Promise<{ etag: string; key: string }> {
+        const upload = new Upload({
+          client: getS3Client(),
+          params: {
+            Bucket: S3_BUCKET,
+            Key: key,
+            Body: body,
+            ContentType: contentType,
+            ServerSideEncryption: 'AES256',
+          },
+          partSize: 8 * 1024 * 1024, // 8 MB parts
+          queueSize: 4,              // 4 parts in flight at once
+          leavePartsOnError: false,  // abort multipart on failure → no orphan parts billed
+        });
+
+        upload.on('httpUploadProgress', (p) => {
+          // Hook for progress reporting / heartbeats (e.g., from a Temporal activity)
+        });
+
+        const result = await upload.done();
+        return { etag: result.ETag ?? '', key };
+      }
+      ```
+
+      `Upload.abort()` is callable mid-flight if the user cancels.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## NestJS Service Wrapper
+
+      ```typescript
+      // src/storage/storage.module.ts
+      import { Module } from '@nestjs/common';
+      import { S3StorageService } from './s3-storage.service';
+
+      @Module({
+        providers: [S3StorageService],
+        exports: [S3StorageService],
+      })
+      export class StorageModule {}
+
+      // src/storage/s3-storage.service.ts
+      import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+      import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+      import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+      @Injectable()
+      export class S3StorageService implements OnModuleDestroy {
+        private readonly logger = new Logger(S3StorageService.name);
+        private readonly client = new S3Client({ region: process.env.AWS_REGION });
+        private readonly bucket = process.env.S3_BUCKET!;
+
+        async createUploadUrl(key: string, contentType: string): Promise<string> {
+          return getSignedUrl(
+            this.client,
+            new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
+            { expiresIn: 300 },
+          );
+        }
+
+        async createDownloadUrl(key: string): Promise<string> {
+          return getSignedUrl(
+            this.client,
+            new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+            { expiresIn: 3600 },
+          );
+        }
+
+        onModuleDestroy() {
+          this.client.destroy();
+        }
+      }
+      ```
+
+      Inject anywhere via `constructor(private readonly storage: S3StorageService) {}`.
+
+  - sequence: 6
+    fragment_type: guardrail
+    content: |
+      ## Security and Anti-Patterns
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | Hardcoded bucket name | Breaks staging/prod separation | `process.env.S3_BUCKET`, validated at boot |
+      | Long-lived AWS keys in env | Credential leakage risk | IAM role (ECS task / IRSA / instance profile) |
+      | Returning S3 errors verbatim to clients | Leaks bucket structure, internal keys | Map to generic 4xx/5xx; log full error server-side |
+      | Presigned URL with 24h+ expiry | Long replay window if leaked | 5–15 min for upload; ≤1h for download |
+      | Trusting client-supplied `Key` | Path traversal: `../../other-user/secret` | Server generates the key (`uploads/${userId}/${uuid}`) |
+      | Missing `Content-Length` on signed PUT | Client can upload unlimited bytes | Sign with `ContentLength` and validate user limits |
+      | `getObject().Body.toString()` for binary | Corrupts non-UTF8 bytes | `Buffer.from(await Body.transformToByteArray())` |
+      | Catching all errors and returning empty | Hides outages | Let infrastructure errors throw; only handle expected 404/403 |
+      | Public-read ACL | All objects exposed; cost & data leakage | Default to private + presigned URLs OR CloudFront with signed cookies |
+      | No SSE / KMS in prod | Data at rest unencrypted | `ServerSideEncryption: 'aws:kms'` with a CMK |
+
+      ### Error handling shape
+
+      ```typescript
+      import { S3ServiceException, NoSuchKey } from '@aws-sdk/client-s3';
+
+      try {
+        await s3.send(cmd);
+      } catch (err) {
+        if (err instanceof NoSuchKey) {
+          throw new NotFoundException('object not found');
+        }
+        if (err instanceof S3ServiceException) {
+          // err.$metadata.httpStatusCode, err.name, err.$fault ('client' | 'server')
+          logger.error({ err }, 's3 error');
+        }
+        throw err;
+      }
+      ```
+
+  - sequence: 7
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      - [ ] Bucket name read from env var, not hardcoded
+      - [ ] No `aws-sdk` (v2) imports — only `@aws-sdk/*` (v3)
+      - [ ] One `S3Client` instance reused across the process (not per-request)
+      - [ ] Presigned upload URLs ≤ 15 minutes, download URLs ≤ 1 hour
+      - [ ] Object keys are server-generated (UUIDs / scoped paths), never client-supplied
+      - [ ] Streams are piped, not buffered (`pipe(res)` or `transformToWebStream()`)
+      - [ ] Large uploads use `@aws-sdk/lib-storage` `Upload` with `leavePartsOnError: false`
+      - [ ] `ServerSideEncryption` set on every PUT in prod
+      - [ ] CORS configured on the bucket for browser-direct uploads
+      - [ ] IAM policy is least-privilege: only the bucket and prefixes the service needs
+      - [ ] `client.destroy()` called on graceful shutdown (NestJS `OnModuleDestroy` or process SIGTERM)

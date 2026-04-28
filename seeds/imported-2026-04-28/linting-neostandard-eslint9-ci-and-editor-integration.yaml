@@ -1,0 +1,44 @@
+skill_type: domain
+skill_id: linting-neostandard-eslint9-ci-and-editor-integration
+canonical_name: Ci And Editor Integration
+category: engineering
+skill_class: domain
+domain_tags:
+- eslint
+- eslint9
+- flat-config
+- javascript
+- linting
+- typescript
+- neostandard
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/linting-neostandard-eslint9/rules/ci-and-editor-integration.md
+raw_prose: "## CI guidance\n\n- Run lint in CI as a required step:\n\n```bash\nnpm run lint\n```\n\n- Do not use auto-fix in CI.\n- Keep CI Node.js version aligned with local development and project engines.\n\n## Pre-commit hook pattern\n\nUse `lint-staged` (or equivalent) to lint only changed files before commit.\n\n```json\n{\n  \"lint-staged\": {\n    \"*.{js,mjs,cjs,ts,mts,cts}\": [\n      \"eslint --fix\"\n    ]\n  }\n}\n```\n\nWhen using `neostandard`, keep pre-commit execution on `eslint --fix` because ESLint is the actual runner.\n\n## VS Code integration\n\n- Install ESLint extension\n- Enable flat config support if required by extension version\n- Use `editor.codeActionsOnSave` for explicit, predictable auto-fixes\n\nExample workspace settings:\n\n```json\n{\n  \"editor.codeActionsOnSave\": {\n    \"source.fixAll.eslint\": \"explicit\"\n  },\n  \"eslint.validate\": [\"javascript\", \"typescript\"]\n}\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '## CI guidance
+
+
+    - Run lint in CI as a required step:
+
+
+    ```bash
+
+    npm run lint
+
+    ```
+
+
+    - Do not use auto-fix in CI.
+
+    - Keep CI Node.js version aligned with local development and project engines.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Pre-commit hook pattern\n\nUse `lint-staged` (or equivalent) to lint only changed files before commit.\n\n```json\n{\n  \"lint-staged\": {\n    \"*.{js,mjs,cjs,ts,mts,cts}\": [\n      \"eslint --fix\"\n    ]\n  }\n}\n```\n\nWhen using `neostandard`, keep pre-commit execution on `eslint --fix` because ESLint is the actual runner."
+- sequence: 3
+  fragment_type: execution
+  content: "## VS Code integration\n\n- Install ESLint extension\n- Enable flat config support if required by extension version\n- Use `editor.codeActionsOnSave` for explicit, predictable auto-fixes\n\nExample workspace settings:\n\n```json\n{\n  \"editor.codeActionsOnSave\": {\n    \"source.fixAll.eslint\": \"explicit\"\n  },\n  \"eslint.validate\": [\"javascript\", \"typescript\"]\n}\n```"

@@ -1,0 +1,34 @@
+skill_type: domain
+skill_id: node-performance
+canonical_name: Performance in Node.js
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- type-stripping
+- node
+- server
+- nodejs
+- typescript
+- backend
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/node/rules/performance.md
+raw_prose: "# Performance in Node.js\n\n## Avoid Blocking the Event Loop\n\nNever perform CPU-intensive operations synchronously:\n\n```typescript\n// BAD - blocks event loop\nfunction hashPasswordSync(password: string): string {\n  return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');\n}\n\n// GOOD - async operation\nfunction hashPassword(password: string): Promise<string> {\n  return new Promise((resolve, reject) => {\n    crypto.pbkdf2(password, salt, 100000, 64, 'sha512', (err, key) => {\n      if (err) reject(err);\n      else resolve(key.toString('hex'));\n    });\n  });\n}\n```\n\n## Worker Threads with Piscina\n\nUse [piscina](https://github.com/piscinajs/piscina) for CPU-intensive tasks:\n\n```typescript\n// worker.ts\nexport default function heavyComputation(data: { input: string }): string {\n  // CPU-intensive work here\n  return result;\n}\n```\n\n```typescript\n// main.ts\nimport Piscina from 'piscina';\n\nconst piscina = new Piscina({\n  filename: new URL('./worker.ts', import.meta.url).href,\n});\n\nconst result = await piscina.run({ input: 'data' });\n```\n\nPiscina handles worker pool management, task queuing, and load balancing automatically.\n\n## Connection Pooling\n\nAlways use connection pools for databases:\n\n```typescript\nimport { Pool } from 'pg';\n\nconst pool = new Pool({\n  max: 20,\n  idleTimeoutMillis: 30000,\n  connectionTimeoutMillis: 2000,\n});\n\nasync function query<T>(sql: string, params: unknown[]): Promise<T[]> {\n  const client = await pool.connect();\n  try {\n    const result = await client.query(sql, params);\n    return result.rows;\n  } finally {\n    client.release();\n  }\n}\n```\n\n## Avoid Memory Leaks\n\nCommon memory leak patterns to avoid:\n\n```typescript\n// BAD - unbounded cache\nconst cache = new Map();\nfunction addToCache(key: string, value: unknown) {\n  cache.set(key, value); // Never cleaned up\n}\n\n// GOOD - LRU cache with max size\nimport { LRUCache } from 'lru-cache';\n\nconst cache = new LRUCache<string, unknown>({\n  max: 500,\n  ttl: 1000 * 60 * 5,\n});\n\n// BAD - listener leak\nfunction subscribe(emitter: EventEmitter) {\n  emitter.on('event', handler); // Never removed\n}\n\n// GOOD - cleanup listeners\nfunction subscribe(emitter: EventEmitter): () => void {\n  emitter.on('event', handler);\n  return () => emitter.off('event', handler);\n}\n```\n\n## Lazy Loading\n\nLoad modules only when needed:\n\n```typescript\nlet heavyModule: HeavyModule | null = null;\n\nasync function getHeavyModule(): Promise<HeavyModule> {\n  if (!heavyModule) {\n    const { HeavyModule } = await import('./heavy-module.js');\n    heavyModule = new HeavyModule();\n  }\n  return heavyModule;\n}\n```\n\n## Related\n\n- [caching.md](./caching.md) - Caching patterns and libraries\n- [profiling.md](./profiling.md) - Profiling and benchmarking tools\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Performance in Node.js'
+- sequence: 2
+  fragment_type: execution
+  content: "## Avoid Blocking the Event Loop\n\nNever perform CPU-intensive operations synchronously:\n\n```typescript\n// BAD - blocks event loop\nfunction hashPasswordSync(password: string): string {\n  return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');\n}\n\n// GOOD - async operation\nfunction hashPassword(password: string): Promise<string> {\n  return new Promise((resolve, reject) => {\n    crypto.pbkdf2(password, salt, 100000, 64, 'sha512', (err, key) => {\n      if (err) reject(err);\n      else resolve(key.toString('hex'));\n    });\n  });\n}\n```\n\n## Worker Threads with Piscina\n\nUse [piscina](https://github.com/piscinajs/piscina) for CPU-intensive tasks:\n\n```typescript\n// worker.ts\nexport default function heavyComputation(data: { input: string }): string {\n  // CPU-intensive work here\n  return result;\n}\n```\n\n```typescript\n// main.ts\nimport Piscina from 'piscina';\n\nconst piscina = new Piscina({\n  filename: new URL('./worker.ts', import.meta.url).href,\n});\n\nconst result = await piscina.run({ input: 'data' });\n```\n\nPiscina handles worker pool management, task queuing, and load balancing automatically.\n\n## Connection Pooling\n\nAlways use connection pools for databases:\n\n```typescript\nimport { Pool } from 'pg';\n\nconst pool = new Pool({\n  max: 20,\n  idleTimeoutMillis: 30000,\n  connectionTimeoutMillis: 2000,\n});\n\nasync function query<T>(sql: string, params: unknown[]): Promise<T[]> {\n  const client = await pool.connect();\n  try {\n    const result = await client.query(sql, params);\n    return result.rows;\n  } finally {\n    client.release();\n  }\n}\n```\n\n## Avoid Memory Leaks\n\nCommon memory leak patterns to avoid:\n\n```typescript\n// BAD - unbounded cache\nconst cache = new Map();\nfunction addToCache(key: string, value: unknown) {\n  cache.set(key, value); // Never cleaned up\n}\n\n// GOOD - LRU cache with max size\nimport { LRUCache } from 'lru-cache';\n\nconst cache = new LRUCache<string, unknown>({\n  max: 500,\n  ttl: 1000 * 60 * 5,\n});\n\n// BAD - listener leak\nfunction subscribe(emitter: EventEmitter) {\n  emitter.on('event', handler); // Never removed\n}\n\n// GOOD - cleanup listeners\nfunction subscribe(emitter: EventEmitter): () => void {\n  emitter.on('event', handler);\n  return () => emitter.off('event', handler);\n}\n```\n\n## Lazy Loading\n\nLoad modules only when needed:\n\n```typescript\nlet heavyModule: HeavyModule | null = null;\n\nasync function getHeavyModule(): Promise<HeavyModule> {\n  if (!heavyModule) {\n    const { HeavyModule } = await import('./heavy-module.js');\n    heavyModule = new HeavyModule();\n  }\n  return heavyModule;\n}\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Related
+
+
+    - [caching.md](./caching.md) - Caching patterns and libraries
+
+    - [profiling.md](./profiling.md) - Profiling and benchmarking tools'

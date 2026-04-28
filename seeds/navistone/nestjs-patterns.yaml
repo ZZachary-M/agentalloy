@@ -1,0 +1,470 @@
+skill_type: domain
+skill_id: nestjs-patterns
+canonical_name: NestJS Application Patterns
+category: engineering
+skill_class: domain
+domain_tags: [nestjs, nodejs, typescript, backend, dependency-injection, modules, validation, guards]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — covers NestJS module/provider/DI architecture, DTOs with class-validator, guards/interceptors/pipes, ConfigModule, exception filters, and testing.
+raw_prose: |
+  # NestJS Application Patterns
+
+  ## Overview
+
+  NestJS is a TypeScript-first Node.js framework built around modules, providers, and dependency injection — modeled on Angular's architecture but on the server. It runs on Express by default; can be swapped to Fastify for higher throughput.
+
+  Core concepts:
+
+  - **Module** — a class with `@Module({ imports, providers, controllers, exports })` that groups related code and defines its DI scope
+  - **Controller** — handles HTTP routes; thin layer that calls services
+  - **Provider** — anything injectable (services, repositories, factories); lifecycle managed by Nest's IoC container
+  - **DTO** — plain class with `class-validator` decorators that defines request/response shape
+  - **Pipe / Guard / Interceptor / Filter** — cross-cutting concerns that run around handlers
+
+  ## When to Use NestJS Over Express
+
+  Use NestJS when:
+
+  - The team values structure, testability, and explicit dependencies
+  - Multiple bounded contexts in one service (modules give you natural seams)
+  - You want first-class support for OpenAPI, microservices, GraphQL, WebSockets without duct-tape
+
+  Stay with bare Express if:
+
+  - Service is genuinely tiny (one or two endpoints)
+  - You're allergic to decorators
+
+  ## Project Structure
+
+  ```
+  src/
+    main.ts                       # bootstrap
+    app.module.ts                 # root module
+    common/
+      filters/                    # global exception filters
+      guards/
+      interceptors/
+      pipes/
+    config/
+      config.module.ts            # ConfigModule.forRoot
+      env.validation.ts           # Joi or Zod schema for env vars
+    users/
+      users.module.ts
+      users.controller.ts
+      users.service.ts
+      dto/
+        create-user.dto.ts
+        update-user.dto.ts
+      entities/
+        user.entity.ts
+    orders/
+      orders.module.ts
+      ...
+  ```
+
+  One feature = one folder = one module. Cross-feature dependencies via `exports` and `imports`.
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup (Node 24, TypeScript, pnpm)
+
+      ```bash
+      pnpm dlx @nestjs/cli new --package-manager pnpm my-service
+      cd my-service
+      pnpm add @nestjs/config class-validator class-transformer
+      pnpm add -D @types/node
+      ```
+
+      Confirm `tsconfig.json` has:
+
+      ```json
+      {
+        "compilerOptions": {
+          "target": "ES2022",
+          "module": "commonjs",
+          "experimentalDecorators": true,
+          "emitDecoratorMetadata": true,
+          "strict": true,
+          "strictNullChecks": true
+        }
+      }
+      ```
+
+      `emitDecoratorMetadata` is required for Nest's DI to resolve types from constructor parameters.
+
+      ### main.ts bootstrap
+
+      ```typescript
+      import { NestFactory } from '@nestjs/core';
+      import { ValidationPipe } from '@nestjs/common';
+      import { AppModule } from './app.module';
+      import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+
+      async function bootstrap() {
+        const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+        app.useGlobalPipes(
+          new ValidationPipe({
+            whitelist: true,            // strip unknown properties
+            forbidNonWhitelisted: true, // 400 if extra props sent
+            transform: true,            // auto-coerce types per DTO
+            transformOptions: { enableImplicitConversion: true },
+          }),
+        );
+        app.useGlobalFilters(new AllExceptionsFilter());
+
+        app.enableShutdownHooks(); // run OnModuleDestroy on SIGTERM
+
+        await app.listen(Number(process.env.PORT ?? 3000));
+      }
+
+      bootstrap();
+      ```
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Module + Service + Controller (Canonical Slice)
+
+      ```typescript
+      // src/users/users.module.ts
+      import { Module } from '@nestjs/common';
+      import { UsersController } from './users.controller';
+      import { UsersService } from './users.service';
+      import { PrismaModule } from '../prisma/prisma.module';
+
+      @Module({
+        imports: [PrismaModule],
+        controllers: [UsersController],
+        providers: [UsersService],
+        exports: [UsersService], // make available to other modules that import this
+      })
+      export class UsersModule {}
+      ```
+
+      ```typescript
+      // src/users/users.service.ts
+      import { Injectable, NotFoundException } from '@nestjs/common';
+      import { PrismaService } from '../prisma/prisma.service';
+      import { CreateUserDto } from './dto/create-user.dto';
+
+      @Injectable()
+      export class UsersService {
+        constructor(private readonly prisma: PrismaService) {}
+
+        async create(dto: CreateUserDto) {
+          return this.prisma.user.create({ data: dto });
+        }
+
+        async findOne(id: string) {
+          const user = await this.prisma.user.findUnique({ where: { id } });
+          if (!user) throw new NotFoundException(`user ${id} not found`);
+          return user;
+        }
+      }
+      ```
+
+      ```typescript
+      // src/users/users.controller.ts
+      import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+      import { UsersService } from './users.service';
+      import { CreateUserDto } from './dto/create-user.dto';
+      import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+      @Controller('users')
+      @UseGuards(JwtAuthGuard)
+      export class UsersController {
+        constructor(private readonly users: UsersService) {}
+
+        @Post()
+        create(@Body() dto: CreateUserDto) {
+          return this.users.create(dto);
+        }
+
+        @Get(':id')
+        findOne(@Param('id') id: string) {
+          return this.users.findOne(id);
+        }
+      }
+      ```
+
+      Controllers stay thin: parse input → call service → return. No DB queries in controllers.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## DTOs and Validation
+
+      DTOs are classes (not interfaces) so decorators can attach metadata for `class-validator`.
+
+      ```typescript
+      // src/users/dto/create-user.dto.ts
+      import { IsEmail, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
+
+      export enum UserRole {
+        ADMIN = 'admin',
+        VENDOR = 'vendor',
+      }
+
+      export class CreateUserDto {
+        @IsEmail()
+        email!: string;
+
+        @IsString()
+        @MinLength(2)
+        name!: string;
+
+        @IsOptional()
+        @IsEnum(UserRole)
+        role?: UserRole;
+      }
+      ```
+
+      With the global `ValidationPipe`, sending `POST /users` with bad data returns 400 automatically:
+
+      ```json
+      { "statusCode": 400, "message": ["email must be an email"], "error": "Bad Request" }
+      ```
+
+      ### Partial / update DTOs
+
+      ```typescript
+      import { PartialType } from '@nestjs/mapped-types';
+      import { CreateUserDto } from './create-user.dto';
+
+      export class UpdateUserDto extends PartialType(CreateUserDto) {}
+      ```
+
+      Nesting: use `@Type(() => Address)` from `class-transformer` plus `@ValidateNested()` for nested DTOs.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Configuration with @nestjs/config
+
+      Validate env at boot. Missing values should crash the process at startup, not at first request.
+
+      ```typescript
+      // src/config/env.validation.ts
+      import { z } from 'zod';
+
+      export const envSchema = z.object({
+        NODE_ENV: z.enum(['development', 'staging', 'production']),
+        PORT: z.coerce.number().default(3000),
+        DATABASE_URL: z.string().url(),
+        JWT_SECRET: z.string().min(32),
+        S3_BUCKET: z.string(),
+        REDIS_URL: z.string().url(),
+        TEMPORAL_ADDRESS: z.string(),
+      });
+
+      export type Env = z.infer<typeof envSchema>;
+
+      export function validateEnv(raw: Record<string, unknown>): Env {
+        const parsed = envSchema.safeParse(raw);
+        if (!parsed.success) {
+          console.error('Invalid environment:', parsed.error.format());
+          process.exit(1);
+        }
+        return parsed.data;
+      }
+      ```
+
+      ```typescript
+      // src/app.module.ts
+      import { Module } from '@nestjs/common';
+      import { ConfigModule } from '@nestjs/config';
+      import { validateEnv } from './config/env.validation';
+
+      @Module({
+        imports: [
+          ConfigModule.forRoot({
+            isGlobal: true,
+            validate: validateEnv,
+          }),
+          UsersModule,
+          OrdersModule,
+        ],
+      })
+      export class AppModule {}
+      ```
+
+      Inject typed config:
+
+      ```typescript
+      constructor(private readonly config: ConfigService<Env, true>) {}
+      // ...
+      const url = this.config.get('DATABASE_URL', { infer: true });
+      ```
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Cross-Cutting: Guards, Interceptors, Filters, Pipes
+
+      Each runs at a specific phase of the request lifecycle. Pick the right tool:
+
+      | Concern | Use |
+      |---|---|
+      | Auth ("can this caller proceed?") | **Guard** |
+      | Transform / log / time the request or response | **Interceptor** |
+      | Coerce / validate one parameter | **Pipe** (custom) or `ValidationPipe` |
+      | Format an exception into an HTTP response | **Exception Filter** |
+
+      ### Guard
+
+      ```typescript
+      // src/auth/jwt-auth.guard.ts
+      import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+      import { Request } from 'express';
+      import { verify } from 'jsonwebtoken';
+
+      @Injectable()
+      export class JwtAuthGuard implements CanActivate {
+        canActivate(ctx: ExecutionContext): boolean {
+          const req = ctx.switchToHttp().getRequest<Request & { user?: unknown }>();
+          const token = req.cookies?.session_jwt; // HttpOnly cookie
+          if (!token) throw new UnauthorizedException();
+          try {
+            req.user = verify(token, process.env.JWT_SECRET!);
+            return true;
+          } catch {
+            throw new UnauthorizedException();
+          }
+        }
+      }
+      ```
+
+      ### Exception filter
+
+      ```typescript
+      // src/common/filters/all-exceptions.filter.ts
+      import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
+      import { Response } from 'express';
+
+      @Catch()
+      export class AllExceptionsFilter implements ExceptionFilter {
+        private readonly logger = new Logger(AllExceptionsFilter.name);
+
+        catch(exception: unknown, host: ArgumentsHost): void {
+          const ctx = host.switchToHttp();
+          const res = ctx.getResponse<Response>();
+
+          const status = exception instanceof HttpException
+            ? exception.getStatus()
+            : HttpStatus.INTERNAL_SERVER_ERROR;
+
+          if (status >= 500) this.logger.error(exception);
+
+          const body = exception instanceof HttpException
+            ? exception.getResponse()
+            : { statusCode: 500, message: 'internal error' };
+
+          res.status(status).json(body);
+        }
+      }
+      ```
+
+      ### Logging interceptor
+
+      ```typescript
+      @Injectable()
+      export class TimingInterceptor implements NestInterceptor {
+        intercept(_ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
+          const start = Date.now();
+          return next.handle().pipe(
+            tap(() => Logger.log(`took ${Date.now() - start}ms`)),
+          );
+        }
+      }
+      ```
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Testing with the Nest TestingModule
+
+      Unit test a service by overriding its dependencies in a `Test.createTestingModule`:
+
+      ```typescript
+      import { Test } from '@nestjs/testing';
+      import { UsersService } from './users.service';
+      import { PrismaService } from '../prisma/prisma.service';
+
+      describe('UsersService', () => {
+        let service: UsersService;
+        const prismaMock = {
+          user: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+          },
+        };
+
+        beforeEach(async () => {
+          const moduleRef = await Test.createTestingModule({
+            providers: [
+              UsersService,
+              { provide: PrismaService, useValue: prismaMock },
+            ],
+          }).compile();
+          service = moduleRef.get(UsersService);
+        });
+
+        it('throws NotFoundException when user is missing', async () => {
+          prismaMock.user.findUnique.mockResolvedValue(null);
+          await expect(service.findOne('x')).rejects.toThrow('user x not found');
+        });
+      });
+      ```
+
+      ### E2E
+
+      ```typescript
+      const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+      app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+      await app.init();
+
+      const res = await request(app.getHttpServer()).post('/users').send({ email: 'bad' });
+      expect(res.status).toBe(400);
+      ```
+
+      Mocha + Chai works equally well — swap `expect`/`describe` semantics, keep the `Test.createTestingModule` setup unchanged.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-Patterns
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | DB calls in controllers | Bypasses service layer; untestable | Move to a service; controller calls service |
+      | Logic inside DTOs | DTOs become smart objects coupled to runtime | DTOs are dumb shapes; logic in services |
+      | Missing global `ValidationPipe` | Per-route validation, easy to forget | Set in `main.ts` once with `whitelist: true` |
+      | `forFeature` providers leaked across modules | Hidden coupling; broken isolation | Export only what other modules truly need |
+      | One giant `AppModule` | Loses module benefits | Feature modules with explicit imports |
+      | Catching `Error` in services and returning `null` | Loses error info; dangerous coercion | Throw `HttpException` subclasses; let filter format |
+      | Direct `process.env.X` access deep in services | Untestable, scattered config | Inject `ConfigService` typed via Zod schema |
+      | Singleton state on a service marked `@Injectable({ scope: REQUEST })` | Per-request scope kills perf for hot path services | Default scope (`SINGLETON`) for stateless services |
+      | Logging request bodies that contain PII or tokens | Compliance / security issue | Redact in interceptor before logging |
+      | Synchronous `bootstrap()` calls (no try/catch) | Process hangs on misconfig | Validate env before listen; exit nonzero on failure |
+
+  - sequence: 8
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      - [ ] One feature = one module; root `AppModule` only imports feature modules
+      - [ ] Controllers contain no DB or business logic — only call services
+      - [ ] All inbound DTOs use `class-validator` decorators; `ValidationPipe` is global with `whitelist: true`
+      - [ ] Env vars validated by Zod/Joi at boot; `process.env.X` not read in services
+      - [ ] `ConfigService` injected with typed generic (`ConfigService<Env, true>`)
+      - [ ] Auth via `Guard` (`@UseGuards`), not ad-hoc middleware
+      - [ ] Exceptions thrown as `HttpException` subclasses; one global filter formats them
+      - [ ] `app.enableShutdownHooks()` called in `main.ts`; services with external resources implement `OnModuleDestroy`
+      - [ ] Each service has unit tests via `Test.createTestingModule` with mocked deps
+      - [ ] No circular module imports — Nest will warn at boot

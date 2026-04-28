@@ -1,0 +1,95 @@
+skill_type: domain
+skill_id: oauth-overview
+canonical_name: oauth (overview)
+category: engineering
+skill_class: domain
+domain_tags:
+- oauth
+- oauth2
+- security
+- authentication
+- authorization
+- jwt
+- fastify
+- overview
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/oauth/SKILL.md
+raw_prose: "## When to use\n\nUse this skill when you need to:\n- Implement or debug an OAuth 2.0/2.1 flow in a Fastify application\n- Validate tokens, configure PKCE, or set up refresh token rotation\n- Secure Fastify routes and plugins with access-control middleware\n- Resolve RFC compliance questions or identify security anti-patterns\n\n---\n\n## Step-by-step: Authorization Code + PKCE in Fastify\n\n### 1. Install dependencies\n\n```bash\nnpm install @fastify/oauth2 @fastify/cookie @fastify/session fastify-plugin\n```\n\n### 2. Register the OAuth plugin\n\n```typescript\n// plugins/oauth.ts\nimport fp from 'fastify-plugin'\nimport oauth2, { OAuth2Namespace } from '@fastify/oauth2'\nimport { FastifyInstance } from 'fastify'\n\nexport default fp(async function (fastify: FastifyInstance) {\n  fastify.register(oauth2, {\n    name: 'oauth2',\n    scope: ['openid', 'profile', 'email'],\n    credentials: {\n      client: {\n        id: process.env.CLIENT_ID!,\n        secret: process.env.CLIENT_SECRET!,\n      },\n      auth: {\n        authorizeHost: process.env.AUTH_SERVER!,\n        authorizePath: '/authorize',\n        tokenHost: process.env.AUTH_SERVER!,\n        tokenPath: '/token',\n      },\n    },\n    startRedirectPath: '/login',\n    callbackUri: process.env.CALLBACK_URI!,\n    pkce: 'S256',               // RFC 7636 — always use for public clients\n    generateStateFunction: (req) => req.session.state = crypto.randomUUID(),\n    checkStateFunction: (req, callback) =>\n      req.query.state === req.session.state ? callback() : callback(new Error('State mismatch')),\n  })\n})\n```\n\n**Validation checkpoint:** Confirm `callbackUri` exactly matches a registered redirect URI at the authorization server before proceeding (RFC 6749 §3.1.2).\n\n### 3. Handle the callback and exchange the code\n\n```typescript\n// routes/auth.ts\nimport { FastifyInstance } from 'fastify'\n\nexport default async function authRoutes(fastify: FastifyInstance) {\n  fastify.get('/login/callback', async (request, reply) => {\n    // @fastify/oauth2 verifies state and exchanges code automatically\n    const tokenResponse = await fastify.oauth2.getAccessTokenFromAuthorizationCodeFlow(request)\n\n    // Store only what you need; never log the raw token\n    request.session.set('accessToken', tokenResponse.token.access_token)\n    request.session.set('refreshToken', tokenResponse.token.refresh_token)\n\n    return reply.redirect('/')\n  })\n\n  fastify.get('/logout', async (request, reply) => {\n    await request.session.destroy()\n    return reply.redirect('/')\n  })\n}\n```\n\n### 4. JWT validation middleware (token introspection hook)\n\n```typescript\n// hooks/verifyToken.ts\nimport { FastifyRequest, FastifyReply } from 'fastify'\nimport jwt from '@fastify/jwt'\n\nexport async function verifyToken(request: FastifyRequest, reply: FastifyReply) {\n  try {\n    await request.jwtVerify()\n    // Validate required claims (RFC 7519)\n    const payload = request.user as Record<string, unknown>\n    const now = Math.floor(Date.now() / 1000)\n\n    if (typeof payload.exp === 'number' && payload.exp < now)\n      return reply.code(401).send({ error: 'token_expired' })\n\n    if (payload.iss !== process.env.EXPECTED_ISSUER)\n      return reply.code(401).send({ error: 'invalid_issuer' })\n\n    if (payload.aud !== process.env.EXPECTED_AUDIENCE)\n      return reply.code(401).send({ error: 'invalid_audience' })\n\n  } catch (err) {\n    return reply.code(401).send({ error: 'invalid_token', error_description: (err as Error).message })\n  }\n}\n```\n\n**Validation checkpoints:**\n- Verify `exp`, `iss`, `aud`, and `sub` on every request — never skip (RFC 7519 §4)\n- Use `fastify.jwt.verify` (asymmetric RS256/ES256) rather than HS256 for tokens issued by a third-party server\n\n### 5. Protecting routes\n\n```typescript\n// routes/api.ts\nimport { FastifyInstance } from 'fastify'\nimport { verifyToken } from '../hooks/verifyToken'\n\nexport default async function apiRoutes(fastify: FastifyInstance) {\n  fastify.addHook('onRequest', verifyToken)   // applies to all routes in this scope\n\n  fastify.get('/me', {\n    schema: {\n      response: { 200: { type: 'object', properties: { sub: { type: 'string' } } } },\n    },\n  }, async (request) => {\n    const user = request.user as { sub: string }\n    return { sub: user.sub }\n  })\n}\n```\n\n### 6. Refresh token rotation\n\n```typescript\nasync function refreshAccessToken(fastify: FastifyInstance, refreshToken: string) {\n  const newToken = await fastify.oauth2.getNewAccessTokenUsingRefreshTokenFlow({ refresh_token: refreshToken })\n\n  // Always replace the stored refresh token if rotation is in use (RFC 6749 §10.4)\n  return {\n    accessToken: newToken.token.access_token,\n    refreshToken: newToken.token.refresh_token ?? refreshToken,\n  }\n}\n```\n\n---\n\n## Security checklist\n\n| Requirement | RFC reference |\n|---|---|\n| Validate redirect URI against allowlist | RFC 6749 §3.1.2 |\n| PKCE (S256) for all public clients | RFC 7636 §4.2 |\n| Validate `state` to prevent CSRF | RFC 6749 §10.12 |\n| Validate `iss`, `aud`, `exp` on every JWT | RFC 7519 §4 |\n| Rotate refresh tokens on every use | RFC 6749 §10.4 |\n| Use HTTPS everywhere; reject HTTP redirect URIs | RFC 6749 §3.1.2.1 |\n| Rate-limit token endpoints | OAuth 2.1 §7 |\n\n---\n\n## Common anti-patterns\n\n- **Storing tokens in localStorage** — use `HttpOnly`, `Secure`, `SameSite=Strict` cookies instead\n- **Skipping audience validation** — allows token reuse across services\n- **Using implicit flow** — deprecated in OAuth 2.1; use authorization code + PKCE\n- **Accepting `response_type=token` in browser apps** — tokens in URL fragments leak in logs/referrers\n- **Symmetric signing (HS256) for third-party tokens** — use RS256/ES256 with JWKS endpoint\n\n---\n\n## Further implementation references\n\n- See `DEVICE_FLOW.md` for device authorization flow (RFC 8628) implementation\n- See `TOKEN_VALIDATION.md` for JWKS rotation, caching strategies, and opaque token introspection\n- See `CLIENT_CREDENTIALS.md` for machine-to-machine service authentication patterns\n- See `MOBILE_OAUTH.md` for native/mobile app flows (RFC 8252) and custom URI schemes\n"
+fragments:
+- sequence: 1
+  fragment_type: setup
+  content: '## When to use
+
+
+    Use this skill when you need to:
+
+    - Implement or debug an OAuth 2.0/2.1 flow in a Fastify application
+
+    - Validate tokens, configure PKCE, or set up refresh token rotation
+
+    - Secure Fastify routes and plugins with access-control middleware
+
+    - Resolve RFC compliance questions or identify security anti-patterns
+
+
+    ---'
+- sequence: 2
+  fragment_type: execution
+  content: "## Step-by-step: Authorization Code + PKCE in Fastify\n\n### 1. Install dependencies\n\n```bash\nnpm install @fastify/oauth2 @fastify/cookie @fastify/session fastify-plugin\n```\n\n### 2. Register the OAuth plugin\n\n```typescript\n// plugins/oauth.ts\nimport fp from 'fastify-plugin'\nimport oauth2, { OAuth2Namespace } from '@fastify/oauth2'\nimport { FastifyInstance } from 'fastify'\n\nexport default fp(async function (fastify: FastifyInstance) {\n  fastify.register(oauth2, {\n    name: 'oauth2',\n    scope: ['openid', 'profile', 'email'],\n    credentials: {\n      client: {\n        id: process.env.CLIENT_ID!,\n        secret: process.env.CLIENT_SECRET!,\n      },\n      auth: {\n        authorizeHost: process.env.AUTH_SERVER!,\n        authorizePath: '/authorize',\n        tokenHost: process.env.AUTH_SERVER!,\n        tokenPath: '/token',\n      },\n    },\n    startRedirectPath: '/login',\n    callbackUri: process.env.CALLBACK_URI!,\n    pkce: 'S256',               // RFC 7636 — always use for public clients\n    generateStateFunction: (req) => req.session.state = crypto.randomUUID(),\n    checkStateFunction: (req, callback) =>\n      req.query.state === req.session.state ? callback() : callback(new Error('State mismatch')),\n  })\n})\n```\n\n**Validation checkpoint:** Confirm `callbackUri` exactly matches a registered redirect URI at the authorization server before proceeding (RFC 6749 §3.1.2).\n\n### 3. Handle the callback and exchange the code\n\n```typescript\n// routes/auth.ts\nimport { FastifyInstance } from 'fastify'\n\nexport default async function authRoutes(fastify: FastifyInstance) {\n  fastify.get('/login/callback', async (request, reply) => {\n    // @fastify/oauth2 verifies state and exchanges code automatically\n    const tokenResponse = await fastify.oauth2.getAccessTokenFromAuthorizationCodeFlow(request)\n\n    // Store only what you need; never log the raw token\n    request.session.set('accessToken', tokenResponse.token.access_token)\n    request.session.set('refreshToken', tokenResponse.token.refresh_token)\n\n    return reply.redirect('/')\n  })\n\n  fastify.get('/logout', async (request, reply) => {\n    await request.session.destroy()\n    return reply.redirect('/')\n  })\n}\n```\n\n### 4. JWT validation middleware (token introspection hook)\n\n```typescript\n// hooks/verifyToken.ts\nimport { FastifyRequest, FastifyReply } from 'fastify'\nimport jwt from '@fastify/jwt'\n\nexport async function verifyToken(request: FastifyRequest, reply: FastifyReply) {\n  try {\n    await request.jwtVerify()\n    // Validate required claims (RFC 7519)\n    const payload = request.user as Record<string, unknown>\n    const now = Math.floor(Date.now() / 1000)\n\n    if (typeof payload.exp === 'number' && payload.exp < now)\n      return reply.code(401).send({ error: 'token_expired' })\n\n    if (payload.iss !== process.env.EXPECTED_ISSUER)\n      return reply.code(401).send({ error: 'invalid_issuer' })\n\n    if (payload.aud !== process.env.EXPECTED_AUDIENCE)\n      return reply.code(401).send({ error: 'invalid_audience' })\n\n  } catch (err) {\n    return reply.code(401).send({ error: 'invalid_token', error_description: (err as Error).message })\n  }\n}\n```\n\n**Validation checkpoints:**\n- Verify `exp`, `iss`, `aud`, and `sub` on every request — never skip (RFC 7519 §4)\n- Use `fastify.jwt.verify` (asymmetric RS256/ES256) rather than HS256 for tokens issued by a third-party server\n\n### 5. Protecting routes\n\n```typescript\n// routes/api.ts\nimport { FastifyInstance } from 'fastify'\nimport { verifyToken } from '../hooks/verifyToken'\n\nexport default async function apiRoutes(fastify: FastifyInstance) {\n  fastify.addHook('onRequest', verifyToken)   // applies to all routes in this scope\n\n  fastify.get('/me', {\n    schema: {\n      response: { 200: { type: 'object', properties: { sub: { type: 'string' } } } },\n    },\n  }, async (request) => {\n    const user = request.user as { sub: string }\n    return { sub: user.sub }\n  })\n}\n```\n\n### 6. Refresh token rotation\n\n```typescript\nasync function refreshAccessToken(fastify: FastifyInstance, refreshToken: string) {\n  const newToken = await fastify.oauth2.getNewAccessTokenUsingRefreshTokenFlow({ refresh_token: refreshToken })\n\n  // Always replace the stored refresh token if rotation is in use (RFC 6749 §10.4)\n  return {\n    accessToken: newToken.token.access_token,\n    refreshToken: newToken.token.refresh_token ?? refreshToken,\n  }\n}\n```\n\n---"
+- sequence: 3
+  fragment_type: verification
+  content: '## Security checklist
+
+
+    | Requirement | RFC reference |
+
+    |---|---|
+
+    | Validate redirect URI against allowlist | RFC 6749 §3.1.2 |
+
+    | PKCE (S256) for all public clients | RFC 7636 §4.2 |
+
+    | Validate `state` to prevent CSRF | RFC 6749 §10.12 |
+
+    | Validate `iss`, `aud`, `exp` on every JWT | RFC 7519 §4 |
+
+    | Rotate refresh tokens on every use | RFC 6749 §10.4 |
+
+    | Use HTTPS everywhere; reject HTTP redirect URIs | RFC 6749 §3.1.2.1 |
+
+    | Rate-limit token endpoints | OAuth 2.1 §7 |
+
+
+    ---'
+- sequence: 4
+  fragment_type: guardrail
+  content: '## Common anti-patterns
+
+
+    - **Storing tokens in localStorage** — use `HttpOnly`, `Secure`, `SameSite=Strict` cookies instead
+
+    - **Skipping audience validation** — allows token reuse across services
+
+    - **Using implicit flow** — deprecated in OAuth 2.1; use authorization code + PKCE
+
+    - **Accepting `response_type=token` in browser apps** — tokens in URL fragments leak in logs/referrers
+
+    - **Symmetric signing (HS256) for third-party tokens** — use RS256/ES256 with JWKS endpoint
+
+
+    ---'
+- sequence: 5
+  fragment_type: execution
+  content: '## Further implementation references
+
+
+    - See `DEVICE_FLOW.md` for device authorization flow (RFC 8628) implementation
+
+    - See `TOKEN_VALIDATION.md` for JWKS rotation, caching strategies, and opaque token introspection
+
+    - See `CLIENT_CREDENTIALS.md` for machine-to-machine service authentication patterns
+
+    - See `MOBILE_OAUTH.md` for native/mobile app flows (RFC 8252) and custom URI schemes'

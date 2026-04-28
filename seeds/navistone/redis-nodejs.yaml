@@ -1,0 +1,366 @@
+skill_type: domain
+skill_id: redis-nodejs
+canonical_name: Redis with Node.js (Caching, Locks, Pub/Sub, Rate Limiting)
+category: engineering
+skill_class: domain
+domain_tags: [redis, nodejs, typescript, caching, distributed-locks, pub-sub, rate-limiting, ioredis]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — runtime Redis usage in Node/TS via ioredis, covers cache-aside, distributed locks, pub/sub, rate limiting, pipelines, NestJS integration. Distinct from build-time turborepo-caching.
+raw_prose: |
+  # Redis with Node.js (Caching, Locks, Pub/Sub, Rate Limiting)
+
+  ## Overview
+
+  Redis is an in-memory data store used at runtime for caching, distributed coordination, queues, pub/sub, and rate limiting. **This is distinct from build-time caching tools (Turborepo, Nx) — those are unrelated.**
+
+  Two mainstream Node clients:
+
+  - **`ioredis`** — most popular, mature, supports Cluster + Sentinel, pipeline-friendly, command-typed in modern versions
+  - **`redis`** (node-redis v4+) — official, modern API, first-party RedisStack/JSON/Search support
+
+  Default to `ioredis` unless you specifically need RedisJSON or RedisSearch modules. Examples below use `ioredis`.
+
+  ## When to Use
+
+  - **Cache-aside**: cache expensive reads (DB queries, external API calls) with TTL + invalidation
+  - **Idempotency / dedup keys**: short-TTL keys to prevent double-processing
+  - **Distributed locks**: serialize work across multiple service instances
+  - **Rate limiting**: token bucket / fixed window via atomic INCR + EXPIRE
+  - **Pub/Sub**: low-latency fan-out (note: at-most-once; no persistence — for durable, use Streams or a real queue)
+  - **Session storage** for non-JWT setups
+  - **Ephemeral state** that's too hot for Postgres but doesn't need durability
+
+  Don't use Redis for:
+  - The system of record (it's a cache; treat eviction as routine)
+  - Long durable queues (use Temporal, BullMQ-with-care, or SQS)
+  - Cross-region replication of mutable state (consistency model is too weak)
+
+  ## Configuration
+
+  ```bash
+  REDIS_URL=redis://default:password@redis-host:6379/0  # ioredis accepts URLs
+  # or for TLS:
+  REDIS_URL=rediss://default:password@redis-host:6380/0
+  ```
+
+  In NestJS, validate at boot via Zod (`z.string().url()`) like other env config.
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup
+
+      ```bash
+      pnpm add ioredis
+      pnpm add -D @types/node
+      ```
+
+      ### Singleton client per process
+
+      ```typescript
+      // src/cache/redis.ts
+      import Redis, { type RedisOptions } from 'ioredis';
+
+      let _client: Redis | undefined;
+
+      export function getRedis(): Redis {
+        if (_client) return _client;
+        const url = process.env.REDIS_URL;
+        if (!url) throw new Error('REDIS_URL is required');
+
+        const opts: RedisOptions = {
+          // Reconnect with backoff on transient drops
+          retryStrategy: (times) => Math.min(times * 200, 2000),
+          maxRetriesPerRequest: 3,
+          enableReadyCheck: true,
+          lazyConnect: false,
+        };
+
+        _client = new Redis(url, opts);
+        _client.on('error', (err) => {
+          // Don't crash on transient connection errors — ioredis will reconnect
+          console.error('[redis] error', err.message);
+        });
+        return _client;
+      }
+
+      export async function closeRedis(): Promise<void> {
+        if (_client) {
+          await _client.quit();
+          _client = undefined;
+        }
+      }
+      ```
+
+      Reuse one `Redis` instance app-wide. Don't `new Redis()` per request.
+
+      For pub/sub you need **two** clients: one for subscribing (puts the connection into subscriber mode), one for publishing/normal commands.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Cache-Aside Pattern
+
+      The standard read-through cache: check Redis → on miss, read from DB → backfill cache.
+
+      ```typescript
+      import { getRedis } from './redis';
+
+      const TTL_SECONDS = 300; // 5 minutes
+
+      export async function getUserCached(id: string): Promise<User> {
+        const redis = getRedis();
+        const key = `user:${id}`;
+
+        const hit = await redis.get(key);
+        if (hit) return JSON.parse(hit) as User;
+
+        const user = await db.user.findUniqueOrThrow({ where: { id } });
+
+        // SET with TTL atomically; tolerate cache write failures
+        await redis.set(key, JSON.stringify(user), 'EX', TTL_SECONDS).catch(() => {});
+
+        return user;
+      }
+
+      export async function invalidateUser(id: string): Promise<void> {
+        await getRedis().del(`user:${id}`);
+      }
+      ```
+
+      ### Stampede protection (single-flight)
+
+      For very hot keys, use a short lock so only one request rebuilds the cache on miss:
+
+      ```typescript
+      const lockKey = `lock:${key}`;
+      const gotLock = await redis.set(lockKey, '1', 'EX', 5, 'NX');
+      if (gotLock) {
+        try {
+          // build and SET as above
+        } finally {
+          await redis.del(lockKey);
+        }
+      } else {
+        // brief backoff then re-read cache
+        await new Promise((r) => setTimeout(r, 50));
+        return getUserCached(id);
+      }
+      ```
+
+      ### Cache invalidation on write
+
+      Always invalidate on update:
+
+      ```typescript
+      async function updateUser(id: string, patch: UpdateUserDto) {
+        const u = await db.user.update({ where: { id }, data: patch });
+        await getRedis().del(`user:${id}`); // important — stale cache otherwise
+        return u;
+      }
+      ```
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Distributed Locks (Single-Node SET NX EX)
+
+      For locks across multiple app instances on a **single** Redis node:
+
+      ```typescript
+      import { randomUUID } from 'node:crypto';
+      import { getRedis } from './redis';
+
+      export async function withLock<T>(
+        key: string,
+        ttlMs: number,
+        fn: () => Promise<T>,
+      ): Promise<T | null> {
+        const redis = getRedis();
+        const token = randomUUID();
+        const lockKey = `lock:${key}`;
+
+        // SET NX with PX TTL — atomic
+        const acquired = await redis.set(lockKey, token, 'PX', ttlMs, 'NX');
+        if (!acquired) return null;
+
+        try {
+          return await fn();
+        } finally {
+          // Release only if we still own the lock (token match)
+          await redis.eval(
+            `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`,
+            1, lockKey, token,
+          );
+        }
+      }
+      ```
+
+      Use the token check on release — without it, you might delete a lock that a slower predecessor already lost (TTL expired, someone else grabbed it).
+
+      **Caveats:**
+
+      - This is "good enough" for most operational tasks. Not safe under network partitions if Redis is replicated; for stronger guarantees use Redlock with multiple independent instances OR — better — let the underlying system enforce uniqueness (DB unique constraint, Temporal workflow ID).
+      - Make `fn()` idempotent if the work could be retried after a TTL expiry mid-execution.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Rate Limiting (Fixed Window via Atomic INCR)
+
+      ```typescript
+      export async function checkRateLimit(
+        userId: string,
+        windowSeconds = 60,
+        maxRequests = 100,
+      ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+        const redis = getRedis();
+        const window = Math.floor(Date.now() / 1000 / windowSeconds);
+        const key = `rl:${userId}:${window}`;
+
+        const pipeline = redis.multi();
+        pipeline.incr(key);
+        pipeline.expire(key, windowSeconds);
+        const [[, count]] = (await pipeline.exec())!; // [[err, count], [err, expire]]
+
+        const current = count as number;
+        return {
+          allowed: current <= maxRequests,
+          remaining: Math.max(0, maxRequests - current),
+          resetAt: (window + 1) * windowSeconds * 1000,
+        };
+      }
+      ```
+
+      For sliding-window or token-bucket, use a Lua script — Redis evaluates it atomically.
+
+      ### Pipelines vs Transactions
+
+      - `pipeline()` — sends multiple commands without waiting for each round-trip; **not** atomic. Use for performance.
+      - `multi()` — also pipelined, executed atomically as `EXEC`. Use when you need atomicity.
+      - `eval(luaScript)` — fully atomic, conditional logic. Use for read-then-write sequences.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Pub/Sub
+
+      Pub/Sub is **at-most-once** — messages published while a subscriber is offline are lost. For durable fan-out, use Redis Streams or a real broker.
+
+      ```typescript
+      import Redis from 'ioredis';
+
+      const subscriber = new Redis(process.env.REDIS_URL!);
+      const publisher = new Redis(process.env.REDIS_URL!);
+
+      // Subscriber side
+      await subscriber.subscribe('orders.created');
+      subscriber.on('message', (channel, message) => {
+        if (channel === 'orders.created') {
+          const evt = JSON.parse(message) as { orderId: string };
+          // handle
+        }
+      });
+
+      // Publisher side
+      await publisher.publish('orders.created', JSON.stringify({ orderId: 'o-1' }));
+      ```
+
+      Subscribers can't run normal commands on the same connection — that's why a second client is required.
+
+      ### NestJS integration
+
+      ```typescript
+      // src/cache/cache.module.ts
+      import { Module, Global } from '@nestjs/common';
+      import { getRedis, closeRedis } from './redis';
+
+      @Global()
+      @Module({
+        providers: [
+          {
+            provide: 'REDIS',
+            useFactory: () => getRedis(),
+          },
+        ],
+        exports: ['REDIS'],
+      })
+      export class CacheModule {
+        async onApplicationShutdown() {
+          await closeRedis();
+        }
+      }
+      ```
+
+      Inject with `@Inject('REDIS') private readonly redis: Redis`.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Idempotency Keys for Webhooks / API Mutations
+
+      ```typescript
+      const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
+
+      export async function withIdempotency<T>(
+        key: string,
+        fn: () => Promise<T>,
+      ): Promise<T> {
+        const redis = getRedis();
+        const cacheKey = `idem:${key}`;
+
+        const cached = await redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as T;
+
+        const result = await fn();
+        // Cache result so retries with the same key return the same response
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', IDEMPOTENCY_TTL);
+        return result;
+      }
+      ```
+
+      Use this for: payment webhooks (`event.id`), POST endpoints with `Idempotency-Key` header, anywhere a client retry might double-fire.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-Patterns and Pitfalls
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | New `Redis()` per request | Connection storm; exhausts ulimit | One client per process, reused |
+      | `KEYS *` in production | O(N) blocks the server | `SCAN` with MATCH and COUNT |
+      | `FLUSHALL` / `FLUSHDB` in app code | Wipes other tenants' data | Never run from app code |
+      | `set` without TTL for cache data | Memory grows unbounded | Always pass `EX` or `PX` for cache values |
+      | Storing huge values (multi-MB) | Blocks the event loop on serialize/parse; bad for cache hit rate | Store references, not blobs; use S3 for large payloads |
+      | Redis as the source of truth | Eviction → data loss | Treat Redis as a cache; rebuild from DB on miss |
+      | DEL after write but with race | Stale read between DEL and write | Update DB first, then DEL — accept brief stale window |
+      | Pub/Sub for "guaranteed delivery" | Messages dropped if subscriber offline | Use Redis Streams (`XADD`/`XREADGROUP`) or a queue |
+      | Lock release without token check | Releases someone else's lock after TTL expiry | Lua compare-and-delete, as shown above |
+      | Crashing the app on Redis error | Cache outages take down the API | Catch errors on cache writes; let cache reads fall through to DB |
+      | Long-running Lua scripts | Blocks the entire Redis instance | Keep scripts O(1) or O(small N) |
+
+      ### When Redis is down
+
+      The app should degrade, not fail. Cache reads → fall through to DB. Cache writes → log and continue. Locks → either fail fast or fall back to a less-strict mode (depends on the operation).
+
+  - sequence: 8
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      - [ ] One `Redis` client per process, reused (singleton)
+      - [ ] `REDIS_URL` from env, validated at boot
+      - [ ] Every cache write has a TTL (`EX`/`PX`); no unbounded keys
+      - [ ] Cache invalidation on every write path that affects the cached entity
+      - [ ] Distributed locks use `SET NX PX` + token + Lua compare-and-delete
+      - [ ] Rate-limit / counter logic uses pipelines or Lua for atomicity
+      - [ ] Pub/Sub uses a separate `Redis` connection from the publishing/normal connection
+      - [ ] No `KEYS *`, `FLUSHALL`, or other O(N) blocking commands in app code
+      - [ ] Cache write errors are caught and logged; reads fall through to source on failure
+      - [ ] Graceful shutdown calls `redis.quit()` (NestJS `OnApplicationShutdown` or process SIGTERM handler)
+      - [ ] If using NestJS: provider is `@Global()` so feature modules can inject without re-importing

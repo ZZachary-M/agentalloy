@@ -1,0 +1,43 @@
+skill_type: domain
+skill_id: node-node-modules-exploration
+canonical_name: Exploring node_modules
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- type-stripping
+- node
+- server
+- nodejs
+- typescript
+- backend
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/node/rules/node-modules-exploration.md
+raw_prose: "# Exploring node_modules\n\n## When to Explore node_modules\n\nExplore node_modules when you need to:\n- Find specific packages and their versions\n- Analyze dependencies and dependency trees\n- Examine package contents\n- Investigate dependency conflicts\n- Understand how a package works internally\n\n## Core Techniques\n\n### Finding Package Versions\n\n```bash\n# Check actual installed version\ncat node_modules/fastify/package.json | grep '\"version\"'\n\n# For scoped packages\ncat node_modules/@fastify/cors/package.json | grep '\"version\"'\n\n# List all versions with npm\nnpm ls fastify\n```\n\n### Navigating Directory Structure\n\n```bash\n# List package contents\nls node_modules/fastify/\n\n# Find TypeScript definitions\nls node_modules/fastify/*.d.ts\nls node_modules/@types/node/\n\n# Check main entry point\ncat node_modules/fastify/package.json | grep '\"main\"\\|\"exports\"'\n```\n\n### Understanding Package Manager Differences\n\n**npm/yarn (node_modules hoisting):**\n```\nnode_modules/\n  fastify/\n  pino/          # hoisted from fastify's dependencies\n  @fastify/cors/\n```\n\n**pnpm (content-addressable storage):**\n```\nnode_modules/\n  .pnpm/\n    fastify@4.0.0/\n      node_modules/\n        fastify/\n        pino/    # symlinked, not hoisted\n  fastify -> .pnpm/fastify@4.0.0/node_modules/fastify\n```\n\n## Finding Package READMEs\n\n**CRITICAL: Never use `find`, `grep`, or `rg` for locating READMEs. Follow this sequence:**\n\n1. **Direct Read attempts (try in order):**\n   ```\n   node_modules/[package-name]/README.md\n   node_modules/[package-name]/readme.md\n   node_modules/[package-name]/README\n   ```\n   For scoped packages: `node_modules/@scope/package-name/README.md`\n\n2. **If not found, list directory contents:**\n   ```bash\n   ls node_modules/[package-name]/\n   ```\n   Look for README files in output, then read the exact filename.\n\n3. **Alternative locations:**\n   ```\n   node_modules/[package-name]/docs/README.md\n   ```\n   Or check `readme` field in `package.json`.\n\n## Analyzing Dependency Trees\n\n```bash\n# See why a package is installed\nnpm why lodash\n\n# Full dependency tree\nnpm ls --all\n\n# Only production dependencies\nnpm ls --prod\n\n# Find duplicates\nnpm ls --all 2>&1 | grep -E \"^\\s+.*@[0-9]\" | sort | uniq -d\n```\n\n## Investigating Conflicts\n\n### Peer Dependency Issues\n\n```bash\n# Check peer dependencies\ncat node_modules/some-plugin/package.json | grep -A 10 '\"peerDependencies\"'\n\n# See what's actually installed vs. what's expected\nnpm ls react\n```\n\n### Duplicate Packages\n\nWhen the same package appears multiple times:\n\n```bash\n# Find all instances of a package\nfind node_modules -name \"package.json\" -path \"*/lodash/*\" 2>/dev/null\n\n# Check for version mismatches\nnpm ls lodash\n```\n\n## Examining Package Internals\n\n### Entry Points\n\n```bash\n# Check exports field (modern)\nnode -e \"console.log(JSON.stringify(require('./node_modules/fastify/package.json').exports, null, 2))\"\n\n# Check main field (legacy)\ncat node_modules/fastify/package.json | grep '\"main\"'\n```\n\n### TypeScript Definitions\n\n```bash\n# Find type definitions\nls node_modules/fastify/*.d.ts\ncat node_modules/fastify/package.json | grep '\"types\"\\|\"typings\"'\n\n# For DefinitelyTyped packages\nls node_modules/@types/\n```\n\n### Source Files\n\n```bash\n# Examine source structure\nls node_modules/fastify/lib/\nhead -50 node_modules/fastify/lib/server.js\n```\n\n## Debugging Module Resolution\n\n```bash\n# See how Node.js resolves a module\nnode -e \"console.log(require.resolve('fastify'))\"\n\n# With full resolution paths\nnode --print \"require.resolve.paths('fastify')\"\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Exploring node_modules'
+- sequence: 2
+  fragment_type: execution
+  content: "## When to Explore node_modules\n\nExplore node_modules when you need to:\n- Find specific packages and their versions\n- Analyze dependencies and dependency trees\n- Examine package contents\n- Investigate dependency conflicts\n- Understand how a package works internally\n\n## Core Techniques\n\n### Finding Package Versions\n\n```bash\n# Check actual installed version\ncat node_modules/fastify/package.json | grep '\"version\"'\n\n# For scoped packages\ncat node_modules/@fastify/cors/package.json | grep '\"version\"'\n\n# List all versions with npm\nnpm ls fastify\n```\n\n### Navigating Directory Structure\n\n```bash\n# List package contents\nls node_modules/fastify/\n\n# Find TypeScript definitions\nls node_modules/fastify/*.d.ts\nls node_modules/@types/node/\n\n# Check main entry point\ncat node_modules/fastify/package.json | grep '\"main\"\\|\"exports\"'\n```\n\n### Understanding Package Manager Differences\n\n**npm/yarn (node_modules hoisting):**\n```\nnode_modules/\n  fastify/\n  pino/          # hoisted from fastify's dependencies\n  @fastify/cors/\n```\n\n**pnpm (content-addressable storage):**\n```\nnode_modules/\n  .pnpm/\n    fastify@4.0.0/\n      node_modules/\n        fastify/\n        pino/    # symlinked, not hoisted\n  fastify -> .pnpm/fastify@4.0.0/node_modules/fastify\n```\n\n## Finding Package READMEs\n\n**CRITICAL: Never use `find`, `grep`, or `rg` for locating READMEs. Follow this sequence:**\n\n1. **Direct Read attempts (try in order):**\n   ```\n   node_modules/[package-name]/README.md\n   node_modules/[package-name]/readme.md\n   node_modules/[package-name]/README\n   ```\n   For scoped packages: `node_modules/@scope/package-name/README.md`\n\n2. **If not found, list directory contents:**\n   ```bash\n   ls node_modules/[package-name]/\n   ```\n   Look for README files in output, then read the exact filename.\n\n3. **Alternative locations:**\n   ```\n   node_modules/[package-name]/docs/README.md\n   ```\n   Or check `readme` field in `package.json`.\n\n## Analyzing Dependency Trees\n\n```bash\n# See why a package is installed\nnpm why lodash\n\n# Full dependency tree\nnpm ls --all\n\n# Only production dependencies\nnpm ls --prod\n\n# Find duplicates\nnpm ls --all 2>&1 | grep -E \"^\\s+.*@[0-9]\" | sort | uniq -d\n```\n\n## Investigating Conflicts\n\n### Peer Dependency Issues\n\n```bash\n# Check peer dependencies\ncat node_modules/some-plugin/package.json | grep -A 10 '\"peerDependencies\"'\n\n# See what's actually installed vs. what's expected\nnpm ls react\n```\n\n### Duplicate Packages\n\nWhen the same package appears multiple times:\n\n```bash\n# Find all instances of a package\nfind node_modules -name \"package.json\" -path \"*/lodash/*\" 2>/dev/null\n\n# Check for version mismatches\nnpm ls lodash\n```\n\n## Examining Package Internals\n\n### Entry Points\n\n```bash\n# Check exports field (modern)\nnode -e \"console.log(JSON.stringify(require('./node_modules/fastify/package.json').exports, null, 2))\"\n\n# Check main field (legacy)\ncat node_modules/fastify/package.json | grep '\"main\"'\n```\n\n### TypeScript Definitions\n\n```bash\n# Find type definitions\nls node_modules/fastify/*.d.ts\ncat node_modules/fastify/package.json | grep '\"types\"\\|\"typings\"'\n\n# For DefinitelyTyped packages\nls node_modules/@types/\n```\n\n### Source Files\n\n```bash\n# Examine source structure\nls node_modules/fastify/lib/\nhead -50 node_modules/fastify/lib/server.js\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Debugging Module Resolution
+
+
+    ```bash
+
+    # See how Node.js resolves a module
+
+    node -e "console.log(require.resolve(''fastify''))"
+
+
+    # With full resolution paths
+
+    node --print "require.resolve.paths(''fastify'')"
+
+    ```'

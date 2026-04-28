@@ -1,0 +1,32 @@
+skill_type: domain
+skill_id: linting-neostandard-eslint9-neostandard
+canonical_name: Neostandard
+category: engineering
+skill_class: domain
+domain_tags:
+- eslint
+- eslint9
+- flat-config
+- javascript
+- linting
+- typescript
+- neostandard
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/linting-neostandard-eslint9/rules/neostandard.md
+raw_prose: "`neostandard` is a **shared ESLint flat config** and config generator, not a standalone replacement linter command.\n\n## Key model\n\n- You install **both** `neostandard` and `eslint`\n- You generate or author `eslint.config.js` / `eslint.config.mjs`\n- You run linting via `eslint` (`eslint .`, `eslint . --fix`)\n\n## Install\n\n```bash\nnpm install --save-dev neostandard eslint\n```\n\n## Create config\n\nGenerate ESM config:\n\n```bash\nnpx neostandard --esm > eslint.config.js\n```\n\nGenerate CommonJS config:\n\n```bash\nnpx neostandard > eslint.config.js\n```\n\nOr author manually (ESM):\n\n```js\nimport neostandard from 'neostandard'\n\nexport default neostandard({\n  ts: true\n})\n```\n\n## Run lint\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```\n\n## Common options\n\n- `ts: true` — lint `*.ts` and `*.d.ts`\n- `semi: true` — semicolon mode (semistandard-style)\n- `noStyle: true` — disable style rules (useful with Prettier/dprint)\n- `noJsx: true` — disable JSX rules\n- `ignores`, `files`, `filesTs`, `env`, `globals`\n\n## Version caveat (v1+)\n\nAs of neostandard v1+, `eslint-plugin-import-x` is no longer bundled.\n\n- If you need deep import/export lint rules, add `eslint-plugin-import-x` explicitly\n- For many TypeScript projects, prefer `tsc --noEmit` for module/import correctness checks\n\n## Useful export\n\nUse `.gitignore` patterns as ESLint ignores:\n\n```js\nimport neostandard, { resolveIgnoresFromGitignore } from 'neostandard'\n\nexport default neostandard({\n  ignores: resolveIgnoresFromGitignore()\n})\n```\n\n## Important migration note\n\nFor projects moving from `standard`, keep `neostandard` as the config source but run lint through `eslint`.\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '`neostandard` is a **shared ESLint flat config** and config generator, not a standalone replacement linter command.'
+- sequence: 2
+  fragment_type: execution
+  content: "## Key model\n\n- You install **both** `neostandard` and `eslint`\n- You generate or author `eslint.config.js` / `eslint.config.mjs`\n- You run linting via `eslint` (`eslint .`, `eslint . --fix`)\n\n## Install\n\n```bash\nnpm install --save-dev neostandard eslint\n```\n\n## Create config\n\nGenerate ESM config:\n\n```bash\nnpx neostandard --esm > eslint.config.js\n```\n\nGenerate CommonJS config:\n\n```bash\nnpx neostandard > eslint.config.js\n```\n\nOr author manually (ESM):\n\n```js\nimport neostandard from 'neostandard'\n\nexport default neostandard({\n  ts: true\n})\n```\n\n## Run lint\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```\n\n## Common options\n\n- `ts: true` — lint `*.ts` and `*.d.ts`\n- `semi: true` — semicolon mode (semistandard-style)\n- `noStyle: true` — disable style rules (useful with Prettier/dprint)\n- `noJsx: true` — disable JSX rules\n- `ignores`, `files`, `filesTs`, `env`, `globals`\n\n## Version caveat (v1+)\n\nAs of neostandard v1+, `eslint-plugin-import-x` is no longer bundled.\n\n- If you need deep import/export lint rules, add `eslint-plugin-import-x` explicitly\n- For many TypeScript projects, prefer `tsc --noEmit` for module/import correctness checks\n\n## Useful export\n\nUse `.gitignore` patterns as ESLint ignores:\n\n```js\nimport neostandard, { resolveIgnoresFromGitignore } from 'neostandard'\n\nexport default neostandard({\n  ignores: resolveIgnoresFromGitignore()\n})\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## Important migration note
+
+
+    For projects moving from `standard`, keep `neostandard` as the config source but run lint through `eslint`.'

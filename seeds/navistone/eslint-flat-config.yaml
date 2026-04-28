@@ -1,0 +1,362 @@
+skill_type: domain
+skill_id: eslint-flat-config
+canonical_name: ESLint Flat Config (eslint.config.cjs / .js / .mjs)
+category: tooling
+skill_class: domain
+domain_tags: [eslint, linting, typescript, flat-config, prettier, configuration, tooling]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — covers the ESLint 9+ flat config format, .cjs vs .js vs .mjs trade-offs, typescript-eslint integration, prettier coexistence, monorepo patterns, and migration from .eslintrc.
+raw_prose: |
+  # ESLint Flat Config (eslint.config.cjs / .js / .mjs)
+
+  ## Overview
+
+  ESLint 9 made **flat config** the default and removed `.eslintrc.*` from the new path. The config file is now a single JS module that exports an array of config objects. Each config object can target specific files, set parser/plugin options, and override rules.
+
+  Three filename choices, same shape:
+
+  | Filename | Module system | When to choose |
+  |---|---|---|
+  | `eslint.config.cjs` | CommonJS | Project's `package.json` is CJS (`"type"` absent or `"commonjs"`); maximum tooling compatibility |
+  | `eslint.config.js` | Inherits from `package.json` | The pragmatic default — matches your project |
+  | `eslint.config.mjs` | ESM regardless of `package.json` | When you want ESM in a CJS project |
+
+  **The `.cjs` extension is the safest choice** if any of the following are true:
+
+  - You're inside a monorepo with mixed module systems
+  - Some tools (older Husky/lint-staged setups) shell out to ESLint and assume CJS
+  - Your `package.json` doesn't declare `"type": "module"`
+
+  Pick `.cjs` once and stop debating; the lint config rarely needs ESM features.
+
+  ## Why Flat Config Wins
+
+  | Old (`.eslintrc.json`) | New (flat) |
+  |---|---|
+  | Cascading discovery up the directory tree | Single file at project root |
+  | Implicit plugin/extends resolution | Explicit imports |
+  | `overrides[].files` patterns | First-class config objects with `files` field |
+  | `env` shortcut | `languageOptions.globals` (explicit) |
+  | Hidden defaults | What you see is what runs |
+
+  Flat config is a JS module — you have variables, conditionals, spread, and Node module resolution. No more "magic strings" looking up `eslint-config-foo`.
+
+  ## When to Use This Skill
+
+  - Setting up ESLint in a new TypeScript project
+  - Migrating from `.eslintrc.*` to flat config (required for ESLint ≥ 9)
+  - Adding TypeScript or React rules to an existing flat config
+  - Sharing config across packages in a monorepo
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup (TypeScript Project, .cjs)
+
+      ```bash
+      pnpm add -D eslint typescript-eslint @eslint/js globals
+      # If using Prettier alongside:
+      pnpm add -D prettier eslint-config-prettier
+      ```
+
+      `typescript-eslint` (the package, no `@`) is the unified entry point as of v8 — it bundles parser, plugin, and config helpers.
+
+      Add scripts to `package.json`:
+
+      ```json
+      {
+        "scripts": {
+          "lint": "eslint .",
+          "lint:fix": "eslint . --fix"
+        }
+      }
+      ```
+
+      Flat config auto-discovers `eslint.config.cjs` / `.js` / `.mjs` — no `--config` flag needed.
+
+      ### Minimum viable .cjs config
+
+      ```javascript
+      // eslint.config.cjs
+      const js = require('@eslint/js');
+      const tseslint = require('typescript-eslint');
+      const prettier = require('eslint-config-prettier');
+      const globals = require('globals');
+
+      module.exports = [
+        // Files ESLint should ignore (replaces .eslintignore)
+        {
+          ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', '**/*.d.ts'],
+        },
+
+        // Base recommended rules
+        js.configs.recommended,
+        ...tseslint.configs.recommendedTypeChecked,
+
+        // Project-wide settings
+        {
+          languageOptions: {
+            ecmaVersion: 2024,
+            sourceType: 'module',
+            parserOptions: {
+              project: './tsconfig.json',
+              tsconfigRootDir: __dirname,
+            },
+            globals: { ...globals.node },
+          },
+          rules: {
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+            '@typescript-eslint/no-explicit-any': 'warn',
+            'no-console': ['warn', { allow: ['warn', 'error'] }],
+          },
+        },
+
+        // Test files: relax some rules
+        {
+          files: ['**/*.test.ts', '**/*.spec.ts'],
+          languageOptions: { globals: { ...globals.mocha } },
+          rules: {
+            '@typescript-eslint/no-non-null-assertion': 'off',
+            '@typescript-eslint/no-explicit-any': 'off',
+          },
+        },
+
+        // Prettier: turn off formatting rules that conflict
+        prettier,
+      ];
+      ```
+
+      Order matters — later objects override earlier ones. `prettier` MUST be last so it disables conflicting style rules from `js.configs.recommended` and `tseslint`.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Anatomy of a Flat Config Object
+
+      Each entry in the exported array is a config object with these optional fields:
+
+      ```javascript
+      {
+        name: 'my-app/typescript',     // optional, shows up in --print-config output
+        files: ['**/*.ts'],            // glob patterns this object applies to
+        ignores: ['**/*.test.ts'],     // negative patterns (within this object only)
+        languageOptions: {
+          ecmaVersion: 2024,
+          sourceType: 'module',
+          parser: tseslintParser,
+          parserOptions: { ... },
+          globals: { ... },
+        },
+        linterOptions: {
+          reportUnusedDisableDirectives: 'warn',
+          noInlineConfig: false,
+        },
+        plugins: { '@typescript-eslint': tseslint.plugin },
+        rules: { ... },
+        settings: { ... },
+      }
+      ```
+
+      ### A standalone `{ ignores: [...] }` object replaces `.eslintignore`
+
+      Important quirk: **a config object with ONLY an `ignores` field acts as global ignore**. With any other field present, the `ignores` is scoped to that object only. Keep your global ignores in their own dedicated object as shown above.
+
+      ### Targeting file types
+
+      ```javascript
+      {
+        files: ['**/*.ts', '**/*.tsx'],
+        plugins: { '@typescript-eslint': tseslint.plugin },
+        rules: { /* TS-only rules */ },
+      },
+      {
+        files: ['**/*.test.ts'],
+        rules: { /* test relaxations */ },
+      },
+      ```
+
+      Glob support is from `minimatch` — supports `**`, `*`, `?`, `[abc]`, `{a,b}`.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## React + TypeScript Flat Config
+
+      For React 18 + TS + Vite (frontend), add `eslint-plugin-react`, `eslint-plugin-react-hooks`, and `eslint-plugin-jsx-a11y`:
+
+      ```bash
+      pnpm add -D eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y eslint-plugin-import
+      ```
+
+      ```javascript
+      // eslint.config.cjs (React app)
+      const js = require('@eslint/js');
+      const tseslint = require('typescript-eslint');
+      const react = require('eslint-plugin-react');
+      const reactHooks = require('eslint-plugin-react-hooks');
+      const jsxA11y = require('eslint-plugin-jsx-a11y');
+      const prettier = require('eslint-config-prettier');
+      const globals = require('globals');
+
+      module.exports = [
+        { ignores: ['dist/**', 'node_modules/**'] },
+
+        js.configs.recommended,
+        ...tseslint.configs.recommendedTypeChecked,
+
+        {
+          files: ['**/*.{ts,tsx}'],
+          languageOptions: {
+            ecmaVersion: 2024,
+            sourceType: 'module',
+            globals: { ...globals.browser },
+            parserOptions: {
+              project: './tsconfig.json',
+              tsconfigRootDir: __dirname,
+              ecmaFeatures: { jsx: true },
+            },
+          },
+          plugins: {
+            react,
+            'react-hooks': reactHooks,
+            'jsx-a11y': jsxA11y,
+          },
+          settings: { react: { version: 'detect' } },
+          rules: {
+            ...react.configs.recommended.rules,
+            ...reactHooks.configs.recommended.rules,
+            ...jsxA11y.configs.recommended.rules,
+            'react/react-in-jsx-scope': 'off',     // React 17+ JSX transform
+            'react/prop-types': 'off',             // We use TS
+          },
+        },
+
+        prettier,
+      ];
+      ```
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Monorepo Pattern (Shared Base + Package Overrides)
+
+      Put a base config in a workspace package and extend it per package:
+
+      ```javascript
+      // packages/eslint-config/index.cjs (shared)
+      const js = require('@eslint/js');
+      const tseslint = require('typescript-eslint');
+      const prettier = require('eslint-config-prettier');
+
+      module.exports = [
+        js.configs.recommended,
+        ...tseslint.configs.recommendedTypeChecked,
+        {
+          rules: {
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+          },
+        },
+        prettier,
+      ];
+      ```
+
+      ```javascript
+      // apps/api/eslint.config.cjs
+      const base = require('@navistone/eslint-config');
+      const globals = require('globals');
+
+      module.exports = [
+        ...base,
+        {
+          files: ['**/*.ts'],
+          languageOptions: {
+            globals: { ...globals.node },
+            parserOptions: {
+              project: './tsconfig.json',
+              tsconfigRootDir: __dirname,
+            },
+          },
+        },
+      ];
+      ```
+
+      Critical: each package sets `tsconfigRootDir: __dirname` so type-aware rules find the right `tsconfig.json`. Shared config can't know the consumer's path.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Migrating from .eslintrc.json to Flat Config
+
+      Mapping table for common fields:
+
+      | `.eslintrc` field | Flat config equivalent |
+      |---|---|
+      | `extends: ['eslint:recommended']` | Spread `js.configs.recommended` (from `@eslint/js`) |
+      | `extends: ['plugin:@typescript-eslint/recommended']` | Spread `...tseslint.configs.recommended` |
+      | `parser: '@typescript-eslint/parser'` | `languageOptions.parser: tseslintParser` |
+      | `plugins: ['@typescript-eslint']` | `plugins: { '@typescript-eslint': plugin }` |
+      | `env: { node: true }` | `languageOptions.globals: { ...globals.node }` |
+      | `overrides: [{ files: ['*.test.ts'], rules: {...} }]` | Separate config object with `files: ['*.test.ts']` |
+      | `.eslintignore` | A `{ ignores: [...] }`-only object |
+      | `root: true` | Implicit (flat config is per-directory) |
+
+      Steps:
+
+      1. `pnpm add -D @eslint/js typescript-eslint globals`
+      2. Create `eslint.config.cjs`, mirror the structure above
+      3. Delete `.eslintrc.*` and `.eslintignore`
+      4. Run `pnpm eslint --print-config <path-to-a-source-file>` to confirm rules resolve as expected
+      5. `pnpm lint` and fix any new findings (flat config defaults are sometimes stricter)
+
+      ### Verifying which config applies to a file
+
+      ```bash
+      pnpm eslint --print-config src/users/users.service.ts | jq '.rules' | head -30
+      ```
+
+      Outputs the fully resolved config — invaluable for debugging "why is this rule on/off?"
+
+  - sequence: 6
+    fragment_type: guardrail
+    content: |
+      ## Anti-Patterns and Pitfalls
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | Mixing `.eslintrc.*` AND `eslint.config.*` in the same repo | ESLint 9 ignores `.eslintrc.*`; old contributors get confused | Pick one — flat for new code; delete the other |
+      | Putting `prettier` config first | Style rules from later configs re-enable conflicts | `eslint-config-prettier` MUST be the last entry |
+      | `recommendedTypeChecked` without `parserOptions.project` | Type-aware rules fail with cryptic "could not find tsconfig" | Set `project` AND `tsconfigRootDir: __dirname` |
+      | Globbing too broadly in `files` | Type-aware lints try to parse JSON/markdown | Scope to `['**/*.ts', '**/*.tsx']` etc. |
+      | Putting `ignores` in a config object that has other fields | Only scopes ignores to that object | Standalone `{ ignores: [...] }` for global ignores |
+      | `eslint-plugin-prettier` (running prettier as a lint rule) | Slow, weird error output | Run prettier separately: `prettier --write` then `eslint --fix` |
+      | Disabling `@typescript-eslint/no-floating-promises` globally | Hides genuine async bugs | Fix the promises with `await` or `void` |
+      | Committing `eslint.config.js` when project is CJS | `require` in ESM file → TypeError at boot | Use `.cjs` to make module system explicit |
+      | No CI step running lint | Drift; rules go stale | `pnpm lint` in CI; fail PR on errors |
+
+      ### Performance
+
+      Type-aware rules (`recommendedTypeChecked`) are slow on large codebases. If lint takes > 30s:
+
+      - Use `eslint --cache` (writes `.eslintcache`)
+      - Set `parserOptions.projectService: true` (typescript-eslint v8) for incremental loading
+      - Consider running type-aware rules only in CI; faster non-type-aware locally
+
+  - sequence: 7
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      - [ ] One config file at repo root: `eslint.config.cjs` (preferred) or `.js` / `.mjs` — never both old + new
+      - [ ] `.eslintrc.*` and `.eslintignore` removed from the repo
+      - [ ] Global ignores in a standalone `{ ignores: [...] }` object
+      - [ ] `eslint-config-prettier` is the **last** entry in the array (if Prettier is used)
+      - [ ] Type-aware rules have `parserOptions.project` AND `tsconfigRootDir: __dirname`
+      - [ ] Per-file-type configs use `files: [...]` (e.g., test relaxations target only `*.test.ts`)
+      - [ ] `pnpm lint` passes with zero errors
+      - [ ] CI runs `pnpm lint` and fails the build on errors
+      - [ ] `eslint --cache` enabled (or equivalent) so local lint is fast on second run
+      - [ ] In monorepos: shared config in a workspace package, consumers spread it and supply their own `tsconfigRootDir`

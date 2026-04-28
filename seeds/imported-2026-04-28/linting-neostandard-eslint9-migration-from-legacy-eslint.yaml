@@ -1,0 +1,38 @@
+skill_type: domain
+skill_id: linting-neostandard-eslint9-migration-from-legacy-eslint
+canonical_name: Migration From Legacy Eslint
+category: engineering
+skill_class: domain
+domain_tags:
+- eslint
+- eslint9
+- flat-config
+- javascript
+- linting
+- typescript
+- neostandard
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/linting-neostandard-eslint9/rules/migration-from-legacy-eslint.md
+raw_prose: "Use this checklist to migrate with low risk.\n\n## Migration checklist\n\n1. Upgrade ESLint major version:\n   ```bash\n   npm install --save-dev eslint@^9\n   ```\n2. Create `eslint.config.js` or `eslint.config.mjs`\n3. Translate legacy `extends`, `plugins`, and `overrides` into flat-config entries\n4. Remove `.eslintrc*` and deprecated ignore files once parity is verified\n5. Run lint and compare issue count before/after migration\n6. Fix rule parity gaps explicitly in config\n7. Update CI scripts to call `eslint .`\n\n## Pitfalls to avoid\n\n- Mixing legacy and flat config in the same project\n- Forgetting to disable base rules when TS variants are enabled\n- Assuming plugin presets are flat-config compatible without checking docs\n- Migrating config and rule semantics in a single large change without validation\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: Use this checklist to migrate with low risk.
+- sequence: 2
+  fragment_type: verification
+  content: "## Migration checklist\n\n1. Upgrade ESLint major version:\n   ```bash\n   npm install --save-dev eslint@^9\n   ```\n2. Create `eslint.config.js` or `eslint.config.mjs`\n3. Translate legacy `extends`, `plugins`, and `overrides` into flat-config entries\n4. Remove `.eslintrc*` and deprecated ignore files once parity is verified\n5. Run lint and compare issue count before/after migration\n6. Fix rule parity gaps explicitly in config\n7. Update CI scripts to call `eslint .`"
+- sequence: 3
+  fragment_type: guardrail
+  content: '## Pitfalls to avoid
+
+
+    - Mixing legacy and flat config in the same project
+
+    - Forgetting to disable base rules when TS variants are enabled
+
+    - Assuming plugin presets are flat-config compatible without checking docs
+
+    - Migrating config and rule semantics in a single large change without validation'

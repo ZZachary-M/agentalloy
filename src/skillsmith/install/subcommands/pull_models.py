@@ -154,12 +154,21 @@ def _auto_pull(runner: str, model: str) -> dict[str, Any]:
         }
     binary = shutil.which(binary_name)
     if not binary:
+        hint = f"Install {binary_name} first."
+        if runner == "ollama":
+            hint = (
+                "Install Ollama first (do NOT auto-execute — ask the user). "
+                "Linux: `curl -fsSL https://ollama.com/install.sh | sh`. "
+                "macOS: `brew install ollama` or https://ollama.com/download/mac. "
+                "Other platforms: https://ollama.com/download. "
+                "After install, ensure `ollama serve` is running, then re-run pull-models."
+            )
         return {
             "runner": runner,
             "model": model,
             "success": False,
             "error": f"{binary_name} not found in PATH",
-            "hint": f"Install {binary_name} first.",
+            "hint": hint,
         }
 
     # `--` separator prevents argv option-injection if model name slipped

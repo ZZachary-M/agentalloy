@@ -1,0 +1,64 @@
+skill_type: domain
+skill_id: linting-neostandard-eslint9-migration-from-standard
+canonical_name: Migration From Standard
+category: engineering
+skill_class: domain
+domain_tags:
+- eslint
+- eslint9
+- flat-config
+- javascript
+- linting
+- typescript
+- neostandard
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/linting-neostandard-eslint9/rules/migration-from-standard.md
+raw_prose: "Use this when a project currently runs `standard` and you want modern ESLint v9 + flat config while keeping a Standard-like baseline.\n\n## Canonical migration flow\n\n1. Install dependencies:\n\n```bash\nnpm install --save-dev neostandard eslint\n```\n\n2. (Optional preflight) verify helper command works:\n\n```bash\nnpx neostandard --help\n```\n\n3. Generate migrated config from existing `package.json` `\"standard\"` settings:\n\n```bash\nnpx neostandard --migrate > eslint.config.js\n```\n\n4. Replace lint scripts/CI commands from `standard` to `eslint`:\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```\n\n5. Cleanup old setup:\n\n```bash\nnpm uninstall standard\n```\n\nThen remove obsolete top-level `\"standard\"` config and editor integrations specific to `standard` (for example `vscode-standard`).\n\n## Semicolon and TypeScript variants\n\n- semistandard-like migration:\n\n```bash\nnpx neostandard --semi --migrate > eslint.config.js\n```\n\n- TypeScript support in resulting config: set `ts: true` (or regenerate/configure accordingly).\n\n## Behavioral differences to expect\n\n- neostandard is built for ESLint 9 flat config (no `standard-engine` wrapper)\n- rule implementation uses modern flat-config/plugin model\n- some rules differ from legacy standard/`eslint-config-standard` behavior\n- on neostandard v1+, import rules from `eslint-plugin-import-x` are not bundled by default\n\nIf you relied heavily on import linting in your old setup, either:\n- add `eslint-plugin-import-x` explicitly, or\n- rely on `tsc --noEmit` (recommended for TypeScript-heavy projects)\n\nRun lint and fix incrementally after migration; keep tooling migration separate from rule-tuning commits.\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: Use this when a project currently runs `standard` and you want modern ESLint v9 + flat config while keeping a Standard-like baseline.
+- sequence: 2
+  fragment_type: execution
+  content: "## Canonical migration flow\n\n1. Install dependencies:\n\n```bash\nnpm install --save-dev neostandard eslint\n```\n\n2. (Optional preflight) verify helper command works:\n\n```bash\nnpx neostandard --help\n```\n\n3. Generate migrated config from existing `package.json` `\"standard\"` settings:\n\n```bash\nnpx neostandard --migrate > eslint.config.js\n```\n\n4. Replace lint scripts/CI commands from `standard` to `eslint`:\n\n```json\n{\n  \"scripts\": {\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"eslint . --fix\"\n  }\n}\n```\n\n5. Cleanup old setup:\n\n```bash\nnpm uninstall standard\n```\n\nThen remove obsolete top-level `\"standard\"` config and editor integrations specific to `standard` (for example `vscode-standard`)."
+- sequence: 3
+  fragment_type: execution
+  content: '## Semicolon and TypeScript variants
+
+
+    - semistandard-like migration:
+
+
+    ```bash
+
+    npx neostandard --semi --migrate > eslint.config.js
+
+    ```
+
+
+    - TypeScript support in resulting config: set `ts: true` (or regenerate/configure accordingly).'
+- sequence: 4
+  fragment_type: execution
+  content: '## Behavioral differences to expect
+
+
+    - neostandard is built for ESLint 9 flat config (no `standard-engine` wrapper)
+
+    - rule implementation uses modern flat-config/plugin model
+
+    - some rules differ from legacy standard/`eslint-config-standard` behavior
+
+    - on neostandard v1+, import rules from `eslint-plugin-import-x` are not bundled by default
+
+
+    If you relied heavily on import linting in your old setup, either:
+
+    - add `eslint-plugin-import-x` explicitly, or
+
+    - rely on `tsc --noEmit` (recommended for TypeScript-heavy projects)
+
+
+    Run lint and fix incrementally after migration; keep tooling migration separate from rule-tuning commits.'

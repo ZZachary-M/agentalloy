@@ -353,7 +353,15 @@ def main(argv: list[str] | None = None) -> int:
         stats.log_summary()
         if stats.embedded > 0:
             logger.info("rebuilding BM25 FTS index after embedding %d fragment(s)", stats.embedded)
-            vs.rebuild_fts_index()
+            try:
+                vs.rebuild_fts_index()
+            except Exception as exc:  # noqa: BLE001 — FTS rebuild is best-effort
+                # DuckDB FTS extension occasionally hits a DDL dependency race
+                # on alternating drop/create cycles ("subject 'stopwords' has
+                # been deleted"). Vector search continues to work; BM25 leg
+                # silently degrades to empty results until the next successful
+                # rebuild. Log and continue rather than crashing the CLI.
+                logger.warning("FTS index rebuild failed (BM25 leg degraded): %s", exc)
         return EXIT_OK if stats.failed == 0 else EXIT_LLM
 
 

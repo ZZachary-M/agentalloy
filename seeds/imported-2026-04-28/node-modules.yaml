@@ -1,0 +1,44 @@
+skill_type: domain
+skill_id: node-modules
+canonical_name: Node.js Modules
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- type-stripping
+- node
+- server
+- nodejs
+- typescript
+- backend
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/node/rules/modules.md
+raw_prose: "# Node.js Modules\n\n## Prefer ES Modules\n\nUse ES Modules (ESM) for new projects:\n\n```json\n// package.json\n{\n  \"type\": \"module\"\n}\n```\n\n```typescript\n// Named exports (preferred)\nexport function processData(data: Data): Result {\n  // ...\n}\n\nexport const CONFIG = {\n  timeout: 5000,\n};\n\n// Named imports\nimport { processData, CONFIG } from './utils.js';\n```\n\n## File Extensions in ESM\n\nAlways include file extensions in ESM imports:\n\n```typescript\n// GOOD - explicit extension\nimport { helper } from './helper.js';\nimport config from './config.json' with { type: 'json' };\n\n// BAD - missing extension (works in bundlers but not native ESM)\nimport { helper } from './helper';\n```\n\n## Barrel Exports\n\nUse index files to simplify imports:\n\n```typescript\n// src/utils/index.ts\nexport { formatDate, parseDate } from './date.js';\nexport { formatCurrency } from './currency.js';\nexport { validateEmail } from './validation.js';\n\n// Consumer\nimport { formatDate, formatCurrency } from './utils/index.js';\n```\n\n## Default vs Named Exports\n\nPrefer named exports for better refactoring and tree-shaking:\n\n```typescript\n// GOOD - named exports\nexport function createServer(config: Config): Server {\n  // ...\n}\n\nexport function createClient(config: Config): Client {\n  // ...\n}\n\n// AVOID - default exports\nexport default function createServer(config: Config): Server {\n  // ...\n}\n```\n\n## Dynamic Imports\n\nUse dynamic imports for code splitting and conditional loading:\n\n```typescript\nasync function loadPlugin(name: string): Promise<Plugin> {\n  const module = await import(`./plugins/${name}.js`);\n  return module.default;\n}\n\n// Conditional loading\nconst { default: heavy } = await import('./heavy-module.js');\n```\n\n## __dirname and __filename in ESM\n\nUse `import.meta.dirname` and `import.meta.filename` (Node.js 20.11+):\n\n```typescript\nimport { join } from 'node:path';\n\nconst configPath = join(import.meta.dirname, 'config.json');\nconst currentFile = import.meta.filename;\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Node.js Modules'
+- sequence: 2
+  fragment_type: execution
+  content: "## Prefer ES Modules\n\nUse ES Modules (ESM) for new projects:\n\n```json\n// package.json\n{\n  \"type\": \"module\"\n}\n```\n\n```typescript\n// Named exports (preferred)\nexport function processData(data: Data): Result {\n  // ...\n}\n\nexport const CONFIG = {\n  timeout: 5000,\n};\n\n// Named imports\nimport { processData, CONFIG } from './utils.js';\n```\n\n## File Extensions in ESM\n\nAlways include file extensions in ESM imports:\n\n```typescript\n// GOOD - explicit extension\nimport { helper } from './helper.js';\nimport config from './config.json' with { type: 'json' };\n\n// BAD - missing extension (works in bundlers but not native ESM)\nimport { helper } from './helper';\n```\n\n## Barrel Exports\n\nUse index files to simplify imports:\n\n```typescript\n// src/utils/index.ts\nexport { formatDate, parseDate } from './date.js';\nexport { formatCurrency } from './currency.js';\nexport { validateEmail } from './validation.js';\n\n// Consumer\nimport { formatDate, formatCurrency } from './utils/index.js';\n```\n\n## Default vs Named Exports\n\nPrefer named exports for better refactoring and tree-shaking:\n\n```typescript\n// GOOD - named exports\nexport function createServer(config: Config): Server {\n  // ...\n}\n\nexport function createClient(config: Config): Client {\n  // ...\n}\n\n// AVOID - default exports\nexport default function createServer(config: Config): Server {\n  // ...\n}\n```\n\n## Dynamic Imports\n\nUse dynamic imports for code splitting and conditional loading:\n\n```typescript\nasync function loadPlugin(name: string): Promise<Plugin> {\n  const module = await import(`./plugins/${name}.js`);\n  return module.default;\n}\n\n// Conditional loading\nconst { default: heavy } = await import('./heavy-module.js');\n```"
+- sequence: 3
+  fragment_type: execution
+  content: '## __dirname and __filename in ESM
+
+
+    Use `import.meta.dirname` and `import.meta.filename` (Node.js 20.11+):
+
+
+    ```typescript
+
+    import { join } from ''node:path'';
+
+
+    const configPath = join(import.meta.dirname, ''config.json'');
+
+    const currentFile = import.meta.filename;
+
+    ```'

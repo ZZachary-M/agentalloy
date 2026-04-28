@@ -1,0 +1,61 @@
+skill_type: domain
+skill_id: node-testing
+canonical_name: Testing in Node.js
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- type-stripping
+- node
+- server
+- nodejs
+- typescript
+- backend
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/node/rules/testing.md
+raw_prose: "# Testing in Node.js\n\n## Node.js Built-in Test Runner\n\nUse the built-in test runner (Node.js 22+):\n\n```typescript\nimport { describe, it, before, after } from 'node:test';\n\ndescribe('UserService', () => {\n  let service: UserService;\n\n  before(() => {\n    service = new UserService();\n  });\n\n  it('should create a user', async (t) => {\n    const user = await service.create({ name: 'John' });\n    t.assert.equal(user.name, 'John');\n    t.assert.ok(user.id);\n  });\n\n  it('should throw on invalid input', async (t) => {\n    await t.assert.rejects(\n      () => service.create({ name: '' }),\n      { message: 'Name is required' }\n    );\n  });\n});\n```\n\n## Mocking with Test Context\n\nUse the test context `t.mock` for mocking:\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('EmailService', () => {\n  it('should send email via provider', async (t) => {\n    const sendMock = t.mock.fn(async () => ({ success: true }));\n    const provider = { send: sendMock };\n    const service = new EmailService(provider);\n\n    await service.sendWelcome('user@example.com');\n\n    t.assert.equal(sendMock.mock.calls.length, 1);\n    t.assert.deepEqual(sendMock.mock.calls[0].arguments, [\n      'user@example.com',\n      'Welcome!',\n    ]);\n  });\n});\n```\n\n### Mocking Methods\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('UserController', () => {\n  it('should fetch user from API', async (t) => {\n    t.mock.method(globalThis, 'fetch', async () => ({\n      ok: true,\n      json: async () => ({ id: '1', name: 'John' }),\n    }));\n\n    const user = await fetchUser('1');\n    t.assert.equal(user.name, 'John');\n  });\n});\n```\n\n## Test Organization\n\nStructure tests alongside source files:\n\n```\nsrc/\n  user/\n    user.service.ts\n    user.service.test.ts\n    user.repository.ts\n    user.repository.test.ts\n```\n\n## Snapshot Testing\n\nUse snapshots for complex outputs:\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('ReportGenerator', () => {\n  it('should generate expected report', async (t) => {\n    const report = await generateReport(sampleData);\n    t.assert.snapshot(report);\n  });\n});\n```\n\n## Test Hooks for Setup/Teardown\n\nUse lifecycle hooks properly:\n\n```typescript\nimport { describe, it, before, after, beforeEach, afterEach } from 'node:test';\n\ndescribe('Database tests', () => {\n  let db: Database;\n\n  before(async () => {\n    db = await Database.connect(testConfig);\n  });\n\n  after(async () => {\n    await db.disconnect();\n  });\n\n  beforeEach(async () => {\n    await db.beginTransaction();\n  });\n\n  afterEach(async () => {\n    await db.rollback();\n  });\n\n  it('should insert record', async (t) => {\n    await db.insert({ name: 'test' });\n    const records = await db.findAll();\n    t.assert.equal(records.length, 1);\n  });\n});\n```\n\n## Isolation and Independence\n\nTests must be independent and not share state:\n\n```typescript\n// BAD - shared mutable state\nlet counter = 0;\n\nit('test 1', (t) => {\n  counter++;\n  t.assert.equal(counter, 1);\n});\n\nit('test 2', (t) => {\n  counter++;\n  t.assert.equal(counter, 2); // Depends on test 1\n});\n\n// GOOD - isolated state\nit('test 1', (t) => {\n  let counter = 0;\n  counter++;\n  t.assert.equal(counter, 1);\n});\n\nit('test 2', (t) => {\n  let counter = 0;\n  counter++;\n  t.assert.equal(counter, 1);\n});\n```\n\n## EventEmitter Timing in Tests\n\nWhen testing `EventEmitter` behavior, always register listeners before triggering the action that emits events.\n\nIf you call `emit()` before `on()`, `once()`, or `events.once(...)` is attached, the event is lost and the test may hang or fail intermittently.\n\n```typescript\nimport { EventEmitter, once } from 'node:events';\n\nit('waits for ready event', async (t) => {\n  const emitter = new EventEmitter();\n\n  // GOOD: subscribe first\n  const readyPromise = once(emitter, 'ready');\n\n  startWorkThatEmitsReady(emitter);\n\n  const [payload] = await readyPromise;\n  t.assert.equal(payload.status, 'ok');\n});\n```\n\nThis ordering is critical for reliable tests and avoiding flaky race conditions.\n\n## Running Tests\n\nRun tests with the built-in runner:\n\n```bash\n# Run all tests\nnode --test\n\n# Run specific file\nnode --test src/user/user.service.test.ts\n\n# With TypeScript (Node.js 22.6+)\nnode --test src/**/*.test.ts\n\n# With coverage\nnode --test --experimental-test-coverage\n\n# Watch mode\nnode --test --watch\n```\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Testing in Node.js'
+- sequence: 2
+  fragment_type: execution
+  content: "## Node.js Built-in Test Runner\n\nUse the built-in test runner (Node.js 22+):\n\n```typescript\nimport { describe, it, before, after } from 'node:test';\n\ndescribe('UserService', () => {\n  let service: UserService;\n\n  before(() => {\n    service = new UserService();\n  });\n\n  it('should create a user', async (t) => {\n    const user = await service.create({ name: 'John' });\n    t.assert.equal(user.name, 'John');\n    t.assert.ok(user.id);\n  });\n\n  it('should throw on invalid input', async (t) => {\n    await t.assert.rejects(\n      () => service.create({ name: '' }),\n      { message: 'Name is required' }\n    );\n  });\n});\n```\n\n## Mocking with Test Context\n\nUse the test context `t.mock` for mocking:\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('EmailService', () => {\n  it('should send email via provider', async (t) => {\n    const sendMock = t.mock.fn(async () => ({ success: true }));\n    const provider = { send: sendMock };\n    const service = new EmailService(provider);\n\n    await service.sendWelcome('user@example.com');\n\n    t.assert.equal(sendMock.mock.calls.length, 1);\n    t.assert.deepEqual(sendMock.mock.calls[0].arguments, [\n      'user@example.com',\n      'Welcome!',\n    ]);\n  });\n});\n```\n\n### Mocking Methods\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('UserController', () => {\n  it('should fetch user from API', async (t) => {\n    t.mock.method(globalThis, 'fetch', async () => ({\n      ok: true,\n      json: async () => ({ id: '1', name: 'John' }),\n    }));\n\n    const user = await fetchUser('1');\n    t.assert.equal(user.name, 'John');\n  });\n});\n```\n\n## Test Organization\n\nStructure tests alongside source files:\n\n```\nsrc/\n  user/\n    user.service.ts\n    user.service.test.ts\n    user.repository.ts\n    user.repository.test.ts\n```\n\n## Snapshot Testing\n\nUse snapshots for complex outputs:\n\n```typescript\nimport { describe, it } from 'node:test';\n\ndescribe('ReportGenerator', () => {\n  it('should generate expected report', async (t) => {\n    const report = await generateReport(sampleData);\n    t.assert.snapshot(report);\n  });\n});\n```\n\n## Test Hooks for Setup/Teardown\n\nUse lifecycle hooks properly:\n\n```typescript\nimport { describe, it, before, after, beforeEach, afterEach } from 'node:test';\n\ndescribe('Database tests', () => {\n  let db: Database;\n\n  before(async () => {\n    db = await Database.connect(testConfig);\n  });\n\n  after(async () => {\n    await db.disconnect();\n  });\n\n  beforeEach(async () => {\n    await db.beginTransaction();\n  });\n\n  afterEach(async () => {\n    await db.rollback();\n  });\n\n  it('should insert record', async (t) => {\n    await db.insert({ name: 'test' });\n    const records = await db.findAll();\n    t.assert.equal(records.length, 1);\n  });\n});\n```\n\n## Isolation and Independence\n\nTests must be independent and not share state:\n\n```typescript\n// BAD - shared mutable state\nlet counter = 0;\n\nit('test 1', (t) => {\n  counter++;\n  t.assert.equal(counter, 1);\n});\n\nit('test 2', (t) => {\n  counter++;\n  t.assert.equal(counter, 2); // Depends on test 1\n});\n\n// GOOD - isolated state\nit('test 1', (t) => {\n  let counter = 0;\n  counter++;\n  t.assert.equal(counter, 1);\n});\n\nit('test 2', (t) => {\n  let counter = 0;\n  counter++;\n  t.assert.equal(counter, 1);\n});\n```\n\n## EventEmitter Timing in Tests\n\nWhen testing `EventEmitter` behavior, always register listeners before triggering the action that emits events.\n\nIf you call `emit()` before `on()`, `once()`, or `events.once(...)` is attached, the event is lost and the test may hang or fail intermittently.\n\n```typescript\nimport { EventEmitter, once } from 'node:events';\n\nit('waits for ready event', async (t) => {\n  const emitter = new EventEmitter();\n\n  // GOOD: subscribe first\n  const readyPromise = once(emitter, 'ready');\n\n  startWorkThatEmitsReady(emitter);\n\n  const [payload] = await readyPromise;\n  t.assert.equal(payload.status, 'ok');\n});\n```\n\nThis ordering is critical for reliable tests and avoiding flaky race conditions."
+- sequence: 3
+  fragment_type: execution
+  content: '## Running Tests
+
+
+    Run tests with the built-in runner:
+
+
+    ```bash
+
+    # Run all tests
+
+    node --test
+
+
+    # Run specific file
+
+    node --test src/user/user.service.test.ts
+
+
+    # With TypeScript (Node.js 22.6+)
+
+    node --test src/**/*.test.ts
+
+
+    # With coverage
+
+    node --test --experimental-test-coverage
+
+
+    # Watch mode
+
+    node --test --watch
+
+    ```'

@@ -1,0 +1,119 @@
+skill_type: domain
+skill_id: node-profiling
+canonical_name: Profiling in Node.js
+category: engineering
+skill_class: domain
+domain_tags:
+- javascript
+- type-stripping
+- node
+- server
+- nodejs
+- typescript
+- backend
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone-import
+change_summary: Imported from skills/skills/node/rules/profiling.md
+raw_prose: "# Profiling in Node.js\n\n## Flame Graphs with @platformatic/flame\n\nUse [@platformatic/flame](https://github.com/platformatic/flame) for CPU profiling with flame graph visualization:\n\n```bash\nnpx @platformatic/flame app.ts\n```\n\nThis starts your application with profiling enabled and generates an interactive flame graph.\n\n### Markdown Output for AI Analysis\n\nflame can output markdown reports suitable for AI-assisted performance analysis:\n\n```bash\nnpx @platformatic/flame --output markdown app.ts\n```\n\nThis enables a fully agentic workflow where you can:\n1. Profile your application\n2. Get markdown output describing hotspots\n3. Feed the report to an AI assistant for optimization suggestions\n\n### Programmatic Usage\n\n```typescript\nimport { profile } from '@platformatic/flame';\n\nconst stop = await profile({\n  outputFile: 'profile.html',\n});\n\n// Run your workload\nawait runBenchmark();\n\nawait stop();\n```\n\n## Load Testing Tools\n\n### autocannon\n\nUse [autocannon](https://github.com/mcollina/autocannon) for HTTP benchmarking:\n\n```bash\n# Basic benchmark\nnpx autocannon http://localhost:3000\n\n# With options\nnpx autocannon -c 100 -d 30 -p 10 http://localhost:3000\n\n# POST request with body\nnpx autocannon -m POST -H \"Content-Type: application/json\" -b '{\"name\":\"test\"}' http://localhost:3000/users\n```\n\nOptions:\n- `-c` - Number of concurrent connections (default: 10)\n- `-d` - Duration in seconds (default: 10)\n- `-p` - Number of pipelined requests (default: 1)\n- `-m` - HTTP method\n- `-b` - Request body\n\n### Programmatic autocannon\n\n```typescript\nimport autocannon from 'autocannon';\n\nconst result = await autocannon({\n  url: 'http://localhost:3000',\n  connections: 100,\n  duration: 30,\n  pipelining: 10,\n});\n\nconsole.log(autocannon.printResult(result));\n```\n\n### wrk\n\n[wrk](https://github.com/wg/wrk) is a high-performance HTTP benchmarking tool:\n\n```bash\n# Basic benchmark\nwrk -t12 -c400 -d30s http://localhost:3000\n\n# With Lua script for custom requests\nwrk -t12 -c400 -d30s -s post.lua http://localhost:3000\n```\n\nOptions:\n- `-t` - Number of threads\n- `-c` - Number of connections\n- `-d` - Duration\n- `-s` - Lua script for custom logic\n\n### k6\n\n[k6](https://k6.io/) is ideal for complex load testing scenarios:\n\n```javascript\n// load-test.js\nimport http from 'k6/http';\nimport { check, sleep } from 'k6';\n\nexport const options = {\n  vus: 100,\n  duration: '30s',\n};\n\nexport default function () {\n  const res = http.get('http://localhost:3000');\n  check(res, {\n    'status is 200': (r) => r.status === 200,\n    'response time < 200ms': (r) => r.timings.duration < 200,\n  });\n  sleep(1);\n}\n```\n\n```bash\nk6 run load-test.js\n```\n\n## Built-in Node.js Profiling\n\n### CPU Profiling\n\n```bash\n# Generate V8 profiling log\nnode --prof app.js\n\n# Process the log\nnode --prof-process isolate-*.log > profile.txt\n```\n\n### Heap Snapshots\n\n```bash\n# Start with inspector\nnode --inspect app.js\n\n# Then use Chrome DevTools (chrome://inspect) to:\n# - Take heap snapshots\n# - Record allocation timelines\n# - Find memory leaks\n```\n\n### Diagnostic Reports\n\n```bash\n# Generate report on signal\nnode --report-on-signal app.js\nkill -SIGUSR2 <pid>\n\n# Generate report on uncaught exception\nnode --report-on-fatalerror app.js\n```\n\n## Profiling Workflow\n\n1. **Establish baseline** - Run autocannon to get initial metrics\n2. **Profile** - Use @platformatic/flame to identify hotspots\n3. **Optimize** - Fix the identified bottlenecks\n4. **Verify** - Run autocannon again to measure improvement\n5. **Repeat** - Continue until performance goals are met\n\n## Tool Comparison\n\n| Tool | Best For |\n|------|----------|\n| @platformatic/flame | CPU profiling, flame graphs, AI-assisted analysis |\n| autocannon | Quick HTTP benchmarks, Node.js native |\n| wrk | Maximum throughput testing |\n| k6 | Complex scenarios, CI/CD integration, scripted tests |\n"
+fragments:
+- sequence: 1
+  fragment_type: execution
+  content: '# Profiling in Node.js'
+- sequence: 2
+  fragment_type: execution
+  content: "## Flame Graphs with @platformatic/flame\n\nUse [@platformatic/flame](https://github.com/platformatic/flame) for CPU profiling with flame graph visualization:\n\n```bash\nnpx @platformatic/flame app.ts\n```\n\nThis starts your application with profiling enabled and generates an interactive flame graph.\n\n### Markdown Output for AI Analysis\n\nflame can output markdown reports suitable for AI-assisted performance analysis:\n\n```bash\nnpx @platformatic/flame --output markdown app.ts\n```\n\nThis enables a fully agentic workflow where you can:\n1. Profile your application\n2. Get markdown output describing hotspots\n3. Feed the report to an AI assistant for optimization suggestions\n\n### Programmatic Usage\n\n```typescript\nimport { profile } from '@platformatic/flame';\n\nconst stop = await profile({\n  outputFile: 'profile.html',\n});\n\n// Run your workload\nawait runBenchmark();\n\nawait stop();\n```"
+- sequence: 3
+  fragment_type: execution
+  content: "## Load Testing Tools\n\n### autocannon\n\nUse [autocannon](https://github.com/mcollina/autocannon) for HTTP benchmarking:\n\n```bash\n# Basic benchmark\nnpx autocannon http://localhost:3000\n\n# With options\nnpx autocannon -c 100 -d 30 -p 10 http://localhost:3000\n\n# POST request with body\nnpx autocannon -m POST -H \"Content-Type: application/json\" -b '{\"name\":\"test\"}' http://localhost:3000/users\n```\n\nOptions:\n- `-c` - Number of concurrent connections (default: 10)\n- `-d` - Duration in seconds (default: 10)\n- `-p` - Number of pipelined requests (default: 1)\n- `-m` - HTTP method\n- `-b` - Request body\n\n### Programmatic autocannon\n\n```typescript\nimport autocannon from 'autocannon';\n\nconst result = await autocannon({\n  url: 'http://localhost:3000',\n  connections: 100,\n  duration: 30,\n  pipelining: 10,\n});\n\nconsole.log(autocannon.printResult(result));\n```\n\n### wrk\n\n[wrk](https://github.com/wg/wrk) is a high-performance HTTP benchmarking tool:\n\n```bash\n# Basic benchmark\nwrk -t12 -c400 -d30s http://localhost:3000\n\n# With Lua script for custom requests\nwrk -t12 -c400 -d30s -s post.lua http://localhost:3000\n```\n\nOptions:\n- `-t` - Number of threads\n- `-c` - Number of connections\n- `-d` - Duration\n- `-s` - Lua script for custom logic\n\n### k6\n\n[k6](https://k6.io/) is ideal for complex load testing scenarios:\n\n```javascript\n// load-test.js\nimport http from 'k6/http';\nimport { check, sleep } from 'k6';\n\nexport const options = {\n  vus: 100,\n  duration: '30s',\n};\n\nexport default function () {\n  const res = http.get('http://localhost:3000');\n  check(res, {\n    'status is 200': (r) => r.status === 200,\n    'response time < 200ms': (r) => r.timings.duration < 200,\n  });\n  sleep(1);\n}\n```\n\n```bash\nk6 run load-test.js\n```"
+- sequence: 4
+  fragment_type: execution
+  content: '## Built-in Node.js Profiling
+
+
+    ### CPU Profiling
+
+
+    ```bash
+
+    # Generate V8 profiling log
+
+    node --prof app.js
+
+
+    # Process the log
+
+    node --prof-process isolate-*.log > profile.txt
+
+    ```
+
+
+    ### Heap Snapshots
+
+
+    ```bash
+
+    # Start with inspector
+
+    node --inspect app.js
+
+
+    # Then use Chrome DevTools (chrome://inspect) to:
+
+    # - Take heap snapshots
+
+    # - Record allocation timelines
+
+    # - Find memory leaks
+
+    ```
+
+
+    ### Diagnostic Reports
+
+
+    ```bash
+
+    # Generate report on signal
+
+    node --report-on-signal app.js
+
+    kill -SIGUSR2 <pid>
+
+
+    # Generate report on uncaught exception
+
+    node --report-on-fatalerror app.js
+
+    ```'
+- sequence: 5
+  fragment_type: execution
+  content: '## Profiling Workflow
+
+
+    1. **Establish baseline** - Run autocannon to get initial metrics
+
+    2. **Profile** - Use @platformatic/flame to identify hotspots
+
+    3. **Optimize** - Fix the identified bottlenecks
+
+    4. **Verify** - Run autocannon again to measure improvement
+
+    5. **Repeat** - Continue until performance goals are met'
+- sequence: 6
+  fragment_type: execution
+  content: '## Tool Comparison
+
+
+    | Tool | Best For |
+
+    |------|----------|
+
+    | @platformatic/flame | CPU profiling, flame graphs, AI-assisted analysis |
+
+    | autocannon | Quick HTTP benchmarks, Node.js native |
+
+    | wrk | Maximum throughput testing |
+
+    | k6 | Complex scenarios, CI/CD integration, scripted tests |'

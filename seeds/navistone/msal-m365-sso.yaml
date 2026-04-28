@@ -1,0 +1,357 @@
+skill_type: domain
+skill_id: msal-m365-sso
+canonical_name: Microsoft 365 / Entra ID SSO with MSAL Node
+category: engineering
+skill_class: domain
+domain_tags: [msal, microsoft, entra, azure-ad, m365, sso, oauth2, authentication, oidc, msal-node]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: Initial authoring — covers MSAL Node ConfidentialClientApplication, authorization code + PKCE flow, on-behalf-of, Microsoft Graph, token cache, NestJS guard pattern, and deployment trade-offs.
+raw_prose: |
+  # Microsoft 365 / Entra ID SSO with MSAL Node
+
+  ## Overview
+
+  Microsoft Authentication Library for Node (`@azure/msal-node`) integrates a Node service with Microsoft Entra ID (formerly Azure AD) and Microsoft 365 identities. It implements OAuth 2.0 + OIDC flows against the Microsoft identity platform.
+
+  Three flows you'll commonly use:
+
+  | Flow | Use case | MSAL class |
+  |---|---|---|
+  | **Authorization Code + PKCE** | Web app signs users in via redirect | `ConfidentialClientApplication.getAuthCodeUrl` + `acquireTokenByCode` |
+  | **Client Credentials** | Service-to-service (no user) | `ConfidentialClientApplication.acquireTokenByClientCredential` |
+  | **On-Behalf-Of (OBO)** | API receives a user token, calls Graph as that user | `acquireTokenOnBehalfOf` |
+
+  ## Deployment Reality Check (Before You Commit)
+
+  M365 SSO is real work to operationalize. Before adopting, weigh:
+
+  | Need | Effort |
+  |---|---|
+  | App registration in Entra (one per environment) | 1–2 hours |
+  | Redirect URIs registered for staging + prod + dev | trivial |
+  | Client secret rotation OR certificate-based credentials | ongoing |
+  | Tenant restriction (single-tenant vs multi-tenant) decision | requires product input |
+  | Conditional Access compliance (MFA, device, location) | varies wildly by tenant policy |
+  | Token cache (in-memory dies on restart; needs Redis or DB for stable sessions) | 1–2 days to do right |
+  | Logout: clearing local session AND Microsoft session | half day |
+  | Group/role mapping from Entra claims to app permissions | depends on RBAC model |
+
+  If the user base is small and external (vendors), **HttpOnly JWT** is often the right answer until M365 SSO has a clear ROI. Adopt MSAL when admin SSO is required for IT/security policy reasons or when you actually need Graph API data.
+
+  ## Configuration
+
+  Per environment:
+
+  ```bash
+  AZURE_AD_TENANT_ID=<guid-or-"common">
+  AZURE_AD_CLIENT_ID=<app-registration-client-id>
+  AZURE_AD_CLIENT_SECRET=<from-key-vault-NOT-env-in-prod>
+  AZURE_AD_REDIRECT_URI=https://app.navistone.com/auth/callback
+  AZURE_AD_POST_LOGOUT_URI=https://app.navistone.com/
+  AZURE_AD_SCOPES=openid,profile,email,User.Read
+  ```
+
+  Use **certificate credentials** (not client secrets) for production. Store cert in Azure Key Vault or AWS Secrets Manager.
+
+fragments:
+  - sequence: 1
+    fragment_type: setup
+    content: |
+      ## Setup
+
+      ```bash
+      pnpm add @azure/msal-node
+      pnpm add -D @types/node
+      ```
+
+      ### Entra App Registration (one-time, per environment)
+
+      1. Azure Portal → Microsoft Entra ID → App registrations → New registration
+      2. Supported account types: **Single tenant** (your org only) unless you need multi-tenant
+      3. Redirect URI: `Web` → `https://your-host/auth/callback`
+      4. Save the **Application (client) ID** and **Directory (tenant) ID**
+      5. Certificates & secrets → upload a certificate (preferred) or create a client secret
+      6. API permissions → add Microsoft Graph delegated scopes (`User.Read`, `email`, `profile`, `openid`); admin-consent if required by your tenant
+      7. Token configuration → optionally add `email`, `groups`, or custom claims to the ID token
+
+      ### MSAL config
+
+      ```typescript
+      // src/auth/msal.ts
+      import { ConfidentialClientApplication, type Configuration, LogLevel } from '@azure/msal-node';
+
+      function buildConfig(): Configuration {
+        return {
+          auth: {
+            clientId: process.env.AZURE_AD_CLIENT_ID!,
+            authority: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}`,
+            clientSecret: process.env.AZURE_AD_CLIENT_SECRET, // OR clientCertificate
+          },
+          system: {
+            loggerOptions: {
+              loggerCallback(level, msg, containsPii) {
+                if (containsPii) return;
+                if (level <= LogLevel.Warning) console.error(`[msal] ${msg}`);
+              },
+              logLevel: LogLevel.Warning,
+            },
+          },
+        };
+      }
+
+      let _msal: ConfidentialClientApplication | undefined;
+      export function getMsal(): ConfidentialClientApplication {
+        if (!_msal) _msal = new ConfidentialClientApplication(buildConfig());
+        return _msal;
+      }
+
+      export const SCOPES = (process.env.AZURE_AD_SCOPES ?? 'openid,profile,email,User.Read').split(',');
+      ```
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Authorization Code Flow (User Sign-In)
+
+      Two endpoints: start the flow (redirect to Microsoft), and the callback (exchange code for tokens).
+
+      ```typescript
+      // src/auth/auth.controller.ts (NestJS shown; same shape works in Express)
+      import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+      import type { Request, Response } from 'express';
+      import { randomBytes, createHash } from 'node:crypto';
+      import { getMsal, SCOPES } from './msal';
+
+      @Controller('auth')
+      export class AuthController {
+        @Get('login')
+        async login(@Req() req: Request, @Res() res: Response) {
+          // PKCE: generate verifier + challenge
+          const verifier = randomBytes(32).toString('base64url');
+          const challenge = createHash('sha256').update(verifier).digest('base64url');
+          const state = randomBytes(16).toString('base64url');
+
+          // Persist verifier + state — by session id, NOT in the URL
+          await sessionStore.set(state, { verifier, returnTo: (req.query.returnTo as string) ?? '/' });
+
+          const url = await getMsal().getAuthCodeUrl({
+            scopes: SCOPES,
+            redirectUri: process.env.AZURE_AD_REDIRECT_URI!,
+            state,
+            codeChallenge: challenge,
+            codeChallengeMethod: 'S256',
+          });
+          return res.redirect(url);
+        }
+
+        @Get('callback')
+        async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
+          const ctx = await sessionStore.get(state);
+          if (!ctx) return res.status(400).send('invalid state');
+          await sessionStore.del(state);
+
+          const result = await getMsal().acquireTokenByCode({
+            code,
+            scopes: SCOPES,
+            redirectUri: process.env.AZURE_AD_REDIRECT_URI!,
+            codeVerifier: ctx.verifier,
+          });
+
+          if (!result?.account) return res.status(401).send('auth failed');
+
+          // Issue your own session (HttpOnly cookie). Do NOT pass Microsoft tokens to the browser.
+          const sessionId = await issueAppSession({
+            sub: result.account.homeAccountId,
+            email: result.account.username,
+            name: result.account.name ?? '',
+          });
+
+          res.cookie('session_jwt', sessionId, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: 8 * 60 * 60 * 1000,
+            path: '/',
+          });
+          return res.redirect(ctx.returnTo);
+        }
+      }
+      ```
+
+      Key points:
+
+      - **PKCE always**, even for confidential clients — defense in depth
+      - **State** is server-side, keyed by random id — never trust client-provided state
+      - **Don't expose Microsoft tokens to the browser** — exchange them server-side, then issue your own session cookie
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Token Cache (Critical for Production)
+
+      MSAL caches tokens in-memory by default — that means **every server restart wipes everyone's session**, and **load-balanced instances can't share sessions**. For real deployments, plug in a distributed cache.
+
+      ```typescript
+      // src/auth/redis-token-cache.ts
+      import type { ICachePlugin, TokenCacheContext } from '@azure/msal-node';
+      import { getRedis } from '../cache/redis';
+
+      const KEY = 'msal:token-cache';
+
+      export const redisCachePlugin: ICachePlugin = {
+        async beforeCacheAccess(ctx: TokenCacheContext): Promise<void> {
+          const data = await getRedis().get(KEY);
+          if (data) ctx.tokenCache.deserialize(data);
+        },
+        async afterCacheAccess(ctx: TokenCacheContext): Promise<void> {
+          if (ctx.cacheHasChanged) {
+            await getRedis().set(KEY, ctx.tokenCache.serialize());
+          }
+        },
+      };
+      ```
+
+      Wire it into the MSAL config:
+
+      ```typescript
+      const msal = new ConfidentialClientApplication({
+        auth: { /* ... */ },
+        cache: { cachePlugin: redisCachePlugin },
+      });
+      ```
+
+      For multi-tenant or per-user partitioning, key the cache by user (`msal:token-cache:${userId}`) and shard reads/writes accordingly.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## On-Behalf-Of (Calling Graph as the User)
+
+      Use OBO when your API receives a user token and needs to call Microsoft Graph (or another downstream API) **as that user**.
+
+      ```typescript
+      export async function getGraphProfile(userAccessToken: string) {
+        const result = await getMsal().acquireTokenOnBehalfOf({
+          oboAssertion: userAccessToken,
+          scopes: ['User.Read'],
+        });
+        if (!result?.accessToken) throw new Error('OBO token exchange failed');
+
+        const res = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${result.accessToken}` },
+        });
+        if (!res.ok) throw new Error(`graph error: ${res.status}`);
+        return res.json();
+      }
+      ```
+
+      ## Client Credentials (App-Only, No User)
+
+      For service-to-service calls (e.g., reading group membership at boot):
+
+      ```typescript
+      const result = await getMsal().acquireTokenByClientCredential({
+        scopes: ['https://graph.microsoft.com/.default'],
+      });
+      ```
+
+      Requires **application** permissions on the Entra app, granted with admin consent.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## NestJS Guard for Routes Behind M365 SSO
+
+      Pair the auth controller above with a guard on protected routes:
+
+      ```typescript
+      // src/auth/sso.guard.ts
+      import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+      import { Request } from 'express';
+      import { verify } from 'jsonwebtoken';
+
+      interface AppSession {
+        sub: string;     // homeAccountId from MSAL
+        email: string;
+        name: string;
+      }
+
+      @Injectable()
+      export class SsoGuard implements CanActivate {
+        canActivate(ctx: ExecutionContext): boolean {
+          const req = ctx.switchToHttp().getRequest<Request & { user?: AppSession }>();
+          const cookie = req.cookies?.session_jwt;
+          if (!cookie) throw new UnauthorizedException();
+          try {
+            req.user = verify(cookie, process.env.JWT_SECRET!) as AppSession;
+            return true;
+          } catch {
+            throw new UnauthorizedException();
+          }
+        }
+      }
+      ```
+
+      ### Logout
+
+      Clearing the local session is necessary but not sufficient — also redirect to the Microsoft logout endpoint so the SSO session ends:
+
+      ```typescript
+      @Get('logout')
+      logout(@Res() res: Response) {
+        res.clearCookie('session_jwt', { path: '/' });
+        const post = encodeURIComponent(process.env.AZURE_AD_POST_LOGOUT_URI!);
+        return res.redirect(
+          `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=${post}`,
+        );
+      }
+      ```
+
+  - sequence: 6
+    fragment_type: guardrail
+    content: |
+      ## Anti-Patterns and Security
+
+      | Anti-Pattern | Problem | Fix |
+      |---|---|---|
+      | Returning Microsoft access tokens to the browser | Token theft expands the blast radius to all your Graph perms | Issue a server session cookie; keep MS tokens server-side |
+      | Skipping PKCE on confidential clients | Less defense in depth | Always include PKCE |
+      | Hardcoded redirect URI | Breaks on env promotion | `process.env.AZURE_AD_REDIRECT_URI`, registered per env |
+      | Trusting `state` from the client | CSRF risk | Server-stored state, indexed by random id |
+      | In-memory token cache in prod | Sessions die on restart; no LB sharing | Redis cache plugin, keyed per user |
+      | Long-lived client secrets | Secret rotation pain; leakage risk | Certificate credentials + Key Vault |
+      | Multi-tenant by accident | Strangers can sign in | `Single tenant` registration unless explicitly multi-tenant |
+      | Catching auth errors and showing them verbatim | Leaks tenant config | Generic 401; log details server-side |
+      | Mapping Entra group IDs into JWT claims as plain strings | Hard to revoke; depends on group membership at signin | Resolve roles server-side per request OR embed short-lived role claim |
+      | No `post_logout_redirect_uri` | User stays signed in to Microsoft | Send to MS logout with redirect back to your home |
+
+      ### Token validation if you accept Entra access tokens directly
+
+      If your API is the resource server (mobile app sends Entra access tokens directly), validate the JWT:
+
+      - Issuer (`iss`) matches your tenant
+      - Audience (`aud`) matches your `clientId`
+      - Signature against the tenant JWKS at `https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys`
+      - `exp` not expired
+
+      Use `jose` or `jsonwebtoken` with the JWKS resolved from the OIDC discovery document.
+
+  - sequence: 7
+    fragment_type: verification
+    content: |
+      ## Verification Checklist
+
+      - [ ] App registration exists for **each** environment (dev/staging/prod) with distinct redirect URIs
+      - [ ] Single-tenant unless multi-tenant is an explicit product requirement
+      - [ ] Production uses certificate credentials, not a long-lived client secret
+      - [ ] Secrets/certs come from Key Vault / Secrets Manager, not committed `.env`
+      - [ ] PKCE used on every authorization code flow (verifier stored server-side, keyed by random state)
+      - [ ] Microsoft tokens never leave the server; client gets only an app session cookie (HttpOnly + Secure + SameSite=Lax)
+      - [ ] Token cache uses a distributed plugin (Redis) — not the default in-memory cache
+      - [ ] Logout clears the local cookie AND redirects to Microsoft `oauth2/v2.0/logout`
+      - [ ] Graph calls go through OBO (delegated user perms) or client-credential (app perms) explicitly — never reuse the wrong flow
+      - [ ] If validating Entra-issued JWTs at the API boundary, `iss`, `aud`, signature (against tenant JWKS), and `exp` are all checked
+      - [ ] Conditional Access policies in the tenant have been reviewed (MFA / device compliance) so deployment doesn't surprise users
