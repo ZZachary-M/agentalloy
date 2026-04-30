@@ -1,5 +1,6 @@
 name: iac
 version: 1.0.0
+tier: platform
 description: Infrastructure as Code — Terraform module library and patterns.
 author: navistone
 embed_model: qwen3-embedding:0.6b

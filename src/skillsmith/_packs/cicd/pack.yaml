@@ -1,5 +1,6 @@
 name: cicd
 version: 1.0.0
+tier: platform
 description: CI/CD pipelines — GitHub Actions, GitLab CI, GitOps, deployment pipeline
   design.
 author: navistone

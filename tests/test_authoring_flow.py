@@ -61,20 +61,40 @@ _DOMAIN_REVIEW_YAML = textwrap.dedent("""\
     author: acceptance-test
     change_summary: NXS-792 acceptance test
     raw_prose: |
-      This is the acceptance test domain skill for the authoring flow.
+      Prepare the skill source prose before starting the authoring flow so
+      the agent has a complete, well-formed input. Source markdown should
+      include a clear H1 title, body prose, and any code examples that will
+      become fragments.
+
+      Run the authoring agent to produce reviewable YAML output. The agent
+      transforms the source into a single review YAML document with
+      contiguous fragments derived directly from the prose, and writes it
+      to skill-source/pending-qa for downstream review.
+
+      Confirm the YAML matches the expected schema before loading by running
+      the ingest validator with --strict, which enforces fragment word-count
+      windows, contiguity against raw_prose, and the canonical tag ceiling.
     fragments:
       - sequence: 1
         fragment_type: setup
         content: |
-          Prepare the skill source prose before starting.
+          Prepare the skill source prose before starting the authoring flow so
+          the agent has a complete, well-formed input. Source markdown should
+          include a clear H1 title, body prose, and any code examples that will
+          become fragments.
       - sequence: 2
         fragment_type: execution
         content: |
-          Run the authoring agent to produce reviewable YAML output.
+          Run the authoring agent to produce reviewable YAML output. The agent
+          transforms the source into a single review YAML document with
+          contiguous fragments derived directly from the prose, and writes it
+          to skill-source/pending-qa for downstream review.
       - sequence: 3
         fragment_type: verification
         content: |
-          Confirm the YAML matches the expected schema before loading.
+          Confirm the YAML matches the expected schema before loading by running
+          the ingest validator with --strict, which enforces fragment word-count
+          windows, contiguity against raw_prose, and the canonical tag ceiling.
 """)
 
 

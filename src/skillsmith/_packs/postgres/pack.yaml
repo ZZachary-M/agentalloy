@@ -1,5 +1,6 @@
 name: postgres
 version: 1.1.0
+tier: store
 description: PostgreSQL — table design, query optimization, migrations.
 author: navistone
 embed_model: qwen3-embedding:0.6b

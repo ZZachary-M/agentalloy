@@ -1,5 +1,6 @@
 name: testing
 version: 1.0.0
+tier: tooling
 description: Testing patterns — JavaScript testing, bats, e2e, browser testing with
   DevTools.
 author: navistone

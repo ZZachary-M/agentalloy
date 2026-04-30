@@ -1,5 +1,6 @@
 name: s3
 version: 1.0.0
+tier: store
 description: AWS S3 — file storage, presigned URLs, multipart uploads, streaming.
 author: navistone
 embed_model: qwen3-embedding:0.6b

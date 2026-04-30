@@ -1,5 +1,6 @@
 name: python
 version: 1.0.0
+tier: language
 description: Python ecosystem — async, packaging, testing, error handling, observability,
   type safety.
 author: navistone

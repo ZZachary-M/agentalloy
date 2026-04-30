@@ -1,3 +1,4 @@
+<!-- prompt_version: 2026-04-30.1 -->
 # Skill QA Agent
 
 **skill_id:** sys-skill-qa-agent
@@ -45,7 +46,11 @@ A single JSON object, no prose outside it:
   "dedup_decisions": [
     {"near_dup_skill_id": "...", "score": 0.85, "distinct": true | false, "reason": "..."}
   ],
-  "suggested_edits": "free-form guidance to the author, empty string if approved"
+  "suggested_edits": "free-form guidance to the author, empty string if approved",
+  "tag_verdicts": [
+    {"tag": "<tag>", "rule": "R1|R3-syn|R4", "verdict": "pass|not_queryable|synonym_of:<other>|off_intent", "detail": "..."}
+  ],
+  "prompt_version": "2026-04-30.1"
 }
 ```
 
@@ -55,6 +60,24 @@ Rules:
 - `revise` means the draft has fixable problems; `reject` means the source
   is fundamentally unsuitable (not a skill, duplicates existing coverage,
   wrong kind of content).
+
+## Tag Policy Verdicts
+
+The user prompt may include a `## Tag Quality Check` block built by
+`build_semantic_lint_block`. When present, evaluate each tag listed against
+the semantic tag rules and return your findings in the `tag_verdicts` array.
+
+Each entry in `tag_verdicts` must have:
+- `tag` — the tag string under review
+- `rule` — the rule identifier violated (e.g. `R1`, `R3-syn`, `R4`)
+- `verdict` — one of: `pass`, `not_queryable`, `synonym_of:<other>`, `off_intent`
+- `detail` — a short human-readable explanation
+
+Non-pass `tag_verdicts` will be folded into `blocking_issues` by the QA gate
+and may cause a `revise` verdict. A `pass` verdict means the tag is acceptable.
+
+Also echo the `prompt_version` field from the version pin at the top of this
+file so operators can correlate verdicts with the prompt revision.
 
 ## Effectiveness Rubric
 

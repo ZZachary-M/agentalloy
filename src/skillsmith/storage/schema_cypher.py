@@ -24,6 +24,7 @@ NODE_TABLES: tuple[str, ...] = (
         always_apply BOOLEAN DEFAULT false,
         phase_scope STRING[],
         category_scope STRING[],
+        tier STRING,
         PRIMARY KEY(skill_id)
     )
     """,

@@ -1,5 +1,6 @@
 name: security
 version: 1.0.0
+tier: cross-cutting
 description: Security — secrets management, SAST, threat modeling (STRIDE/attack trees),
   hardening, defensive patterns.
 author: navistone

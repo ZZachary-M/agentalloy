@@ -1,5 +1,6 @@
 name: nestjs
 version: 1.0.0
+tier: framework
 description: NestJS framework — modules, providers, DI, ValidationPipe, guards, interceptors,
   exception filters.
 author: navistone

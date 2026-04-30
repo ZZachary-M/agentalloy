@@ -1,6 +1,8 @@
 name: vite
 version: 1.0.0
-description: Vite build tool — config patterns, plugins, env vars, dev proxy, production builds with Rolldown, code splitting, bundle analysis.
+tier: tooling
+description: Vite build tool — config patterns, plugins, env vars, dev proxy, production
+  builds with Rolldown, code splitting, bundle analysis.
 author: navistone
 embed_model: qwen3-embedding:0.6b
 embedding_dim: 1024

@@ -1,5 +1,6 @@
 name: temporal
 version: 1.0.0
+tier: store
 description: Temporal durable workflows — TypeScript SDK + Python testing strategies.
 author: navistone
 embed_model: qwen3-embedding:0.6b

@@ -1,5 +1,6 @@
 name: containers
 version: 1.1.0
+tier: platform
 description: Container orchestration — Kubernetes, Helm, service mesh (Istio/Linkerd),
   mTLS, multi-cloud networking.
 author: navistone

@@ -117,6 +117,8 @@ PACK_RULES: list[tuple[str, str]] = [
         r"cost-optimization)$",
         "engineering",
     ),
+    # ── SDD pipeline workflow skills ──
+    (r"^sdd-", "sdd"),
     # ── Everything else → core (process, governance, generic) ──
     (r".*", "core"),
 ]
@@ -240,11 +242,85 @@ PACK_METADATA = {
         "description": "Monorepo build tooling — Bazel, Nx, Turborepo, monorepo management patterns.",
         "depends_on": [],
     },
+    "mongodb": {
+        "description": "MongoDB — document modeling, aggregation pipelines, indexing, transactions.",
+        "depends_on": [],
+    },
+    "prisma": {
+        "description": "Prisma ORM — schema design, migrations, query API, type safety.",
+        "depends_on": [],
+    },
+    "graphql": {
+        "description": "GraphQL — schema design, resolvers, subscriptions, federation.",
+        "depends_on": [],
+    },
+    "webhooks": {
+        "description": "Webhook design — delivery guarantees, retries, signature verification, idempotency.",
+        "depends_on": [],
+    },
+    "websockets": {
+        "description": "WebSocket scaling — connection management, backpressure, pub/sub patterns.",
+        "depends_on": [],
+    },
+    "mocha-chai": {
+        "description": "Mocha + Chai testing — test structure, assertions, async patterns.",
+        "depends_on": [],
+    },
+    "vite": {
+        "description": "Vite — bundling, plugins, dev server, build optimisation.",
+        "depends_on": [],
+    },
+    "sdd": {
+        "description": "SDD pipeline workflow skills (spec → design → plan → testgen → build → verify → deliver)",
+        "depends_on": [],
+        "always_install": False,
+    },
 }
 
 PACK_VERSION = "1.0.0"
 EMBED_MODEL = "qwen3-embedding:0.6b"
 EMBED_DIM = 1024
+
+# Pack tier — see install_pack._VALID_PACK_TIERS and docs/PACK-AUTHORING.md.
+PACK_TIERS: dict[str, str] = {
+    "core": "foundation",
+    "engineering": "foundation",
+    "nodejs": "language",
+    "typescript": "language",
+    "python": "language",
+    "rust": "language",
+    "go": "language",
+    "nestjs": "framework",
+    "fastify": "framework",
+    "react": "framework",
+    "vue": "framework",
+    "nextjs": "framework",
+    "fastapi": "framework",
+    "postgres": "store",
+    "mongodb": "store",
+    "redis": "store",
+    "s3": "store",
+    "temporal": "store",
+    "auth": "cross-cutting",
+    "security": "cross-cutting",
+    "observability": "cross-cutting",
+    "containers": "platform",
+    "iac": "platform",
+    "cicd": "platform",
+    "monorepo": "platform",
+    "testing": "tooling",
+    "linting": "tooling",
+    "mocha-chai": "tooling",
+    "vite": "tooling",
+    "agents": "domain",
+    "ui-design": "domain",
+    "data-engineering": "domain",
+    "prisma": "store",
+    "graphql": "protocol",
+    "webhooks": "protocol",
+    "websockets": "protocol",
+    "sdd": "workflow",
+}
 
 
 def classify(skill_id: str) -> str:
@@ -273,9 +349,16 @@ def load_skill(path: Path) -> dict:
 
 def write_pack_manifest(pack: str, entries: list[dict]) -> None:
     meta = PACK_METADATA.get(pack, {"description": f"{pack} pack.", "depends_on": []})
+    tier = PACK_TIERS.get(pack)
+    if tier is None:
+        raise ValueError(
+            f"pack '{pack}' has no entry in PACK_TIERS — add one in "
+            f"scripts/migrate-seeds-to-packs.py before regenerating manifests"
+        )
     manifest = {
         "name": pack,
         "version": PACK_VERSION,
+        "tier": tier,
         "description": meta["description"],
         "author": "navistone",
         "embed_model": EMBED_MODEL,

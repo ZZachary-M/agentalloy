@@ -93,6 +93,8 @@ class CompositionTrace:
     total_latency_ms: int | None = None
     error_code: str | None = None
     response_size_chars: int | None = None
+    prompt_version: str | None = None
+    workflow_skill_ids: list[str] = field(default_factory=lambda: [])
 
 
 # ---------------------------------------------------------------------------
@@ -150,12 +152,22 @@ CREATE TABLE IF NOT EXISTS composition_traces (
     total_latency_ms INTEGER,
     status VARCHAR NOT NULL,
     error_code VARCHAR,
-    response_size_chars INTEGER
+    response_size_chars INTEGER,
+    prompt_version VARCHAR,
+    workflow_skill_ids VARCHAR[]
 );
 
 CREATE INDEX IF NOT EXISTS idx_traces_ts ON composition_traces(request_ts);
 CREATE INDEX IF NOT EXISTS idx_traces_phase ON composition_traces(phase);
 CREATE INDEX IF NOT EXISTS idx_traces_status ON composition_traces(status);
+
+CREATE TABLE IF NOT EXISTS prompt_loads (
+    ts BIGINT NOT NULL,
+    prompt_name VARCHAR NOT NULL,
+    prompt_version VARCHAR NOT NULL,
+    trace_id VARCHAR
+);
+CREATE INDEX IF NOT EXISTS idx_prompt_loads_ts ON prompt_loads(ts);
 """
 
 _FTS_SETUP_SQL = """
@@ -405,8 +417,9 @@ class VectorStore:
                 task_prompt, selected_fragment_ids, source_skill_ids,
                 system_skill_ids, assembly_tier, assembly_model,
                 retrieval_latency_ms, assembly_latency_ms, total_latency_ms,
-                status, error_code, response_size_chars
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, error_code, response_size_chars,
+                prompt_version, workflow_skill_ids
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 trace.trace_id,
@@ -426,6 +439,8 @@ class VectorStore:
                 trace.status,
                 trace.error_code,
                 trace.response_size_chars,
+                trace.prompt_version,
+                trace.workflow_skill_ids,
             ],
         )
 

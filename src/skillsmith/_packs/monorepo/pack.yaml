@@ -1,5 +1,6 @@
 name: monorepo
 version: 1.0.0
+tier: platform
 description: Monorepo build tooling — Bazel, Nx, Turborepo, monorepo management patterns.
 author: navistone
 embed_model: qwen3-embedding:0.6b

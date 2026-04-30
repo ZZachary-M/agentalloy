@@ -31,6 +31,7 @@ from skillsmith.authoring.driver import (
 )
 from skillsmith.authoring.lm_client import OpenAICompatClient
 from skillsmith.authoring.paths import PipelinePaths
+from skillsmith.authoring.prompt_loader import load_prompt
 from skillsmith.authoring.qa_gate import (
     GateResult,
     load_bounces,
@@ -191,7 +192,8 @@ def run_per_skill(
     qa_fixture = repo_root / "fixtures" / "skill-qa-agent.md"
     if not qa_fixture.exists():
         raise FileNotFoundError(f"QA fixture missing: {qa_fixture}")
-    qa_prompt = qa_fixture.read_text(encoding="utf-8")
+    qa_prompt, _prompt_version = load_prompt(qa_fixture)
+    logger.debug("pipeline loaded qa prompt version=%s", _prompt_version or "(none)")
 
     bounces = load_bounces(paths)
 

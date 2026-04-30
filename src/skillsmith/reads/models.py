@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-SkillClass = Literal["domain", "system"]
+SkillClass = Literal["domain", "system", "workflow"]
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class ActiveSkill:
     phase_scope: list[str] | None
     category_scope: list[str] | None
     active_version_id: str
+    tier: str | None
 
 
 @dataclass(frozen=True)

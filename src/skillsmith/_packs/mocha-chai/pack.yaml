@@ -1,6 +1,8 @@
 name: mocha-chai
 version: 1.0.0
-description: Mocha test runner + Chai BDD assertions + Sinon spies/stubs/mocks for Node.js/TypeScript projects.
+tier: tooling
+description: Mocha test runner + Chai BDD assertions + Sinon spies/stubs/mocks for
+  Node.js/TypeScript projects.
 author: navistone
 embed_model: qwen3-embedding:0.6b
 embedding_dim: 1024

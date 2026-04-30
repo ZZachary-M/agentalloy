@@ -34,7 +34,7 @@ class FragmentSource(Protocol):
     def get_active_fragments(
         self,
         *,
-        skill_class: SkillClass | None = None,
+        skill_class: SkillClass | tuple[str, ...] | None = None,
         categories: list[str] | None = None,
         domain_tags: list[str] | None = None,
     ) -> list[ActiveFragment]: ...
@@ -82,7 +82,7 @@ class StoreFragmentSource:
     def get_active_fragments(
         self,
         *,
-        skill_class: SkillClass | None = None,
+        skill_class: SkillClass | tuple[str, ...] | None = None,
         categories: list[str] | None = None,
         domain_tags: list[str] | None = None,
     ) -> list[ActiveFragment]:
@@ -187,7 +187,7 @@ def retrieve_domain_candidates(
     # Hydrate ActiveFragment metadata from the source. Pull domain fragments
     # for the eligible categories; intersect with the fused ids.
     metadata = frag_src.get_active_fragments(
-        skill_class="domain",
+        skill_class=("domain", "workflow"),
         categories=categories,
         domain_tags=domain_tags,
     )

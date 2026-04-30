@@ -71,6 +71,7 @@ def _write_pack_manifest(
     manifest = {
         "name": name,
         "version": "1.0.0",
+        "tier": "tooling",
         "description": f"{name} test pack",
         "author": "test",
         "embed_model": embed_model,

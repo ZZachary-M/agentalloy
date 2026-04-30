@@ -23,7 +23,7 @@ class RetrieveByIdResponse(BaseModel):
     skill_id: str
     canonical_name: str
     category: str
-    skill_class: Literal["domain", "system"]
+    skill_class: Literal["domain", "system", "workflow"]
     active_version: ActiveVersionMeta
     raw_prose: str
 

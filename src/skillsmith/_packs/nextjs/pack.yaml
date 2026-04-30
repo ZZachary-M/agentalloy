@@ -1,5 +1,6 @@
 name: nextjs
 version: 1.0.0
+tier: framework
 description: Next.js — App Router, Cache Components (16+), upgrade workflows, Vercel
   deployment.
 author: navistone

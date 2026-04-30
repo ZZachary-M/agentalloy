@@ -1,5 +1,6 @@
 name: engineering
 version: 1.2.0
+tier: foundation
 description: Generic engineering patterns — API design, error handling, ADRs, microservices,
   performance, CQRS, event sourcing, feature flags. Always installed.
 author: navistone

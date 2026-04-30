@@ -1,6 +1,8 @@
 name: mongodb
 version: 1.0.0
-description: MongoDB — schema design (embed vs. reference), aggregation pipelines, indexes, transactions, change streams, official driver vs. Mongoose tradeoffs.
+tier: store
+description: MongoDB — schema design (embed vs. reference), aggregation pipelines,
+  indexes, transactions, change streams, official driver vs. Mongoose tradeoffs.
 author: navistone
 embed_model: qwen3-embedding:0.6b
 embedding_dim: 1024

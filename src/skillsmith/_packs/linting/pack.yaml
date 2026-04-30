@@ -1,5 +1,6 @@
 name: linting
 version: 1.0.0
+tier: tooling
 description: Linting — ESLint flat config, neostandard, migration from legacy ESLint.
 author: navistone
 embed_model: qwen3-embedding:0.6b

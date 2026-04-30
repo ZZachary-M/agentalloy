@@ -1,5 +1,6 @@
 name: nodejs
 version: 1.0.0
+tier: language
 description: Node.js (22+) — async, streams, errors, perf, profiling, type-stripping,
   V8/libuv internals.
 author: navistone

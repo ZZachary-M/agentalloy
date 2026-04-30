@@ -159,6 +159,23 @@ def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
 
 _REQUIRED_MANIFEST_FIELDS = ("name", "version", "embed_model", "embedding_dim", "skills")
 
+# Pack tier — drives the install picker grouping, retirement policy, and
+# retrieval scoping. See docs/PACK-AUTHORING.md §"Pack tier".
+_VALID_PACK_TIERS = frozenset(
+    {
+        "foundation",  # always-installed process & generic engineering (core, engineering)
+        "language",  # standalone programming languages (nodejs, python, rust, go, typescript)
+        "framework",  # depends on a language (nestjs, react, fastify, vue, nextjs, fastapi)
+        "store",  # data stores & runtimes (postgres, mongodb, redis, s3, temporal)
+        "cross-cutting",  # capability domains usable from any stack (auth, security, observability)
+        "platform",  # infra/orchestration (containers, iac, cicd, monorepo)
+        "tooling",  # dev-loop tooling (testing, linting, vite, mocha-chai)
+        "domain",  # application-layer domains (agents, ui-design, data-engineering)
+        "protocol",  # wire-format / integration (graphql, webhooks, websockets)
+        "workflow",  # SDD pipeline workflows (spec → design → plan → testgen → build → verify → deliver)
+    }
+)
+
 
 def _read_pack_manifest(pack_dir: Path) -> tuple[dict[str, Any] | None, list[str]]:
     """Load and validate a local pack.yaml. Returns (manifest, errors)."""
@@ -174,6 +191,17 @@ def _read_pack_manifest(pack_dir: Path) -> tuple[dict[str, Any] | None, list[str
     for f in _REQUIRED_MANIFEST_FIELDS:
         if f not in manifest:
             errors.append(f"pack.yaml missing required field: {f}")
+
+    tier = manifest.get("tier")
+    if tier is None:
+        errors.append(
+            f"pack.yaml missing required field: tier (must be one of {sorted(_VALID_PACK_TIERS)})"
+        )
+    elif tier not in _VALID_PACK_TIERS:
+        errors.append(
+            f"pack.yaml 'tier' value '{tier}' is not valid "
+            f"(must be one of {sorted(_VALID_PACK_TIERS)})"
+        )
 
     skills = manifest.get("skills") or []
     if not isinstance(skills, list):

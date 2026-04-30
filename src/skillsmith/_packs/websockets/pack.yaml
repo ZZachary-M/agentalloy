@@ -1,8 +1,9 @@
 name: websockets
 version: 1.0.0
-description: WebSocket scaling patterns — Redis pub/sub fan-out, sticky sessions, auth
-  on upgrade, heartbeat + reconnection with exponential backoff. Socket.IO + ws + Bun
-  native.
+tier: protocol
+description: WebSocket scaling patterns — Redis pub/sub fan-out, sticky sessions,
+  auth on upgrade, heartbeat + reconnection with exponential backoff. Socket.IO +
+  ws + Bun native.
 author: navistone
 embed_model: qwen3-embedding:0.6b
 embedding_dim: 1024

@@ -1,5 +1,6 @@
 name: fastapi
 version: 1.0.0
+tier: framework
 description: FastAPI — project templates, dependency injection, async endpoints.
 author: navistone
 embed_model: qwen3-embedding:0.6b

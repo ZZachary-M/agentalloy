@@ -1,5 +1,6 @@
 name: auth
 version: 1.0.0
+tier: cross-cutting
 description: Authentication & authorization — OAuth 2.0, MSAL Microsoft 365 SSO, JWT
   patterns.
 author: navistone

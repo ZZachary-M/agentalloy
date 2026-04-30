@@ -1,5 +1,6 @@
 name: vue
 version: 1.0.0
+tier: framework
 description: Vue 3 — Composition API, Pinia, Router, JSX, debugging gotchas, testing.
 author: navistone
 embed_model: qwen3-embedding:0.6b

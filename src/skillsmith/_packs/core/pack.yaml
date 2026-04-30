@@ -1,5 +1,6 @@
 name: core
 version: 1.1.0
+tier: foundation
 description: Process & governance — TDD, code review, planning, debugging, git, brainstorming,
   verification, dispatching, dependency management. Always installed.
 author: navistone

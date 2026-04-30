@@ -24,6 +24,7 @@ def _skill(
         phase_scope=phase_scope,
         category_scope=category_scope,
         active_version_id="v1",
+        tier=None,
     )
 
 

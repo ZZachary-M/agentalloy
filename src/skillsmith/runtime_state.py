@@ -63,10 +63,15 @@ class RuntimeCache:
     def get_active_skill_by_id(self, skill_id: str) -> ActiveSkill | None:
         return self._skills.get(skill_id)
 
-    def get_active_skills(self, *, skill_class: SkillClass | None = None) -> list[ActiveSkill]:
+    def get_active_skills(
+        self, *, skill_class: SkillClass | tuple[str, ...] | None = None
+    ) -> list[ActiveSkill]:
         skills = list(self._skills.values())
         if skill_class is not None:
-            skills = [s for s in skills if s.skill_class == skill_class]
+            if isinstance(skill_class, tuple):
+                skills = [s for s in skills if s.skill_class in skill_class]
+            else:
+                skills = [s for s in skills if s.skill_class == skill_class]
         return sorted(skills, key=lambda s: s.skill_id)
 
     # ---- fragment reads ----
@@ -74,13 +79,16 @@ class RuntimeCache:
     def get_active_fragments(
         self,
         *,
-        skill_class: SkillClass | None = None,
+        skill_class: SkillClass | tuple[str, ...] | None = None,
         categories: list[str] | None = None,
         domain_tags: list[str] | None = None,
     ) -> list[ActiveFragment]:
         result: list[ActiveFragment] = list(self._fragments)
         if skill_class is not None:
-            result = [f for f in result if f.skill_class == skill_class]
+            if isinstance(skill_class, tuple):
+                result = [f for f in result if f.skill_class in skill_class]
+            else:
+                result = [f for f in result if f.skill_class == skill_class]
         if categories is not None:
             cat_set = set(categories)
             result = [f for f in result if f.category in cat_set]
@@ -103,7 +111,7 @@ class RuntimeCache:
     ) -> list[ActiveFragment]:
         """Convenience: fragments eligible for a compose/retrieve phase."""
         return self.get_active_fragments(
-            skill_class="domain",
+            skill_class=("domain", "workflow"),
             categories=phase_to_categories(phase),
             domain_tags=domain_tags,
         )

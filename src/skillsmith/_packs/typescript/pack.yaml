@@ -1,5 +1,6 @@
 name: typescript
 version: 1.0.0
+tier: language
 description: TypeScript advanced types — generics, conditionals, mapped types, brand
   types, error diagnosis.
 author: navistone

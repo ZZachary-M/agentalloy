@@ -1,5 +1,6 @@
 name: ui-design
 version: 1.0.0
+tier: domain
 description: UI/UX — mobile (iOS/Android), React Native, web design, accessibility,
   Tailwind, design systems.
 author: navistone

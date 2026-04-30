@@ -1,6 +1,8 @@
 name: prisma
 version: 1.0.0
-description: Prisma ORM — schema, migrations, Prisma Client patterns, transactions, soft-delete extensions.
+tier: store
+description: Prisma ORM — schema, migrations, Prisma Client patterns, transactions,
+  soft-delete extensions.
 author: navistone
 embed_model: qwen3-embedding:0.6b
 embedding_dim: 1024

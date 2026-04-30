@@ -8,7 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-from skillsmith.ingest import EXIT_DUPLICATE, EXIT_OK, EXIT_USAGE, EXIT_VALIDATION, main
+from skillsmith.ingest import (
+    EXIT_DUPLICATE,
+    EXIT_OK,
+    EXIT_USAGE,
+    EXIT_VALIDATION,
+    _lint,  # type: ignore[reportPrivateUsage]
+    _load_yaml,  # type: ignore[reportPrivateUsage]
+    main,
+)
 from skillsmith.storage.ladybug import LadybugStore
 
 _DOMAIN_YAML = textwrap.dedent("""\
@@ -17,23 +25,35 @@ _DOMAIN_YAML = textwrap.dedent("""\
     canonical_name: Test Domain Skill
     category: engineering
     skill_class: domain
-    domain_tags: [testing]
+    domain_tags: [testing, pytest]
     always_apply: false
     phase_scope: null
     category_scope: null
     author: test
     change_summary: unit test
     raw_prose: |
-      This skill teaches you how to test things.
+      Run pytest with the -x flag to stop on first failure. This is the
+      fastest way to get useful feedback during a debug loop because the
+      stack trace from the very first failing assertion is rarely buried
+      under cascading downstream failures.
+
+      All tests pass with exit code 0; non-zero indicates at least one
+      failure or collection error. Wire this exit code into your CI step
+      so a regression blocks the merge rather than emitting a green check.
     fragments:
       - sequence: 1
         fragment_type: execution
         content: |
-          Run pytest with the -x flag to stop on first failure.
+          Run pytest with the -x flag to stop on first failure. This is the
+          fastest way to get useful feedback during a debug loop because the
+          stack trace from the very first failing assertion is rarely buried
+          under cascading downstream failures.
       - sequence: 2
         fragment_type: verification
         content: |
-          All tests pass with exit code 0.
+          All tests pass with exit code 0; non-zero indicates at least one
+          failure or collection error. Wire this exit code into your CI step
+          so a regression blocks the merge rather than emitting a green check.
 """)
 
 _SYSTEM_YAML = textwrap.dedent("""\
@@ -296,6 +316,12 @@ def test_non_contiguous_sequences_is_validation_error(tmp_path: Path) -> None:
 
 
 def _write_domain(path: Path, skill_id: str, canonical_name: str) -> None:
+    body = (
+        f"Run the canonical workflow for {skill_id} end-to-end. Start by "
+        f"checking out a fresh branch, install dependencies with the project's "
+        f"package manager, and run the smoke test suite to confirm the local "
+        f"environment matches CI before making any changes."
+    )
     path.write_text(
         textwrap.dedent(f"""\
         skill_type: domain
@@ -303,14 +329,15 @@ def _write_domain(path: Path, skill_id: str, canonical_name: str) -> None:
         canonical_name: {canonical_name}
         category: engineering
         skill_class: domain
-        domain_tags: []
+        domain_tags: [testing]
         always_apply: false
         raw_prose: |
-          Content for {skill_id}.
+          {body}
         fragments:
           - sequence: 1
             fragment_type: execution
-            content: Core steps for {skill_id}.
+            content: |
+              {body}
     """)
     )
 
@@ -413,3 +440,136 @@ def test_batch_force_overwrites_duplicates(
     count = store.scalar("MATCH (s:Skill {skill_id: 'batch-force-a'}) RETURN count(s)")
     assert count == 1
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# B.4 — Mechanical tag lint warning shape tests
+# ---------------------------------------------------------------------------
+
+_WORKFLOW_YAML = textwrap.dedent("""\
+    skill_type: domain
+    skill_id: sdd-spec-authoring
+    canonical_name: SDD Spec Authoring
+    category: sdd
+    skill_class: workflow
+    domain_tags: [design, planning]
+    always_apply: false
+    phase_scope: null
+    category_scope: null
+    author: test
+    change_summary: test
+    raw_prose: |
+      The spec phase captures user intent into a structured specification document.
+      Authors write the spec before any design or planning begins. The spec is
+      the single source of truth for what the feature should do, not how.
+      Verification: spec document exists, stakeholder has reviewed it, no open
+      questions remain unresolved.
+    fragments:
+      - sequence: 1
+        fragment_type: rationale
+        content: |
+          The spec phase captures user intent into a structured specification
+          document. Authors write the spec before any design or planning begins.
+      - sequence: 2
+        fragment_type: verification
+        content: |
+          Spec document exists, stakeholder has reviewed it, no open questions
+          remain unresolved.
+""")
+
+
+def _parse_yaml_inline(content: str, tmp_path: Path) -> object:
+    """Write content to a tmp file and parse it via _load_yaml."""
+    f = tmp_path / "skill.yaml"
+    f.write_text(content)
+    return _load_yaml(f)
+
+
+def test_system_skill_with_tags_warns_system_empty(tmp_path: Path) -> None:
+    """system skills with non-empty domain_tags should get system-empty verdicts."""
+    yaml_content = textwrap.dedent("""\
+        skill_type: system
+        skill_id: sys-tagged
+        canonical_name: Tagged System Skill
+        category: governance
+        skill_class: system
+        domain_tags: [some-tag, another-tag]
+        always_apply: true
+        phase_scope: null
+        category_scope: null
+        author: test
+        change_summary: test
+        raw_prose: |
+          Always do the right thing.
+    """)
+    f = tmp_path / "sys_tagged.yaml"
+    f.write_text(yaml_content)
+    record = _load_yaml(f)
+    warns = _lint(record, yaml_path=f)
+    assert any("system_has_tags" in w for w in warns), (
+        f"Expected system_has_tags warning, got: {warns}"
+    )
+
+
+def test_domain_skill_tags_redundant_with_title_warns_r2(tmp_path: Path) -> None:
+    """Tags whose stems fully overlap the title stems should trigger R2."""
+    yaml_content = textwrap.dedent("""\
+        skill_type: domain
+        skill_id: prisma-schema-design
+        canonical_name: Prisma Schema Design
+        category: engineering
+        skill_class: domain
+        domain_tags: [prisma, schema]
+        always_apply: false
+        phase_scope: null
+        category_scope: null
+        author: test
+        change_summary: test
+        raw_prose: |
+          Use Prisma schema to define your database models. The schema file
+          declares all models and their relations. Run prisma generate to
+          sync the client with your schema. Verify the schema compiles
+          without errors by running prisma validate.
+        fragments:
+          - sequence: 1
+            fragment_type: execution
+            content: |
+              Use Prisma schema to define your database models. The schema file
+              declares all models and their relations. Run prisma generate to
+              sync the client with your schema.
+          - sequence: 2
+            fragment_type: verification
+            content: |
+              Verify the schema compiles without errors by running prisma validate.
+    """)
+    f = tmp_path / "prisma.yaml"
+    f.write_text(yaml_content)
+    record = _load_yaml(f)
+    warns = _lint(record, yaml_path=f)
+    assert any("redundant_with_title" in w for w in warns), f"Expected R2 warning, got: {warns}"
+
+
+def test_workflow_skill_without_position_marker_warns_w1(tmp_path: Path) -> None:
+    """Workflow skills lacking a position marker tag should trigger W1."""
+    f = tmp_path / "workflow.yaml"
+    f.write_text(_WORKFLOW_YAML)
+    record = _load_yaml(f)
+    warns = _lint(record, yaml_path=f)
+    assert any("missing_position_marker" in w for w in warns), (
+        f"Expected W1/missing_position_marker warning, got: {warns}"
+    )
+
+
+def test_workflow_skill_with_position_marker_no_w1(tmp_path: Path) -> None:
+    """Workflow skills that include a position marker tag must NOT trigger W1."""
+    yaml_with_marker = _WORKFLOW_YAML.replace(
+        "domain_tags: [design, planning]",
+        "domain_tags: [phase:spec, design]",
+    )
+    f = tmp_path / "workflow_marked.yaml"
+    f.write_text(yaml_with_marker)
+    record = _load_yaml(f)
+    warns = _lint(record, yaml_path=f)
+    assert not any("missing_position_marker" in w for w in warns), (
+        f"Unexpected W1 warning when position marker present: {warns}"
+    )

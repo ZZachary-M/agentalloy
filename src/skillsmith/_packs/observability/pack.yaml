@@ -1,5 +1,6 @@
 name: observability
 version: 1.2.0
+tier: cross-cutting
 description: Observability — Prometheus, Grafana, distributed tracing, SLO implementation,
   service mesh observability, Sentry error tracking.
 author: navistone

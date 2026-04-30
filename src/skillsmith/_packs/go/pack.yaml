@@ -1,5 +1,6 @@
 name: go
 version: 1.0.0
+tier: language
 description: Go — concurrency patterns, error handling, idiomatic style.
 author: navistone
 embed_model: qwen3-embedding:0.6b

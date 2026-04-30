@@ -1,5 +1,6 @@
 name: graphql
 version: 1.0.0
+tier: protocol
 description: GraphQL server patterns — Apollo Server, GraphQL Yoga, Mercurius, DataLoader
   for N+1 mitigation, graphql-ws subscriptions, Apollo Federation v2.
 author: navistone

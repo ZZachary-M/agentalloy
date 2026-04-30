@@ -1,5 +1,6 @@
 name: data-engineering
 version: 1.0.0
+tier: domain
 description: Data engineering — Airflow, dbt, Spark, ML pipelines, data quality frameworks.
 author: navistone
 embed_model: qwen3-embedding:0.6b

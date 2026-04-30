@@ -1,5 +1,6 @@
 name: webhooks
 version: 1.0.0
+tier: protocol
 description: Webhook receiver + sender patterns — HMAC-SHA256 signing, replay protection,
   retry with exponential backoff + jitter, dead-letter queue. Stripe / GitHub / Standard
   Webhooks reference.

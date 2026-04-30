@@ -25,6 +25,9 @@ seeds/packs/nodejs/
 ```yaml
 name: nodejs                          # required, unique pack identifier
 version: 1.0.0                        # required, semver
+tier: language                        # required, one of: foundation, language,
+                                      # framework, store, cross-cutting,
+                                      # platform, tooling, domain, protocol
 description: |                        # required, one-line summary
   Node.js (Node 22+) backend patterns — async, streams, errors, perf.
 author: navistone                     # required
@@ -50,10 +53,35 @@ skills:                               # required, inventory check
 |---|---|
 | `name` | Lowercase, hyphenated. Must match the directory name. |
 | `version` | Semver. Bump on any skill content change. |
+| `tier` | One of `foundation`, `language`, `framework`, `store`, `cross-cutting`, `platform`, `tooling`, `domain`, `protocol`. **Hard-blocked** if missing or invalid. Drives install-picker grouping, retirement policy, and retrieval scoping. |
 | `description` | One sentence. Shown in the install picker. |
 | `embed_model` | The model name the YAML content was authored against. Soft-warned on mismatch. |
 | `embedding_dim` | The vector dimension. **Hard-blocked** on mismatch with the running corpus — install-pack will refuse. |
 | `skills` | List of `{skill_id, file, fragment_count}` for every YAML in the pack. |
+
+### Pack tier
+
+Each pack must declare exactly one tier. Tiers are decision-axes — pick the
+one that answers "if a user is looking for this pack, what kind of question
+are they answering?"
+
+| Tier | Answers | Examples |
+|---|---|---|
+| `foundation` | "always-installed process & generic engineering" | `core`, `engineering` |
+| `language` | "I write code in X" | `nodejs`, `typescript`, `python`, `rust`, `go` |
+| `framework` | "I build apps with framework X" (depends on a language) | `nestjs`, `react`, `fastify`, `vue`, `nextjs`, `fastapi` |
+| `store` | "I read/write data to system X" | `postgres`, `mongodb`, `redis`, `s3`, `temporal`, `prisma` |
+| `cross-cutting` | "I need capability X regardless of stack" | `auth`, `security`, `observability` |
+| `platform` | "I run/ship code on infra X" | `containers`, `iac`, `cicd`, `monorepo` |
+| `tooling` | "I use dev-loop tool X" | `testing`, `linting`, `vite`, `mocha-chai` |
+| `domain` | "I work in application domain X" | `agents`, `ui-design`, `data-engineering` |
+| `protocol` | "I integrate via wire-format X" | `graphql`, `webhooks`, `websockets` |
+
+If two tiers seem equally apt, the pack is probably doing two jobs — split it
+(see "Pack boundaries" below). The tier table is closed; if you genuinely
+need a new tier, add it to `_VALID_PACK_TIERS` in
+`src/skillsmith/install/subcommands/install_pack.py` and
+`PACK_TIERS` in `scripts/migrate-seeds-to-packs.py` in the same change.
 
 ### Soft-blocked vs hard-blocked
 

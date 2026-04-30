@@ -22,6 +22,7 @@ from typing import Any, cast
 from skillsmith.authoring.dedup import dedup_candidates
 from skillsmith.authoring.lm_client import LMClientError, OpenAICompatClient
 from skillsmith.authoring.paths import PipelinePaths
+from skillsmith.authoring.prompt_loader import load_prompt
 from skillsmith.config import get_settings
 from skillsmith.ingest import (
     ReviewRecord,
@@ -51,6 +52,8 @@ class CriticVerdict:
     per_fragment: list[dict[str, Any]] = field(default_factory=lambda: [])
     dedup_decisions: list[dict[str, Any]] = field(default_factory=lambda: [])
     suggested_edits: str = ""
+    tag_verdicts: list[dict[str, Any]] = field(default_factory=lambda: [])
+    prompt_version: str = ""
 
     @classmethod
     def unparseable(cls, raw: str, err: str) -> CriticVerdict:
@@ -211,13 +214,15 @@ def run_critic(
     source_md: str,
     draft_yaml_text: str,
     soft_dups: list[DedupHit],
+    semantic_tag_block: str = "",
 ) -> CriticVerdict:
     dedup_block = _format_dedup_for_prompt(soft_dups)
     user_prompt = (
         f"---SOURCE SKILL.md---\n{source_md}\n---END SOURCE---\n\n"
         f"---DRAFT REVIEW YAML---\n{draft_yaml_text}\n---END DRAFT---\n\n"
         f"---DEDUP CONTEXT (0.80-0.92 band)---\n{dedup_block}\n---END DEDUP---\n\n"
-        "Return JSON only. Schema per your system prompt."
+        + (f"{semantic_tag_block}\n\n" if semantic_tag_block else "")
+        + "Return JSON only. Schema per your system prompt."
     )
     try:
         raw = client.chat(
@@ -253,13 +258,21 @@ def run_critic(
     if verdict not in ("approve", "revise", "reject"):
         return CriticVerdict.unparseable(raw, f"unknown verdict {verdict!r}")
 
+    base_issues = [str(x) for x in cast(list[Any], data.get("blocking_issues") or [])]
+    tag_verdict_issues = [
+        f"tag [{tv.get('rule', '?')}] '{tv.get('tag', '?')}': {tv.get('verdict', '?')} — {tv.get('detail', '')}"
+        for tv in cast(list[dict[str, Any]], data.get("tag_verdicts") or [])
+        if tv.get("verdict", "pass") != "pass"
+    ]
     return CriticVerdict(
         verdict=verdict,
         summary=str(data.get("summary", "")),
-        blocking_issues=[str(x) for x in cast(list[Any], data.get("blocking_issues") or [])],
+        blocking_issues=base_issues + tag_verdict_issues,
         per_fragment=cast(list[dict[str, Any]], data.get("per_fragment") or []),
         dedup_decisions=cast(list[dict[str, Any]], data.get("dedup_decisions") or []),
         suggested_edits=str(data.get("suggested_edits", "")),
+        tag_verdicts=cast(list[dict[str, Any]], data.get("tag_verdicts") or []),
+        prompt_version=str(data.get("prompt_version", "")),
     )
 
 
@@ -388,6 +401,8 @@ def qa_one(
             soft_threshold=soft_threshold,
         )
         if hard_dup is None:
+            from skillsmith.lint_tags_semantic import build_semantic_lint_block
+
             source_md = _find_source_md(record, draft_path)
             critic = run_critic(
                 client=lm_client,
@@ -396,6 +411,9 @@ def qa_one(
                 source_md=source_md,
                 draft_yaml_text=draft_path.read_text(encoding="utf-8"),
                 soft_dups=soft_dups,
+                semantic_tag_block=build_semantic_lint_block(
+                    record.domain_tags, record.canonical_name, record.raw_prose
+                ),
             )
 
     current_bounces = bounces.get(skill_id, 0)
@@ -465,7 +483,8 @@ def run_qa(
     qa_fixture = repo_root / "fixtures" / "skill-qa-agent.md"
     if not qa_fixture.exists():
         raise FileNotFoundError(f"QA fixture missing: {qa_fixture}")
-    qa_prompt = qa_fixture.read_text(encoding="utf-8")
+    qa_prompt, _prompt_version = load_prompt(qa_fixture)
+    logger.debug("qa_gate loaded prompt version=%s", _prompt_version or "(none)")
 
     bounces = load_bounces(paths)
 

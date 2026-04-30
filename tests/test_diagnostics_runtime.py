@@ -101,6 +101,7 @@ def _stale_cache(populated_store: LadybugStore, stale_skill_id: str) -> RuntimeC
         phase_scope=real_skill.phase_scope,
         category_scope=real_skill.category_scope,
         active_version_id="stale-version-id-xyz",
+        tier=real_skill.tier,
     )
     skills = {s.skill_id: s for s in real.get_active_skills()}
     skills[stale_skill_id] = stale_skill

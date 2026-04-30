@@ -1,5 +1,6 @@
 name: rust
 version: 1.0.0
+tier: language
 description: Rust — async runtimes, ownership patterns, error handling.
 author: navistone
 embed_model: qwen3-embedding:0.6b

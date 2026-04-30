@@ -1,5 +1,6 @@
 name: fastify
 version: 1.0.0
+tier: framework
 description: Fastify framework — plugins, JSON Schema, hooks, pino logging, performance.
 author: navistone
 embed_model: qwen3-embedding:0.6b

@@ -46,6 +46,8 @@ class TelemetryRecord:
     input_tokens: int | None = None
     output_tokens: int | None = None
     error_payload: str | None = None
+    workflow_skill_ids: list[str] | None = None
+    prompt_version: str | None = None
 
 
 class TelemetryWriter(Protocol):
@@ -122,6 +124,8 @@ class DuckDBTelemetryWriter:
             total_latency_ms=record.latency_total_ms,
             error_code=record.error_payload,
             response_size_chars=len(record.output) if record.output is not None else None,
+            workflow_skill_ids=list(record.workflow_skill_ids or []),
+            prompt_version=record.prompt_version,
         )
 
 

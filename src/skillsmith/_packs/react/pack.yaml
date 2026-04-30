@@ -1,5 +1,6 @@
 name: react
 version: 1.0.0
+tier: framework
 description: React (web) — modernization, state management, composition, view transitions.
 author: navistone
 embed_model: qwen3-embedding:0.6b
