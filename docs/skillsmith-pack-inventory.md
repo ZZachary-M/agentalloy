@@ -343,17 +343,20 @@ This is the order for build sequencing if choosing freely. Actual priorities sho
 ## Pack count summary
 
 ```
-v1 (NaviStone) packs:        ~29
-ga additions:                ~155
-total general-release:       ~185
-estimated skill range:       900–1800 skills total at 5–10 skills per pack
+v1 (NaviStone) packs:         41
+ga additions:                157
+gap (audit-flagged):           6
+total general-release:       204
+estimated skill range:       1,020–2,040 skills total at 5–10 skills per pack
 ```
 
-The full ~185-pack inventory is the eventual destination, not the launch state. Recommended rollout:
+(Counts derived from the numbered pack rows above; recount with `grep -E '^[ ]*[0-9]+\.' docs/skillsmith-pack-inventory.md | awk -F'[][]' '{print $2}' | sort | uniq -c` after edits.)
 
-1. Ship NaviStone v1 first (~29 packs). Architecture stabilizes.
-2. Add the "core 50" general-access packs next: language packs (5–7), most common framework packs (8–10), must-have store packs (8–10), cross-cutting essentials (5–7), cloud providers (3–4), workflow expansions (5–8). Total roughly 80–85 packs.
-3. Add the long tail (~100 more packs) opportunistically, prioritizing by what users actually request. Telemetry from v2 routing will tell you which packs are missing because routing will fail to find skills for certain queries. That's better signal than guessing.
+The full ~200-pack inventory is the eventual destination, not the launch state. Recommended rollout:
+
+1. Ship NaviStone v1 first (41 packs). Architecture stabilizes.
+2. Add the highest-leverage `[ga]` packs after v1: language tier completion (5–7), most common framework packs (8–10), must-have store packs (8–10), cross-cutting essentials (5–7), cloud providers (3–4), workflow expansions (5–8). Roughly 80–95 packs once layered on top of v1.
+3. Add the long tail (~110 more packs) opportunistically, prioritizing by what users actually request. Telemetry from v2 routing will tell you which packs are missing because routing will fail to find skills for certain queries. That's better signal than guessing.
 
 ## Notes on what's intentionally NOT included
 
