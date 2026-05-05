@@ -1,0 +1,444 @@
+skill_type: domain
+skill_id: ts-generics-and-conditional-types
+canonical_name: TypeScript Generics and Conditional Types (Type-Level Programming)
+category: engineering
+skill_class: domain
+domain_tags: [generics, conditional-types, infer-clause, mapped-types, variance-modifiers]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — TypeScript handbook on generics https://www.typescriptlang.org/docs/handbook/2/generics.html (verified 2026-05-04 against fixtures/upstream/curated/typescript.yaml topic `typing_and_generics`); conditional types https://www.typescriptlang.org/docs/handbook/2/conditional-types.html; mapped types https://www.typescriptlang.org/docs/handbook/2/mapped-types.html; template literal types https://www.typescriptlang.org/docs/handbook/2/template-literal-types.html. Skill scope: writing generic functions, generic types, conditional types, mapped types, and using `infer` correctly; not basic syntax (covered in tsconfig and types-vs-interfaces).
+
+raw_prose: |
+  # TypeScript Generics and Conditional Types
+
+  Generics let you write code that works over many types while preserving type information. The rule is one sentence: use generics when the types of inputs and outputs are related, constrain them with `extends` to keep them usable, and reach for conditional types or `infer` only when a generic alone cannot express the relationship. Most generic-heavy TypeScript code that becomes unreadable does so because it tried to encode runtime logic at the type level — a sign that the abstraction needs simplification, not more conditional types.
+
+  ## Generics let types flow through functions
+
+  A generic function's type parameter connects inputs to outputs:
+
+  ```ts
+  function first<T>(items: T[]): T | undefined {
+    return items[0];
+  }
+
+  const x = first([1, 2, 3]);   // x: number | undefined
+  const y = first(["a", "b"]);  // y: string | undefined
+  ```
+
+  Without generics, you would write `(items: unknown[]) => unknown` and lose type information at the call site. With generics, the input type flows to the output.
+
+  Two rules of thumb:
+
+  - **A generic parameter must be used at least twice.** Once is not generic — it's just a parameter type. Use it in the input *and* the output, or in two related places.
+  - **TypeScript infers generic parameters from arguments.** You rarely need `first<number>([1, 2, 3])`; the call site infers `T = number`. Explicit generic args are a fallback for when inference fails.
+
+  ## Constrain with `extends`
+
+  An unconstrained generic (`<T>`) accepts any type, including ones that do not have the methods or properties your function needs. Constrain with `extends`:
+
+  ```ts
+  function getId<T extends { id: number }>(thing: T): number {
+    return thing.id;
+  }
+  ```
+
+  `T extends { id: number }` says: "T can be anything, as long as it has an `id: number` field." Inside the function, you can access `thing.id` safely.
+
+  Without the constraint, TypeScript rejects `thing.id` because `T` might not have it. Adding the constraint is the simplest fix and the most common pattern.
+
+  Common constraint shapes:
+
+  - `T extends string` — narrow to string-like generics.
+  - `T extends keyof U` — `T` is one of the keys of `U`.
+  - `T extends readonly unknown[]` — narrow to tuple-like inputs.
+  - `T extends Record<string, unknown>` — narrow to object-like values.
+
+  Default values via `=` follow constraints: `T extends string = "default"`.
+
+  ## Generic classes and types
+
+  Generics also work on classes and type aliases:
+
+  ```ts
+  class Stack<T> {
+    private items: T[] = [];
+    push(item: T): void { this.items.push(item); }
+    pop(): T | undefined { return this.items.pop(); }
+  }
+
+  type Box<T> = { value: T };
+  ```
+
+  PEP 695-equivalent syntax does not exist in TypeScript — generics use the `<T>` form on classes, types, functions, and methods. The handbook uses this consistently.
+
+  Method-level generics shadow class-level generics:
+
+  ```ts
+  class Container<T> {
+    add<U>(item: U): Pair<T, U> { /* ... */ }
+  }
+  ```
+
+  Here `add` introduces its own `U` independent of the class's `T`.
+
+  ## Conditional types — branching at the type level
+
+  Conditional types let you choose a type based on another type:
+
+  ```ts
+  type IsString<T> = T extends string ? true : false;
+  type A = IsString<"hello">;  // true
+  type B = IsString<42>;        // false
+  ```
+
+  The syntax is `T extends U ? X : Y`. If `T` is assignable to `U`, the type resolves to `X`; otherwise, `Y`.
+
+  Conditional types are most useful when you need different output types based on input shapes:
+
+  ```ts
+  type ApiResponse<T> = T extends { error: string } ? Error : T;
+  ```
+
+  Use sparingly. Conditional types are powerful but can produce error messages that are nearly unreadable. If a type is taking three nested conditionals to express, simplify the input shape instead.
+
+  ## `infer` extracts pieces of types
+
+  Inside a conditional type, `infer` introduces a type variable bound to a piece of the matched type:
+
+  ```ts
+  type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
+
+  type X = ReturnType<() => number>;  // number
+  ```
+
+  `infer R` says "match anything in this position and bind it to `R`." `R` is then usable in the success branch.
+
+  Common uses:
+
+  - `T extends Promise<infer U> ? U : T` — unwrap a Promise.
+  - `T extends Array<infer E> ? E : never` — element type of an array.
+  - `T extends (...args: infer A) => any ? A : never` — extract argument tuple.
+
+  Many of these are built into TypeScript as utility types (`Awaited<T>`, `Parameters<T>`, `ReturnType<T>`). Reach for the built-ins before writing your own.
+
+  ## Mapped types — transform every property
+
+  Mapped types apply a transformation to each key of an object type:
+
+  ```ts
+  type Readonly<T> = { readonly [K in keyof T]: T[K] };
+  type Partial<T>  = { [K in keyof T]?: T[K] };
+  type Required<T> = { [K in keyof T]-?: T[K] };
+  ```
+
+  The `[K in keyof T]` syntax iterates over each key of `T`. Modifiers like `readonly` and `?` can be added (`+readonly`, `+?`) or removed (`-readonly`, `-?`).
+
+  Mapped types let you derive new shapes from existing ones. Combined with conditional types, you can do things like "make all string fields optional, leave others required":
+
+  ```ts
+  type StringPartial<T> = {
+    [K in keyof T]: T[K] extends string ? T[K] | undefined : T[K]
+  };
+  ```
+
+  Most application code does not need to write its own mapped types — the standard utilities (`Pick`, `Omit`, `Partial`, `Required`, `Readonly`, `Record`, `Exclude`, `Extract`, `NonNullable`) cover the common cases. Write custom mapped types only when none of these fits.
+
+  ## Template literal types
+
+  Template literal types let you compose string-literal types:
+
+  ```ts
+  type Greeting = `hello, ${string}`;
+  type EventName = `on${Capitalize<string>}`;
+  type HttpRoute = `/${string}/${string}`;
+  ```
+
+  Useful for typing string-keyed APIs (CSS class names, route paths, event names). Combined with mapped types, they can generate keyed types from a base shape:
+
+  ```ts
+  type Getters<T> = {
+    [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K]
+  };
+  ```
+
+  Use sparingly. Template literal types can produce complex error messages and slow down the type checker on large projects. They are at their best when typing a domain-specific string format (`"USD-EUR"`, `"/api/v1/users/:id"`) and at their worst when used to generate large derived types.
+
+  ## Variance — most code does not need to think about it
+
+  Generics in TypeScript are mostly bivariant by default (with some special-cased contravariance for function parameters under `strictFunctionTypes`). The TS 4.7+ syntax lets you mark variance explicitly:
+
+  ```ts
+  type Producer<out T> = () => T;       // covariant
+  type Consumer<in T> = (x: T) => void; // contravariant
+  type Both<in out T> = (x: T) => T;    // invariant
+  ```
+
+  Most application code does not need these annotations. Reach for them only when writing variance-sensitive library code (parser combinators, observable streams, complex state machines) where the default variance produces wrong assignability.
+
+  ## Anti-patterns
+
+  - **Generic parameter used once.** Not generic; just a typed parameter. Drop the `<T>`.
+  - **Unconstrained generic where a constraint is needed.** Code that fails because `T` might not have the method you assumed. Add `T extends ...`.
+  - **Conditional types for runtime logic.** Encoding business rules at the type level produces unreadable types. Keep types descriptive; put logic in code.
+  - **Reinventing `Pick`, `Omit`, `Partial`, etc.** Standard utility types cover most cases. Use them.
+  - **Deeply nested conditional types.** Three levels of `T extends U ? X : Y extends Z ? ...` is unreadable. Refactor by simplifying the input shape or splitting into named intermediate types.
+  - **`infer` outside a conditional type.** `infer` only works inside the `extends` clause of a conditional type. Putting it elsewhere is a syntax error.
+  - **Type-level bookkeeping that should be runtime.** If a type encodes state ("the third call returns a different type than the first"), the code should encode that state with values, not types.
+
+  ## When generics are over-engineering
+
+  Some functions look like they should be generic but should not be:
+
+  - **A function that returns a fixed type regardless of input.** No generic needed.
+  - **A function whose generic is only used internally.** The generic is decoration; drop it.
+  - **A wrapper that forwards to a generic function.** If the wrapper does not transform types, propagate the underlying generic shape directly rather than re-wrapping.
+
+  Generics have a cost in code that is harder to read; only pay that cost when the type relationship is real and useful at the call site.
+
+  ## Verification
+
+  - [ ] Generic parameters are used in at least two positions; single-use generics are turned into ordinary parameters.
+  - [ ] Generic parameters that depend on shape are constrained with `extends`; no unconstrained `<T>` accessing `T.foo`.
+  - [ ] Standard utility types (`Pick`, `Omit`, `Partial`, `Required`, `Readonly`, `Record`, `ReturnType`, `Awaited`, `Parameters`) are used before writing custom mapped or conditional types.
+  - [ ] Conditional types are nested at most two levels; deeper nesting is refactored into named intermediate types.
+  - [ ] `infer` is only used inside the `extends` clause of conditional types.
+  - [ ] Template literal types are used for domain-specific string formats, not as a substitute for generated code.
+  - [ ] No type-level encoding of runtime state; runtime logic stays in code, types stay descriptive.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # TypeScript Generics and Conditional Types
+
+      Generics let you write code that works over many types while preserving type information. The rule is one sentence: use generics when the types of inputs and outputs are related, constrain them with `extends` to keep them usable, and reach for conditional types or `infer` only when a generic alone cannot express the relationship. Most generic-heavy TypeScript code that becomes unreadable does so because it tried to encode runtime logic at the type level — a sign that the abstraction needs simplification, not more conditional types.
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## Generics let types flow through functions
+
+      A generic function's type parameter connects inputs to outputs:
+
+      ```ts
+      function first<T>(items: T[]): T | undefined {
+        return items[0];
+      }
+
+      const x = first([1, 2, 3]);   // x: number | undefined
+      const y = first(["a", "b"]);  // y: string | undefined
+      ```
+
+      Without generics, you would write `(items: unknown[]) => unknown` and lose type information at the call site. With generics, the input type flows to the output.
+
+      Two rules of thumb:
+
+      - **A generic parameter must be used at least twice.** Once is not generic — it's just a parameter type. Use it in the input *and* the output, or in two related places.
+      - **TypeScript infers generic parameters from arguments.** You rarely need `first<number>([1, 2, 3])`; the call site infers `T = number`. Explicit generic args are a fallback for when inference fails.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Constrain with `extends`
+
+      An unconstrained generic (`<T>`) accepts any type, including ones that do not have the methods or properties your function needs. Constrain with `extends`:
+
+      ```ts
+      function getId<T extends { id: number }>(thing: T): number {
+        return thing.id;
+      }
+      ```
+
+      `T extends { id: number }` says: "T can be anything, as long as it has an `id: number` field." Inside the function, you can access `thing.id` safely.
+
+      Without the constraint, TypeScript rejects `thing.id` because `T` might not have it. Adding the constraint is the simplest fix and the most common pattern.
+
+      Common constraint shapes:
+
+      - `T extends string` — narrow to string-like generics.
+      - `T extends keyof U` — `T` is one of the keys of `U`.
+      - `T extends readonly unknown[]` — narrow to tuple-like inputs.
+      - `T extends Record<string, unknown>` — narrow to object-like values.
+
+      Default values via `=` follow constraints: `T extends string = "default"`.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Generic classes and types
+
+      Generics also work on classes and type aliases:
+
+      ```ts
+      class Stack<T> {
+        private items: T[] = [];
+        push(item: T): void { this.items.push(item); }
+        pop(): T | undefined { return this.items.pop(); }
+      }
+
+      type Box<T> = { value: T };
+      ```
+
+      PEP 695-equivalent syntax does not exist in TypeScript — generics use the `<T>` form on classes, types, functions, and methods. The handbook uses this consistently.
+
+      Method-level generics shadow class-level generics:
+
+      ```ts
+      class Container<T> {
+        add<U>(item: U): Pair<T, U> { /* ... */ }
+      }
+      ```
+
+      Here `add` introduces its own `U` independent of the class's `T`.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Conditional types — branching at the type level
+
+      Conditional types let you choose a type based on another type:
+
+      ```ts
+      type IsString<T> = T extends string ? true : false;
+      type A = IsString<"hello">;  // true
+      type B = IsString<42>;        // false
+      ```
+
+      The syntax is `T extends U ? X : Y`. If `T` is assignable to `U`, the type resolves to `X`; otherwise, `Y`.
+
+      Conditional types are most useful when you need different output types based on input shapes:
+
+      ```ts
+      type ApiResponse<T> = T extends { error: string } ? Error : T;
+      ```
+
+      Use sparingly. Conditional types are powerful but can produce error messages that are nearly unreadable. If a type is taking three nested conditionals to express, simplify the input shape instead.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## `infer` extracts pieces of types
+
+      Inside a conditional type, `infer` introduces a type variable bound to a piece of the matched type:
+
+      ```ts
+      type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
+
+      type X = ReturnType<() => number>;  // number
+      ```
+
+      `infer R` says "match anything in this position and bind it to `R`." `R` is then usable in the success branch.
+
+      Common uses:
+
+      - `T extends Promise<infer U> ? U : T` — unwrap a Promise.
+      - `T extends Array<infer E> ? E : never` — element type of an array.
+      - `T extends (...args: infer A) => any ? A : never` — extract argument tuple.
+
+      Many of these are built into TypeScript as utility types (`Awaited<T>`, `Parameters<T>`, `ReturnType<T>`). Reach for the built-ins before writing your own.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Mapped types — transform every property
+
+      Mapped types apply a transformation to each key of an object type:
+
+      ```ts
+      type Readonly<T> = { readonly [K in keyof T]: T[K] };
+      type Partial<T>  = { [K in keyof T]?: T[K] };
+      type Required<T> = { [K in keyof T]-?: T[K] };
+      ```
+
+      The `[K in keyof T]` syntax iterates over each key of `T`. Modifiers like `readonly` and `?` can be added (`+readonly`, `+?`) or removed (`-readonly`, `-?`).
+
+      Mapped types let you derive new shapes from existing ones. Combined with conditional types, you can do things like "make all string fields optional, leave others required":
+
+      ```ts
+      type StringPartial<T> = {
+        [K in keyof T]: T[K] extends string ? T[K] | undefined : T[K]
+      };
+      ```
+
+      Most application code does not need to write its own mapped types — the standard utilities (`Pick`, `Omit`, `Partial`, `Required`, `Readonly`, `Record`, `Exclude`, `Extract`, `NonNullable`) cover the common cases. Write custom mapped types only when none of these fits.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## Template literal types
+
+      Template literal types let you compose string-literal types:
+
+      ```ts
+      type Greeting = `hello, ${string}`;
+      type EventName = `on${Capitalize<string>}`;
+      type HttpRoute = `/${string}/${string}`;
+      ```
+
+      Useful for typing string-keyed APIs (CSS class names, route paths, event names). Combined with mapped types, they can generate keyed types from a base shape:
+
+      ```ts
+      type Getters<T> = {
+        [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K]
+      };
+      ```
+
+      Use sparingly. Template literal types can produce complex error messages and slow down the type checker on large projects. They are at their best when typing a domain-specific string format (`"USD-EUR"`, `"/api/v1/users/:id"`) and at their worst when used to generate large derived types.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Variance — most code does not need to think about it
+
+      Generics in TypeScript are mostly bivariant by default (with some special-cased contravariance for function parameters under `strictFunctionTypes`). The TS 4.7+ syntax lets you mark variance explicitly:
+
+      ```ts
+      type Producer<out T> = () => T;       // covariant
+      type Consumer<in T> = (x: T) => void; // contravariant
+      type Both<in out T> = (x: T) => T;    // invariant
+      ```
+
+      Most application code does not need these annotations. Reach for them only when writing variance-sensitive library code (parser combinators, observable streams, complex state machines) where the default variance produces wrong assignability.
+
+  - sequence: 10
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Generic parameter used once.** Not generic; just a typed parameter. Drop the `<T>`.
+      - **Unconstrained generic where a constraint is needed.** Code that fails because `T` might not have the method you assumed. Add `T extends ...`.
+      - **Conditional types for runtime logic.** Encoding business rules at the type level produces unreadable types. Keep types descriptive; put logic in code.
+      - **Reinventing `Pick`, `Omit`, `Partial`, etc.** Standard utility types cover most cases. Use them.
+      - **Deeply nested conditional types.** Three levels of `T extends U ? X : Y extends Z ? ...` is unreadable. Refactor by simplifying the input shape or splitting into named intermediate types.
+      - **`infer` outside a conditional type.** `infer` only works inside the `extends` clause of a conditional type. Putting it elsewhere is a syntax error.
+      - **Type-level bookkeeping that should be runtime.** If a type encodes state ("the third call returns a different type than the first"), the code should encode that state with values, not types.
+
+  - sequence: 11
+    fragment_type: rationale
+    content: |
+      ## When generics are over-engineering
+
+      Some functions look like they should be generic but should not be:
+
+      - **A function that returns a fixed type regardless of input.** No generic needed.
+      - **A function whose generic is only used internally.** The generic is decoration; drop it.
+      - **A wrapper that forwards to a generic function.** If the wrapper does not transform types, propagate the underlying generic shape directly rather than re-wrapping.
+
+      Generics have a cost in code that is harder to read; only pay that cost when the type relationship is real and useful at the call site.
+
+  - sequence: 12
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Generic parameters are used in at least two positions; single-use generics are turned into ordinary parameters.
+      - [ ] Generic parameters that depend on shape are constrained with `extends`; no unconstrained `<T>` accessing `T.foo`.
+      - [ ] Standard utility types (`Pick`, `Omit`, `Partial`, `Required`, `Readonly`, `Record`, `ReturnType`, `Awaited`, `Parameters`) are used before writing custom mapped or conditional types.
+      - [ ] Conditional types are nested at most two levels; deeper nesting is refactored into named intermediate types.
+      - [ ] `infer` is only used inside the `extends` clause of conditional types.
+      - [ ] Template literal types are used for domain-specific string formats, not as a substitute for generated code.
+      - [ ] No type-level encoding of runtime state; runtime logic stays in code, types stay descriptive.

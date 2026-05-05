@@ -1,0 +1,429 @@
+skill_type: domain
+skill_id: ts-narrowing-and-discriminated-unions
+canonical_name: TypeScript Narrowing and Discriminated Unions (Type-Safe Branching)
+category: engineering
+skill_class: domain
+domain_tags: [type-narrowing, discriminated-union, type-guard, exhaustiveness-check, assertion-function]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — TypeScript handbook on narrowing https://www.typescriptlang.org/docs/handbook/2/narrowing.html (verified 2026-05-04 against fixtures/upstream/curated/typescript.yaml topic `error_handling_and_exceptions`); TypeScript 4.0 release notes https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-0.html for assertion functions. Skill scope: type narrowing, type guards, discriminated unions, exhaustiveness checks; not generic type-system mechanics (covered in ts-generics-and-conditional-types).
+
+raw_prose: |
+  # TypeScript Narrowing and Discriminated Unions
+
+  Narrowing is how TypeScript refines a broad type to a specific one inside a conditional branch. The rule is one sentence: prefer discriminated unions over loose object types, narrow with `typeof`, `instanceof`, `in`, and equality checks before user-defined guards, and use exhaustiveness checks (`never`) so future variants do not silently fall through. Most "type assertions" sprinkled through TypeScript codebases are fixes for missing narrowing — the type checker would have inferred the right type if the union had been discriminable and the branch had been written as a check the checker recognizes.
+
+  ## What narrowing is
+
+  Narrowing happens when TypeScript refines a value's type based on control flow. After a check, the type inside the branch is narrower than outside.
+
+  ```ts
+  function handle(x: string | number) {
+    if (typeof x === "string") {
+      x.toUpperCase();  // x is narrowed to string here
+    } else {
+      x.toFixed(2);     // x is narrowed to number here
+    }
+  }
+  ```
+
+  TypeScript recognizes a fixed set of narrowing patterns: `typeof`, `instanceof`, `in`, equality checks (`===`, `!==`), truthiness, predicate functions with type-guard signatures. These all flow through the type checker; the developer does not have to assert types.
+
+  When you reach for `as` to "tell TypeScript what the type is," you are usually missing a narrowing opportunity — the question is "what check would let the checker infer this?"
+
+  ## The five built-in narrowing forms
+
+  TypeScript narrows automatically on these patterns:
+
+  - **`typeof`** — for primitives. `typeof x === "string"` narrows to `string`.
+  - **`instanceof`** — for classes. `x instanceof Error` narrows to `Error`.
+  - **`in`** — for property presence. `"foo" in x` narrows to types that have `foo`.
+  - **Equality** — `x === null`, `x === "DONE"`. Useful for null checks and literal comparisons.
+  - **Truthiness** — `if (x)` removes `null`, `undefined`, `0`, `""`, `false`. Be careful — falsy values may not be the same as null.
+
+  Reach for these first. They are checker-recognized, type-safe, and require no extra code.
+
+  ## Discriminated unions — the right shape for variant data
+
+  When you have a value that can be one of several variants (success or failure, draft or published, etc.), use a discriminated union — a union of object types that share a common literal-typed `kind` field:
+
+  ```ts
+  type Result =
+    | { kind: "success"; data: User }
+    | { kind: "failure"; error: string };
+
+  function handle(r: Result) {
+    if (r.kind === "success") {
+      console.log(r.data);   // narrowed to the success branch
+    } else {
+      console.error(r.error); // narrowed to failure
+    }
+  }
+  ```
+
+  The narrowing on `r.kind === "success"` is automatic because each branch's `kind` is a literal type. TypeScript infers the rest of the shape based on the literal match.
+
+  Compare to a loose union without a discriminant:
+
+  ```ts
+  // Bad — checker cannot narrow
+  type LooseResult = { data?: User; error?: string };
+
+  // checker cannot tell whether `data` or `error` is present
+  ```
+
+  Always include a discriminator. The field name is by convention `kind`, `type`, `tag`, or `_tag`. Pick one per codebase and stay consistent.
+
+  ## User-defined type guards — `is` predicates
+
+  When narrowing logic is more complex than the built-ins, write a type guard — a function whose return type uses `value is T`:
+
+  ```ts
+  function isUser(x: unknown): x is User {
+    return (
+      typeof x === "object" &&
+      x !== null &&
+      "id" in x &&
+      typeof (x as User).id === "number"
+    );
+  }
+
+  if (isUser(input)) {
+    input.id;  // narrowed to User
+  }
+  ```
+
+  The `x is User` return type tells the checker: "if this returns true, treat `x` as `User` in the branch." The checker trusts the function — you must implement the runtime check correctly. A buggy guard introduces type-safe-looking code that is actually wrong.
+
+  Use type guards sparingly. Most narrowing should use the built-in forms with discriminated unions; type guards are for cases the built-ins cannot express (validating shape from `unknown`, checking against external schemas).
+
+  ## Assertion functions
+
+  TypeScript 3.7+ supports assertion functions: signatures that throw if the assertion fails, narrowing thereafter:
+
+  ```ts
+  function assertUser(x: unknown): asserts x is User {
+    if (!isUser(x)) throw new Error("not a user");
+  }
+
+  assertUser(input);
+  input.id;  // narrowed to User from this point on
+  ```
+
+  Useful for validation at boundaries — once asserted, the rest of the function can use the value without re-checking. Like type guards, the assertion is trusted by the checker; the runtime must actually throw on bad input.
+
+  Pair with `node:assert`-style or `zod`-style runtime validation libraries; do not roll your own assertion logic for non-trivial shapes.
+
+  ## Exhaustiveness checks with `never`
+
+  When you handle a discriminated union, you want a compile-time guarantee that all variants are covered. The pattern uses `never`:
+
+  ```ts
+  type Status = "pending" | "active" | "archived";
+
+  function describe(s: Status): string {
+    switch (s) {
+      case "pending": return "waiting";
+      case "active": return "live";
+      case "archived": return "old";
+      default:
+        const exhaustive: never = s;
+        throw new Error(`unhandled: ${exhaustive}`);
+    }
+  }
+  ```
+
+  If a future change adds `"deleted"` to `Status`, the `default` branch will fail to compile because `"deleted"` is not assignable to `never`. The compile error tells you exactly which switch needs updating.
+
+  This is the single most valuable pattern for code that branches on a discriminator. Use it in every switch over a union; the cost is three lines and the benefit is "every new variant produces a compile error pointing at the missed handler."
+
+  ## Catching `unknown` (since TS 4.4)
+
+  In TS 4.4+ with `strict` enabled, catch variables are typed `unknown` instead of `any`:
+
+  ```ts
+  try {
+    risky();
+  } catch (err) {
+    // err is unknown — must narrow before use
+    if (err instanceof Error) {
+      console.error(err.message);
+    } else {
+      console.error("unknown error", err);
+    }
+  }
+  ```
+
+  The narrow-before-use discipline catches a class of bugs where catch handlers assumed `Error` and crashed on non-Error throws (a string, a thrown number, an object literal). Either narrow with `instanceof` or assert with a type guard; do not access `.message` directly on `unknown`.
+
+  Avoid `catch (err: any)` — it brings back the old footgun.
+
+  ## Anti-patterns
+
+  - **`as` assertions to fix narrowing.** Usually a missed `typeof`, `in`, or discriminant check. Add the check; remove the assertion.
+  - **Loose object unions without a discriminant.** `type X = { a?: A } | { b?: B }` cannot be narrowed by the checker. Add a `kind` field.
+  - **Type guards without runtime validation.** `function isFoo(x: unknown): x is Foo { return true; }` lies to the checker; runtime crashes follow.
+  - **`switch` without exhaustiveness check.** Future variants silently fall through. Always include the `never` default.
+  - **`if (x)` as a stand-in for `if (x !== undefined)`.** Falsy values (0, "", false) hit the wrong branch. Use explicit comparisons for clarity.
+  - **Catching `any` instead of narrowing `unknown`.** Disables checking for the catch handler.
+  - **Casting through `unknown` to bypass type errors.** `(x as unknown as Foo)` is the type system flag-of-surrender. Almost always indicates a missing narrowing or a wrong type elsewhere.
+
+  ## Narrowing limits
+
+  TypeScript's narrowing has limits worth knowing:
+
+  - **Function-call narrowing is local.** A function call between a narrow and a use can re-widen the type — TS conservatively assumes the call may have mutated state.
+
+    ```ts
+    let x: string | null = getX();
+    if (x !== null) {
+      doSomething();
+      x.toUpperCase();  // OK if doSomething does not mutate, but TS sometimes widens
+    }
+    ```
+
+    Workaround: assign to a local `const` after narrowing.
+
+  - **Object property narrowing on possibly-mutable references.** Discriminated unions on object properties narrow within a branch, but TS may re-widen if the object could be mutated. Const-binding helps; readonly fields help more.
+
+  - **Generics do not narrow well.** Inside a generic function, the type parameter usually cannot be narrowed by `typeof` or `in`. You may need to widen to a non-generic type for the duration of the check.
+
+  These corners are rare in normal application code. Most narrowing works as expected.
+
+  ## Verification
+
+  - [ ] Multi-variant data uses discriminated unions with a literal-typed `kind`/`type`/`tag` field, not loose object types.
+  - [ ] Branching uses TS-recognized narrowing forms (`typeof`, `instanceof`, `in`, equality, truthiness) before reaching for type guards.
+  - [ ] Switches over discriminated unions include an exhaustiveness check (assignment to `never`) so future variants fail to compile.
+  - [ ] User-defined type guards (`x is T`) implement the runtime check correctly; the predicate is not just `return true`.
+  - [ ] Catch variables are narrowed (`err instanceof Error`) before accessing properties; no `catch (err: any)`.
+  - [ ] No `as Foo` assertions remain that could be replaced by a checker-recognized narrowing.
+  - [ ] No double-cast `as unknown as Foo` patterns; either the type is wrong upstream or a narrow is missing.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # TypeScript Narrowing and Discriminated Unions
+
+      Narrowing is how TypeScript refines a broad type to a specific one inside a conditional branch. The rule is one sentence: prefer discriminated unions over loose object types, narrow with `typeof`, `instanceof`, `in`, and equality checks before user-defined guards, and use exhaustiveness checks (`never`) so future variants do not silently fall through. Most "type assertions" sprinkled through TypeScript codebases are fixes for missing narrowing — the type checker would have inferred the right type if the union had been discriminable and the branch had been written as a check the checker recognizes.
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## What narrowing is
+
+      Narrowing happens when TypeScript refines a value's type based on control flow. After a check, the type inside the branch is narrower than outside.
+
+      ```ts
+      function handle(x: string | number) {
+        if (typeof x === "string") {
+          x.toUpperCase();  // x is narrowed to string here
+        } else {
+          x.toFixed(2);     // x is narrowed to number here
+        }
+      }
+      ```
+
+      TypeScript recognizes a fixed set of narrowing patterns: `typeof`, `instanceof`, `in`, equality checks (`===`, `!==`), truthiness, predicate functions with type-guard signatures. These all flow through the type checker; the developer does not have to assert types.
+
+      When you reach for `as` to "tell TypeScript what the type is," you are usually missing a narrowing opportunity — the question is "what check would let the checker infer this?"
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## The five built-in narrowing forms
+
+      TypeScript narrows automatically on these patterns:
+
+      - **`typeof`** — for primitives. `typeof x === "string"` narrows to `string`.
+      - **`instanceof`** — for classes. `x instanceof Error` narrows to `Error`.
+      - **`in`** — for property presence. `"foo" in x` narrows to types that have `foo`.
+      - **Equality** — `x === null`, `x === "DONE"`. Useful for null checks and literal comparisons.
+      - **Truthiness** — `if (x)` removes `null`, `undefined`, `0`, `""`, `false`. Be careful — falsy values may not be the same as null.
+
+      Reach for these first. They are checker-recognized, type-safe, and require no extra code.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Discriminated unions — the right shape for variant data
+
+      When you have a value that can be one of several variants (success or failure, draft or published, etc.), use a discriminated union — a union of object types that share a common literal-typed `kind` field:
+
+      ```ts
+      type Result =
+        | { kind: "success"; data: User }
+        | { kind: "failure"; error: string };
+
+      function handle(r: Result) {
+        if (r.kind === "success") {
+          console.log(r.data);   // narrowed to the success branch
+        } else {
+          console.error(r.error); // narrowed to failure
+        }
+      }
+      ```
+
+      The narrowing on `r.kind === "success"` is automatic because each branch's `kind` is a literal type. TypeScript infers the rest of the shape based on the literal match.
+
+      Compare to a loose union without a discriminant:
+
+      ```ts
+      // Bad — checker cannot narrow
+      type LooseResult = { data?: User; error?: string };
+
+      // checker cannot tell whether `data` or `error` is present
+      ```
+
+      Always include a discriminator. The field name is by convention `kind`, `type`, `tag`, or `_tag`. Pick one per codebase and stay consistent.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## User-defined type guards — `is` predicates
+
+      When narrowing logic is more complex than the built-ins, write a type guard — a function whose return type uses `value is T`:
+
+      ```ts
+      function isUser(x: unknown): x is User {
+        return (
+          typeof x === "object" &&
+          x !== null &&
+          "id" in x &&
+          typeof (x as User).id === "number"
+        );
+      }
+
+      if (isUser(input)) {
+        input.id;  // narrowed to User
+      }
+      ```
+
+      The `x is User` return type tells the checker: "if this returns true, treat `x` as `User` in the branch." The checker trusts the function — you must implement the runtime check correctly. A buggy guard introduces type-safe-looking code that is actually wrong.
+
+      Use type guards sparingly. Most narrowing should use the built-in forms with discriminated unions; type guards are for cases the built-ins cannot express (validating shape from `unknown`, checking against external schemas).
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Assertion functions
+
+      TypeScript 3.7+ supports assertion functions: signatures that throw if the assertion fails, narrowing thereafter:
+
+      ```ts
+      function assertUser(x: unknown): asserts x is User {
+        if (!isUser(x)) throw new Error("not a user");
+      }
+
+      assertUser(input);
+      input.id;  // narrowed to User from this point on
+      ```
+
+      Useful for validation at boundaries — once asserted, the rest of the function can use the value without re-checking. Like type guards, the assertion is trusted by the checker; the runtime must actually throw on bad input.
+
+      Pair with `node:assert`-style or `zod`-style runtime validation libraries; do not roll your own assertion logic for non-trivial shapes.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Exhaustiveness checks with `never`
+
+      When you handle a discriminated union, you want a compile-time guarantee that all variants are covered. The pattern uses `never`:
+
+      ```ts
+      type Status = "pending" | "active" | "archived";
+
+      function describe(s: Status): string {
+        switch (s) {
+          case "pending": return "waiting";
+          case "active": return "live";
+          case "archived": return "old";
+          default:
+            const exhaustive: never = s;
+            throw new Error(`unhandled: ${exhaustive}`);
+        }
+      }
+      ```
+
+      If a future change adds `"deleted"` to `Status`, the `default` branch will fail to compile because `"deleted"` is not assignable to `never`. The compile error tells you exactly which switch needs updating.
+
+      This is the single most valuable pattern for code that branches on a discriminator. Use it in every switch over a union; the cost is three lines and the benefit is "every new variant produces a compile error pointing at the missed handler."
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## Catching `unknown` (since TS 4.4)
+
+      In TS 4.4+ with `strict` enabled, catch variables are typed `unknown` instead of `any`:
+
+      ```ts
+      try {
+        risky();
+      } catch (err) {
+        // err is unknown — must narrow before use
+        if (err instanceof Error) {
+          console.error(err.message);
+        } else {
+          console.error("unknown error", err);
+        }
+      }
+      ```
+
+      The narrow-before-use discipline catches a class of bugs where catch handlers assumed `Error` and crashed on non-Error throws (a string, a thrown number, an object literal). Either narrow with `instanceof` or assert with a type guard; do not access `.message` directly on `unknown`.
+
+      Avoid `catch (err: any)` — it brings back the old footgun.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`as` assertions to fix narrowing.** Usually a missed `typeof`, `in`, or discriminant check. Add the check; remove the assertion.
+      - **Loose object unions without a discriminant.** `type X = { a?: A } | { b?: B }` cannot be narrowed by the checker. Add a `kind` field.
+      - **Type guards without runtime validation.** `function isFoo(x: unknown): x is Foo { return true; }` lies to the checker; runtime crashes follow.
+      - **`switch` without exhaustiveness check.** Future variants silently fall through. Always include the `never` default.
+      - **`if (x)` as a stand-in for `if (x !== undefined)`.** Falsy values (0, "", false) hit the wrong branch. Use explicit comparisons for clarity.
+      - **Catching `any` instead of narrowing `unknown`.** Disables checking for the catch handler.
+      - **Casting through `unknown` to bypass type errors.** `(x as unknown as Foo)` is the type system flag-of-surrender. Almost always indicates a missing narrowing or a wrong type elsewhere.
+
+  - sequence: 10
+    fragment_type: rationale
+    content: |
+      ## Narrowing limits
+
+      TypeScript's narrowing has limits worth knowing:
+
+      - **Function-call narrowing is local.** A function call between a narrow and a use can re-widen the type — TS conservatively assumes the call may have mutated state.
+
+        ```ts
+        let x: string | null = getX();
+        if (x !== null) {
+          doSomething();
+          x.toUpperCase();  // OK if doSomething does not mutate, but TS sometimes widens
+        }
+        ```
+
+        Workaround: assign to a local `const` after narrowing.
+
+      - **Object property narrowing on possibly-mutable references.** Discriminated unions on object properties narrow within a branch, but TS may re-widen if the object could be mutated. Const-binding helps; readonly fields help more.
+
+      - **Generics do not narrow well.** Inside a generic function, the type parameter usually cannot be narrowed by `typeof` or `in`. You may need to widen to a non-generic type for the duration of the check.
+
+      These corners are rare in normal application code. Most narrowing works as expected.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Multi-variant data uses discriminated unions with a literal-typed `kind`/`type`/`tag` field, not loose object types.
+      - [ ] Branching uses TS-recognized narrowing forms (`typeof`, `instanceof`, `in`, equality, truthiness) before reaching for type guards.
+      - [ ] Switches over discriminated unions include an exhaustiveness check (assignment to `never`) so future variants fail to compile.
+      - [ ] User-defined type guards (`x is T`) implement the runtime check correctly; the predicate is not just `return true`.
+      - [ ] Catch variables are narrowed (`err instanceof Error`) before accessing properties; no `catch (err: any)`.
+      - [ ] No `as Foo` assertions remain that could be replaced by a checker-recognized narrowing.
+      - [ ] No double-cast `as unknown as Foo` patterns; either the type is wrong upstream or a narrow is missing.

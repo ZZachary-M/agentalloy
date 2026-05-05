@@ -1,0 +1,270 @@
+skill_type: domain
+skill_id: ts-strict-mode-and-tsconfig
+canonical_name: TypeScript Strict Mode and tsconfig (Catch Bugs at Compile Time)
+category: engineering
+skill_class: domain
+domain_tags: [strict-mode, no-unchecked-indexed-access, target-es-version, module-resolution-bundler, project-references]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — TypeScript handbook https://www.typescriptlang.org/docs/handbook/intro.html (verified 2026-05-04 against fixtures/upstream/curated/typescript.yaml, version_anchor 5.7); tsconfig reference https://www.typescriptlang.org/tsconfig/; TypeScript 5.7 release notes https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-7.html. Skill scope: configuring tsc strict mode, picking the right tsconfig flags, project references for monorepos; not bundler-specific config (tsup, vite, esbuild — covered in tooling), not framework-specific tsconfig (Next.js, Nuxt — covered in framework packs).
+
+raw_prose: |
+  # TypeScript Strict Mode and tsconfig
+
+  `tsconfig.json` is where you decide how strict the type checker will be. The rule is one sentence: enable `strict: true`, add `noUncheckedIndexedAccess`, set `module: "NodeNext"` or `module: "Preserve"` (5.4+) to match your runtime, and pick a `target` no older than your deployment supports. Most TypeScript codebases that "have types but still ship bugs" have permissive tsconfigs — `strict` off, implicit `any` allowed, indexed access trusted — so the type checker is barely engaged.
+
+  ## `strict: true` is the floor, not the ceiling
+
+  Setting `"strict": true` enables a bundle of strictness flags:
+
+  - `strictNullChecks` — `null` and `undefined` are not assignable to other types.
+  - `noImplicitAny` — variables without inferable types must be annotated.
+  - `strictFunctionTypes` — function parameter types are checked contravariantly.
+  - `strictBindCallApply` — `bind`, `call`, `apply` are type-checked.
+  - `strictPropertyInitialization` — class properties must be definitely assigned.
+  - `alwaysStrict` — emits `"use strict"` and parses in strict mode.
+  - `useUnknownInCatchVariables` — catch variables are typed `unknown`, not `any`.
+  - `noImplicitThis` — `this` cannot have implicit `any`.
+
+  All of these catch real bugs at compile time. Disabling individual ones (`"strictNullChecks": false`) is a migration tactic, not a long-term posture. Most TypeScript projects today should enable `strict` unconditionally.
+
+  ## Beyond `strict` — the high-leverage extras
+
+  `strict: true` is necessary; it is not sufficient. A handful of additional flags catch common bugs that `strict` alone misses:
+
+  - **`noUncheckedIndexedAccess`** — `arr[i]` is typed as `T | undefined` instead of just `T`. Catches the off-by-one and missing-key bugs that index access otherwise hides.
+  - **`exactOptionalPropertyTypes`** — `{ x?: number }` does not allow `undefined` to be explicitly assigned to `x`. Forces a distinction between "missing" and "present and undefined."
+  - **`noImplicitOverride`** — subclass methods must use the `override` keyword. Catches typos in parent method names.
+  - **`noFallthroughCasesInSwitch`** — flags `case` blocks that fall through without `break` or `return`. Catches a classic copy-paste bug.
+  - **`noUnusedLocals` / `noUnusedParameters`** — surfaces dead code. Useful but noisy during refactoring; some teams gate behind the linter instead.
+
+  Pick `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` for new projects; they cost some annotation work and pay back in bugs caught.
+
+  ## `module` and `moduleResolution` — match your runtime
+
+  These two flags control how `import` statements resolve. The right choice depends on what runs your code.
+
+  - **`"module": "NodeNext"` + `"moduleResolution": "NodeNext"`** — for modern Node.js with ESM. Honors `"type": "module"` in package.json, conditional exports, `.mjs`/`.cjs` extensions. Default for Node.js libraries.
+  - **`"module": "Preserve"` + `"moduleResolution": "Bundler"`** (TS 5.4+) — for code that goes through a bundler (Vite, Webpack, esbuild). Lets the bundler handle resolution; tsc just type-checks.
+  - **`"module": "ESNext"` + `"moduleResolution": "Bundler"`** — older equivalent of the above. Still works.
+  - **`"module": "CommonJS"`** — only when emitting CommonJS to old Node or compatibility scenarios. Most new code should not start here.
+
+  Mismatches between `module` and your runtime are a major source of "works locally, breaks in prod" bugs. If your code runs in Node, NodeNext. If it goes through a bundler, Preserve. Pick deliberately.
+
+  ## `target` and the JavaScript version you emit
+
+  `target` controls what JavaScript syntax tsc emits. Common choices:
+
+  - **`"target": "ES2022"`** — modern Node.js (18+), modern browsers. Keeps modern features (top-level await, class fields).
+  - **`"target": "ES2020"`** — broader compatibility; emits older syntax for some features. Use if you target older runtimes.
+  - **`"target": "ESNext"`** — emits the latest TS-supported features without downleveling. Useful for libraries that expect bundlers to handle compatibility, or for tooling code that runs on the same Node as it was authored on.
+
+  Avoid `"target": "ES5"` unless you specifically need IE11 or very old Node. ES5 emits enormous polyfills for modern features and inflates output. Most production targets are ES2020+ now.
+
+  Keep `target` consistent across the dependency graph. If your library targets ES2022 but a consumer's bundler downlevels to ES5, the consumer's bundler does the work.
+
+  ## `verbatimModuleSyntax` — predictable imports
+
+  `"verbatimModuleSyntax": true` (TS 5.0+) makes imports do exactly what they say:
+
+  - `import { X } from "./mod"` always emits a value import.
+  - `import type { X } from "./mod"` always emits a type-only import (erased at runtime).
+
+  Without this flag, tsc may elide imports it thinks are unused, which causes problems with ESM and side-effect imports. Enable for any new project; it makes the emitted code predictable.
+
+  ## Project references for monorepos
+
+  When a repo has multiple packages that depend on each other, project references let tsc build them incrementally and respect inter-package boundaries:
+
+  ```json
+  // packages/lib/tsconfig.json
+  {
+    "compilerOptions": { "composite": true, "outDir": "dist" },
+    "include": ["src"]
+  }
+
+  // packages/app/tsconfig.json
+  {
+    "compilerOptions": { ... },
+    "references": [{ "path": "../lib" }]
+  }
+  ```
+
+  Build with `tsc --build packages/app`. tsc detects which packages need rebuilding based on `composite` outputs and only rebuilds the dirty ones.
+
+  Project references replace older patterns like building everything from a root tsconfig. They are the right model for any monorepo with two or more TS packages. Single-package repos do not need them.
+
+  ## Common tsconfig pitfalls
+
+  - **`allowJs: true` on a TS project.** Lets `.js` files into the project; useful for migration but disables many type checks. Turn off once migration is done.
+  - **`skipLibCheck: false`.** Type-checks every `.d.ts` in node_modules — slow and rarely productive. `skipLibCheck: true` is the standard setting.
+  - **`esModuleInterop: false`.** Without it, default imports from CommonJS modules need `import * as X` syntax. Almost always set to `true` for compatibility with the npm ecosystem.
+  - **No `outDir`, emitting next to source.** Pollutes the source tree with `.js` and `.d.ts` siblings. Always set `outDir`.
+  - **`isolatedModules: false` for transpiler-only code.** Bundlers and `swc`/`esbuild` transpile per-file without cross-file type information. `isolatedModules: true` makes tsc enforce the constraints those tools require, so emit is predictable.
+  - **Forgetting `incremental: true` on big projects.** Builds get slow. Incremental builds cache type info between runs.
+
+  ## Anti-patterns
+
+  - **`"strict": false` on a non-migration project.** Throws away most of TypeScript's value. The whole point is the strict check.
+  - **`"any"` annotations to silence errors.** Disables checking for that surface. Use `unknown` and narrow, or fix the type.
+  - **Mixing `module: "CommonJS"` and ESM imports.** Ambiguity about emit shape; runtime errors vary by environment.
+  - **Allowing implicit `any`.** Variables without inferable types become `any`, escaping the checker. `noImplicitAny` (in `strict`) blocks this.
+  - **`@ts-ignore` instead of `@ts-expect-error`.** `ts-expect-error` errors when the line stops needing the suppression; `ts-ignore` silently rots. Use the former.
+  - **Building without `tsc --noEmit` in CI.** Editors are forgiving; CI must run the full type check. A green CI without `tsc` running is a false negative.
+
+  ## Verification
+
+  - [ ] `tsconfig.json` has `"strict": true`.
+  - [ ] `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are enabled (or there is a documented reason not to).
+  - [ ] `module` and `moduleResolution` match the runtime: NodeNext for Node, Preserve+Bundler for bundled code.
+  - [ ] `target` is ES2020 or newer; ES5 only for legacy compatibility.
+  - [ ] `verbatimModuleSyntax: true` for new projects so imports are predictable.
+  - [ ] `skipLibCheck: true` and `esModuleInterop: true` for sane defaults.
+  - [ ] Monorepos use project references with `composite: true`; CI runs `tsc --noEmit` (or `--build`) so type errors fail the build.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # TypeScript Strict Mode and tsconfig
+
+      `tsconfig.json` is where you decide how strict the type checker will be. The rule is one sentence: enable `strict: true`, add `noUncheckedIndexedAccess`, set `module: "NodeNext"` or `module: "Preserve"` (5.4+) to match your runtime, and pick a `target` no older than your deployment supports. Most TypeScript codebases that "have types but still ship bugs" have permissive tsconfigs — `strict` off, implicit `any` allowed, indexed access trusted — so the type checker is barely engaged. The cost is silent: errors that the checker would have caught reach review or production, and the team blames TypeScript for not catching them when the actual issue is the configuration.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## `strict: true` is the floor, not the ceiling
+
+      Setting `"strict": true` enables a bundle of strictness flags:
+
+      - `strictNullChecks` — `null` and `undefined` are not assignable to other types.
+      - `noImplicitAny` — variables without inferable types must be annotated.
+      - `strictFunctionTypes` — function parameter types are checked contravariantly.
+      - `strictBindCallApply` — `bind`, `call`, `apply` are type-checked.
+      - `strictPropertyInitialization` — class properties must be definitely assigned.
+      - `alwaysStrict` — emits `"use strict"` and parses in strict mode.
+      - `useUnknownInCatchVariables` — catch variables are typed `unknown`, not `any`.
+      - `noImplicitThis` — `this` cannot have implicit `any`.
+
+      All of these catch real bugs at compile time. Disabling individual ones (`"strictNullChecks": false`) is a migration tactic, not a long-term posture. Most TypeScript projects today should enable `strict` unconditionally.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Beyond `strict` — the high-leverage extras
+
+      `strict: true` is necessary; it is not sufficient. A handful of additional flags catch common bugs that `strict` alone misses:
+
+      - **`noUncheckedIndexedAccess`** — `arr[i]` is typed as `T | undefined` instead of just `T`. Catches the off-by-one and missing-key bugs that index access otherwise hides.
+      - **`exactOptionalPropertyTypes`** — `{ x?: number }` does not allow `undefined` to be explicitly assigned to `x`. Forces a distinction between "missing" and "present and undefined."
+      - **`noImplicitOverride`** — subclass methods must use the `override` keyword. Catches typos in parent method names.
+      - **`noFallthroughCasesInSwitch`** — flags `case` blocks that fall through without `break` or `return`. Catches a classic copy-paste bug.
+      - **`noUnusedLocals` / `noUnusedParameters`** — surfaces dead code. Useful but noisy during refactoring; some teams gate behind the linter instead.
+
+      Pick `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` for new projects; they cost some annotation work and pay back in bugs caught.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## `module` and `moduleResolution` — match your runtime
+
+      These two flags control how `import` statements resolve. The right choice depends on what runs your code.
+
+      - **`"module": "NodeNext"` + `"moduleResolution": "NodeNext"`** — for modern Node.js with ESM. Honors `"type": "module"` in package.json, conditional exports, `.mjs`/`.cjs` extensions. Default for Node.js libraries.
+      - **`"module": "Preserve"` + `"moduleResolution": "Bundler"`** (TS 5.4+) — for code that goes through a bundler (Vite, Webpack, esbuild). Lets the bundler handle resolution; tsc just type-checks.
+      - **`"module": "ESNext"` + `"moduleResolution": "Bundler"`** — older equivalent of the above. Still works.
+      - **`"module": "CommonJS"`** — only when emitting CommonJS to old Node or compatibility scenarios. Most new code should not start here.
+
+      Mismatches between `module` and your runtime are a major source of "works locally, breaks in prod" bugs. If your code runs in Node, NodeNext. If it goes through a bundler, Preserve. Pick deliberately.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## `target` and the JavaScript version you emit
+
+      `target` controls what JavaScript syntax tsc emits. Common choices:
+
+      - **`"target": "ES2022"`** — modern Node.js (18+), modern browsers. Keeps modern features (top-level await, class fields).
+      - **`"target": "ES2020"`** — broader compatibility; emits older syntax for some features. Use if you target older runtimes.
+      - **`"target": "ESNext"`** — emits the latest TS-supported features without downleveling. Useful for libraries that expect bundlers to handle compatibility, or for tooling code that runs on the same Node as it was authored on.
+
+      Avoid `"target": "ES5"` unless you specifically need IE11 or very old Node. ES5 emits enormous polyfills for modern features and inflates output. Most production targets are ES2020+ now.
+
+      Keep `target` consistent across the dependency graph. If your library targets ES2022 but a consumer's bundler downlevels to ES5, the consumer's bundler does the work.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## `verbatimModuleSyntax` — predictable imports
+
+      `"verbatimModuleSyntax": true` (TS 5.0+) makes imports do exactly what they say:
+
+      - `import { X } from "./mod"` always emits a value import.
+      - `import type { X } from "./mod"` always emits a type-only import (erased at runtime).
+
+      Without this flag, tsc may elide imports it thinks are unused, which causes problems with ESM and side-effect imports. Enable for any new project; it makes the emitted code predictable.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Project references for monorepos
+
+      When a repo has multiple packages that depend on each other, project references let tsc build them incrementally and respect inter-package boundaries:
+
+      ```json
+      // packages/lib/tsconfig.json
+      {
+        "compilerOptions": { "composite": true, "outDir": "dist" },
+        "include": ["src"]
+      }
+
+      // packages/app/tsconfig.json
+      {
+        "compilerOptions": { ... },
+        "references": [{ "path": "../lib" }]
+      }
+      ```
+
+      Build with `tsc --build packages/app`. tsc detects which packages need rebuilding based on `composite` outputs and only rebuilds the dirty ones.
+
+      Project references replace older patterns like building everything from a root tsconfig. They are the right model for any monorepo with two or more TS packages. Single-package repos do not need them.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Common tsconfig pitfalls
+
+      - **`allowJs: true` on a TS project.** Lets `.js` files into the project; useful for migration but disables many type checks. Turn off once migration is done.
+      - **`skipLibCheck: false`.** Type-checks every `.d.ts` in node_modules — slow and rarely productive. `skipLibCheck: true` is the standard setting.
+      - **`esModuleInterop: false`.** Without it, default imports from CommonJS modules need `import * as X` syntax. Almost always set to `true` for compatibility with the npm ecosystem.
+      - **No `outDir`, emitting next to source.** Pollutes the source tree with `.js` and `.d.ts` siblings. Always set `outDir`.
+      - **`isolatedModules: false` for transpiler-only code.** Bundlers and `swc`/`esbuild` transpile per-file without cross-file type information. `isolatedModules: true` makes tsc enforce the constraints those tools require, so emit is predictable.
+      - **Forgetting `incremental: true` on big projects.** Builds get slow. Incremental builds cache type info between runs.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`"strict": false` on a non-migration project.** Throws away most of TypeScript's value. The whole point is the strict check.
+      - **`"any"` annotations to silence errors.** Disables checking for that surface. Use `unknown` and narrow, or fix the type.
+      - **Mixing `module: "CommonJS"` and ESM imports.** Ambiguity about emit shape; runtime errors vary by environment.
+      - **Allowing implicit `any`.** Variables without inferable types become `any`, escaping the checker. `noImplicitAny` (in `strict`) blocks this.
+      - **`@ts-ignore` instead of `@ts-expect-error`.** `ts-expect-error` errors when the line stops needing the suppression; `ts-ignore` silently rots. Use the former.
+      - **Building without `tsc --noEmit` in CI.** Editors are forgiving; CI must run the full type check. A green CI without `tsc` running is a false negative.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `tsconfig.json` has `"strict": true`.
+      - [ ] `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are enabled (or there is a documented reason not to).
+      - [ ] `module` and `moduleResolution` match the runtime: NodeNext for Node, Preserve+Bundler for bundled code.
+      - [ ] `target` is ES2020 or newer; ES5 only for legacy compatibility.
+      - [ ] `verbatimModuleSyntax: true` for new projects so imports are predictable.
+      - [ ] `skipLibCheck: true` and `esModuleInterop: true` for sane defaults.
+      - [ ] Monorepos use project references with `composite: true`; CI runs `tsc --noEmit` (or `--build`) so type errors fail the build.

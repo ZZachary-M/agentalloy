@@ -1,0 +1,343 @@
+skill_type: domain
+skill_id: ts-types-vs-interfaces
+canonical_name: TypeScript Types vs Interfaces (Aliases, Interfaces, Declaration Merging)
+category: engineering
+skill_class: domain
+domain_tags: [type-alias, interface, declaration-merging, structural-typing, readonly-modifier]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — TypeScript handbook "Everyday Types" https://www.typescriptlang.org/docs/handbook/2/everyday-types.html (verified 2026-05-04 against fixtures/upstream/curated/typescript.yaml topic `typing_and_generics`); "Types vs Interfaces" guidance https://www.typescriptlang.org/docs/handbook/2/objects.html#differences-between-type-aliases-and-interfaces. Skill scope: when to use `type` aliases vs `interface`, structural typing semantics, declaration merging; not advanced type-system features (covered in ts-generics-and-conditional-types).
+
+raw_prose: |
+  # TypeScript Types vs Interfaces
+
+  TypeScript has two ways to name a type: `type` aliases and `interface` declarations. The rule is one sentence: default to `type` for everything, switch to `interface` when you specifically want declaration merging or are authoring a public API meant to be extended by consumers. Most TypeScript style debates ("type vs interface") are resolved by this single distinction — both work for almost all cases, with a small set of features where one beats the other.
+
+  ## Both express object shapes; the difference is mechanical
+
+  Both `type` and `interface` can describe object shapes:
+
+  ```ts
+  type User = {
+    id: number;
+    name: string;
+  };
+
+  interface User {
+    id: number;
+    name: string;
+  }
+  ```
+
+  These are interchangeable for the consumer — function signatures, generic constraints, return types all accept either. The difference is in what the *declaration form* itself supports.
+
+  Three meaningful differences:
+
+  - **Declaration merging.** `interface` declarations with the same name in the same scope merge their members. `type` aliases with the same name in the same scope are an error.
+  - **Computed/conditional/union types.** `type` can express unions, intersections, mapped types, conditional types, template literals. `interface` cannot.
+  - **Tooltips and error messages.** Tools tend to display `interface User` more cleanly in tooltips than equivalent `type User`. Often a wash, occasionally noticeable.
+
+  Performance differences exist but are usually irrelevant for application code. They matter at the scale of compiler-perf-sensitive type-heavy libraries.
+
+  ## When `type` is right (default)
+
+  Use `type` for:
+
+  - **Unions and discriminated unions.** `type Result = Success | Failure`. Interface cannot do this.
+  - **Mapped types and conditional types.** `type Readonly<T> = { readonly [K in keyof T]: T[K] }`. Interface cannot do this.
+  - **Function types.** `type Handler = (event: Event) => void` is cleaner than the equivalent interface.
+  - **Tuples.** `type Pair = [string, number]`. Interface cannot do this.
+  - **Aliases for primitives, literals, template literals.** `type UserId = number & { __brand: "UserId" }`.
+  - **Anywhere you do not specifically need declaration merging.**
+
+  Default to `type`. The flexibility (unions, mapped, conditional) covers more cases than `interface`'s features.
+
+  ## When `interface` is right (specific)
+
+  Use `interface` for:
+
+  - **Declaration merging across files.** Two `interface User { ... }` declarations merge. Useful for module augmentation: extending a library's types from a consumer module. The most common real use case.
+  - **Public APIs meant to be extended.** Consumers can add fields with module augmentation. If your library exposes types that users will extend, use interface.
+  - **Class shapes.** `class Foo implements MyInterface` is conventional with `interface`. Using `type` works but reads less idiomatically.
+
+  If you find yourself reaching for declaration merging or class implementation, use interface. Otherwise, default to type.
+
+  ## Declaration merging in practice
+
+  Module augmentation is the canonical use of declaration merging:
+
+  ```ts
+  // a third-party library
+  declare module "express" {
+    interface Request {
+      user?: User;
+    }
+  }
+  ```
+
+  Inside the project, every `Request` from express now has the optional `user` field. This works because `Request` was declared as an `interface` in `@types/express`. If it had been declared as a `type`, augmentation would not be possible.
+
+  This pattern is why public-API types tend to be interfaces in idiomatic TypeScript: it lets consumers extend them without forking. If your library uses `type` aliases for everything, consumers cannot augment.
+
+  ## Structural typing — both share the same semantics
+
+  TypeScript is structurally typed: a value is assignable to a type if its shape matches, regardless of nominal identity. This applies equally to `type` and `interface`:
+
+  ```ts
+  interface Point { x: number; y: number; }
+  type Vec2 = { x: number; y: number; };
+
+  const p: Point = { x: 1, y: 2 };
+  const v: Vec2 = p;  // OK — shapes match, even though one is interface, one is type
+  ```
+
+  This is the foundation of TypeScript's flexibility but also a frequent source of confusion for engineers coming from nominally-typed languages (Java, C#). Two types with the same shape are the same type, full stop.
+
+  When you specifically want nominal typing — a `UserId` distinct from a plain `number` — use a branded intersection:
+
+  ```ts
+  type UserId = number & { __brand: "UserId" };
+  ```
+
+  The `__brand` field exists only at the type level and never at runtime. The intersection makes a plain `number` no longer assignable to `UserId` without an explicit cast.
+
+  ## `readonly` and immutability
+
+  Both `type` and `interface` support `readonly` field modifiers:
+
+  ```ts
+  interface User {
+    readonly id: number;
+    name: string;  // mutable
+  }
+
+  type Config = {
+    readonly endpoint: string;
+  };
+  ```
+
+  `readonly` is a compile-time check; nothing at runtime prevents mutation. The check catches reassignment but does not catch deep mutation: `obj.list.push(x)` is allowed even if `list` is `readonly`. Use `Readonly<T>` (the utility type) for shallow read-only; use `DeepReadonly<T>` (often hand-written or from `type-fest`) for deep.
+
+  Pair `readonly` arrays with `ReadonlyArray<T>` or `readonly T[]`. The latter is shorter and idiomatic.
+
+  ## Naming conventions
+
+  - **PascalCase for both `type` and `interface` names.** `User`, `OrderId`, `ApiResponse`.
+  - **No `I` prefix.** `IUser` is a C# convention that TypeScript style explicitly rejects. `User` is correct; `IUser` is not.
+  - **Suffix conventions for variants** are useful: `UserPayload` (API input), `UserRecord` (DB row), `UserView` (UI shape). Be consistent within a project.
+  - **Avoid `Type` suffix.** `UserType` is redundant — `User` is already a type. Exception: when distinguishing from a class `User` and the type that describes its shape; in TypeScript this rarely arises.
+
+  ## Anti-patterns
+
+  - **Using `interface` for unions.** `interface` cannot express `A | B`. Use `type`.
+  - **Using `type` for everything in a public library.** Consumers cannot augment. Use `interface` for public types meant to be extensible.
+  - **Mixing both styles inconsistently within one module.** Pick one default per project; switch only when the case demands the specific feature.
+  - **`I`-prefix on interface names.** Non-idiomatic; rejected by the official handbook style.
+  - **`type Something = SomethingElse`.** Re-aliasing without changing anything. Either rename in place or delete the alias.
+  - **Overusing branded types.** Branded primitives (`type UserId = number & { __brand: ... }`) are valuable for IDs that should not interchange; using them everywhere creates ceremony without benefit.
+  - **`extends` chains spanning many interfaces deeply.** Five-level interface inheritance is hard to reason about. Composition (intersections in `type`) is often clearer.
+
+  ## When to switch from one to the other
+
+  Migration tactics:
+
+  - **Library author shipping types as `type` and getting "I cannot augment your types" complaints.** Switch the public-API types to `interface`. Internal types can stay `type`.
+  - **Application code with `interface UserPayload` but a need for unions.** Switch to `type` and define `type UserPayload = NewUserPayload | UpdateUserPayload | ...`.
+  - **Class with `interface` describing shape, but the shape includes computed types.** Switch to `type`, drop `implements` if the class structure is incompatible.
+
+  Switching is mechanical and rarely breaks consumers, since both compile to the same structural type. Worth doing when the case demands.
+
+  ## Verification
+
+  - [ ] `type` is the default for new declarations; `interface` is used only for declaration merging or public extensible APIs.
+  - [ ] No `I`-prefix on interface names; PascalCase only.
+  - [ ] Unions, intersections, mapped types, conditional types, tuples use `type` (interface cannot express these).
+  - [ ] Module augmentation (e.g., extending Express's `Request` with custom fields) uses interface declaration merging.
+  - [ ] `readonly` is used for immutable fields; `ReadonlyArray<T>` or `readonly T[]` for immutable arrays.
+  - [ ] Branded types (`number & { __brand: ... }`) are used sparingly — only for IDs that must not interchange with raw primitives.
+  - [ ] No `Type` suffix on type names (`UserType` is redundant; `User` is correct).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # TypeScript Types vs Interfaces
+
+      TypeScript has two ways to name a type: `type` aliases and `interface` declarations. The rule is one sentence: default to `type` for everything, switch to `interface` when you specifically want declaration merging or are authoring a public API meant to be extended by consumers. Most TypeScript style debates ("type vs interface") are resolved by this single distinction — both work for almost all cases, with a small set of features where one beats the other.
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## Both express object shapes; the difference is mechanical
+
+      Both `type` and `interface` can describe object shapes:
+
+      ```ts
+      type User = {
+        id: number;
+        name: string;
+      };
+
+      interface User {
+        id: number;
+        name: string;
+      }
+      ```
+
+      These are interchangeable for the consumer — function signatures, generic constraints, return types all accept either. The difference is in what the *declaration form* itself supports.
+
+      Three meaningful differences:
+
+      - **Declaration merging.** `interface` declarations with the same name in the same scope merge their members. `type` aliases with the same name in the same scope are an error.
+      - **Computed/conditional/union types.** `type` can express unions, intersections, mapped types, conditional types, template literals. `interface` cannot.
+      - **Tooltips and error messages.** Tools tend to display `interface User` more cleanly in tooltips than equivalent `type User`. Often a wash, occasionally noticeable.
+
+      Performance differences exist but are usually irrelevant for application code. They matter at the scale of compiler-perf-sensitive type-heavy libraries.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## When `type` is right (default)
+
+      Use `type` for:
+
+      - **Unions and discriminated unions.** `type Result = Success | Failure`. Interface cannot do this.
+      - **Mapped types and conditional types.** `type Readonly<T> = { readonly [K in keyof T]: T[K] }`. Interface cannot do this.
+      - **Function types.** `type Handler = (event: Event) => void` is cleaner than the equivalent interface.
+      - **Tuples.** `type Pair = [string, number]`. Interface cannot do this.
+      - **Aliases for primitives, literals, template literals.** `type UserId = number & { __brand: "UserId" }`.
+      - **Anywhere you do not specifically need declaration merging.**
+
+      Default to `type`. The flexibility (unions, mapped, conditional) covers more cases than `interface`'s features.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## When `interface` is right (specific)
+
+      Use `interface` for:
+
+      - **Declaration merging across files.** Two `interface User { ... }` declarations merge. Useful for module augmentation: extending a library's types from a consumer module. The most common real use case.
+      - **Public APIs meant to be extended.** Consumers can add fields with module augmentation. If your library exposes types that users will extend, use interface.
+      - **Class shapes.** `class Foo implements MyInterface` is conventional with `interface`. Using `type` works but reads less idiomatically.
+
+      If you find yourself reaching for declaration merging or class implementation, use interface. Otherwise, default to type.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Declaration merging in practice
+
+      Module augmentation is the canonical use of declaration merging:
+
+      ```ts
+      // a third-party library
+      declare module "express" {
+        interface Request {
+          user?: User;
+        }
+      }
+      ```
+
+      Inside the project, every `Request` from express now has the optional `user` field. This works because `Request` was declared as an `interface` in `@types/express`. If it had been declared as a `type`, augmentation would not be possible.
+
+      This pattern is why public-API types tend to be interfaces in idiomatic TypeScript: it lets consumers extend them without forking. If your library uses `type` aliases for everything, consumers cannot augment.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Structural typing — both share the same semantics
+
+      TypeScript is structurally typed: a value is assignable to a type if its shape matches, regardless of nominal identity. This applies equally to `type` and `interface`:
+
+      ```ts
+      interface Point { x: number; y: number; }
+      type Vec2 = { x: number; y: number; };
+
+      const p: Point = { x: 1, y: 2 };
+      const v: Vec2 = p;  // OK — shapes match, even though one is interface, one is type
+      ```
+
+      This is the foundation of TypeScript's flexibility but also a frequent source of confusion for engineers coming from nominally-typed languages (Java, C#). Two types with the same shape are the same type, full stop.
+
+      When you specifically want nominal typing — a `UserId` distinct from a plain `number` — use a branded intersection:
+
+      ```ts
+      type UserId = number & { __brand: "UserId" };
+      ```
+
+      The `__brand` field exists only at the type level and never at runtime. The intersection makes a plain `number` no longer assignable to `UserId` without an explicit cast.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## `readonly` and immutability
+
+      Both `type` and `interface` support `readonly` field modifiers:
+
+      ```ts
+      interface User {
+        readonly id: number;
+        name: string;  // mutable
+      }
+
+      type Config = {
+        readonly endpoint: string;
+      };
+      ```
+
+      `readonly` is a compile-time check; nothing at runtime prevents mutation. The check catches reassignment but does not catch deep mutation: `obj.list.push(x)` is allowed even if `list` is `readonly`. Use `Readonly<T>` (the utility type) for shallow read-only; use `DeepReadonly<T>` (often hand-written or from `type-fest`) for deep.
+
+      Pair `readonly` arrays with `ReadonlyArray<T>` or `readonly T[]`. The latter is shorter and idiomatic.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Naming conventions
+
+      - **PascalCase for both `type` and `interface` names.** `User`, `OrderId`, `ApiResponse`.
+      - **No `I` prefix.** `IUser` is a C# convention that TypeScript style explicitly rejects. `User` is correct; `IUser` is not.
+      - **Suffix conventions for variants** are useful: `UserPayload` (API input), `UserRecord` (DB row), `UserView` (UI shape). Be consistent within a project.
+      - **Avoid `Type` suffix.** `UserType` is redundant — `User` is already a type. Exception: when distinguishing from a class `User` and the type that describes its shape; in TypeScript this rarely arises.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Using `interface` for unions.** `interface` cannot express `A | B`. Use `type`.
+      - **Using `type` for everything in a public library.** Consumers cannot augment. Use `interface` for public types meant to be extensible.
+      - **Mixing both styles inconsistently within one module.** Pick one default per project; switch only when the case demands the specific feature.
+      - **`I`-prefix on interface names.** Non-idiomatic; rejected by the official handbook style.
+      - **`type Something = SomethingElse`.** Re-aliasing without changing anything. Either rename in place or delete the alias.
+      - **Overusing branded types.** Branded primitives (`type UserId = number & { __brand: ... }`) are valuable for IDs that should not interchange; using them everywhere creates ceremony without benefit.
+      - **`extends` chains spanning many interfaces deeply.** Five-level interface inheritance is hard to reason about. Composition (intersections in `type`) is often clearer.
+
+  - sequence: 10
+    fragment_type: rationale
+    content: |
+      ## When to switch from one to the other
+
+      Migration tactics:
+
+      - **Library author shipping types as `type` and getting "I cannot augment your types" complaints.** Switch the public-API types to `interface`. Internal types can stay `type`.
+      - **Application code with `interface UserPayload` but a need for unions.** Switch to `type` and define `type UserPayload = NewUserPayload | UpdateUserPayload | ...`.
+      - **Class with `interface` describing shape, but the shape includes computed types.** Switch to `type`, drop `implements` if the class structure is incompatible.
+
+      Switching is mechanical and rarely breaks consumers, since both compile to the same structural type. Worth doing when the case demands.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `type` is the default for new declarations; `interface` is used only for declaration merging or public extensible APIs.
+      - [ ] No `I`-prefix on interface names; PascalCase only.
+      - [ ] Unions, intersections, mapped types, conditional types, tuples use `type` (interface cannot express these).
+      - [ ] Module augmentation (e.g., extending Express's `Request` with custom fields) uses interface declaration merging.
+      - [ ] `readonly` is used for immutable fields; `ReadonlyArray<T>` or `readonly T[]` for immutable arrays.
+      - [ ] Branded types (`number & { __brand: ... }`) are used sparingly — only for IDs that must not interchange with raw primitives.
+      - [ ] No `Type` suffix on type names (`UserType` is redundant; `User` is correct).
