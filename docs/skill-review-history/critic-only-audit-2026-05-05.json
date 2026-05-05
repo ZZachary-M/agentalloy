@@ -1,0 +1,52 @@
+[
+  {
+    "skill_id": "go-concurrency-and-context",
+    "verdict": "approve",
+    "summary": "All fragments are self\u2011contained, correctly typed, category\u2011fit, and have relevant tags; no blocking issues or dedup con"
+  },
+  {
+    "skill_id": "go-error-handling",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, categorically appropriate, and tags are relev"
+  },
+  {
+    "skill_id": "go-generics-and-types",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, and distinct from existing content."
+  },
+  {
+    "skill_id": "go-modules-and-dependencies",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, and the skill aligns with its category and ta"
+  },
+  {
+    "skill_id": "go-testing-idioms",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, and distinct from existing content."
+  },
+  {
+    "skill_id": "rust-ownership-and-borrowing",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, categorically appropriate, and tags are relev"
+  },
+  {
+    "skill_id": "rust-error-handling",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied: fragments are self\u2011contained, correctly typed, appropriately sized, and tags are relevant; n"
+  },
+  {
+    "skill_id": "rust-async-and-concurrency",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, categorically appropriate, and tags are relev"
+  },
+  {
+    "skill_id": "rust-cargo-and-features",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, categorically appropriate, and tags are relev"
+  },
+  {
+    "skill_id": "rust-testing-idioms",
+    "verdict": "approve",
+    "summary": "All criteria are satisfied; fragments are self\u2011contained, correctly typed, categorically appropriate, and tags are relev"
+  }
+]
