@@ -1,0 +1,181 @@
+skill_type: domain
+skill_id: dispatching-parallel-agents
+canonical_name: Dispatching Parallel Agents (When to Fan Out, When to Stay Sequential)
+category: design
+skill_class: domain
+domain_tags: [parallel-agent-dispatch, fan-out-fan-in, subagent-context-isolation, independent-tasks, shared-state-warning]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Claude Code Agent tool documentation https://docs.anthropic.com/en/docs/claude-code/sub-agents (verified 2026-05-04); internal review history on misfired parallel dispatches (shared-file-write conflicts, redundant searches across siblings); Claude Agent SDK guidance on subagent boundaries. Skill scope: when to fan out work to multiple agents in one message vs. keep it sequential, and how to brief each agent so the parallel run produces useful, non-redundant output; not workflow orchestration (covered in workflow packs), not single-agent prompt engineering (covered in claude-code pack).
+
+raw_prose: |
+  # Dispatching Parallel Agents
+
+  Dispatching parallel agents is the discipline of recognizing when a task splits cleanly into independent subtasks and fanning them out in one message so they execute concurrently. The rule is one sentence: parallelize only what shares no state and no sequential dependency — anything else runs sequentially. Most parallel dispatches that produced bad output broke this rule. Two agents wrote to the same file, three agents searched the same code with different keywords, or a downstream agent needed a result that an upstream sibling was still computing.
+
+  ## When parallel dispatch is the right shape
+
+  Parallel dispatch pays off when:
+
+  - **The subtasks are genuinely independent.** No subtask needs another subtask's output. No two subtasks write the same file. No subtask reads a file another subtask is editing.
+  - **There are at least two subtasks.** One subtask fanned out to one agent is just a delegation — no parallelism gain.
+  - **The subtasks justify the round-trip cost.** Agent dispatch has overhead — context briefing, tool result roundtrip, summary synthesis. Trivial subtasks (a one-line grep, a one-file read) are usually faster done inline.
+
+  Common shapes that fit:
+
+  - Independent research lookups: "summarize what's in path A" + "summarize what's in path B" + "find all callers of function C" — three separate read-only investigations.
+  - Independent codegen on disjoint files: "implement the API route in routes/users.ts" + "implement the migration in migrations/0042.sql" + "write tests in tests/users.test.ts" — three writes that do not collide.
+  - Cross-validation: "review this PR for bugs" + "review this PR for security" + "review this PR for performance" — three independent assessments of the same input.
+
+  ## When parallel dispatch is the wrong shape
+
+  Sequential is the right shape when:
+
+  - **One subtask depends on another's output.** "Find the auth function, then refactor it" cannot be parallelized — the refactor agent needs to know what to refactor.
+  - **The subtasks share writable state.** Two agents writing to the same file race-condition each other. The harness usually serializes the writes, but the *content* will be wrong: the second writer overwrites or merges incoherently.
+  - **The work is one search across one space.** "Find all uses of X" is one search, not three. Splitting into "find Y, find Z, find W" only helps if Y/Z/W are genuinely different searches.
+
+  ## How to fan out — one message, multiple tool calls
+
+  Parallel dispatch happens by emitting multiple Agent tool calls in a single response. The runtime executes them concurrently. Sequential calls (one Agent call, wait for the result, then a second Agent call) do not parallelize — they serialize.
+
+  Each agent runs in an isolated context. It does not see your conversation, sibling agent results, or earlier turns. You must brief each agent self-contained: state the goal, the inputs, the constraints, the expected output shape. Terse prompts like "research X" produce shallow generic work; pretend you are briefing a smart colleague who just walked into the room.
+
+  ## Briefing parallel agents
+
+  Each prompt must be self-contained. Specifically:
+
+  - **State what to do.** A goal, not a method ("audit Y for race conditions" beats "look at file Z line by line").
+  - **State what is already known or ruled out.** Without this, agents repeat work you already did.
+  - **State the expected output shape.** "Report a punch list, under 200 words" beats "tell me what you find" — without a shape, the agent returns an essay.
+  - **State the boundary.** What is in scope, what is out. Without it, agents drift into adjacent territory.
+
+  Identical prompts to multiple agents only make sense for cross-validation (you want N independent reads of the same input). For decomposed work, each prompt names a different slice.
+
+  ## After fan-out — synthesizing siblings
+
+  When the agents return, their summaries land in your context as separate tool results. Synthesize before reporting. The user does not want three separate reports; they want one answer that integrates the three.
+
+  Watch for contradictions between siblings. If two agents disagree, the parent must reconcile — usually by spot-checking the files in question rather than averaging the agents' confidences. Agent confidence is a poor signal; primary sources are better.
+
+  ## Anti-patterns
+
+  - **Fan out when sequential would do.** A single grep or single file-read does not need an agent. Use the direct tool.
+  - **Fan out without independence.** Two agents editing the same file. Two agents whose outputs the third agent needs. The result is corrupt or wasted.
+  - **Identical prompts where decomposition was needed.** Three agents told "research the auth system" produce three overlapping reports. Decompose into "auth at the route layer", "auth at the session layer", "auth at the token layer" so each agent has a slice.
+  - **Skipping the synthesis.** Pasting three agent summaries into the response without integrating them pushes the synthesis cost onto the user.
+  - **Briefing too thin.** "Investigate X" with no scope, no constraints, no output shape. The agent guesses, often wrong.
+
+  ## Parallel dispatch is not a substitute for understanding
+
+  An anti-pattern worth its own rule: do not delegate tasks you have not understood yourself. "Based on your findings, fix the bug" pushes synthesis onto the agent, which has less context than you do. Write prompts that prove you understood — name the file, the line, the specific change to make. The agent's job is execution against a clear contract, not architectural decision-making the parent should have done. The same rule applies after the agent returns: spot-check the diff or the report against the source files before accepting it. Agent summaries are claims about what the agent intended to do, not proofs of what it actually did. Trust but verify, especially when fanning out — three agents producing wrong-but-confident output can compound into an answer that looks well-supported but is structurally wrong.
+
+  ## Verification
+
+  - [ ] All parallel agents were dispatched in one message via multiple tool calls (not sequential calls awaiting each other).
+  - [ ] No two parallel agents write to the same file or share writable state.
+  - [ ] No parallel agent depends on another sibling's output (those would be sequential).
+  - [ ] Each prompt is self-contained: goal, known context, expected output shape, scope boundary.
+  - [ ] Sibling outputs were synthesized before reporting to the user (not pasted as three separate reports).
+  - [ ] The decision to dispatch (vs. inline) was justified by independence + sufficient task size, not reflex.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Dispatching Parallel Agents
+
+      Dispatching parallel agents is the discipline of recognizing when a task splits cleanly into independent subtasks and fanning them out in one message so they execute concurrently. The rule is one sentence: parallelize only what shares no state and no sequential dependency — anything else runs sequentially. Most parallel dispatches that produced bad output broke this rule. Two agents wrote to the same file, three agents searched the same code with different keywords, or a downstream agent needed a result that an upstream sibling was still computing.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## When parallel dispatch is the right shape
+
+      Parallel dispatch pays off when:
+
+      - **The subtasks are genuinely independent.** No subtask needs another subtask's output. No two subtasks write the same file. No subtask reads a file another subtask is editing.
+      - **There are at least two subtasks.** One subtask fanned out to one agent is just a delegation — no parallelism gain.
+      - **The subtasks justify the round-trip cost.** Agent dispatch has overhead — context briefing, tool result roundtrip, summary synthesis. Trivial subtasks (a one-line grep, a one-file read) are usually faster done inline.
+
+      Common shapes that fit:
+
+      - Independent research lookups: "summarize what's in path A" + "summarize what's in path B" + "find all callers of function C" — three separate read-only investigations.
+      - Independent codegen on disjoint files: "implement the API route in routes/users.ts" + "implement the migration in migrations/0042.sql" + "write tests in tests/users.test.ts" — three writes that do not collide.
+      - Cross-validation: "review this PR for bugs" + "review this PR for security" + "review this PR for performance" — three independent assessments of the same input.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## When parallel dispatch is the wrong shape
+
+      Sequential is the right shape when:
+
+      - **One subtask depends on another's output.** "Find the auth function, then refactor it" cannot be parallelized — the refactor agent needs to know what to refactor.
+      - **The subtasks share writable state.** Two agents writing to the same file race-condition each other. The harness usually serializes the writes, but the *content* will be wrong: the second writer overwrites or merges incoherently.
+      - **The work is one search across one space.** "Find all uses of X" is one search, not three. Splitting into "find Y, find Z, find W" only helps if Y/Z/W are genuinely different searches.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## How to fan out — one message, multiple tool calls
+
+      Parallel dispatch happens by emitting multiple Agent tool calls in a single response. The runtime executes them concurrently. Sequential calls (one Agent call, wait for the result, then a second Agent call) do not parallelize — they serialize.
+
+      Each agent runs in an isolated context. It does not see your conversation, sibling agent results, or earlier turns. You must brief each agent self-contained: state the goal, the inputs, the constraints, the expected output shape. Terse prompts like "research X" produce shallow generic work; pretend you are briefing a smart colleague who just walked into the room.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Briefing parallel agents
+
+      Each prompt must be self-contained. Specifically:
+
+      - **State what to do.** A goal, not a method ("audit Y for race conditions" beats "look at file Z line by line").
+      - **State what is already known or ruled out.** Without this, agents repeat work you already did.
+      - **State the expected output shape.** "Report a punch list, under 200 words" beats "tell me what you find" — without a shape, the agent returns an essay.
+      - **State the boundary.** What is in scope, what is out. Without it, agents drift into adjacent territory.
+
+      Identical prompts to multiple agents only make sense for cross-validation (you want N independent reads of the same input). For decomposed work, each prompt names a different slice.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## After fan-out — synthesizing siblings
+
+      When the agents return, their summaries land in your context as separate tool results. Synthesize before reporting. The user does not want three separate reports; they want one answer that integrates the three.
+
+      Watch for contradictions between siblings. If two agents disagree, the parent must reconcile — usually by spot-checking the files in question rather than averaging the agents' confidences. Agent confidence is a poor signal; primary sources are better.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Fan out when sequential would do.** A single grep or single file-read does not need an agent. Use the direct tool.
+      - **Fan out without independence.** Two agents editing the same file. Two agents whose outputs the third agent needs. The result is corrupt or wasted.
+      - **Identical prompts where decomposition was needed.** Three agents told "research the auth system" produce three overlapping reports. Decompose into "auth at the route layer", "auth at the session layer", "auth at the token layer" so each agent has a slice.
+      - **Skipping the synthesis.** Pasting three agent summaries into the response without integrating them pushes the synthesis cost onto the user.
+      - **Briefing too thin.** "Investigate X" with no scope, no constraints, no output shape. The agent guesses, often wrong.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Parallel dispatch is not a substitute for understanding
+
+      An anti-pattern worth its own rule: do not delegate tasks you have not understood yourself. "Based on your findings, fix the bug" pushes synthesis onto the agent, which has less context than you do. Write prompts that prove you understood — name the file, the line, the specific change to make. The agent's job is execution against a clear contract, not architectural decision-making the parent should have done. The same rule applies after the agent returns: spot-check the diff or the report against the source files before accepting it. Agent summaries are claims about what the agent intended to do, not proofs of what it actually did. Trust but verify, especially when fanning out — three agents producing wrong-but-confident output can compound into an answer that looks well-supported but is structurally wrong.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] All parallel agents were dispatched in one message via multiple tool calls (not sequential calls awaiting each other).
+      - [ ] No two parallel agents write to the same file or share writable state.
+      - [ ] No parallel agent depends on another sibling's output (those would be sequential).
+      - [ ] Each prompt is self-contained: goal, known context, expected output shape, scope boundary.
+      - [ ] Sibling outputs were synthesized before reporting to the user (not pasted as three separate reports).
+      - [ ] The decision to dispatch (vs. inline) was justified by independence + sufficient task size, not reflex.

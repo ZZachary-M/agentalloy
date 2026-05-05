@@ -1,0 +1,186 @@
+skill_type: domain
+skill_id: debugging-systematic
+canonical_name: Systematic Debugging (Hypothesis, Bisection, Reproduce)
+category: engineering
+skill_class: domain
+domain_tags: [reproduce-the-bug, hypothesis-driven, git-bisect, log-analysis, root-cause]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — git-bisect docs (https://git-scm.com/docs/git-bisect), curated/python.yaml `topics.error_handling_and_exceptions` for stdlib traceback handling, internal review history for "fix the symptom not the cause" failure modes. Skill scope: the systematic loop of reproduce → hypothesize → test → narrow; not language-specific debugger UX.
+
+raw_prose: |
+  # Systematic Debugging
+
+  Debugging is the search problem of finding the smallest change that explains the observed failure. It is a search, not a guess. The systematic loop is four steps: reproduce the bug deterministically, form a hypothesis about the cause, design a check that distinguishes the hypothesis from alternatives, run the check. The loop ends when the hypothesis is confirmed AND the fix has been validated against the original reproduction.
+
+  Skipping any step inflates total debugging time. Most "long-running mystery bugs" are bugs where step 1 (deterministic reproduction) was skipped — without a reliable reproduction, every fix is a guess and every "is it fixed?" is unanswerable.
+
+  ## Step 1 — Reproduce the bug deterministically
+
+  Before forming any hypothesis, get to a state where you can trigger the bug on demand. Random bugs that "happen sometimes" defeat hypothesis testing entirely; you cannot tell whether your last change fixed the bug or whether the bug was about to not happen anyway.
+
+  For deterministic-input bugs, write a failing test or a script that exercises the input. For timing-sensitive bugs, increase the trigger probability — add sleeps, run the failing path in a tight loop, or instrument the suspected race. For environmental bugs, capture the environment: dump env vars, package versions, OS, and the exact command. Reproductions in CI but not locally are a signal of environment drift; reproduce that environment locally before debugging.
+
+  If you cannot reproduce, you do not yet have a bug — you have a report. Spend more time on reproduction before any fix attempt.
+
+  ## Step 2 — Form a hypothesis
+
+  A hypothesis names a specific cause and predicts a specific observation. "Maybe the cache is stale" is not a hypothesis; "If the cache key includes the user_id, the second user's request returns the first user's data and I should see that in the response body" is a hypothesis.
+
+  Good hypotheses are falsifiable — there is a check that, if it returns the predicted result, makes the hypothesis more likely; if it returns a different result, makes the hypothesis less likely. Bad hypotheses survive every observation by adding caveats; that is a sign you are guessing, not searching.
+
+  Generate two or three hypotheses, not one. The first hypothesis is often the wrong one — having alternatives keeps you from anchoring on it.
+
+  ## Step 3 — Design a discriminating check
+
+  A check separates hypotheses. The strongest check returns one result if hypothesis A is true and a different result if hypothesis B is true. Weaker checks rule out one hypothesis without confirming another.
+
+  Concrete check shapes:
+
+  - **Print or log a value at a specific line.** "Is `user_id` set when this code runs?" — log it.
+  - **Add an assertion at a boundary.** "Is the response body the right shape leaving this function?" — `assert response['user_id'] == expected`.
+  - **Bisect via git.** "Did this start failing recently?" — `git bisect start; git bisect bad HEAD; git bisect good <last-known-good>`. Then run the reproduction at each commit and tell `git bisect` good or bad.
+  - **Disable layers.** "Is the bug in our code or the framework?" — replace the framework call with a stub; if the bug persists, the framework was not the cause.
+
+  Run the check, read the output, update beliefs. Then loop — most bugs require three to ten iterations.
+
+  ## Step 4 — Validate the fix against the reproduction
+
+  When you think you have the fix, do not commit yet. Re-run the original reproduction. The bug should be gone. Then re-run the test suite. The fix should not have broken anything else. Then write a new test that reproduces the bug — it should fail without your fix and pass with it. The test guards against regression.
+
+  If the fix makes the reproduction stop firing but you cannot explain why, you have not finished debugging. You have a workaround. Workarounds shipped without root cause come back as bigger bugs in three months.
+
+  ## Reading stack traces
+
+  A stack trace names the call chain. Read it from the top (most recent frame) but understand it from the bottom (entry point). The most recent frame names the line that exploded; the bottom-most frame names the call that started the chain. The bug is somewhere on that chain — usually in your own code, not the framework's.
+
+  Filter framework frames mentally. `django/core/handlers/wsgi.py:123` is rarely the bug; `myapp/views.py:45` calling into Django is more likely. Read your own frames first.
+
+  ## When the bug is not where the symptom is
+
+  Symptoms appear at the surface; causes hide deeper. A 500 error from `/api/users` may originate in a database connection pool, a config value, or a different request that left state behind. The hypothesis "the bug is in /api/users" is sometimes wrong.
+
+  Use blast-radius tools (GitNexus impact analysis, jcodemunch find_references) to widen the search past the surface. The bug is in the d=1 or d=2 dependency that recently changed, not in the file with the symptom.
+
+  ## Anti-patterns
+
+  - **Random changes until it works.** "I changed something and it works now" is not a fix; it is a temporary remission. Roll back the change and re-reproduce; if you cannot, you do not have a fix.
+  - **Skipping the reproduction step.** "I think I see what's wrong" without reproducing first is guess-driven, not hypothesis-driven. Do step 1.
+  - **Logging without a hypothesis.** Spraying log statements everywhere produces noise. One targeted log per hypothesis check produces signal.
+  - **Fixing the symptom.** Catching an exception and ignoring it is hiding the bug, not fixing it. The bug recurs as data corruption later.
+  - **Stopping at the first plausible cause.** Two bugs can produce the same symptom. Confirm the hypothesis fully before declaring done.
+
+  ## Verification
+
+  - [ ] You can reproduce the bug on demand. Name the exact command, input, or trigger.
+  - [ ] You wrote a hypothesis that names a specific cause and predicts a specific observation.
+  - [ ] You designed a check that distinguishes the hypothesis from at least one alternative.
+  - [ ] After applying the fix, the original reproduction no longer triggers the bug.
+  - [ ] After applying the fix, the full test suite still passes.
+  - [ ] A new regression test exists that fails without your fix and passes with it.
+
+  ## Sources (verified 2026-05-04)
+
+  - git-bisect: https://git-scm.com/docs/git-bisect
+  - Python traceback handling: https://docs.python.org/3.13/library/traceback.html
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Systematic Debugging
+
+      Debugging is the search problem of finding the smallest change that explains the observed failure. It is a search, not a guess. The systematic loop is four steps: reproduce the bug deterministically, form a hypothesis about the cause, design a check that distinguishes the hypothesis from alternatives, run the check. The loop ends when the hypothesis is confirmed AND the fix has been validated against the original reproduction.
+
+      Skipping any step inflates total debugging time. Most "long-running mystery bugs" are bugs where step 1 (deterministic reproduction) was skipped — without a reliable reproduction, every fix is a guess and every "is it fixed?" is unanswerable.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Step 1 — Reproduce the bug deterministically
+
+      Before forming any hypothesis, get to a state where you can trigger the bug on demand. Random bugs that "happen sometimes" defeat hypothesis testing entirely; you cannot tell whether your last change fixed the bug or whether the bug was about to not happen anyway.
+
+      For deterministic-input bugs, write a failing test or a script that exercises the input. For timing-sensitive bugs, increase the trigger probability — add sleeps, run the failing path in a tight loop, or instrument the suspected race. For environmental bugs, capture the environment: dump env vars, package versions, OS, and the exact command. Reproductions in CI but not locally are a signal of environment drift; reproduce that environment locally before debugging.
+
+      If you cannot reproduce, you do not yet have a bug — you have a report. Spend more time on reproduction before any fix attempt.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Step 2 — Form a hypothesis
+
+      A hypothesis names a specific cause and predicts a specific observation. "Maybe the cache is stale" is not a hypothesis; "If the cache key includes the user_id, the second user's request returns the first user's data and I should see that in the response body" is a hypothesis.
+
+      Good hypotheses are falsifiable — there is a check that, if it returns the predicted result, makes the hypothesis more likely; if it returns a different result, makes the hypothesis less likely. Bad hypotheses survive every observation by adding caveats; that is a sign you are guessing, not searching.
+
+      Generate two or three hypotheses, not one. The first hypothesis is often the wrong one — having alternatives keeps you from anchoring on it.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Step 3 — Design a discriminating check
+
+      A check separates hypotheses. The strongest check returns one result if hypothesis A is true and a different result if hypothesis B is true. Weaker checks rule out one hypothesis without confirming another.
+
+      Concrete check shapes:
+
+      - **Print or log a value at a specific line.** "Is `user_id` set when this code runs?" — log it.
+      - **Add an assertion at a boundary.** "Is the response body the right shape leaving this function?" — `assert response['user_id'] == expected`.
+      - **Bisect via git.** "Did this start failing recently?" — `git bisect start; git bisect bad HEAD; git bisect good <last-known-good>`. Then run the reproduction at each commit and tell `git bisect` good or bad.
+      - **Disable layers.** "Is the bug in our code or the framework?" — replace the framework call with a stub; if the bug persists, the framework was not the cause.
+
+      Run the check, read the output, update beliefs. Then loop — most bugs require three to ten iterations.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Step 4 — Validate the fix against the reproduction
+
+      When you think you have the fix, do not commit yet. Re-run the original reproduction. The bug should be gone. Then re-run the test suite. The fix should not have broken anything else. Then write a new test that reproduces the bug — it should fail without your fix and pass with it. The test guards against regression.
+
+      If the fix makes the reproduction stop firing but you cannot explain why, you have not finished debugging. You have a workaround. Workarounds shipped without root cause come back as bigger bugs in three months.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Reading stack traces
+
+      A stack trace names the call chain. Read it from the top (most recent frame) but understand it from the bottom (entry point). The most recent frame names the line that exploded; the bottom-most frame names the call that started the chain. The bug is somewhere on that chain — usually in your own code, not the framework's.
+
+      Filter framework frames mentally. `django/core/handlers/wsgi.py:123` is rarely the bug; `myapp/views.py:45` calling into Django is more likely. Read your own frames first.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## When the bug is not where the symptom is
+
+      Symptoms appear at the surface; causes hide deeper. A 500 error from `/api/users` may originate in a database connection pool, a config value, or a different request that left state behind. The hypothesis "the bug is in /api/users" is sometimes wrong.
+
+      Use blast-radius tools (GitNexus impact analysis, jcodemunch find_references) to widen the search past the surface. The bug is in the d=1 or d=2 dependency that recently changed, not in the file with the symptom.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Random changes until it works.** "I changed something and it works now" is not a fix; it is a temporary remission. Roll back the change and re-reproduce; if you cannot, you do not have a fix.
+      - **Skipping the reproduction step.** "I think I see what's wrong" without reproducing first is guess-driven, not hypothesis-driven. Do step 1.
+      - **Logging without a hypothesis.** Spraying log statements everywhere produces noise. One targeted log per hypothesis check produces signal.
+      - **Fixing the symptom.** Catching an exception and ignoring it is hiding the bug, not fixing it. The bug recurs as data corruption later.
+      - **Stopping at the first plausible cause.** Two bugs can produce the same symptom. Confirm the hypothesis fully before declaring done.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] You can reproduce the bug on demand. Name the exact command, input, or trigger.
+      - [ ] You wrote a hypothesis that names a specific cause and predicts a specific observation.
+      - [ ] You designed a check that distinguishes the hypothesis from at least one alternative.
+      - [ ] After applying the fix, the original reproduction no longer triggers the bug.
+      - [ ] After applying the fix, the full test suite still passes.
+      - [ ] A new regression test exists that fails without your fix and passes with it.

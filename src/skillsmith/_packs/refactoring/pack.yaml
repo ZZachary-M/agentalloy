@@ -1,0 +1,24 @@
+name: refactoring
+version: 1.0.0
+tier: foundation
+description: Refactoring practices that span stacks — when to refactor, how to refactor safely, the most common moves, and when to stop. Always installed.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: [core, engineering]
+skills:
+  - skill_id: refactoring-when-and-why
+    file: refactoring-when-and-why.yaml
+    fragment_count: 10
+  - skill_id: refactoring-safely-with-tests
+    file: refactoring-safely-with-tests.yaml
+    fragment_count: 10
+  - skill_id: common-refactoring-moves
+    file: common-refactoring-moves.yaml
+    fragment_count: 11
+  - skill_id: when-to-stop-refactoring
+    file: when-to-stop-refactoring.yaml
+    fragment_count: 10

@@ -1,0 +1,209 @@
+skill_type: domain
+skill_id: handling-technical-debt
+canonical_name: Handling Technical Debt (Recording, Triaging, Paying Down)
+category: design
+skill_class: domain
+domain_tags: [tech-debt, fowler-quadrant, debt-ledger, prudent-vs-reckless, repayment-cadence]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Ward Cunningham's original debt-metaphor talk https://www.youtube.com/watch?v=pqeJFYwnkjE (verified 2026-05-04 via cached transcript); Martin Fowler's "TechnicalDebtQuadrant" https://martinfowler.com/bliki/TechnicalDebtQuadrant.html (verified 2026-05-04 against fixtures/upstream/curated/fowler.yaml topic `tech_debt`); internal review history on debt-tagged TODOs that aged for years untouched. Skill scope: how to record, triage, and pay down deliberate and accidental tech debt; not refactoring techniques (covered in refactoring pack), not initial design decisions (covered in ADRs).
+
+raw_prose: |
+  # Handling Technical Debt
+
+  Technical debt is the cost a team accepts now (a shortcut, a missing test, an outdated dep) in exchange for shipping faster. The rule is one sentence: debt is recorded explicitly, triaged honestly, and paid down on a cadence — not left to compound silently. Most codebases that became unmaintainable failed this rule. They took on debt without recording it, the debt accreted into a slow rot, and by the time the team noticed, the cost of paying it down was higher than the cost of the original work would have been.
+
+  ## Debt is taken on, not just accumulated
+
+  Cunningham's original metaphor was specific: debt is what you owe when you ship code that does not yet match your understanding of the problem. You ship anyway because shipping has value; the debt is the cost of going back and aligning the code once you understand more. That is **prudent debt**, taken on deliberately because shipping now is worth the cost of revisiting later.
+
+  Fowler extended this with a quadrant — debt has two axes, *deliberate vs inadvertent* and *prudent vs reckless*:
+
+  - **Deliberate + prudent.** "We must ship now and deal with the consequences." The healthy form. Recorded, scheduled to repay.
+  - **Deliberate + reckless.** "We do not have time for design." Avoid. The repayment cost compounds fast.
+  - **Inadvertent + prudent.** "Now we know how we should have done it." Common, especially after learning. Record and revisit.
+  - **Inadvertent + reckless.** "What's layering?" Junior teams without supervision. The fix is mentorship, not just refactoring.
+
+  Most healthy teams accept the first and third quadrants and avoid the second and fourth. The line is not "no debt" — that is impossible — it is "no untracked debt."
+
+  ## Record debt at the moment it is taken on
+
+  The single biggest failure mode is taking on debt and not writing it down. Six months later, no one remembers what was deferred or why. The fix is mechanical: when a shortcut is taken, add an entry to the debt ledger before merging.
+
+  Forms of debt ledger that work:
+
+  - **Tracker tickets.** A "tech-debt" label or a dedicated "tech-debt" project. Searchable, prioritizable, attachable to PRs.
+  - **TODO comments with a tracker reference.** `// TODO(LIN-1234): repay this once X ships`. The reference is mandatory; bare `TODO` aged out of usefulness years ago.
+  - **A `DEBT.md` or wiki page.** Useful for high-level debt that does not map to one file. Update it when items are added or paid down.
+
+  The format matters less than the discipline. Pick one and use it consistently. A mix of unlinked TODOs, abandoned tickets, and mental lists is no ledger.
+
+  ## What to record
+
+  Each debt entry needs five fields:
+
+  - **What.** A specific description of the shortcut: "schema migration uses `ALTER TABLE` without backfill batching".
+  - **Why it was taken.** "Migration was needed before the launch and we did not have time to build a backfill helper."
+  - **Cost of leaving it.** What gets harder, and how soon. "Will block the next 1M-row migration; needed by Q3."
+  - **Cost of paying it down.** Rough size of the repayment work. "About one week of work plus DBA review."
+  - **Trigger.** What event makes it urgent. "When we exceed 500K rows in this table" or "before the next major schema change."
+
+  Without the trigger, the entry sits in the ledger forever — there is no signal to act. With the trigger, the team has a clear point at which deferring further is no longer prudent.
+
+  ## Triage on a schedule
+
+  Walk the debt ledger on a fixed cadence — monthly is common. The walk has three outputs per item:
+
+  - **Pay it down now.** Schedule the work in the next sprint or release.
+  - **Defer with a new trigger.** Re-justify why deferring is still prudent, update the trigger.
+  - **Accept it permanently.** Some debt does not need repaying — the system will be retired before the cost is felt. Mark the entry "accepted" and stop walking it.
+
+  Items that get re-deferred more than two or three times in a row are signaling — the team keeps saying "later" because the actual cost of repayment is unclear. Spike on the cost; convert "we should fix this someday" into "this is two weeks of work, scheduled for sprint N+3" or "this is six months of work, accepted as permanent."
+
+  ## Pay down debt on the same cadence as features
+
+  Treat repayment as work, not heroism. A typical pattern is to allocate ~10–20% of each sprint to debt repayment. Smaller than 10% means debt accretes faster than it is paid; larger than 20% slows feature work enough that stakeholders notice and push back.
+
+  Repayment work belongs in the same backlog as features, with the same review and quality bar. "Quick refactor" PRs that do not have tests are how debt repayment introduces new debt. Write tests for the refactored code; otherwise the repayment is not durable.
+
+  Some debt is best paid as part of related feature work. Renaming a module is cheaper if you are already touching it for a feature. Schedule the repayment to ride along when the cost of payment is low.
+
+  ## Anti-patterns
+
+  - **Untracked debt.** Shortcuts taken without a ledger entry. The debt is invisible until it surfaces as a bug or a slowdown.
+  - **TODO without a tracker.** `// TODO: fix this` with no link. Greppable but unactionable; aged out of usefulness.
+  - **"We'll fix it later" as a plan.** Without a trigger and a rough cost, "later" never arrives.
+  - **Reckless deliberate debt.** "We do not have time for design" while no actual deadline exists. The shortcut is taken because design is hard, not because shipping is urgent. Slow down.
+  - **Big-bang repayment.** Stopping all feature work to pay down a year of debt at once. Usually fails — the team loses momentum and the repayment ships incomplete.
+  - **Repayment without tests.** Refactoring without a regression suite re-creates debt instead of paying it down.
+  - **Endless re-deferral.** An item that gets deferred at every monthly walk is signaling. Either spike on the cost or accept it permanently.
+
+  ## Communicate debt up
+
+  Tech debt is a stakeholder conversation, not a private engineering matter. Translate debt into product terms when reporting up: "the migration debt blocks the next quarter's analytics work" or "the auth-layer debt adds one week to every feature touching login." Without translation, debt looks like engineering grumbling and gets deprioritized indefinitely.
+
+  When negotiating timelines, name the debt explicitly. "We can ship in two weeks if we take on debt-X (tracked as LIN-1234)" makes the trade-off visible. The stakeholder accepts the debt knowingly, and the team has a record to point at when the repayment work is scheduled.
+
+  ## Verification
+
+  - [ ] Every shortcut taken during implementation has a corresponding ledger entry (tracker ticket, TODO with tracker link, or DEBT.md item) created before the PR merges.
+  - [ ] Each debt entry includes: what, why taken, cost of leaving, cost of paying, trigger that makes it urgent.
+  - [ ] The team walks the debt ledger on a fixed cadence (monthly is typical) and each item gets one of three outcomes: pay down, defer with new trigger, accept permanently.
+  - [ ] Items deferred three or more times in a row are spike-investigated to convert "later" into a concrete cost and date.
+  - [ ] Repayment work is scheduled in the same backlog as features with the same review and test bar; no untested "quick refactor" repayments.
+  - [ ] Significant debt is communicated up to stakeholders in product terms, not engineering jargon.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Handling Technical Debt
+
+      Technical debt is the cost a team accepts now (a shortcut, a missing test, an outdated dep) in exchange for shipping faster. The rule is one sentence: debt is recorded explicitly, triaged honestly, and paid down on a cadence — not left to compound silently. Most codebases that became unmaintainable failed this rule. They took on debt without recording it, the debt accreted into a slow rot, and by the time the team noticed, the cost of paying it down was higher than the cost of the original work would have been.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Debt is taken on, not just accumulated
+
+      Cunningham's original metaphor was specific: debt is what you owe when you ship code that does not yet match your understanding of the problem. You ship anyway because shipping has value; the debt is the cost of going back and aligning the code once you understand more. That is **prudent debt**, taken on deliberately because shipping now is worth the cost of revisiting later.
+
+      Fowler extended this with a quadrant — debt has two axes, *deliberate vs inadvertent* and *prudent vs reckless*:
+
+      - **Deliberate + prudent.** "We must ship now and deal with the consequences." The healthy form. Recorded, scheduled to repay.
+      - **Deliberate + reckless.** "We do not have time for design." Avoid. The repayment cost compounds fast.
+      - **Inadvertent + prudent.** "Now we know how we should have done it." Common, especially after learning. Record and revisit.
+      - **Inadvertent + reckless.** "What's layering?" Junior teams without supervision. The fix is mentorship, not just refactoring.
+
+      Most healthy teams accept the first and third quadrants and avoid the second and fourth. The line is not "no debt" — that is impossible — it is "no untracked debt."
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Record debt at the moment it is taken on
+
+      The single biggest failure mode is taking on debt and not writing it down. Six months later, no one remembers what was deferred or why. The fix is mechanical: when a shortcut is taken, add an entry to the debt ledger before merging.
+
+      Forms of debt ledger that work:
+
+      - **Tracker tickets.** A "tech-debt" label or a dedicated "tech-debt" project. Searchable, prioritizable, attachable to PRs.
+      - **TODO comments with a tracker reference.** `// TODO(LIN-1234): repay this once X ships`. The reference is mandatory; bare `TODO` aged out of usefulness years ago.
+      - **A `DEBT.md` or wiki page.** Useful for high-level debt that does not map to one file. Update it when items are added or paid down.
+
+      The format matters less than the discipline. Pick one and use it consistently. A mix of unlinked TODOs, abandoned tickets, and mental lists is no ledger.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## What to record
+
+      Each debt entry needs five fields:
+
+      - **What.** A specific description of the shortcut: "schema migration uses `ALTER TABLE` without backfill batching".
+      - **Why it was taken.** "Migration was needed before the launch and we did not have time to build a backfill helper."
+      - **Cost of leaving it.** What gets harder, and how soon. "Will block the next 1M-row migration; needed by Q3."
+      - **Cost of paying it down.** Rough size of the repayment work. "About one week of work plus DBA review."
+      - **Trigger.** What event makes it urgent. "When we exceed 500K rows in this table" or "before the next major schema change."
+
+      Without the trigger, the entry sits in the ledger forever — there is no signal to act. With the trigger, the team has a clear point at which deferring further is no longer prudent.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Triage on a schedule
+
+      Walk the debt ledger on a fixed cadence — monthly is common. The walk has three outputs per item:
+
+      - **Pay it down now.** Schedule the work in the next sprint or release.
+      - **Defer with a new trigger.** Re-justify why deferring is still prudent, update the trigger.
+      - **Accept it permanently.** Some debt does not need repaying — the system will be retired before the cost is felt. Mark the entry "accepted" and stop walking it.
+
+      Items that get re-deferred more than two or three times in a row are signaling — the team keeps saying "later" because the actual cost of repayment is unclear. Spike on the cost; convert "we should fix this someday" into "this is two weeks of work, scheduled for sprint N+3" or "this is six months of work, accepted as permanent."
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Pay down debt on the same cadence as features
+
+      Treat repayment as work, not heroism. A typical pattern is to allocate ~10–20% of each sprint to debt repayment. Smaller than 10% means debt accretes faster than it is paid; larger than 20% slows feature work enough that stakeholders notice and push back.
+
+      Repayment work belongs in the same backlog as features, with the same review and quality bar. "Quick refactor" PRs that do not have tests are how debt repayment introduces new debt. Write tests for the refactored code; otherwise the repayment is not durable.
+
+      Some debt is best paid as part of related feature work. Renaming a module is cheaper if you are already touching it for a feature. Schedule the repayment to ride along when the cost of payment is low.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Untracked debt.** Shortcuts taken without a ledger entry. The debt is invisible until it surfaces as a bug or a slowdown.
+      - **TODO without a tracker.** `// TODO: fix this` with no link. Greppable but unactionable; aged out of usefulness.
+      - **"We'll fix it later" as a plan.** Without a trigger and a rough cost, "later" never arrives.
+      - **Reckless deliberate debt.** "We do not have time for design" while no actual deadline exists. The shortcut is taken because design is hard, not because shipping is urgent. Slow down.
+      - **Big-bang repayment.** Stopping all feature work to pay down a year of debt at once. Usually fails — the team loses momentum and the repayment ships incomplete.
+      - **Repayment without tests.** Refactoring without a regression suite re-creates debt instead of paying it down.
+      - **Endless re-deferral.** An item that gets deferred at every monthly walk is signaling. Either spike on the cost or accept it permanently.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Communicate debt up
+
+      Tech debt is a stakeholder conversation, not a private engineering matter. Translate debt into product terms when reporting up: "the migration debt blocks the next quarter's analytics work" or "the auth-layer debt adds one week to every feature touching login." Without translation, debt looks like engineering grumbling and gets deprioritized indefinitely.
+
+      When negotiating timelines, name the debt explicitly. "We can ship in two weeks if we take on debt-X (tracked as LIN-1234)" makes the trade-off visible. The stakeholder accepts the debt knowingly, and the team has a record to point at when the repayment work is scheduled.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Every shortcut taken during implementation has a corresponding ledger entry (tracker ticket, TODO with tracker link, or DEBT.md item) created before the PR merges.
+      - [ ] Each debt entry includes: what, why taken, cost of leaving, cost of paying, trigger that makes it urgent.
+      - [ ] The team walks the debt ledger on a fixed cadence (monthly is typical) and each item gets one of three outcomes: pay down, defer with new trigger, accept permanently.
+      - [ ] Items deferred three or more times in a row are spike-investigated to convert "later" into a concrete cost and date.
+      - [ ] Repayment work is scheduled in the same backlog as features with the same review and test bar; no untested "quick refactor" repayments.
+      - [ ] Significant debt is communicated up to stakeholders in product terms, not engineering jargon.

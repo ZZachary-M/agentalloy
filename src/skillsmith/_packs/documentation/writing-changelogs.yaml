@@ -1,0 +1,244 @@
+skill_type: domain
+skill_id: writing-changelogs
+canonical_name: Writing Changelogs (Keep a Changelog and Semver Linkage)
+category: design
+skill_class: domain
+domain_tags: [keep-a-changelog, version-bump-mapping, breaking-changes, unreleased-section, audience-is-the-user]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Keep a Changelog v1.1.0 https://keepachangelog.com/en/1.1.0/ (verified 2026-05-04 against fixtures/upstream/curated/changelog.yaml topic `keep_a_changelog`); semver spec https://semver.org/; conventional commits spec https://www.conventionalcommits.org/en/v1.0.0/ for the auto-generation pattern. Skill scope: writing and maintaining a changelog — what to record, how to group, how to align with semver; not commit message style (covered in core/git-workflow), not release notes for marketing (covered in workflow/release).
+
+raw_prose: |
+  # Writing Changelogs
+
+  A changelog is the human-readable record of what changed between releases, written for the user — not the developer. The rule is one sentence: every release has a dated section, every change is grouped by kind, and the changelog is a deliverable, not a side effect. Most projects whose changelogs decayed into uselessness failed this rule — the changelog was auto-generated from raw commits (so users saw "fix: bump deps"), it conflated user-visible behavior with internal refactors (so users could not tell which bumps mattered), or it was updated by exception instead of by discipline (so the unreleased section was always wrong).
+
+  ## Audience is the user, not the developer
+
+  A changelog is written for whoever depends on this software — the application developer using your library, the operator deploying your service, the end user installing your CLI. They want to know: what should I do differently when I upgrade?
+
+  This is the line between a changelog and a commit log. A commit log records every change for the project's developers. A changelog records the changes that affect a user. "Refactored internal cache" is a commit; it is not a changelog entry unless it changed behavior the user can observe.
+
+  Writing for the user means using the user's vocabulary. "Updated the authorization middleware" is internal; "JWT tokens now expire after 24 hours by default (was 1 hour)" is user-facing. Translate before writing.
+
+  ## Standard structure: Keep a Changelog
+
+  The Keep a Changelog format is the de facto standard. Every release section has a date, a version, and changes grouped under fixed categories:
+
+  - **Added.** New features visible to users.
+  - **Changed.** Changes to existing functionality. The most important category — these are the ones that may need user action.
+  - **Deprecated.** Features still present but slated for removal in a future release.
+  - **Removed.** Features that are gone.
+  - **Fixed.** Bug fixes.
+  - **Security.** Security-related changes. Called out separately because users prioritize security upgrades differently.
+
+  An `## [Unreleased]` section at the top accumulates changes destined for the next release. When a release ships, that section is renamed with the version + date and a fresh `## [Unreleased]` is started.
+
+  Keep entries terse — one line per change is the floor, two or three for changes that need explanation. Long discussions belong in linked issues or PRs.
+
+  ## Link to semver
+
+  The version number on each section should follow semver: `MAJOR.MINOR.PATCH`.
+
+  - **Patch (`1.2.X`).** Backward-compatible bug fixes. Users should be able to upgrade with no action.
+  - **Minor (`1.X.0`).** Backward-compatible feature additions. Users may want to read the release notes for new features but should not need to change anything.
+  - **Major (`X.0.0`).** Breaking changes. Users must read the migration guide and change something.
+
+  The mapping between changelog category and semver bump:
+
+  - `Added` → minor (or patch for trivial additions).
+  - `Changed` (breaking) → major. `Changed` (non-breaking, behavioral) → minor.
+  - `Deprecated` → minor (the deprecation warning itself is non-breaking; removal is the breaking change).
+  - `Removed` → major.
+  - `Fixed` → patch (most cases). If the fix changes long-standing observable behavior, it can be a minor or major.
+  - `Security` → patch usually, minor if the fix changes behavior.
+
+  Mismatches are a smell. Bumping major because of one `Fixed` entry suggests the fix was actually a behavior change that needed `Changed` framing.
+
+  ## Highlight breaking changes
+
+  Breaking changes deserve more than a bullet under `Changed`. The changelog should:
+
+  - **Mark them clearly.** `**BREAKING:**` prefix or a separate "Breaking Changes" subsection at the top of the version.
+  - **Say what to do.** "Replace `client.send(x, y)` with `client.send({input: x, options: y})`."
+  - **Link to the migration guide.** A longer document showing how to update typical call sites.
+
+  Breaking changes that are mentioned only in passing are how teams ship a major version that nobody upgrades to. The changelog is the visible surface; if the migration is hidden, the version dies.
+
+  ## Update the changelog in the same PR as the change
+
+  The single biggest discipline failure is "update the changelog at release time." The release person does not remember every change, the unreleased section is always partial, and entries get missed. The fix is mechanical: update the changelog as part of the PR that makes the change. PR template includes a `Changelog:` field; reviewers flag missing entries.
+
+  This is the same pattern as updating tests, updating the README, and updating ADRs in the same PR as the code. The principle: the smallest unit that is shippable is the smallest unit that includes its docs.
+
+  ## Generated changelogs are a starting point, not a destination
+
+  Tools like `release-please`, `changesets`, `git-cliff`, or conventional-commits-driven generators can produce a draft changelog from commit messages. They are a useful first pass, but the output needs editing.
+
+  Specifically, generated changelogs over-include — every `chore: bump deps` lands in the user-facing log, drowning the entries that matter. Edit the draft to:
+
+  - **Remove non-user-facing entries.** Internal refactors, dependency bumps users cannot see, CI-only changes.
+  - **Reword for the user.** Translate developer terms into user terms.
+  - **Group breaking changes prominently.** The generator may not separate them.
+
+  The changelog with editing is dramatically more useful than the raw generated output. Treat the generator as a stenographer, not a writer.
+
+  ## Anti-patterns
+
+  - **Changelog as commit log.** Every commit dumped into the changelog. Users cannot find the entries that matter.
+  - **No `Unreleased` section.** Forces release-time scrambling to remember what changed.
+  - **Mixing user-visible and internal changes.** "Added retry logic / Refactored connection pool / Updated CI." The user does not care about the second two.
+  - **Vague entries.** "Improved performance." How? By how much? On what surface? "Reduced p99 list endpoint latency from 200ms to 80ms" is informative.
+  - **Skipping the date.** "v2.3.0 — Q3 2026" is not a date. Use `YYYY-MM-DD`.
+  - **Hidden breaking changes.** A breaking change buried under `Changed` without the `BREAKING:` flag. The user finds out by their service crashing.
+  - **No changelog at all.** Users must compare git tags by hand. Adoption suffers.
+
+  ## Linking entries to evidence
+
+  Each non-trivial entry benefits from a link — to the issue, the PR, or the documentation that explains the change. Short prefix like `(#123)` or a markdown link `([#123](url))`. The link is for the small fraction of users who want to dig deeper; for the rest, the entry text is enough.
+
+  When migrating from another change-tracking system to a real changelog, do not retroactively backfill years of history in detail. Start the changelog at the current version, link backward to "see git log for changes before vX.Y.Z", and forward from there.
+
+  ## Verification
+
+  - [ ] Changelog file exists at the project root (typically `CHANGELOG.md`) and follows Keep a Changelog format.
+  - [ ] An `## [Unreleased]` section sits at the top, accumulating changes destined for the next release.
+  - [ ] Each released version has a `YYYY-MM-DD` date and a semver version number.
+  - [ ] Entries are grouped under the standard categories (Added, Changed, Deprecated, Removed, Fixed, Security).
+  - [ ] Entries are written for the user, not the developer; internal-only changes are excluded.
+  - [ ] Breaking changes are marked clearly (`**BREAKING:**` prefix or separate subsection) and link to a migration guide.
+  - [ ] Changelog was updated in the same PR as the change it documents, not retrofitted at release time.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Writing Changelogs
+
+      A changelog is the human-readable record of what changed between releases, written for the user — not the developer. The rule is one sentence: every release has a dated section, every change is grouped by kind, and the changelog is a deliverable, not a side effect. Most projects whose changelogs decayed into uselessness failed this rule — the changelog was auto-generated from raw commits (so users saw "fix: bump deps"), it conflated user-visible behavior with internal refactors (so users could not tell which bumps mattered), or it was updated by exception instead of by discipline (so the unreleased section was always wrong).
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Audience is the user, not the developer
+
+      A changelog is written for whoever depends on this software — the application developer using your library, the operator deploying your service, the end user installing your CLI. They want to know: what should I do differently when I upgrade?
+
+      This is the line between a changelog and a commit log. A commit log records every change for the project's developers. A changelog records the changes that affect a user. "Refactored internal cache" is a commit; it is not a changelog entry unless it changed behavior the user can observe.
+
+      Writing for the user means using the user's vocabulary. "Updated the authorization middleware" is internal; "JWT tokens now expire after 24 hours by default (was 1 hour)" is user-facing. Translate before writing.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Standard structure: Keep a Changelog
+
+      The Keep a Changelog format is the de facto standard. Every release section has a date, a version, and changes grouped under fixed categories:
+
+      - **Added.** New features visible to users.
+      - **Changed.** Changes to existing functionality. The most important category — these are the ones that may need user action.
+      - **Deprecated.** Features still present but slated for removal in a future release.
+      - **Removed.** Features that are gone.
+      - **Fixed.** Bug fixes.
+      - **Security.** Security-related changes. Called out separately because users prioritize security upgrades differently.
+
+      An `## [Unreleased]` section at the top accumulates changes destined for the next release. When a release ships, that section is renamed with the version + date and a fresh `## [Unreleased]` is started.
+
+      Keep entries terse — one line per change is the floor, two or three for changes that need explanation. Long discussions belong in linked issues or PRs.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Link to semver
+
+      The version number on each section should follow semver: `MAJOR.MINOR.PATCH`.
+
+      - **Patch (`1.2.X`).** Backward-compatible bug fixes. Users should be able to upgrade with no action.
+      - **Minor (`1.X.0`).** Backward-compatible feature additions. Users may want to read the release notes for new features but should not need to change anything.
+      - **Major (`X.0.0`).** Breaking changes. Users must read the migration guide and change something.
+
+      The mapping between changelog category and semver bump:
+
+      - `Added` → minor (or patch for trivial additions).
+      - `Changed` (breaking) → major. `Changed` (non-breaking, behavioral) → minor.
+      - `Deprecated` → minor (the deprecation warning itself is non-breaking; removal is the breaking change).
+      - `Removed` → major.
+      - `Fixed` → patch (most cases). If the fix changes long-standing observable behavior, it can be a minor or major.
+      - `Security` → patch usually, minor if the fix changes behavior.
+
+      Mismatches are a smell. Bumping major because of one `Fixed` entry suggests the fix was actually a behavior change that needed `Changed` framing.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Highlight breaking changes
+
+      Breaking changes deserve more than a bullet under `Changed`. The changelog should:
+
+      - **Mark them clearly.** `**BREAKING:**` prefix or a separate "Breaking Changes" subsection at the top of the version.
+      - **Say what to do.** "Replace `client.send(x, y)` with `client.send({input: x, options: y})`."
+      - **Link to the migration guide.** A longer document showing how to update typical call sites.
+
+      Breaking changes that are mentioned only in passing are how teams ship a major version that nobody upgrades to. The changelog is the visible surface; if the migration is hidden, the version dies.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Update the changelog in the same PR as the change
+
+      The single biggest discipline failure is "update the changelog at release time." The release person does not remember every change, the unreleased section is always partial, and entries get missed. The fix is mechanical: update the changelog as part of the PR that makes the change. PR template includes a `Changelog:` field; reviewers flag missing entries.
+
+      This is the same pattern as updating tests, updating the README, and updating ADRs in the same PR as the code. The principle: the smallest unit that is shippable is the smallest unit that includes its docs.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Generated changelogs are a starting point, not a destination
+
+      Tools like `release-please`, `changesets`, `git-cliff`, or conventional-commits-driven generators can produce a draft changelog from commit messages. They are a useful first pass, but the output needs editing.
+
+      Specifically, generated changelogs over-include — every `chore: bump deps` lands in the user-facing log, drowning the entries that matter. Edit the draft to:
+
+      - **Remove non-user-facing entries.** Internal refactors, dependency bumps users cannot see, CI-only changes.
+      - **Reword for the user.** Translate developer terms into user terms.
+      - **Group breaking changes prominently.** The generator may not separate them.
+
+      The changelog with editing is dramatically more useful than the raw generated output. Treat the generator as a stenographer, not a writer.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Changelog as commit log.** Every commit dumped into the changelog. Users cannot find the entries that matter.
+      - **No `Unreleased` section.** Forces release-time scrambling to remember what changed.
+      - **Mixing user-visible and internal changes.** "Added retry logic / Refactored connection pool / Updated CI." The user does not care about the second two.
+      - **Vague entries.** "Improved performance." How? By how much? On what surface? "Reduced p99 list endpoint latency from 200ms to 80ms" is informative.
+      - **Skipping the date.** "v2.3.0 — Q3 2026" is not a date. Use `YYYY-MM-DD`.
+      - **Hidden breaking changes.** A breaking change buried under `Changed` without the `BREAKING:` flag. The user finds out by their service crashing.
+      - **No changelog at all.** Users must compare git tags by hand. Adoption suffers.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Linking entries to evidence
+
+      Each non-trivial entry benefits from a link — to the issue, the PR, or the documentation that explains the change. Short prefix like `(#123)` or a markdown link `([#123](url))`. The link is for the small fraction of users who want to dig deeper; for the rest, the entry text is enough.
+
+      When migrating from another change-tracking system to a real changelog, do not retroactively backfill years of history in detail. Start the changelog at the current version, link backward to "see git log for changes before vX.Y.Z", and forward from there.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Changelog file exists at the project root (typically `CHANGELOG.md`) and follows Keep a Changelog format.
+      - [ ] An `## [Unreleased]` section sits at the top, accumulating changes destined for the next release.
+      - [ ] Each released version has a `YYYY-MM-DD` date and a semver version number.
+      - [ ] Entries are grouped under the standard categories (Added, Changed, Deprecated, Removed, Fixed, Security).
+      - [ ] Entries are written for the user, not the developer; internal-only changes are excluded.
+      - [ ] Breaking changes are marked clearly (`**BREAKING:**` prefix or separate subsection) and link to a migration guide.
+      - [ ] Changelog was updated in the same PR as the change it documents, not retrofitted at release time.

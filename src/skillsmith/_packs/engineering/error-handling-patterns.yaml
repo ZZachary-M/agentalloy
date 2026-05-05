@@ -1,0 +1,181 @@
+skill_type: domain
+skill_id: error-handling-patterns
+canonical_name: Error Handling Patterns (Propagate, Recover, Validate at Boundaries)
+category: design
+skill_class: domain
+domain_tags: [error-propagation, validation-boundary, fail-fast, swallow-anti-pattern, retry-policy]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Joe Armstrong's Erlang error-handling philosophy https://www.cs.otago.ac.nz/staffpriv/ok/Joe.Armstrong/joe.html (verified 2026-05-04 against fixtures/upstream/curated/error-handling.yaml topic `let_it_crash`); Go error-handling guide https://go.dev/blog/error-handling-and-go; Rust `Result` documentation https://doc.rust-lang.org/std/result/; internal review history on swallowed exceptions and over-defensive validation. Skill scope: how errors propagate through a system, where to catch them, when to validate; not language-specific exception syntax (covered in language packs), not retry logic (covered in cross-cutting/error-handling).
+
+raw_prose: |
+  # Error Handling Patterns
+
+  Error handling is the discipline of deciding where errors are caught, where they propagate, and where they are validated. The rule is one sentence: validate at boundaries, propagate within, catch only where you can act. Most production bugs traced to error handling failed this rule somewhere — an exception was swallowed silently in a layer that could not act on it, an internal function defensively re-validated input it had already received from a trusted layer, or an error from a remote call was caught and turned into a bland fallback that hid a real problem.
+
+  ## Errors live in three places — boundary, internal, remote
+
+  Three categories cover almost every error your code will see, and the right strategy differs for each.
+
+  - **Boundary errors.** Bad input crossing a system boundary — user request, file upload, third-party API response. The boundary is the only honest place to validate. Reject malformed input early, with a specific message, before it propagates inward.
+  - **Internal errors.** Bugs in your own code — null where it should not be, an invariant broken, a logic path the author did not anticipate. Internal errors should fail loudly. Catching and silencing them hides the bug.
+  - **Remote errors.** A call to another service or process that did not return what you needed — timeout, 5xx, network blip. These need explicit handling: retry policy, circuit breaker, fallback. They are not bugs in your code, but they are not happy-path either.
+
+  Most error-handling confusion comes from applying boundary-style validation to internal code or remote-style fallbacks to internal errors. The wrong strategy in the wrong layer is what produces silently-wrong systems.
+
+  ## Validate at boundaries, trust within
+
+  Validation belongs at the system boundary — the place where untrusted input becomes trusted internal state. Once data has been validated, internal code should trust it. Re-validating "just in case" inside helper functions clutters the code and signals distrust the codebase has not earned.
+
+  The corollary: if internal code feels like it needs to re-validate, the boundary validation is incomplete. Tighten the boundary contract instead of adding internal checks.
+
+  In statically-typed languages, types do part of the validation work. A function that takes `User` should not accept `null`; a function that takes `OrderId` should not accept `string`. Lean on the type system; it is cheaper than runtime checks and harder to skip.
+
+  ## Propagate within, catch only where you can act
+
+  Internal errors should propagate up the call stack until they reach a layer that can act on them — log them, return them to the user, retry them, surface them to monitoring. A `try`/`catch` that just logs and continues is almost always wrong; it hides the failure from the layer that needed to know.
+
+  Specifically, do not catch what you cannot handle. "Handle" means: do something different than the caller would have. Re-throwing after logging is not handling — it is a logging concern that belongs in middleware, not scattered through the codebase.
+
+  When you do catch, catch the narrowest type. Catching `Exception` (or `error.Error`, or `Throwable`) catches programming bugs you did not anticipate — null deref, type confusion, division by zero — and converts them into the same handler that was meant for "expected" failures. The expected failures (timeout, validation rejection) get the same treatment as the bugs, and the bugs ship to production looking like a graceful fallback.
+
+  ## Add context as you propagate
+
+  An error that bubbles up from three layers down should carry context from each layer. "Connection refused" tells you nothing; "Failed to load user 42 from cache: redis pool exhausted: connection refused" tells you what happened, what was being attempted, and where to look.
+
+  Languages handle this differently — Go uses `fmt.Errorf("%w: ...", err)`, Rust uses the `?` operator with `Result` plus `anyhow`/`thiserror`, JavaScript uses `cause:` on the new `Error` constructor (verified 2026-05-04 against MDN), Python uses `raise X from err`. The pattern is the same: wrap, do not replace. Replacing the original error loses the stack trace and the root-cause information.
+
+  ## Recover from remote errors with explicit policy
+
+  Remote errors deserve explicit handling because they are routine: networks blip, services restart, third parties throttle. The right shape:
+
+  - **Retry transient failures.** Timeouts, 5xx, connection resets. Use exponential backoff with jitter; cap retries to a small number (3 is typical) so a struggling service is not amplified.
+  - **Do not retry idempotency-unsafe operations without idempotency keys.** A retry of "create order" without an idempotency key creates two orders. Use an `Idempotency-Key` header or a database-side dedup.
+  - **Circuit-break on persistent failure.** After N consecutive failures, stop calling and short-circuit for a cool-down period. Lets the downstream recover without being hammered.
+  - **Have a fallback only when one is correct.** Returning empty results on a search-service outage is fine; returning empty results on a balance-lookup outage is dangerous. The fallback must be honest about its meaning.
+
+  ## Anti-patterns
+
+  - **Swallow.** `try { ... } catch { /* nothing */ }` or its language equivalent. Every swallowed error is a future debugging session that starts with "why does the system silently misbehave?"
+  - **Catch-all at the wrong layer.** A top-level catch around `main` that prints "something went wrong" hides every internal bug. Specific handling at specific layers, fall-through to a global error reporter at the top.
+  - **Re-validate inside.** A helper function that asserts its input is non-null after a chain of typed callers. The type already says non-null; the assert clutters the code and signals the wrong norm.
+  - **Convert exceptions to bland fallbacks.** Returning an empty list on database error so "the page still loads" hides a real outage. The page loading empty teaches users the system is broken; an explicit error page tells them.
+  - **Throw strings or untyped values.** Throwing strings, numbers, or plain objects loses the stack trace and breaks tooling. Throw typed errors — `Error` in JS, exceptions in Python, structured errors in Go.
+  - **Logging instead of handling.** A `try`/`catch` that logs and rethrows is fine; one that logs and continues silently is not. The continuation is the bug.
+
+  ## Observability is part of error handling
+
+  Errors that are caught and not surfaced to monitoring are invisible. Every catch site that suppresses propagation should emit a log line, a metric, or both. Without that signal, the only way to find the bug is when a user complains.
+
+  Structure the log: include the operation name, the input shape (with PII redacted), the error class, and any IDs that let you correlate to the user's session. Free-form `console.log("error happened")` is barely better than silent.
+
+  ## Verification
+
+  - [ ] Untrusted inputs (HTTP requests, user uploads, third-party API responses) are validated at the boundary and the validation rejects malformed input with specific messages.
+  - [ ] Internal helper functions trust their inputs (no defensive re-validation of types the type system already enforces).
+  - [ ] No `catch (Exception)` / `catch (error)` / bare `except:` blocks except in top-level error reporters and well-justified retry middleware.
+  - [ ] Caught errors are either handled (acted on differently than propagation) or re-thrown with added context, never logged-and-continued.
+  - [ ] Error messages name the operation, the input, and the cause; they wrap the underlying error rather than replacing it.
+  - [ ] Remote calls use explicit retry policy with backoff + jitter and idempotency keys for write operations.
+  - [ ] Suppressed errors emit a log line or metric so they remain visible to monitoring.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Error Handling Patterns
+
+      Error handling is the discipline of deciding where errors are caught, where they propagate, and where they are validated. The rule is one sentence: validate at boundaries, propagate within, catch only where you can act. Most production bugs traced to error handling failed this rule somewhere — an exception was swallowed silently in a layer that could not act on it, an internal function defensively re-validated input it had already received from a trusted layer, or an error from a remote call was caught and turned into a bland fallback that hid a real problem.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## Errors live in three places — boundary, internal, remote
+
+      Three categories cover almost every error your code will see, and the right strategy differs for each.
+
+      - **Boundary errors.** Bad input crossing a system boundary — user request, file upload, third-party API response. The boundary is the only honest place to validate. Reject malformed input early, with a specific message, before it propagates inward.
+      - **Internal errors.** Bugs in your own code — null where it should not be, an invariant broken, a logic path the author did not anticipate. Internal errors should fail loudly. Catching and silencing them hides the bug.
+      - **Remote errors.** A call to another service or process that did not return what you needed — timeout, 5xx, network blip. These need explicit handling: retry policy, circuit breaker, fallback. They are not bugs in your code, but they are not happy-path either.
+
+      Most error-handling confusion comes from applying boundary-style validation to internal code or remote-style fallbacks to internal errors. The wrong strategy in the wrong layer is what produces silently-wrong systems.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Validate at boundaries, trust within
+
+      Validation belongs at the system boundary — the place where untrusted input becomes trusted internal state. Once data has been validated, internal code should trust it. Re-validating "just in case" inside helper functions clutters the code and signals distrust the codebase has not earned.
+
+      The corollary: if internal code feels like it needs to re-validate, the boundary validation is incomplete. Tighten the boundary contract instead of adding internal checks.
+
+      In statically-typed languages, types do part of the validation work. A function that takes `User` should not accept `null`; a function that takes `OrderId` should not accept `string`. Lean on the type system; it is cheaper than runtime checks and harder to skip.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Propagate within, catch only where you can act
+
+      Internal errors should propagate up the call stack until they reach a layer that can act on them — log them, return them to the user, retry them, surface them to monitoring. A `try`/`catch` that just logs and continues is almost always wrong; it hides the failure from the layer that needed to know.
+
+      Specifically, do not catch what you cannot handle. "Handle" means: do something different than the caller would have. Re-throwing after logging is not handling — it is a logging concern that belongs in middleware, not scattered through the codebase.
+
+      When you do catch, catch the narrowest type. Catching `Exception` (or `error.Error`, or `Throwable`) catches programming bugs you did not anticipate — null deref, type confusion, division by zero — and converts them into the same handler that was meant for "expected" failures. The expected failures (timeout, validation rejection) get the same treatment as the bugs, and the bugs ship to production looking like a graceful fallback.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Add context as you propagate
+
+      An error that bubbles up from three layers down should carry context from each layer. "Connection refused" tells you nothing; "Failed to load user 42 from cache: redis pool exhausted: connection refused" tells you what happened, what was being attempted, and where to look.
+
+      Languages handle this differently — Go uses `fmt.Errorf("%w: ...", err)`, Rust uses the `?` operator with `Result` plus `anyhow`/`thiserror`, JavaScript uses `cause:` on the new `Error` constructor (verified 2026-05-04 against MDN), Python uses `raise X from err`. The pattern is the same: wrap, do not replace. Replacing the original error loses the stack trace and the root-cause information.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Recover from remote errors with explicit policy
+
+      Remote errors deserve explicit handling because they are routine: networks blip, services restart, third parties throttle. The right shape:
+
+      - **Retry transient failures.** Timeouts, 5xx, connection resets. Use exponential backoff with jitter; cap retries to a small number (3 is typical) so a struggling service is not amplified.
+      - **Do not retry idempotency-unsafe operations without idempotency keys.** A retry of "create order" without an idempotency key creates two orders. Use an `Idempotency-Key` header or a database-side dedup.
+      - **Circuit-break on persistent failure.** After N consecutive failures, stop calling and short-circuit for a cool-down period. Lets the downstream recover without being hammered.
+      - **Have a fallback only when one is correct.** Returning empty results on a search-service outage is fine; returning empty results on a balance-lookup outage is dangerous. The fallback must be honest about its meaning.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Swallow.** `try { ... } catch { /* nothing */ }` or its language equivalent. Every swallowed error is a future debugging session that starts with "why does the system silently misbehave?"
+      - **Catch-all at the wrong layer.** A top-level catch around `main` that prints "something went wrong" hides every internal bug. Specific handling at specific layers, fall-through to a global error reporter at the top.
+      - **Re-validate inside.** A helper function that asserts its input is non-null after a chain of typed callers. The type already says non-null; the assert clutters the code and signals the wrong norm.
+      - **Convert exceptions to bland fallbacks.** Returning an empty list on database error so "the page still loads" hides a real outage. The page loading empty teaches users the system is broken; an explicit error page tells them.
+      - **Throw strings or untyped values.** Throwing strings, numbers, or plain objects loses the stack trace and breaks tooling. Throw typed errors — `Error` in JS, exceptions in Python, structured errors in Go.
+      - **Logging instead of handling.** A `try`/`catch` that logs and rethrows is fine; one that logs and continues silently is not. The continuation is the bug.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Observability is part of error handling
+
+      Errors that are caught and not surfaced to monitoring are invisible. Every catch site that suppresses propagation should emit a log line, a metric, or both. Without that signal, the only way to find the bug is when a user complains.
+
+      Structure the log: include the operation name, the input shape (with PII redacted), the error class, and any IDs that let you correlate to the user's session. Free-form `console.log("error happened")` is barely better than silent.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Untrusted inputs (HTTP requests, user uploads, third-party API responses) are validated at the boundary and the validation rejects malformed input with specific messages.
+      - [ ] Internal helper functions trust their inputs (no defensive re-validation of types the type system already enforces).
+      - [ ] No `catch (Exception)` / `catch (error)` / bare `except:` blocks except in top-level error reporters and well-justified retry middleware.
+      - [ ] Caught errors are either handled (acted on differently than propagation) or re-thrown with added context, never logged-and-continued.
+      - [ ] Error messages name the operation, the input, and the cause; they wrap the underlying error rather than replacing it.
+      - [ ] Remote calls use explicit retry policy with backoff + jitter and idempotency keys for write operations.
+      - [ ] Suppressed errors emit a log line or metric so they remain visible to monitoring.

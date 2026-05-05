@@ -1,0 +1,277 @@
+skill_type: domain
+skill_id: performance-budgets
+canonical_name: Performance Budgets (SLOs, Latency Targets, Regression Alerts)
+category: design
+skill_class: domain
+domain_tags: [slo, error-budget, p99, drift-detection, when-to-stop-optimizing]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Google SRE Workbook ch. 4 "Service Level Objectives" https://sre.google/workbook/implementing-slos/ (verified 2026-05-04 against fixtures/upstream/curated/sre.yaml topic `slo`); web.dev performance budgets https://web.dev/performance-budgets-101/; internal review history on optimizations that improved one metric while regressing another. Skill scope: setting performance targets and using them to decide when to optimize and when to stop; not measurement (covered in measure-before-optimizing), not bottleneck identification (covered in finding-the-bottleneck).
+
+raw_prose: |
+  # Performance Budgets
+
+  A performance budget is a stated target for a metric — the latency you are willing to accept, the throughput you must hit, the bundle size you must stay under. The rule is one sentence: define the budget before the work starts, alert on regressions, and stop optimizing when you are inside the budget. Most teams that over-optimize or under-optimize lack budgets — they keep tuning when the system is already fast enough, or they never define what "fast enough" means and the system slowly degrades over a year of unbudgeted minor regressions.
+
+  ## A budget is a target with consequences
+
+  A performance budget is more than an aspiration. It has three properties:
+
+  - **It is a number.** "Page loads in under 2 seconds at p95" is a budget; "page loads fast" is a wish.
+  - **It is monitored.** The metric is measured continuously, not once at the launch demo. Regressions trigger alerts.
+  - **It has a consequence.** When the budget is exceeded, something happens — a build fails, a deploy blocks, an investigation opens. Without consequences, the budget is decorative.
+
+  Budgets without consequences become aspirations, then noise. The discipline is to enforce them — even when enforcement is uncomfortable.
+
+  ## SLOs are budgets at the service layer
+
+  Google's SLO discipline is the canonical example. An SLO is a numeric target for service behavior: "99.9% of requests complete in under 200ms over a rolling 28-day window." Two parts matter:
+
+  - **The objective.** What you commit to.
+  - **The error budget.** How much you can spend missing the objective. If the SLO is 99.9% over 28 days, the error budget is 0.1% of requests over 28 days. Once spent, no risky changes ship until the budget refills.
+
+  This converts performance from "always optimize more" into a budgeting exercise. Below the budget, ship features. Above the budget, slow down and address reliability. The error budget is the lever that prevents both ends — never optimizing (running through the budget) and over-optimizing (spending engineering time on a system already inside the SLO).
+
+  Set SLOs at the boundary the user feels: end-to-end latency, end-to-end success rate, end-to-end correctness. Internal-component SLOs are tools for owners but should not be the public contract.
+
+  ## Pick the right percentile
+
+  Budgets are usually expressed at a percentile, not the mean. The mean hides the tail; the user feels the tail.
+
+  - **p50 (median).** Useful for understanding the typical experience. Not what most users complain about.
+  - **p95.** A common SLO target. Catches most user-perceived issues without being too strict to be achievable.
+  - **p99.** Catches issues that affect a significant minority. Often where high-traffic services target.
+  - **p99.9.** For services where rare slow requests still need to be acceptable.
+
+  Higher percentiles are more sensitive to outliers and harder to monitor reliably (need many samples). For most services, p95 or p99 is the right balance.
+
+  Mean latency is fine as a sanity check but is rarely the right SLO. A service with mean 50ms and p99 5000ms has a serious tail problem invisible in the mean.
+
+  ## Budgets prevent slow regressions
+
+  The most common performance failure mode is not a single bad commit; it is a slow drift. Each change adds 5ms; ten changes later the page is 50ms slower with nothing obvious to revert. Without a budget and continuous measurement, the drift is invisible.
+
+  Two patterns to catch drift:
+
+  - **Per-PR perf check.** A benchmark runs on every PR; if a key metric regresses by more than X%, the PR is flagged. Tools like CodSpeed, Tachometer, Lighthouse CI integrate this into the build.
+  - **Production trend alerts.** A metric that crosses the budget over a rolling window pages someone. The alert fires not on a single bad request but on a sustained regression.
+
+  Per-PR catches changes attributable to a specific commit. Production trends catch issues that only manifest under real load (cache effects, contention) or that arise from environmental shifts (data growth, traffic patterns).
+
+  ## When to stop optimizing — inside the budget
+
+  The clearest signal to stop optimizing is being inside the budget with margin to spare. If the SLO is p95 < 200ms and you measure p95 = 80ms, further optimization is not the highest-leverage work. Time is better spent on features, on reducing other risks, or on optimizing a different component that is closer to its budget.
+
+  This is the half of budgeting that engineers find hardest. The system is not as fast as it could be; surely it is "better" to keep optimizing? Amdahl's law and opportunity cost both say no. Optimizing inside the budget produces effort with no measurable user benefit, and that effort comes from somewhere — usually from work that would have produced user benefit.
+
+  Stop and ship. The budget exists to define enough.
+
+  ## When the budget is wrong
+
+  Sometimes the budget itself needs to change. Either it is too loose (users are complaining despite the system being inside the budget) or too tight (the team is constantly fighting it without user complaints).
+
+  Symptoms the budget is too loose:
+
+  - **User complaints despite green metrics.** The SLO is being met but users still find the service slow. The metric or percentile is wrong; tighten or change.
+  - **The SLO has not been reviewed since launch.** What was acceptable for an MVP may not be acceptable for a mature product.
+
+  Symptoms the budget is too tight:
+
+  - **The team spends most cycles on perf, not features.** And the user experience is fine.
+  - **The SLO is rarely missed even when something is genuinely wrong.** The budget has too much margin to be informative.
+
+  Adjust budgets deliberately, not opportunistically. A budget changed because "this PR breaks it" is the budget losing meaning. A budget changed because user expectations or product strategy shifted is the budget being maintained.
+
+  ## Budgets for non-latency metrics
+
+  Latency is the most common budget, but the same discipline applies elsewhere:
+
+  - **Bundle size.** "Main JS bundle ≤ 300KB gzipped." Web teams use this aggressively.
+  - **Memory footprint.** "RSS ≤ 1GB on the standard pod." Useful for cost and density planning.
+  - **Cost per request.** "Average $0.0001 per request." Useful when CPU/RAM/IO map directly to cloud costs.
+  - **Build time.** "CI under 10 minutes." Productivity budget; ages well as a target because it is observable to the whole team.
+  - **Coverage.** "Test coverage ≥ 75% for new code." Quality budget enforced at PR.
+
+  All of these are budgets in the same sense: a number, monitored, with consequences. Pick the metrics that matter for your domain.
+
+  ## Anti-patterns
+
+  - **No budget.** "We'll know it when we see it." The team finds out when users complain.
+  - **Budget without monitoring.** Set at launch, never measured against. Drifts invisibly.
+  - **Budget without consequences.** Reported in dashboards but never acted on.
+  - **Mean as the SLO.** Hides the tail. Users feel p99, not the mean.
+  - **Optimize past the budget without need.** "We could be at 50ms instead of 100ms." If 100ms is inside the budget, the optimization is opportunity cost.
+  - **Adjust budget to make a regressing PR pass.** The budget should constrain the work, not the other way around. If the regression is acceptable, document why and set a new budget deliberately.
+  - **Per-component SLO as user contract.** "Auth service SLO is 99.99%; database SLO is 99.95%." User feels the product, not the components. Set the user-facing SLO; let internal SLOs be management tools.
+
+  ## Budgets enable error-budget-based prioritization
+
+  Once budgets are in place, prioritization gets easier. Three states:
+
+  - **Inside the budget with margin.** Ship features; do not invest in further perf optimization. Take risks; the budget can absorb regressions.
+  - **Inside the budget but close.** Be cautious about regressions; review perf-impacting PRs more carefully.
+  - **Outside the budget.** Stop feature work, address the regression. The error-budget framework gives a clear, non-debatable signal.
+
+  This is the operational benefit of budgets: they take "is the system fast enough?" out of subjective debate and into observable comparison.
+
+  ## Verification
+
+  - [ ] A specific performance budget is defined for the user-facing metric (latency at a percentile, bundle size, throughput, cost per request, etc.).
+  - [ ] The metric is monitored continuously in production and alerts fire when the budget is exceeded over a defined window.
+  - [ ] The budget has a consequence: failed builds, blocked deploys, opened investigation, or a slow-down on feature work.
+  - [ ] The percentile is appropriate for the use case (typically p95 or p99 for user-facing latency); the mean is not the SLO.
+  - [ ] Per-PR perf checks catch regressions before they merge for metrics where this is feasible.
+  - [ ] Optimization stops when the system is inside the budget with margin; further work goes to features or to other components.
+  - [ ] Budget changes are made deliberately based on user expectations or product strategy, not to silence a regressing PR.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Performance Budgets
+
+      A performance budget is a stated target for a metric — the latency you are willing to accept, the throughput you must hit, the bundle size you must stay under. The rule is one sentence: define the budget before the work starts, alert on regressions, and stop optimizing when you are inside the budget. Most teams that over-optimize or under-optimize lack budgets — they keep tuning when the system is already fast enough, or they never define what "fast enough" means and the system slowly degrades over a year of unbudgeted minor regressions.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## A budget is a target with consequences
+
+      A performance budget is more than an aspiration. It has three properties:
+
+      - **It is a number.** "Page loads in under 2 seconds at p95" is a budget; "page loads fast" is a wish.
+      - **It is monitored.** The metric is measured continuously, not once at the launch demo. Regressions trigger alerts.
+      - **It has a consequence.** When the budget is exceeded, something happens — a build fails, a deploy blocks, an investigation opens. Without consequences, the budget is decorative.
+
+      Budgets without consequences become aspirations, then noise. The discipline is to enforce them — even when enforcement is uncomfortable.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## SLOs are budgets at the service layer
+
+      Google's SLO discipline is the canonical example. An SLO is a numeric target for service behavior: "99.9% of requests complete in under 200ms over a rolling 28-day window." Two parts matter:
+
+      - **The objective.** What you commit to.
+      - **The error budget.** How much you can spend missing the objective. If the SLO is 99.9% over 28 days, the error budget is 0.1% of requests over 28 days. Once spent, no risky changes ship until the budget refills.
+
+      This converts performance from "always optimize more" into a budgeting exercise. Below the budget, ship features. Above the budget, slow down and address reliability. The error budget is the lever that prevents both ends — never optimizing (running through the budget) and over-optimizing (spending engineering time on a system already inside the SLO).
+
+      Set SLOs at the boundary the user feels: end-to-end latency, end-to-end success rate, end-to-end correctness. Internal-component SLOs are tools for owners but should not be the public contract.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Pick the right percentile
+
+      Budgets are usually expressed at a percentile, not the mean. The mean hides the tail; the user feels the tail.
+
+      - **p50 (median).** Useful for understanding the typical experience. Not what most users complain about.
+      - **p95.** A common SLO target. Catches most user-perceived issues without being too strict to be achievable.
+      - **p99.** Catches issues that affect a significant minority. Often where high-traffic services target.
+      - **p99.9.** For services where rare slow requests still need to be acceptable.
+
+      Higher percentiles are more sensitive to outliers and harder to monitor reliably (need many samples). For most services, p95 or p99 is the right balance.
+
+      Mean latency is fine as a sanity check but is rarely the right SLO. A service with mean 50ms and p99 5000ms has a serious tail problem invisible in the mean.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Budgets prevent slow regressions
+
+      The most common performance failure mode is not a single bad commit; it is a slow drift. Each change adds 5ms; ten changes later the page is 50ms slower with nothing obvious to revert. Without a budget and continuous measurement, the drift is invisible.
+
+      Two patterns to catch drift:
+
+      - **Per-PR perf check.** A benchmark runs on every PR; if a key metric regresses by more than X%, the PR is flagged. Tools like CodSpeed, Tachometer, Lighthouse CI integrate this into the build.
+      - **Production trend alerts.** A metric that crosses the budget over a rolling window pages someone. The alert fires not on a single bad request but on a sustained regression.
+
+      Per-PR catches changes attributable to a specific commit. Production trends catch issues that only manifest under real load (cache effects, contention) or that arise from environmental shifts (data growth, traffic patterns).
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## When to stop optimizing — inside the budget
+
+      The clearest signal to stop optimizing is being inside the budget with margin to spare. If the SLO is p95 < 200ms and you measure p95 = 80ms, further optimization is not the highest-leverage work. Time is better spent on features, on reducing other risks, or on optimizing a different component that is closer to its budget.
+
+      This is the half of budgeting that engineers find hardest. The system is not as fast as it could be; surely it is "better" to keep optimizing? Amdahl's law and opportunity cost both say no. Optimizing inside the budget produces effort with no measurable user benefit, and that effort comes from somewhere — usually from work that would have produced user benefit.
+
+      Stop and ship. The budget exists to define enough.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## When the budget is wrong
+
+      Sometimes the budget itself needs to change. Either it is too loose (users are complaining despite the system being inside the budget) or too tight (the team is constantly fighting it without user complaints).
+
+      Symptoms the budget is too loose:
+
+      - **User complaints despite green metrics.** The SLO is being met but users still find the service slow. The metric or percentile is wrong; tighten or change.
+      - **The SLO has not been reviewed since launch.** What was acceptable for an MVP may not be acceptable for a mature product.
+
+      Symptoms the budget is too tight:
+
+      - **The team spends most cycles on perf, not features.** And the user experience is fine.
+      - **The SLO is rarely missed even when something is genuinely wrong.** The budget has too much margin to be informative.
+
+      Adjust budgets deliberately, not opportunistically. A budget changed because "this PR breaks it" is the budget losing meaning. A budget changed because user expectations or product strategy shifted is the budget being maintained.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## Budgets for non-latency metrics
+
+      Latency is the most common budget, but the same discipline applies elsewhere:
+
+      - **Bundle size.** "Main JS bundle ≤ 300KB gzipped." Web teams use this aggressively.
+      - **Memory footprint.** "RSS ≤ 1GB on the standard pod." Useful for cost and density planning.
+      - **Cost per request.** "Average $0.0001 per request." Useful when CPU/RAM/IO map directly to cloud costs.
+      - **Build time.** "CI under 10 minutes." Productivity budget; ages well as a target because it is observable to the whole team.
+      - **Coverage.** "Test coverage ≥ 75% for new code." Quality budget enforced at PR.
+
+      All of these are budgets in the same sense: a number, monitored, with consequences. Pick the metrics that matter for your domain.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **No budget.** "We'll know it when we see it." The team finds out when users complain.
+      - **Budget without monitoring.** Set at launch, never measured against. Drifts invisibly.
+      - **Budget without consequences.** Reported in dashboards but never acted on.
+      - **Mean as the SLO.** Hides the tail. Users feel p99, not the mean.
+      - **Optimize past the budget without need.** "We could be at 50ms instead of 100ms." If 100ms is inside the budget, the optimization is opportunity cost.
+      - **Adjust budget to make a regressing PR pass.** The budget should constrain the work, not the other way around. If the regression is acceptable, document why and set a new budget deliberately.
+      - **Per-component SLO as user contract.** "Auth service SLO is 99.99%; database SLO is 99.95%." User feels the product, not the components. Set the user-facing SLO; let internal SLOs be management tools.
+
+  - sequence: 10
+    fragment_type: rationale
+    content: |
+      ## Budgets enable error-budget-based prioritization
+
+      Once budgets are in place, prioritization gets easier. Three states:
+
+      - **Inside the budget with margin.** Ship features; do not invest in further perf optimization. Take risks; the budget can absorb regressions.
+      - **Inside the budget but close.** Be cautious about regressions; review perf-impacting PRs more carefully.
+      - **Outside the budget.** Stop feature work, address the regression. The error-budget framework gives a clear, non-debatable signal.
+
+      This is the operational benefit of budgets: they take "is the system fast enough?" out of subjective debate and into observable comparison.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] A specific performance budget is defined for the user-facing metric (latency at a percentile, bundle size, throughput, cost per request, etc.).
+      - [ ] The metric is monitored continuously in production and alerts fire when the budget is exceeded over a defined window.
+      - [ ] The budget has a consequence: failed builds, blocked deploys, opened investigation, or a slow-down on feature work.
+      - [ ] The percentile is appropriate for the use case (typically p95 or p99 for user-facing latency); the mean is not the SLO.
+      - [ ] Per-PR perf checks catch regressions before they merge for metrics where this is feasible.
+      - [ ] Optimization stops when the system is inside the budget with margin; further work goes to features or to other components.
+      - [ ] Budget changes are made deliberately based on user expectations or product strategy, not to silence a regressing PR.

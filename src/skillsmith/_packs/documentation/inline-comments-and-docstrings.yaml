@@ -1,0 +1,257 @@
+skill_type: domain
+skill_id: inline-comments-and-docstrings
+canonical_name: Inline Comments and Docstrings (Document Why, Not What)
+category: design
+skill_class: domain
+domain_tags: [explain-rationale, docstring-discipline, comment-as-code-smell, todo-with-tracker, public-api-surface]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Robert Martin, *Clean Code*, ch. 4 ("Comments") on the "comments compensate for failure to express ourselves" thesis (verified 2026-05-04 against fixtures/upstream/curated/clean-code.yaml topic `comments`); PEP 257 https://peps.python.org/pep-0257/ for docstring conventions; godoc conventions https://go.dev/blog/godoc; internal review history on comments that lied because the code changed and the comment did not. Skill scope: when to write inline comments and docstrings, when not to, what to put in them; not external API documentation (covered in writing-api-docs), not code naming (covered in engineering/naming-things).
+
+raw_prose: |
+  # Inline Comments and Docstrings
+
+  Inline comments and docstrings document what code cannot say for itself. The rule is one sentence: default to no comment; write one only when the *why* is non-obvious from the code, and document every public API surface. Most codebases that drowned in stale comments failed this rule somewhere — comments paraphrased the code (so they aged into lies the moment the code changed), comments documented the obvious (cluttering without informing), or public APIs went undocumented (forcing every caller to read the source).
+
+  ## The default is no comment
+
+  A well-named function, with well-named parameters, doing one thing, does not need a comment. Adding "// gets the active users" above `function getActiveUsers` adds noise without information. Adding "// loops through users" above a `for (user of users)` loop is worse — it documents the *what* a programmer can read in two seconds.
+
+  Comments compete with code for attention. Each comment is a small distraction the reader pays. Make the reader pay only when the comment earns its keep.
+
+  The fastest way to know if a comment earns its keep: would removing it confuse a future reader? If no, delete. If yes, keep.
+
+  ## Comment the WHY, not the WHAT
+
+  When a comment is warranted, it explains *why* — context, constraint, decision, history — that the code itself cannot show. Examples of *why* worth a comment:
+
+  - **Hidden constraint.** "Must run before the cache warms — see incident report 2025-03-15."
+  - **Subtle invariant.** "This list is sorted by creation date; the binary search below depends on it."
+  - **Workaround for a bug.** "Postgres 14.3 panics on this query if `LIMIT 0`; using `LIMIT 1` and discarding the row."
+  - **Surprising behavior.** "Returns null on rate limit, not an error — caller is expected to back off."
+  - **Decision rationale.** "Chose a list over a hash map because reads are 10x more common than writes; profile lives at docs/perf/2026-Q2."
+
+  The bar: a future reader, including future-you, would otherwise misread or misuse the code. The comment prevents that misread.
+
+  ## Don't reference the current task or callers
+
+  Two specific kinds of comment age into noise quickly:
+
+  - **Task references.** "Added for ticket FOO-123." The ticket exists in your tracker; the commit history records the link. The comment adds nothing that survives the next refactor.
+  - **Caller references.** "Used by the Y flow." Callers move; the comment becomes wrong when Y is renamed or when a new caller is added. Use call-graph tools instead.
+
+  Both kinds belong in the PR description, the commit message, or a tracker — not the source. The source describes the code's contract; metadata about *why this commit* belongs in the version-controlled history of the commit.
+
+  ## Docstrings document the public API surface
+
+  Docstrings are different from inline comments. They are part of the function's contract — what callers can rely on. Every public function, class, module, and exported type gets a docstring; private helpers usually do not need one (the caller is in the same file and can read the code).
+
+  A docstring covers what the public reference docs would (see writing-api-docs): summary, parameters, return value, errors, side effects. The format differs by language — PEP 257 in Python, JSDoc/TSDoc in JS/TS, godoc paragraphs in Go, rustdoc in Rust — but the content is the same.
+
+  Use the language's docstring tooling. `pydoc`, `jsdoc`, `godoc`, `rustdoc` extract these into the generated reference. Hand-rolled comment formats outside the tooling do not flow into the docs.
+
+  ## Comments age; treat them like code
+
+  Comments are code's least-tested companion. Nothing fails when a comment becomes wrong; the rot is silent. Treat comment maintenance like code maintenance:
+
+  - **Update the comment when the code changes.** A comment that says "X uses path A" becomes a lie when X is changed to use path B. The diff that changed X must update the comment.
+  - **Delete comments that no longer apply.** If a workaround was for a bug fixed three releases ago, the comment is wrong. Remove.
+  - **Question every comment in code review.** Reviewers should treat a comment with the same scrutiny as a line of code. "Is this still true? Is this clearer than just renaming the function?"
+
+  When in doubt, delete a stale comment rather than try to update it. The risk of a wrong comment is higher than the value of a half-right one.
+
+  ## Code smells that comments reveal
+
+  Sometimes a comment is a sign that the code itself needs work, not that it needs documentation. Specifically:
+
+  - **A comment explaining a long function.** Often the fix is to split the function, not annotate it. The comment becomes a section header for what should be a separate, named piece.
+  - **A comment apologizing for a workaround.** "// HACK: ..." or "// FIXME: ..." without a tracker reference is a red flag. Either the workaround is justified (in which case write a real comment with the *why*) or it should be fixed.
+  - **A comment defending an unusual name.** "// `data` here actually means the user's profile." Rename the variable.
+  - **A comment compensating for a complex expression.** Extract a named subexpression instead.
+
+  In each case, refactor first, comment second. The refactor often eliminates the need for the comment.
+
+  ## TODOs need a tracker reference
+
+  Bare `TODO` comments age into noise. A `TODO` that has lived for 18 months is not a todo; it is a fact about the code. The discipline:
+
+  - **Every `TODO` has a tracker link.** `// TODO(LIN-1234): switch to streaming once the API supports it`.
+  - **No `TODO` for "I would have done it differently."** That is taste, not work; not actionable.
+  - **No `TODO` for unbounded aspirations.** "Make this faster" is not a TODO; "TODO(LIN-5678): reduce p99 latency below 200ms by Q3" is.
+
+  See the `handling-technical-debt` skill in the engineering pack for the broader debt-ledger discipline. Inline TODOs are one form of debt entry; they need the same fields.
+
+  ## Anti-patterns
+
+  - **Paraphrasing code in comments.** "// increment counter" above `counter++`. Adds noise; ages into a lie when `counter` is renamed.
+  - **Commenting out dead code.** "Just in case we need it." Git remembers; the version control system is your dead-code archive. Delete.
+  - **Decorative banners.** `// ===== USER SECTION =====` blocks. Use file structure or class boundaries instead.
+  - **Author signatures and dates.** `// Author: X, 2024-03-12.` The blame tool knows; the comment ages.
+  - **Bare `TODO`.** No tracker link, no owner, no date. Indistinguishable from a wish.
+  - **Multi-paragraph docstring on a private helper.** Caller is in the same file; over-documenting private code wastes time and goes stale fast.
+  - **JSDoc-only `@param` boilerplate.** `@param {string} name - The name.` documents nothing the type and parameter name do not. Either say something useful or omit.
+
+  ## Public-API docstring structure
+
+  For exported functions, classes, modules, the docstring covers:
+
+  - **One-line summary.** First line. Used by docs indexes and IDEs in tooltips.
+  - **Detailed description.** Multi-paragraph if needed. What the function does, what it does not do, when to use it vs. alternatives.
+  - **Parameters.** Each one: type, semantic meaning, constraints (range, enum values, format).
+  - **Returns.** Type and meaning. "Returns the user, or null if not found" is informative; "Returns user" is not.
+  - **Raises / throws.** Each exception or error type, and what triggers it.
+  - **Examples.** At least one runnable example for non-trivial functions, in the language's docstring example format (`>>>` in Python, `@example` in JSDoc, runnable Examples in Go).
+
+  The tooling will surface this. Without it, your generated reference docs are a wall of bare signatures.
+
+  ## Verification
+
+  - [ ] No comments paraphrase the code; every inline comment names a *why* the code cannot show (constraint, invariant, workaround, decision).
+  - [ ] No comments reference the current task, ticket, or specific callers — that metadata lives in commit history and trackers.
+  - [ ] Every public function, class, module, and exported type has a docstring in the language's standard format.
+  - [ ] Docstrings cover summary, parameters with semantic descriptions, return value, errors/exceptions, examples for non-trivial functions.
+  - [ ] All `TODO` comments have a tracker link; no bare `TODO` or aspirational `// FIXME: maybe one day`.
+  - [ ] Stale comments (referring to removed code, fixed bugs, or renamed identifiers) were deleted in the PR that made them stale.
+  - [ ] No commented-out code; deletions are committed and rely on version history for archive.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Inline Comments and Docstrings
+
+      Inline comments and docstrings document what code cannot say for itself. The rule is one sentence: default to no comment; write one only when the *why* is non-obvious from the code, and document every public API surface. Most codebases that drowned in stale comments failed this rule somewhere — comments paraphrased the code (so they aged into lies the moment the code changed), comments documented the obvious (cluttering without informing), or public APIs went undocumented (forcing every caller to read the source).
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## The default is no comment
+
+      A well-named function, with well-named parameters, doing one thing, does not need a comment. Adding "// gets the active users" above `function getActiveUsers` adds noise without information. Adding "// loops through users" above a `for (user of users)` loop is worse — it documents the *what* a programmer can read in two seconds.
+
+      Comments compete with code for attention. Each comment is a small distraction the reader pays. Make the reader pay only when the comment earns its keep.
+
+      The fastest way to know if a comment earns its keep: would removing it confuse a future reader? If no, delete. If yes, keep.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Comment the WHY, not the WHAT
+
+      When a comment is warranted, it explains *why* — context, constraint, decision, history — that the code itself cannot show. Examples of *why* worth a comment:
+
+      - **Hidden constraint.** "Must run before the cache warms — see incident report 2025-03-15."
+      - **Subtle invariant.** "This list is sorted by creation date; the binary search below depends on it."
+      - **Workaround for a bug.** "Postgres 14.3 panics on this query if `LIMIT 0`; using `LIMIT 1` and discarding the row."
+      - **Surprising behavior.** "Returns null on rate limit, not an error — caller is expected to back off."
+      - **Decision rationale.** "Chose a list over a hash map because reads are 10x more common than writes; profile lives at docs/perf/2026-Q2."
+
+      The bar: a future reader, including future-you, would otherwise misread or misuse the code. The comment prevents that misread.
+
+  - sequence: 4
+    fragment_type: guardrail
+    content: |
+      ## Don't reference the current task or callers
+
+      Two specific kinds of comment age into noise quickly:
+
+      - **Task references.** "Added for ticket FOO-123." The ticket exists in your tracker; the commit history records the link. The comment adds nothing that survives the next refactor.
+      - **Caller references.** "Used by the Y flow." Callers move; the comment becomes wrong when Y is renamed or when a new caller is added. Use call-graph tools instead.
+
+      Both kinds belong in the PR description, the commit message, or a tracker — not the source. The source describes the code's contract; metadata about *why this commit* belongs in the version-controlled history of the commit.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Docstrings document the public API surface
+
+      Docstrings are different from inline comments. They are part of the function's contract — what callers can rely on. Every public function, class, module, and exported type gets a docstring; private helpers usually do not need one (the caller is in the same file and can read the code).
+
+      A docstring covers what the public reference docs would (see writing-api-docs): summary, parameters, return value, errors, side effects. The format differs by language — PEP 257 in Python, JSDoc/TSDoc in JS/TS, godoc paragraphs in Go, rustdoc in Rust — but the content is the same.
+
+      Use the language's docstring tooling. `pydoc`, `jsdoc`, `godoc`, `rustdoc` extract these into the generated reference. Hand-rolled comment formats outside the tooling do not flow into the docs.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Comments age; treat them like code
+
+      Comments are code's least-tested companion. Nothing fails when a comment becomes wrong; the rot is silent. Treat comment maintenance like code maintenance:
+
+      - **Update the comment when the code changes.** A comment that says "X uses path A" becomes a lie when X is changed to use path B. The diff that changed X must update the comment.
+      - **Delete comments that no longer apply.** If a workaround was for a bug fixed three releases ago, the comment is wrong. Remove.
+      - **Question every comment in code review.** Reviewers should treat a comment with the same scrutiny as a line of code. "Is this still true? Is this clearer than just renaming the function?"
+
+      When in doubt, delete a stale comment rather than try to update it. The risk of a wrong comment is higher than the value of a half-right one.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## Code smells that comments reveal
+
+      Sometimes a comment is a sign that the code itself needs work, not that it needs documentation. Specifically:
+
+      - **A comment explaining a long function.** Often the fix is to split the function, not annotate it. The comment becomes a section header for what should be a separate, named piece.
+      - **A comment apologizing for a workaround.** "// HACK: ..." or "// FIXME: ..." without a tracker reference is a red flag. Either the workaround is justified (in which case write a real comment with the *why*) or it should be fixed.
+      - **A comment defending an unusual name.** "// `data` here actually means the user's profile." Rename the variable.
+      - **A comment compensating for a complex expression.** Extract a named subexpression instead.
+
+      In each case, refactor first, comment second. The refactor often eliminates the need for the comment.
+
+  - sequence: 8
+    fragment_type: execution
+    content: |
+      ## TODOs need a tracker reference
+
+      Bare `TODO` comments age into noise. A `TODO` that has lived for 18 months is not a todo; it is a fact about the code. The discipline:
+
+      - **Every `TODO` has a tracker link.** `// TODO(LIN-1234): switch to streaming once the API supports it`.
+      - **No `TODO` for "I would have done it differently."** That is taste, not work; not actionable.
+      - **No `TODO` for unbounded aspirations.** "Make this faster" is not a TODO; "TODO(LIN-5678): reduce p99 latency below 200ms by Q3" is.
+
+      See the `handling-technical-debt` skill in the engineering pack for the broader debt-ledger discipline. Inline TODOs are one form of debt entry; they need the same fields.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Paraphrasing code in comments.** "// increment counter" above `counter++`. Adds noise; ages into a lie when `counter` is renamed.
+      - **Commenting out dead code.** "Just in case we need it." Git remembers; the version control system is your dead-code archive. Delete.
+      - **Decorative banners.** `// ===== USER SECTION =====` blocks. Use file structure or class boundaries instead.
+      - **Author signatures and dates.** `// Author: X, 2024-03-12.` The blame tool knows; the comment ages.
+      - **Bare `TODO`.** No tracker link, no owner, no date. Indistinguishable from a wish.
+      - **Multi-paragraph docstring on a private helper.** Caller is in the same file; over-documenting private code wastes time and goes stale fast.
+      - **JSDoc-only `@param` boilerplate.** `@param {string} name - The name.` documents nothing the type and parameter name do not. Either say something useful or omit.
+
+  - sequence: 10
+    fragment_type: execution
+    content: |
+      ## Public-API docstring structure
+
+      For exported functions, classes, modules, the docstring covers:
+
+      - **One-line summary.** First line. Used by docs indexes and IDEs in tooltips.
+      - **Detailed description.** Multi-paragraph if needed. What the function does, what it does not do, when to use it vs. alternatives.
+      - **Parameters.** Each one: type, semantic meaning, constraints (range, enum values, format).
+      - **Returns.** Type and meaning. "Returns the user, or null if not found" is informative; "Returns user" is not.
+      - **Raises / throws.** Each exception or error type, and what triggers it.
+      - **Examples.** At least one runnable example for non-trivial functions, in the language's docstring example format (`>>>` in Python, `@example` in JSDoc, runnable Examples in Go).
+
+      The tooling will surface this. Without it, your generated reference docs are a wall of bare signatures.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] No comments paraphrase the code; every inline comment names a *why* the code cannot show (constraint, invariant, workaround, decision).
+      - [ ] No comments reference the current task, ticket, or specific callers — that metadata lives in commit history and trackers.
+      - [ ] Every public function, class, module, and exported type has a docstring in the language's standard format.
+      - [ ] Docstrings cover summary, parameters with semantic descriptions, return value, errors/exceptions, examples for non-trivial functions.
+      - [ ] All `TODO` comments have a tracker link; no bare `TODO` or aspirational `// FIXME: maybe one day`.
+      - [ ] Stale comments (referring to removed code, fixed bugs, or renamed identifiers) were deleted in the PR that made them stale.
+      - [ ] No commented-out code; deletions are committed and rely on version history for archive.

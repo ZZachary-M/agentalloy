@@ -1,0 +1,220 @@
+skill_type: domain
+skill_id: refactoring-when-and-why
+canonical_name: Refactoring (When It Is Justified, When It Is Premature)
+category: design
+skill_class: domain
+domain_tags: [behavior-preserving, rule-of-three, just-in-time-refactor, opportunistic-refactor, premature-abstraction]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Martin Fowler, *Refactoring* (2nd ed., 2018) https://martinfowler.com/books/refactoring.html (verified 2026-05-04 against fixtures/upstream/curated/fowler.yaml topic `refactoring_definitions`); Kent Beck's "rule of three" formulation in *Smalltalk Best Practice Patterns*; internal review history on "preemptive refactor" PRs that introduced bugs in code that was working fine. Skill scope: deciding when refactoring is justified and when it is premature; not specific refactoring moves (covered in common-refactoring-moves), not refactoring safely (covered in refactoring-safely-with-tests).
+
+raw_prose: |
+  # Refactoring — When It Is Justified, When It Is Premature
+
+  Refactoring is changing the structure of code without changing its behavior. The rule is one sentence: refactor when the next change is hard, not when the code is "ugly" — and never refactor speculatively, far from the work that motivated it. Most refactoring that introduced regressions broke this rule. The author refactored code that was already working, motivated by aesthetics rather than friction, and the regression they caused traced to a behavior they did not realize the original code was preserving.
+
+  ## Refactoring is behavior-preserving
+
+  The defining property of a refactor is that observable behavior does not change. The same inputs produce the same outputs; the same APIs accept the same calls; the same database state results from the same operations. What changes is internal: structure, naming, organization, layering.
+
+  This is the property that lets refactoring be safe. If behavior is preserved, every existing test should still pass — by construction. A refactor that requires a test to be updated is not a refactor; it is a behavior change masquerading as one. Either tag it as a feature/fix and update the tests honestly, or back out the part that changed behavior and refactor just the rest.
+
+  ## Refactor when the next change is hard, not before
+
+  The trigger for a refactor is friction in the work you are about to do, not a sense that the code "should" be cleaner. Specifically:
+
+  - **You need to add a feature, but the existing code makes it expensive.** Refactor first, then add the feature on the cleaner shape.
+  - **You need to fix a bug, but the existing code makes the fix risky.** Refactor first to expose the surface, then fix.
+  - **You need to read the code to understand a downstream system.** A small refactor for understanding is fine — see reading-unfamiliar-code.
+
+  Refactoring without an immediate motivating change is speculative. The cleaned-up shape may be better; it may be better in the wrong dimensions, optimizing for an extension that never arrives. Worse, every refactor is a change, and every change is a chance to introduce a bug. A refactor that improves nothing imminent is trading certain bug risk for hypothetical clarity gain.
+
+  Kent Beck's formulation: "make the change easy, then make the easy change." The refactor enables the next concrete step. If you cannot name that step, the refactor is premature.
+
+  ## Rule of three
+
+  When you see duplication, the first instinct is to extract — pull the repeated code into a shared helper. Resist on the second occurrence. Wait for the third.
+
+  Two occurrences of similar code may diverge in their next iteration. They may share a current shape but represent different domain concepts that happen to look alike. Extracting too early creates an abstraction that has to be twisted as the cases evolve, and twisting an abstraction is harder than maintaining two simple cases.
+
+  Three occurrences are when the pattern is genuinely shared. By the third, you can see what is constant and what varies; the abstraction has data to be designed against rather than guessed at.
+
+  This is a rule of thumb, not a law. Sometimes two occurrences are obviously the same concept and extracting now is right. Sometimes three are still coincidence. The rule trains the instinct: do not extract before you have evidence that the shape is shared.
+
+  ## Opportunistic refactoring beats scheduled refactoring
+
+  Most successful refactoring happens as part of feature work — the boy-scout rule, "leave the code better than you found it." Touching a function for a feature is the cheapest opportunity to clean it up: the context is loaded, the tests are running, the change is small.
+
+  Scheduled "refactoring sprints" usually fail. The code being refactored is not the code anyone is currently working on, the team loses momentum on shipping features, and the refactor often misses what would actually have been useful because the friction was not present at the time.
+
+  Exception: large architectural shifts (split a monolith, replace a database, change the build system). These need scheduled work because they cannot be opportunistic. But they are rare; most refactoring is small and rides along.
+
+  ## Watch out for premature abstraction
+
+  The most expensive refactors create the wrong abstraction. Symptoms:
+
+  - **An abstraction with one caller.** Why does the abstraction exist? Inline it; if a second caller appears later, extract then.
+  - **An abstraction whose interface accommodates "future flexibility".** Configuration parameters that no current caller uses, optional flags that exist for "in case we need it." YAGNI applies — every option is a maintenance cost paid forever.
+  - **An abstraction that requires a comment explaining what it does.** If the abstraction's purpose is unclear, the abstraction is in the wrong place. Consider inlining.
+  - **Multiple implementations of an abstraction with one in production.** The abstraction was designed for variation that did not arrive. Collapse to the one shape that exists.
+
+  The cure for premature abstraction is to inline: pull the abstraction back into its caller, see the original concrete code, and let the next genuine demand for variation drive a new (likely different) abstraction. Inline is reversible; bad abstraction calcified into the codebase is not.
+
+  ## Refactoring is not for "code I do not like"
+
+  Aesthetic preferences are not justification for behavior-preserving rewrites. "I would have used a different pattern" is not a reason to change working code; it is a reason to write your next module the way you prefer. Touching code that already works because of taste is how regressions happen.
+
+  Specific examples that look like refactoring but are not:
+
+  - **Renaming a variable that already has a clear name.** Adds churn, makes git blame harder, achieves nothing.
+  - **Reformatting that the linter does not require.** Tabs vs spaces, brace placement, the auto-formatter has opinions; do not override.
+  - **Replacing one idiom with a synonymous one.** `[].forEach` vs `for...of` when both work; pick one project-wide and let lint enforce.
+
+  These are noise PRs. They do not enable a downstream change, they do not reduce future cost, they only churn the diff and risk a subtle change. Block at code review.
+
+  ## Anti-patterns
+
+  - **Refactor without a downstream change in mind.** No concrete "make the easy change" follows. Speculative.
+  - **Refactor and feature in one PR.** Reviewer cannot tell which lines preserve behavior and which add it. Split the PR — refactor first, behavior change second.
+  - **Refactor without test coverage.** Without tests, you cannot verify behavior was preserved. Either add characterization tests first, or do not refactor.
+  - **Big-bang refactor.** Three weeks of restructuring landed in one PR. Reviewable by no one; merges are surgical operations. Slice it.
+  - **Refactor by preference, not by friction.** "I think this would be cleaner with X." If the next change does not use X, the cleaning achieves nothing.
+  - **Inline is sometimes the right refactor.** Many refactor catalogs lean toward extraction. Sometimes the right move is the opposite — collapse two helpers, inline a one-caller function, replace a class with a pair of functions. Refactoring is bidirectional.
+
+  ## Refactoring is part of TDD's third step
+
+  In TDD, the cycle is red-green-refactor: write a failing test, make it pass, then clean up. The third step is where refactoring lives without being speculative — the green code just shipped, the test guards it, you have license to improve the shape now while context is loaded and verification is one command away.
+
+  Refactoring outside this cycle still applies the same shape: the green test suite is the safety net, the recent change is the context, and the cleanup is bounded by what the next step needs.
+
+  ## Verification
+
+  - [ ] The refactor is motivated by a specific upcoming change (feature, bug fix, comprehension); the next step is named.
+  - [ ] All existing tests pass before the refactor (green baseline) and after (post-refactor green) without test modifications.
+  - [ ] The PR contains only the refactor; behavior changes are in a separate PR or commit.
+  - [ ] Duplication being extracted has at least three occurrences (or a documented exception).
+  - [ ] No new abstraction has fewer than two callers; no new abstraction includes options no current caller uses.
+  - [ ] No purely-aesthetic changes (renames of clear names, idiom-swap reformatting) ride along.
+  - [ ] Inline was considered as an alternative move when extraction was the instinct.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Refactoring — When It Is Justified, When It Is Premature
+
+      Refactoring is changing the structure of code without changing its behavior. The rule is one sentence: refactor when the next change is hard, not when the code is "ugly" — and never refactor speculatively, far from the work that motivated it. Most refactoring that introduced regressions broke this rule. The author refactored code that was already working, motivated by aesthetics rather than friction, and the regression they caused traced to a behavior they did not realize the original code was preserving.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Refactoring is behavior-preserving
+
+      The defining property of a refactor is that observable behavior does not change. The same inputs produce the same outputs; the same APIs accept the same calls; the same database state results from the same operations. What changes is internal: structure, naming, organization, layering.
+
+      This is the property that lets refactoring be safe. If behavior is preserved, every existing test should still pass — by construction. A refactor that requires a test to be updated is not a refactor; it is a behavior change masquerading as one. Either tag it as a feature/fix and update the tests honestly, or back out the part that changed behavior and refactor just the rest.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Refactor when the next change is hard, not before
+
+      The trigger for a refactor is friction in the work you are about to do, not a sense that the code "should" be cleaner. Specifically:
+
+      - **You need to add a feature, but the existing code makes it expensive.** Refactor first, then add the feature on the cleaner shape.
+      - **You need to fix a bug, but the existing code makes the fix risky.** Refactor first to expose the surface, then fix.
+      - **You need to read the code to understand a downstream system.** A small refactor for understanding is fine — see reading-unfamiliar-code.
+
+      Refactoring without an immediate motivating change is speculative. The cleaned-up shape may be better; it may be better in the wrong dimensions, optimizing for an extension that never arrives. Worse, every refactor is a change, and every change is a chance to introduce a bug. A refactor that improves nothing imminent is trading certain bug risk for hypothetical clarity gain.
+
+      Kent Beck's formulation: "make the change easy, then make the easy change." The refactor enables the next concrete step. If you cannot name that step, the refactor is premature.
+
+  - sequence: 4
+    fragment_type: rationale
+    content: |
+      ## Rule of three
+
+      When you see duplication, the first instinct is to extract — pull the repeated code into a shared helper. Resist on the second occurrence. Wait for the third.
+
+      Two occurrences of similar code may diverge in their next iteration. They may share a current shape but represent different domain concepts that happen to look alike. Extracting too early creates an abstraction that has to be twisted as the cases evolve, and twisting an abstraction is harder than maintaining two simple cases.
+
+      Three occurrences are when the pattern is genuinely shared. By the third, you can see what is constant and what varies; the abstraction has data to be designed against rather than guessed at.
+
+      This is a rule of thumb, not a law. Sometimes two occurrences are obviously the same concept and extracting now is right. Sometimes three are still coincidence. The rule trains the instinct: do not extract before you have evidence that the shape is shared.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Opportunistic refactoring beats scheduled refactoring
+
+      Most successful refactoring happens as part of feature work — the boy-scout rule, "leave the code better than you found it." Touching a function for a feature is the cheapest opportunity to clean it up: the context is loaded, the tests are running, the change is small.
+
+      Scheduled "refactoring sprints" usually fail. The code being refactored is not the code anyone is currently working on, the team loses momentum on shipping features, and the refactor often misses what would actually have been useful because the friction was not present at the time.
+
+      Exception: large architectural shifts (split a monolith, replace a database, change the build system). These need scheduled work because they cannot be opportunistic. But they are rare; most refactoring is small and rides along.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## Watch out for premature abstraction
+
+      The most expensive refactors create the wrong abstraction. Symptoms:
+
+      - **An abstraction with one caller.** Why does the abstraction exist? Inline it; if a second caller appears later, extract then.
+      - **An abstraction whose interface accommodates "future flexibility".** Configuration parameters that no current caller uses, optional flags that exist for "in case we need it." YAGNI applies — every option is a maintenance cost paid forever.
+      - **An abstraction that requires a comment explaining what it does.** If the abstraction's purpose is unclear, the abstraction is in the wrong place. Consider inlining.
+      - **Multiple implementations of an abstraction with one in production.** The abstraction was designed for variation that did not arrive. Collapse to the one shape that exists.
+
+      The cure for premature abstraction is to inline: pull the abstraction back into its caller, see the original concrete code, and let the next genuine demand for variation drive a new (likely different) abstraction. Inline is reversible; bad abstraction calcified into the codebase is not.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Refactoring is not for "code I do not like"
+
+      Aesthetic preferences are not justification for behavior-preserving rewrites. "I would have used a different pattern" is not a reason to change working code; it is a reason to write your next module the way you prefer. Touching code that already works because of taste is how regressions happen.
+
+      Specific examples that look like refactoring but are not:
+
+      - **Renaming a variable that already has a clear name.** Adds churn, makes git blame harder, achieves nothing.
+      - **Reformatting that the linter does not require.** Tabs vs spaces, brace placement, the auto-formatter has opinions; do not override.
+      - **Replacing one idiom with a synonymous one.** `[].forEach` vs `for...of` when both work; pick one project-wide and let lint enforce.
+
+      These are noise PRs. They do not enable a downstream change, they do not reduce future cost, they only churn the diff and risk a subtle change. Block at code review.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Refactor without a downstream change in mind.** No concrete "make the easy change" follows. Speculative.
+      - **Refactor and feature in one PR.** Reviewer cannot tell which lines preserve behavior and which add it. Split the PR — refactor first, behavior change second.
+      - **Refactor without test coverage.** Without tests, you cannot verify behavior was preserved. Either add characterization tests first, or do not refactor.
+      - **Big-bang refactor.** Three weeks of restructuring landed in one PR. Reviewable by no one; merges are surgical operations. Slice it.
+      - **Refactor by preference, not by friction.** "I think this would be cleaner with X." If the next change does not use X, the cleaning achieves nothing.
+      - **Inline is sometimes the right refactor.** Many refactor catalogs lean toward extraction. Sometimes the right move is the opposite — collapse two helpers, inline a one-caller function, replace a class with a pair of functions. Refactoring is bidirectional.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Refactoring is part of TDD's third step
+
+      In TDD, the cycle is red-green-refactor: write a failing test, make it pass, then clean up. The third step is where refactoring lives without being speculative — the green code just shipped, the test guards it, you have license to improve the shape now while context is loaded and verification is one command away.
+
+      Refactoring outside this cycle still applies the same shape: the green test suite is the safety net, the recent change is the context, and the cleanup is bounded by what the next step needs.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] The refactor is motivated by a specific upcoming change (feature, bug fix, comprehension); the next step is named.
+      - [ ] All existing tests pass before the refactor (green baseline) and after (post-refactor green) without test modifications.
+      - [ ] The PR contains only the refactor; behavior changes are in a separate PR or commit.
+      - [ ] Duplication being extracted has at least three occurrences (or a documented exception).
+      - [ ] No new abstraction has fewer than two callers; no new abstraction includes options no current caller uses.
+      - [ ] No purely-aesthetic changes (renames of clear names, idiom-swap reformatting) ride along.
+      - [ ] Inline was considered as an alternative move when extraction was the instinct.

@@ -1,0 +1,218 @@
+skill_type: domain
+skill_id: refactoring-safely-with-tests
+canonical_name: Refactoring Safely with Tests (Characterization Tests and the Green Bar)
+category: design
+skill_class: domain
+domain_tags: [characterization-tests, green-bar, golden-master, small-steps, bisect-on-failure]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Michael Feathers, *Working Effectively with Legacy Code*, ch. 13 ("I Need to Make a Change, but I Don't Know What Tests to Write") (verified 2026-05-04 against fixtures/upstream/curated/feathers.yaml topic `characterization_tests`); Martin Fowler, *Refactoring*, ch. 1 on the small-step discipline; internal review history on refactors that broke production because the test suite was thin where the refactor reached. Skill scope: the discipline of using tests as the safety net during a refactor — adding tests first when coverage is missing, taking small reversible steps, keeping the bar green; not test-writing fundamentals (covered in TDD), not refactoring decisions (covered in refactoring-when-and-why).
+
+raw_prose: |
+  # Refactoring Safely with Tests
+
+  Refactoring safely is the discipline of treating the test suite as the safety net the refactor relies on. The rule is one sentence: the bar is green before the refactor starts, green after each small step, and green at the end — and any code without tests gets characterization tests before it gets refactored. Most refactors that introduced regressions skipped this discipline somewhere — there were no tests covering the surface that broke, the refactor took a big step that obscured which line caused the regression, or the bar went red and the author kept going.
+
+  ## Tests are the safety net, not the goal
+
+  In a refactor, tests do one job: they catch behavior changes you did not intend. Every test that runs green is one fewer way the refactor could have silently broken something. The more of the changed surface is covered, the safer the refactor.
+
+  This is why a green baseline before the refactor matters. If the suite is red before you start, you cannot tell whether a test failure during the refactor is your fault or pre-existing. Get to green first; refactor second.
+
+  ## Add characterization tests for untested code
+
+  When the surface you want to refactor is not covered by tests, do not refactor blindly. Add **characterization tests** first: tests that document the current behavior, whatever it is. The point is not to verify the behavior is correct — it is to lock the behavior in place so the refactor cannot change it accidentally.
+
+  Feathers' technique for legacy code: pick a realistic input, run the code, observe the output, write a test that asserts that output. The test passes from day one. Now you have a regression sentinel for the next change. Repeat until the surface you intend to refactor has enough coverage that you would be confident a behavior change would trip a test.
+
+  Characterization tests sometimes pin behavior that turns out to be a bug. That is fine — the test documents the behavior, not its correctness. When the bug is fixed in a separate change, that change updates the characterization test honestly with a note. The refactor itself stays behavior-preserving.
+
+  ## Small steps with green between each
+
+  The other half of safe refactoring is taking small steps. Each step should:
+
+  - **Be one named refactoring move.** Extract function, rename variable, inline helper. Not "rewrote this section."
+  - **Compile and run between steps.** The bar stays green between every step, not just at the end of the PR.
+  - **Be revertable in one git operation.** A bad step is reverted with `git reset` or by reverting one commit; you do not unwind a chain.
+
+  This is slower than it sounds in the planning. In practice it is faster, because when something breaks — and something will break — you know exactly which step caused it. The alternative is a big-bang refactor that ends red and you spend an hour bisecting.
+
+  Modern editors with safe-refactoring tooling (LSP rename, IntelliJ extract method, `gitnexus_rename`) make most steps a single keystroke. The discipline is to use them, not to do the move by hand.
+
+  ## When the bar goes red, stop
+
+  The defining moment of safe refactoring is when a test fails. The discipline: stop and understand the failure. Do not push through, do not assume the test was wrong, do not "fix" the test to match the new behavior.
+
+  The failing test is one of three things:
+
+  - **A real regression.** Your refactor changed behavior. Revert the last step, look at the diff, find the behavior change, and either redo the refactor without it or recognize you are refactoring something that needs a feature-level change first.
+  - **A test that was tied to implementation, not behavior.** The test asserted on internal structure that the refactor legitimately changed. Update the test to assert on observable behavior instead, then re-run.
+  - **A pre-existing flaky test.** Run it again to confirm. If flaky, fix or skip in a separate change before continuing.
+
+  Updating the test "because the new behavior is fine" is the cardinal sin. The test is the safety net; loosening it on the fly is how silent regressions ship.
+
+  ## Refactoring under partial coverage
+
+  Real codebases rarely have full test coverage. The pragmatic version of "tests as safety net":
+
+  - **Identify the surface the refactor reaches.** Which functions, classes, and modules will the refactor touch?
+  - **Check coverage on that surface.** If it is well-covered, proceed with confidence.
+  - **Where coverage is thin, add characterization tests for the highest-risk paths.** Not every line — the paths that, if they broke, would be hardest to detect in production.
+  - **For the rest, accept the risk explicitly.** Know which paths are uncovered; instrument them in observability or smoke-test them manually after the refactor.
+
+  Trying to add 100% coverage before any refactor stalls the work indefinitely. The goal is enough coverage to catch the regression you are most likely to introduce, not certainty.
+
+  ## Tests over types over compilation
+
+  Compilation passing is a coarse signal — it catches type-level mismatches and nothing else. Tests catch behavior mismatches. Both matter; tests catch more.
+
+  The corollary: a refactor that "compiles, types check, tests pass" is in a much better state than one that "compiles, types check, but I did not run the tests." Run the tests. Read the output (see verification-before-completion). The exit code alone is not evidence.
+
+  Specifically for typed languages, a refactor that changes types should also re-run integration tests. Type changes can subtly alter runtime behavior — different conversions, different default values, different exception types — that the type checker cannot catch.
+
+  ## Anti-patterns
+
+  - **Refactor without a green baseline.** Pre-existing failures hide your regressions in the noise.
+  - **Big-step refactor, only running tests at the end.** When the bar goes red, you cannot bisect. Take small steps.
+  - **"Update the test" as the response to a failure.** The failure is signal; treating it as noise is how regressions ship.
+  - **Refactoring code with no tests, without adding characterization tests first.** No safety net. Even small refactors silently break.
+  - **Editing-and-running, not committing between steps.** When something breaks, you cannot revert one step — you have to remember what you did and undo it manually.
+  - **Trusting the type checker.** Types catch a subset of regressions. Run the tests too.
+  - **Skipping integration tests because unit tests pass.** Refactors that touch boundaries (DB, network, IO) need integration coverage. Unit tests against mocks miss real integration drift.
+
+  ## Commit each step
+
+  Commit at each green step, even within a PR you will squash-merge. The commits give you bisectability if a regression is reported later — `git bisect` finds the exact step that caused the breakage. Without per-step commits, the entire refactor is one suspect.
+
+  Commit messages can be terse — "extract sendInvoice", "rename usr to user" — but each commit should leave the bar green. A commit with a red bar is a bug commit; squash it into its predecessor or fix it in the next commit before continuing.
+
+  ## Verification
+
+  - [ ] The full test suite was green before the refactor started (baseline confirmed).
+  - [ ] Code being refactored had test coverage; surfaces without coverage got characterization tests first.
+  - [ ] The refactor was done in small named steps, with the bar green between each.
+  - [ ] Each step was committed (even if the PR will squash-merge), so regressions can be bisected to a single step.
+  - [ ] Tests were not updated to make a failure pass; failures were treated as signal and the cause was found.
+  - [ ] Integration tests were run for any refactor that touched boundaries (DB, network, IO), not just unit tests.
+  - [ ] Final test run output was read in full (skip count, warnings, summary line) — not just the exit code.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Refactoring Safely with Tests
+
+      Refactoring safely is the discipline of treating the test suite as the safety net the refactor relies on. The rule is one sentence: the bar is green before the refactor starts, green after each small step, and green at the end — and any code without tests gets characterization tests before it gets refactored. Most refactors that introduced regressions skipped this discipline somewhere — there were no tests covering the surface that broke, the refactor took a big step that obscured which line caused the regression, or the bar went red and the author kept going.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Tests are the safety net, not the goal
+
+      In a refactor, tests do one job: they catch behavior changes you did not intend. Every test that runs green is one fewer way the refactor could have silently broken something. The more of the changed surface is covered, the safer the refactor.
+
+      This is why a green baseline before the refactor matters. If the suite is red before you start, you cannot tell whether a test failure during the refactor is your fault or pre-existing. Get to green first; refactor second.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Add characterization tests for untested code
+
+      When the surface you want to refactor is not covered by tests, do not refactor blindly. Add **characterization tests** first: tests that document the current behavior, whatever it is. The point is not to verify the behavior is correct — it is to lock the behavior in place so the refactor cannot change it accidentally.
+
+      Feathers' technique for legacy code: pick a realistic input, run the code, observe the output, write a test that asserts that output. The test passes from day one. Now you have a regression sentinel for the next change. Repeat until the surface you intend to refactor has enough coverage that you would be confident a behavior change would trip a test.
+
+      Characterization tests sometimes pin behavior that turns out to be a bug. That is fine — the test documents the behavior, not its correctness. When the bug is fixed in a separate change, that change updates the characterization test honestly with a note. The refactor itself stays behavior-preserving.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Small steps with green between each
+
+      The other half of safe refactoring is taking small steps. Each step should:
+
+      - **Be one named refactoring move.** Extract function, rename variable, inline helper. Not "rewrote this section."
+      - **Compile and run between steps.** The bar stays green between every step, not just at the end of the PR.
+      - **Be revertable in one git operation.** A bad step is reverted with `git reset` or by reverting one commit; you do not unwind a chain.
+
+      This is slower than it sounds in the planning. In practice it is faster, because when something breaks — and something will break — you know exactly which step caused it. The alternative is a big-bang refactor that ends red and you spend an hour bisecting.
+
+      Modern editors with safe-refactoring tooling (LSP rename, IntelliJ extract method, `gitnexus_rename`) make most steps a single keystroke. The discipline is to use them, not to do the move by hand.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## When the bar goes red, stop
+
+      The defining moment of safe refactoring is when a test fails. The discipline: stop and understand the failure. Do not push through, do not assume the test was wrong, do not "fix" the test to match the new behavior.
+
+      The failing test is one of three things:
+
+      - **A real regression.** Your refactor changed behavior. Revert the last step, look at the diff, find the behavior change, and either redo the refactor without it or recognize you are refactoring something that needs a feature-level change first.
+      - **A test that was tied to implementation, not behavior.** The test asserted on internal structure that the refactor legitimately changed. Update the test to assert on observable behavior instead, then re-run.
+      - **A pre-existing flaky test.** Run it again to confirm. If flaky, fix or skip in a separate change before continuing.
+
+      Updating the test "because the new behavior is fine" is the cardinal sin. The test is the safety net; loosening it on the fly is how silent regressions ship.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Refactoring under partial coverage
+
+      Real codebases rarely have full test coverage. The pragmatic version of "tests as safety net":
+
+      - **Identify the surface the refactor reaches.** Which functions, classes, and modules will the refactor touch?
+      - **Check coverage on that surface.** If it is well-covered, proceed with confidence.
+      - **Where coverage is thin, add characterization tests for the highest-risk paths.** Not every line — the paths that, if they broke, would be hardest to detect in production.
+      - **For the rest, accept the risk explicitly.** Know which paths are uncovered; instrument them in observability or smoke-test them manually after the refactor.
+
+      Trying to add 100% coverage before any refactor stalls the work indefinitely. The goal is enough coverage to catch the regression you are most likely to introduce, not certainty.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## Tests over types over compilation
+
+      Compilation passing is a coarse signal — it catches type-level mismatches and nothing else. Tests catch behavior mismatches. Both matter; tests catch more.
+
+      The corollary: a refactor that "compiles, types check, tests pass" is in a much better state than one that "compiles, types check, but I did not run the tests." Run the tests. Read the output (see verification-before-completion). The exit code alone is not evidence.
+
+      Specifically for typed languages, a refactor that changes types should also re-run integration tests. Type changes can subtly alter runtime behavior — different conversions, different default values, different exception types — that the type checker cannot catch.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Refactor without a green baseline.** Pre-existing failures hide your regressions in the noise.
+      - **Big-step refactor, only running tests at the end.** When the bar goes red, you cannot bisect. Take small steps.
+      - **"Update the test" as the response to a failure.** The failure is signal; treating it as noise is how regressions ship.
+      - **Refactoring code with no tests, without adding characterization tests first.** No safety net. Even small refactors silently break.
+      - **Editing-and-running, not committing between steps.** When something breaks, you cannot revert one step — you have to remember what you did and undo it manually.
+      - **Trusting the type checker.** Types catch a subset of regressions. Run the tests too.
+      - **Skipping integration tests because unit tests pass.** Refactors that touch boundaries (DB, network, IO) need integration coverage. Unit tests against mocks miss real integration drift.
+
+  - sequence: 9
+    fragment_type: execution
+    content: |
+      ## Commit each step
+
+      Commit at each green step, even within a PR you will squash-merge. The commits give you bisectability if a regression is reported later — `git bisect` finds the exact step that caused the breakage. Without per-step commits, the entire refactor is one suspect.
+
+      Commit messages can be terse — "extract sendInvoice", "rename usr to user" — but each commit should leave the bar green. A commit with a red bar is a bug commit; squash it into its predecessor or fix it in the next commit before continuing.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] The full test suite was green before the refactor started (baseline confirmed).
+      - [ ] Code being refactored had test coverage; surfaces without coverage got characterization tests first.
+      - [ ] The refactor was done in small named steps, with the bar green between each.
+      - [ ] Each step was committed (even if the PR will squash-merge), so regressions can be bisected to a single step.
+      - [ ] Tests were not updated to make a failure pass; failures were treated as signal and the cause was found.
+      - [ ] Integration tests were run for any refactor that touched boundaries (DB, network, IO), not just unit tests.
+      - [ ] Final test run output was read in full (skip count, warnings, summary line) — not just the exit code.

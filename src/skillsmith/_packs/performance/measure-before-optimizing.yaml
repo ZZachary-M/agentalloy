@@ -1,0 +1,228 @@
+skill_type: domain
+skill_id: measure-before-optimizing
+canonical_name: Measure Before Optimizing (Don't Guess)
+category: design
+skill_class: domain
+domain_tags: [premature-optimization, baseline-measurement, before-and-after, profiling-vs-guessing, micro-benchmark]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Donald Knuth's "premature optimization is the root of all evil" essay, *Structured Programming with go to Statements* (1974) (verified 2026-05-04 via cached PDF; full quote context preserved); Brendan Gregg's *Systems Performance* (2nd ed.) on the measure-first discipline; internal review history on optimization PRs that improved a metric while making the user-visible flow slower. Skill scope: the discipline of measuring before optimizing and confirming improvement after; not specific profiling tools (covered in profiling-correctly), not budgets (covered in performance-budgets).
+
+raw_prose: |
+  # Measure Before Optimizing
+
+  Optimization is changing the code to make it faster, and the rule is one sentence: measure before, measure after, and only ship the change if the measurement shows the improvement you predicted. Most "optimizations" that did not produce real speedups skipped this discipline somewhere. The author guessed where the bottleneck was, applied a textbook fix to a non-bottleneck, and shipped a more complex codebase that ran the same speed (or sometimes slower because of the new complexity).
+
+  ## Knuth's quote in full
+
+  The famous "premature optimization is the root of all evil" line comes from a 1974 paper, and the full sentence matters: "We *should* forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil. Yet we should not pass up our opportunities in that critical 3%." Knuth was not telling programmers never to optimize — he was saying optimization without evidence is wasted, and the small fraction of code where it matters is identifiable through measurement.
+
+  Two things follow:
+
+  - **Most code does not need to be fast.** A function called once per request, taking 2ms, is not a target. Optimizing it from 2ms to 1ms saves nothing observable.
+  - **The hot path is small and discoverable.** When performance matters, profiling will show where. The hot 3% is where optimization pays.
+
+  Without measurement, every line looks equally worth optimizing, and the time goes to wherever the author finds interesting rather than wherever it matters.
+
+  ## Three failure modes guessing produces
+
+  When optimization happens without measurement, the result is one of three failure modes:
+
+  - **Optimized the wrong thing.** Spent two days speeding up a function that takes 1% of total time. Total improvement: 1% × speedup factor — usually invisible.
+  - **Made it slower.** Added caching that misses more than it hits, added parallelism that contention costs more than it saves, added a clever algorithm whose constant factors dwarf the asymptotic win on real input sizes. Without before-and-after measurement, this is invisible.
+  - **Made it more complex with no benefit.** The optimized version is harder to read, harder to test, harder to change. The team pays maintenance forever for a speedup that did not materialize.
+
+  All three are common. All three are caught by measure-before-and-after.
+
+  ## Establish a baseline
+
+  Before optimizing, capture a baseline. The minimum:
+
+  - **A representative workload.** A real or realistic input that exercises the surface you are optimizing. "Hello world" is not representative; production traffic captures are. A canonical synthetic benchmark is the next best thing.
+  - **A timing measurement.** Run the workload, record wall clock or CPU time, run again to confirm stability. A single measurement is not a baseline; three runs that agree within ~5% is.
+  - **The metric that matters.** Latency? Throughput? CPU? Memory? Disk? Pick one to optimize for. Optimizing for "performance" without naming the metric produces incoherent changes.
+
+  Baselines are throwaway artifacts — they do not need to be permanent. They do need to exist long enough to compare against post-optimization measurements.
+
+  ## Confirm the improvement after
+
+  After the optimization, run the same workload and compare. Three outcomes:
+
+  - **The metric improved meaningfully.** Ship it. Record the before-and-after numbers in the PR description so reviewers can see the gain matches the cost of the change.
+  - **The metric did not improve.** Revert. The optimization did not work. Time spent is gone; do not compound by shipping the change.
+  - **The metric improved on this workload but a different metric got worse.** Re-evaluate. A latency win that costs 30% more memory may or may not be worth it; the trade-off needs explicit acceptance.
+
+  "Meaningfully" is fuzzy. As a rule of thumb, an improvement under 5% on a single benchmark is noise; improvements 10%+ are real. For latency-sensitive work, p99 changes matter more than mean changes — the mean often hides regressions in the tail.
+
+  ## Micro-benchmarks lie about real systems
+
+  A micro-benchmark measures one function in isolation. It is useful for comparing two implementations of the same function, but it does not predict real-system performance. Real systems involve cache effects, memory pressure, contention, network, IO — none of which the micro-benchmark sees.
+
+  Two patterns to keep micro-benchmarks honest:
+
+  - **Cross-check with end-to-end measurement.** A micro-benchmark says "function X is 2x faster"; an end-to-end measurement says "no observable change in p99 latency." Trust the end-to-end. The function was not the bottleneck.
+  - **Use realistic input sizes.** A micro-benchmark on 100-element arrays may favor algorithms that lose on 1M-element arrays. Match input sizes to production.
+
+  Micro-benchmarks are useful as a faster iteration loop while exploring alternatives, but the final decision rests on the end-to-end measurement.
+
+  ## Optimization is also a refactor
+
+  Most optimizations change code shape — extract a hot path, replace a clear algorithm with a faster one, restructure data layout. The same discipline that applies to refactoring applies here: tests guard behavior, small steps make regressions bisectable, the bar stays green between steps.
+
+  See refactoring-safely-with-tests for the test-as-safety-net discipline. The only difference: in refactoring, the goal is structural; in optimization, the goal is metric improvement. Both share the requirement that observable behavior does not change.
+
+  An optimization that changes behavior is not an optimization — it is a feature change wearing a performance label. Tag it accordingly and review it on its merits.
+
+  ## Anti-patterns
+
+  - **Optimization without measurement.** Speedup based on intuition, not data. May or may not work.
+  - **Single-run measurement.** "I ran it and it was faster." Once is not statistics. Run multiple times; confirm stability.
+  - **Optimizing the wrong metric.** Improving CPU time when latency is the SLO; improving throughput when tail latency is the user pain.
+  - **Premature optimization in new code.** "I'll write it efficiently the first time." Usually means writing it complex the first time. Write it clear; profile if needed; optimize the bottleneck.
+  - **Optimization that complicates without measured benefit.** A "fast path" with three branches that the data shows is hit 1% of the time. The complexity costs forever; the benefit was 0.5%.
+  - **Comparing different workloads.** Baseline ran on one machine, post-optimization on another. Or different OS versions, different load levels. Hold everything else constant.
+  - **Skipping the after-measurement.** Author shipped because they "expect" it to be faster. Half the time it is not.
+
+  ## When optimization is genuinely premature
+
+  Some optimization is preemptive in the right way: the author knows from past experience or from a planned scaling threshold that a given approach will not scale. Caching that anticipates a known load is sometimes worth doing before the load arrives, if the cost is small.
+
+  But the bar is "we know the load is coming and the cost of optimizing now is small." Not "this might be slow someday so let me write it complex now." The first is informed planning; the second is speculative complexity.
+
+  Even informed preemptive optimization should record what threshold motivated it, so a future reader can re-evaluate when the threshold changes.
+
+  ## Verification
+
+  - [ ] Before the optimization, a baseline measurement was captured: representative workload, timing across multiple runs, the metric that matters.
+  - [ ] After the optimization, the same workload was measured and compared to the baseline.
+  - [ ] The PR description records before-and-after numbers so reviewers can see the gain.
+  - [ ] If the optimization did not produce a meaningful improvement (~10% or more on the chosen metric), the change was reverted, not shipped.
+  - [ ] Trade-offs (memory increase, complexity increase, code clarity loss) are named explicitly and accepted on their merits.
+  - [ ] No optimization was based on micro-benchmarks alone; an end-to-end measurement confirmed the gain in the real-system context.
+  - [ ] The optimized code passes the same tests as the unoptimized code; no behavior changes rode along.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Measure Before Optimizing
+
+      Optimization is changing the code to make it faster, and the rule is one sentence: measure before, measure after, and only ship the change if the measurement shows the improvement you predicted. Most "optimizations" that did not produce real speedups skipped this discipline somewhere. The author guessed where the bottleneck was, applied a textbook fix to a non-bottleneck, and shipped a more complex codebase that ran the same speed (or sometimes slower because of the new complexity).
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Knuth's quote in full
+
+      The famous "premature optimization is the root of all evil" line comes from a 1974 paper, and the full sentence matters: "We *should* forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil. Yet we should not pass up our opportunities in that critical 3%." Knuth was not telling programmers never to optimize — he was saying optimization without evidence is wasted, and the small fraction of code where it matters is identifiable through measurement.
+
+      Two things follow:
+
+      - **Most code does not need to be fast.** A function called once per request, taking 2ms, is not a target. Optimizing it from 2ms to 1ms saves nothing observable.
+      - **The hot path is small and discoverable.** When performance matters, profiling will show where. The hot 3% is where optimization pays.
+
+      Without measurement, every line looks equally worth optimizing, and the time goes to wherever the author finds interesting rather than wherever it matters.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Three failure modes guessing produces
+
+      When optimization happens without measurement, the result is one of three failure modes:
+
+      - **Optimized the wrong thing.** Spent two days speeding up a function that takes 1% of total time. Total improvement: 1% × speedup factor — usually invisible.
+      - **Made it slower.** Added caching that misses more than it hits, added parallelism that contention costs more than it saves, added a clever algorithm whose constant factors dwarf the asymptotic win on real input sizes. Without before-and-after measurement, this is invisible.
+      - **Made it more complex with no benefit.** The optimized version is harder to read, harder to test, harder to change. The team pays maintenance forever for a speedup that did not materialize.
+
+      All three are common. All three are caught by measure-before-and-after.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Establish a baseline
+
+      Before optimizing, capture a baseline. The minimum:
+
+      - **A representative workload.** A real or realistic input that exercises the surface you are optimizing. "Hello world" is not representative; production traffic captures are. A canonical synthetic benchmark is the next best thing.
+      - **A timing measurement.** Run the workload, record wall clock or CPU time, run again to confirm stability. A single measurement is not a baseline; three runs that agree within ~5% is.
+      - **The metric that matters.** Latency? Throughput? CPU? Memory? Disk? Pick one to optimize for. Optimizing for "performance" without naming the metric produces incoherent changes.
+
+      Baselines are throwaway artifacts — they do not need to be permanent. They do need to exist long enough to compare against post-optimization measurements.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Confirm the improvement after
+
+      After the optimization, run the same workload and compare. Three outcomes:
+
+      - **The metric improved meaningfully.** Ship it. Record the before-and-after numbers in the PR description so reviewers can see the gain matches the cost of the change.
+      - **The metric did not improve.** Revert. The optimization did not work. Time spent is gone; do not compound by shipping the change.
+      - **The metric improved on this workload but a different metric got worse.** Re-evaluate. A latency win that costs 30% more memory may or may not be worth it; the trade-off needs explicit acceptance.
+
+      "Meaningfully" is fuzzy. As a rule of thumb, an improvement under 5% on a single benchmark is noise; improvements 10%+ are real. For latency-sensitive work, p99 changes matter more than mean changes — the mean often hides regressions in the tail.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## Micro-benchmarks lie about real systems
+
+      A micro-benchmark measures one function in isolation. It is useful for comparing two implementations of the same function, but it does not predict real-system performance. Real systems involve cache effects, memory pressure, contention, network, IO — none of which the micro-benchmark sees.
+
+      Two patterns to keep micro-benchmarks honest:
+
+      - **Cross-check with end-to-end measurement.** A micro-benchmark says "function X is 2x faster"; an end-to-end measurement says "no observable change in p99 latency." Trust the end-to-end. The function was not the bottleneck.
+      - **Use realistic input sizes.** A micro-benchmark on 100-element arrays may favor algorithms that lose on 1M-element arrays. Match input sizes to production.
+
+      Micro-benchmarks are useful as a faster iteration loop while exploring alternatives, but the final decision rests on the end-to-end measurement.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## Optimization is also a refactor
+
+      Most optimizations change code shape — extract a hot path, replace a clear algorithm with a faster one, restructure data layout. The same discipline that applies to refactoring applies here: tests guard behavior, small steps make regressions bisectable, the bar stays green between steps.
+
+      See refactoring-safely-with-tests for the test-as-safety-net discipline. The only difference: in refactoring, the goal is structural; in optimization, the goal is metric improvement. Both share the requirement that observable behavior does not change.
+
+      An optimization that changes behavior is not an optimization — it is a feature change wearing a performance label. Tag it accordingly and review it on its merits.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Optimization without measurement.** Speedup based on intuition, not data. May or may not work.
+      - **Single-run measurement.** "I ran it and it was faster." Once is not statistics. Run multiple times; confirm stability.
+      - **Optimizing the wrong metric.** Improving CPU time when latency is the SLO; improving throughput when tail latency is the user pain.
+      - **Premature optimization in new code.** "I'll write it efficiently the first time." Usually means writing it complex the first time. Write it clear; profile if needed; optimize the bottleneck.
+      - **Optimization that complicates without measured benefit.** A "fast path" with three branches that the data shows is hit 1% of the time. The complexity costs forever; the benefit was 0.5%.
+      - **Comparing different workloads.** Baseline ran on one machine, post-optimization on another. Or different OS versions, different load levels. Hold everything else constant.
+      - **Skipping the after-measurement.** Author shipped because they "expect" it to be faster. Half the time it is not.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## When optimization is genuinely premature
+
+      Some optimization is preemptive in the right way: the author knows from past experience or from a planned scaling threshold that a given approach will not scale. Caching that anticipates a known load is sometimes worth doing before the load arrives, if the cost is small.
+
+      But the bar is "we know the load is coming and the cost of optimizing now is small." Not "this might be slow someday so let me write it complex now." The first is informed planning; the second is speculative complexity.
+
+      Even informed preemptive optimization should record what threshold motivated it, so a future reader can re-evaluate when the threshold changes.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Before the optimization, a baseline measurement was captured: representative workload, timing across multiple runs, the metric that matters.
+      - [ ] After the optimization, the same workload was measured and compared to the baseline.
+      - [ ] The PR description records before-and-after numbers so reviewers can see the gain.
+      - [ ] If the optimization did not produce a meaningful improvement (~10% or more on the chosen metric), the change was reverted, not shipped.
+      - [ ] Trade-offs (memory increase, complexity increase, code clarity loss) are named explicitly and accepted on their merits.
+      - [ ] No optimization was based on micro-benchmarks alone; an end-to-end measurement confirmed the gain in the real-system context.
+      - [ ] The optimized code passes the same tests as the unoptimized code; no behavior changes rode along.

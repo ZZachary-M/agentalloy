@@ -1,0 +1,187 @@
+skill_type: domain
+skill_id: postmortem
+canonical_name: Postmortem (Blameless Incident Analysis and Follow-Through)
+category: design
+skill_class: domain
+domain_tags: [blameless-postmortem, root-cause-analysis, contributing-factors, action-items, follow-through]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Google SRE Book chapter 15 "Postmortem Culture" https://sre.google/sre-book/postmortem-culture/ (verified 2026-05-04 against fixtures/upstream/curated/sre.yaml topic `postmortem`); PagerDuty incident response postmortem guide https://response.pagerduty.com/after/post_mortem_process/; internal review history on stale action items and "the deploy script was bad" single-cause postmortems. Skill scope: writing the postmortem document and following through on action items after an incident is resolved; not the live incident response itself (covered in incident-response).
+
+raw_prose: |
+  # Postmortem
+
+  A postmortem is the document that turns an incident into organizational learning. The rule is one sentence: postmortems are blameless, evidence-based, and produce action items that someone owns and ships. Most postmortems that did not improve anything failed this rule somewhere — they named a person instead of a system, they recorded opinions instead of timestamps, or they listed action items that no one was responsible for and that quietly aged out.
+
+  ## Blameless means systems, not people
+
+  "Blameless" does not mean omitting names. It means analyzing the *system* that allowed a human action to cause harm. If an engineer ran a destructive command, the postmortem asks why the command was destructive when run by mistake — not who ran it. If a deploy went out unreviewed, the postmortem asks why the deploy path allowed unreviewed pushes — not who pushed.
+
+  This framing matters because individuals are replaceable; systems persist. A postmortem that ends with "Engineer X will be more careful" produces no improvement — the next engineer in that role inherits the same trap. A postmortem that ends with "Add a pre-deploy lint that flags destructive migrations" makes the trap harder to fall into.
+
+  ## What goes in the document
+
+  Every postmortem covers the same six sections. Skipping any of them produces a document that cannot be acted on later.
+
+  - **Summary.** One paragraph: what happened, when, what the impact was, how long it lasted. A reader scanning the docs index needs to know in 10 seconds whether this incident is relevant to them.
+  - **Impact.** Concrete user-visible effect. "API was down" is not impact; "23% of checkout requests returned 500 for 47 minutes between 14:03 and 14:50 UTC, affecting an estimated 1,200 users" is impact. Quantify wherever possible.
+  - **Timeline.** Timestamped events in chronological order. Detection, escalation, mitigation attempts, resolution. Include false-starts and dead-ends — they reveal where the response was slowed.
+  - **Root cause and contributing factors.** Plural. Most incidents have one *root* cause and several *contributing factors* that turned a small problem into a big one. Listing only one is the most common postmortem failure mode.
+  - **What went well.** This is not consolation. It is a record of which response practices worked, so they get reinforced. "On-call paged within 90 seconds" or "Rollback ran in one command" belong here.
+  - **Action items.** Each with an owner, a due date, and a tracker link. Without owner+date+link, the action item is a wish.
+
+  ## Root cause is rarely a single thing
+
+  Anti-pattern: "The root cause was a bad deploy." That is a contributing factor, not a root cause. The root-cause question keeps going: why did the bad deploy reach production? Why was it not caught in CI? Why did monitoring not flag it within the SLA window? Why did rollback take 12 minutes instead of 2?
+
+  A useful frame is the "five whys" — keep asking why until the answer points at a system property (a missing test, a missing alert, a missing review gate) rather than a single code change. Five is a guideline, not a quota; stop when further whys stop revealing system properties.
+
+  Multiple contributing factors are normal and expected. A typical postmortem lists three to seven. Listing one suggests the analysis stopped early.
+
+  ## Action items must be small and owned
+
+  Action items larger than a sprint never ship. "Rewrite the deploy system" produces no improvement; "Add a pre-deploy lint that blocks ALTER TABLE without an explicit DBA approval flag" produces improvement.
+
+  Each action item has three required fields:
+
+  - **Owner.** A named person, not a team. Teams do not ship; individuals do.
+  - **Due date.** A specific date. "Soon" is not a date.
+  - **Tracker link.** A URL to the issue, ticket, or PR where the work happens. Without it, the action item lives only in the postmortem doc, where no one looks again.
+
+  At the next month's incident review, walk the prior month's action items. The ones that shipped get closed; the ones that did not get re-owned, re-scheduled, or explicitly de-prioritized with a written rationale. Quietly aging out is the failure mode this guards against.
+
+  ## Writing voice
+
+  Past tense, third person, factual. "The cache returned stale data because the TTL was set to 24 hours, not 24 minutes." Not "We probably set the TTL wrong because we were rushed." Speculation belongs in the contributing-factors section labelled as speculation.
+
+  Avoid hedging that obscures the analysis. "It seems possible the metric may have been delayed" is unactionable; "The metric was delayed by 4 minutes (verified by the timeline)" is actionable.
+
+  Avoid heroes. "Engineer Y saved us by spotting the bug" is not actionable. "The bug was identified by inspecting the deploy diff at 14:32" tells the reader what to do; the engineer's name belongs in the timeline as a record of presence, not an award citation.
+
+  ## Anti-patterns
+
+  - **Single-cause postmortem.** "The deploy script was bad." Stop, run more whys.
+  - **No owner on action items.** "We should add monitoring." By when, by whom?
+  - **Action items that are wishes, not work.** "Improve our culture of testing" is not an action item; "Add a CI gate that blocks PRs with zero new test lines for any code change > 50 lines" is.
+  - **Naming a person as the cause.** "Engineer X ran the wrong command." The trap is the system that lets the wrong command reach production; fix the trap.
+  - **Skipping the "what went well" section.** Without it, the response practices that worked are not reinforced and may erode.
+  - **Postmortem written, never re-read.** If no one walks the action items in 30 days, the postmortem is performance art.
+
+  ## When to write one
+
+  Write a postmortem for any incident that caused user-visible impact, breached an SLA, required a rollback, or surprised the team. Near-misses are also worth postmortems — they are cheaper to learn from than actual incidents.
+
+  Skip postmortems for known-issue noise (a flaky test that the team has already triaged) and for non-incident events (a planned migration that ran smoothly). Postmortems are for events that revealed something the team did not know. The bar is information value, not severity — a low-severity incident that surfaced a previously-unknown failure mode is worth a postmortem; a high-severity incident that was a known issue with a known mitigation is not. When in doubt, write the short version. A two-paragraph postmortem with three action items beats no postmortem at all, and the cost of writing one when none was needed is low compared to the cost of skipping one when it was needed.
+
+  ## Verification
+
+  - [ ] Document includes: summary, impact (quantified), timeline (timestamped), root cause + contributing factors (plural), what went well, action items.
+  - [ ] No human is named as the root cause; the analysis points at system properties (missing checks, missing alerts, missing review gates).
+  - [ ] At least three contributing factors are listed (single-factor analyses indicate the analysis stopped early).
+  - [ ] Every action item has a named owner, a specific due date, and a tracker link to a ticket or PR.
+  - [ ] The postmortem is linked from a discoverable index (incident log, runbook, wiki) so future incident responders can find prior art.
+  - [ ] A scheduled review (e.g. monthly) walks open action items; aged-out items are explicitly re-owned, re-scheduled, or de-prioritized with written rationale.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Postmortem
+
+      A postmortem is the document that turns an incident into organizational learning. The rule is one sentence: postmortems are blameless, evidence-based, and produce action items that someone owns and ships. Most postmortems that did not improve anything failed this rule somewhere — they named a person instead of a system, they recorded opinions instead of timestamps, or they listed action items that no one was responsible for and that quietly aged out.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Blameless means systems, not people
+
+      "Blameless" does not mean omitting names. It means analyzing the *system* that allowed a human action to cause harm. If an engineer ran a destructive command, the postmortem asks why the command was destructive when run by mistake — not who ran it. If a deploy went out unreviewed, the postmortem asks why the deploy path allowed unreviewed pushes — not who pushed.
+
+      This framing matters because individuals are replaceable; systems persist. A postmortem that ends with "Engineer X will be more careful" produces no improvement — the next engineer in that role inherits the same trap. A postmortem that ends with "Add a pre-deploy lint that flags destructive migrations" makes the trap harder to fall into.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## What goes in the document
+
+      Every postmortem covers the same six sections. Skipping any of them produces a document that cannot be acted on later.
+
+      - **Summary.** One paragraph: what happened, when, what the impact was, how long it lasted. A reader scanning the docs index needs to know in 10 seconds whether this incident is relevant to them.
+      - **Impact.** Concrete user-visible effect. "API was down" is not impact; "23% of checkout requests returned 500 for 47 minutes between 14:03 and 14:50 UTC, affecting an estimated 1,200 users" is impact. Quantify wherever possible.
+      - **Timeline.** Timestamped events in chronological order. Detection, escalation, mitigation attempts, resolution. Include false-starts and dead-ends — they reveal where the response was slowed.
+      - **Root cause and contributing factors.** Plural. Most incidents have one *root* cause and several *contributing factors* that turned a small problem into a big one. Listing only one is the most common postmortem failure mode.
+      - **What went well.** This is not consolation. It is a record of which response practices worked, so they get reinforced. "On-call paged within 90 seconds" or "Rollback ran in one command" belong here.
+      - **Action items.** Each with an owner, a due date, and a tracker link. Without owner+date+link, the action item is a wish.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Root cause is rarely a single thing
+
+      Anti-pattern: "The root cause was a bad deploy." That is a contributing factor, not a root cause. The root-cause question keeps going: why did the bad deploy reach production? Why was it not caught in CI? Why did monitoring not flag it within the SLA window? Why did rollback take 12 minutes instead of 2?
+
+      A useful frame is the "five whys" — keep asking why until the answer points at a system property (a missing test, a missing alert, a missing review gate) rather than a single code change. Five is a guideline, not a quota; stop when further whys stop revealing system properties.
+
+      Multiple contributing factors are normal and expected. A typical postmortem lists three to seven. Listing one suggests the analysis stopped early.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Action items must be small and owned
+
+      Action items larger than a sprint never ship. "Rewrite the deploy system" produces no improvement; "Add a pre-deploy lint that blocks ALTER TABLE without an explicit DBA approval flag" produces improvement.
+
+      Each action item has three required fields:
+
+      - **Owner.** A named person, not a team. Teams do not ship; individuals do.
+      - **Due date.** A specific date. "Soon" is not a date.
+      - **Tracker link.** A URL to the issue, ticket, or PR where the work happens. Without it, the action item lives only in the postmortem doc, where no one looks again.
+
+      At the next month's incident review, walk the prior month's action items. The ones that shipped get closed; the ones that did not get re-owned, re-scheduled, or explicitly de-prioritized with a written rationale. Quietly aging out is the failure mode this guards against.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## Writing voice
+
+      Past tense, third person, factual. "The cache returned stale data because the TTL was set to 24 hours, not 24 minutes." Not "We probably set the TTL wrong because we were rushed." Speculation belongs in the contributing-factors section labelled as speculation.
+
+      Avoid hedging that obscures the analysis. "It seems possible the metric may have been delayed" is unactionable; "The metric was delayed by 4 minutes (verified by the timeline)" is actionable.
+
+      Avoid heroes. "Engineer Y saved us by spotting the bug" is not actionable. "The bug was identified by inspecting the deploy diff at 14:32" tells the reader what to do; the engineer's name belongs in the timeline as a record of presence, not an award citation.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Single-cause postmortem.** "The deploy script was bad." Stop, run more whys.
+      - **No owner on action items.** "We should add monitoring." By when, by whom?
+      - **Action items that are wishes, not work.** "Improve our culture of testing" is not an action item; "Add a CI gate that blocks PRs with zero new test lines for any code change > 50 lines" is.
+      - **Naming a person as the cause.** "Engineer X ran the wrong command." The trap is the system that lets the wrong command reach production; fix the trap.
+      - **Skipping the "what went well" section.** Without it, the response practices that worked are not reinforced and may erode.
+      - **Postmortem written, never re-read.** If no one walks the action items in 30 days, the postmortem is performance art.
+
+  - sequence: 8
+    fragment_type: setup
+    content: |
+      ## When to write one
+
+      Write a postmortem for any incident that caused user-visible impact, breached an SLA, required a rollback, or surprised the team. Near-misses are also worth postmortems — they are cheaper to learn from than actual incidents.
+
+      Skip postmortems for known-issue noise (a flaky test that the team has already triaged) and for non-incident events (a planned migration that ran smoothly). Postmortems are for events that revealed something the team did not know. The bar is information value, not severity — a low-severity incident that surfaced a previously-unknown failure mode is worth a postmortem; a high-severity incident that was a known issue with a known mitigation is not. When in doubt, write the short version. A two-paragraph postmortem with three action items beats no postmortem at all, and the cost of writing one when none was needed is low compared to the cost of skipping one when it was needed.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Document includes: summary, impact (quantified), timeline (timestamped), root cause + contributing factors (plural), what went well, action items.
+      - [ ] No human is named as the root cause; the analysis points at system properties (missing checks, missing alerts, missing review gates).
+      - [ ] At least three contributing factors are listed (single-factor analyses indicate the analysis stopped early).
+      - [ ] Every action item has a named owner, a specific due date, and a tracker link to a ticket or PR.
+      - [ ] The postmortem is linked from a discoverable index (incident log, runbook, wiki) so future incident responders can find prior art.
+      - [ ] A scheduled review (e.g. monthly) walks open action items; aged-out items are explicitly re-owned, re-scheduled, or de-prioritized with written rationale.

@@ -1,0 +1,182 @@
+skill_type: domain
+skill_id: verification-before-completion
+canonical_name: Verification Before Completion (Evidence Before Assertions)
+category: engineering
+skill_class: domain
+domain_tags: [evidence-before-assertions, run-the-tests, ci-output, partial-pass, type-check-is-not-feature-check]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — internal review history (docs/skill-review-history/2026-04-28-batch-2-stack-foundations.md) for the "claimed passing without running" failure modes; pytest exit-code semantics from https://docs.python.org/3.13/library/unittest.html and pytest official docs (curated/python.yaml `topics.testing_idioms`). Skill scope: the discipline of running verification commands and reading the output before declaring work complete; not test-writing (covered in test-driven-development).
+
+raw_prose: |
+  # Verification Before Completion
+
+  Verification before completion is the discipline of running the verification command and reading its output before claiming work is done. The rule is one sentence: evidence before assertions, always. Most "task complete" claims that turn out to be wrong fail this rule — the writer assumed the change worked, did not run the check, and shipped the assumption.
+
+  ## Why this discipline exists
+
+  Three failure modes recur across reviews:
+
+  - **Type-check passing is not feature passing.** A change can satisfy `tsc` or `mypy` while the runtime behavior is wrong. Type checking proves the shapes line up; it does not prove the function does the thing.
+  - **One test passing is not the suite passing.** A green unit test on the changed file says nothing about the integration tests that exercise the same surface. The suite is the contract.
+  - **Reading the output matters.** A command that exits 0 with `0 passed, 17 skipped` is not a passing run — the suite skipped everything because the test discovery glob was wrong. The exit code is a coarse signal; the body of the output is the actual evidence.
+
+  ## The verification step
+
+  Before claiming completion, run the verification command for the change and read every line of the output. The verification command depends on the change:
+
+  - Code change to a unit-tested module: run the unit test for that module AND the full test suite for the package.
+  - Type-affecting change: run `tsc --noEmit` (TypeScript), `mypy` or `pyright` (Python), or the language equivalent.
+  - Migration or schema change: apply the migration to a clean DB, run the integration suite against it.
+  - UI change: start the dev server, navigate to the changed surface, exercise the interaction. Watch the browser console for errors.
+  - Build / packaging change: run `pnpm build` or `uv build`, inspect the artifact, confirm the dist tree matches expectation.
+
+  Run the highest-fidelity verification you can afford. Type-check is fast but proves little. Unit tests prove more but skip integration paths. Integration tests prove the most but cost more wall-clock. Pick the highest tier that fits the change's blast radius.
+
+  ## Read the output
+
+  After the command finishes, read the output. Specifically look for:
+
+  - **Skip count.** A non-zero skip count means tests were excluded. Confirm each skip is intentional (marker-driven) and not a discovery failure.
+  - **Warning lines.** Deprecation warnings often precede the next breaking-change cycle; suppress with a marker only after recording the fix as tech debt.
+  - **Suite summary.** "5 passed, 0 failed, 0 skipped" is the floor. Anything else is a partial pass — investigate before claiming completion.
+  - **Build-time output for UI changes.** Vite, Next.js, and similar print warnings about dynamic imports, bundle size, and unresolved deps; these often surface real bugs that the type checker misses.
+
+  ## Verification anti-patterns
+
+  - **"It compiles, ship it."** Compilation is a precondition, not a verification. Run the test.
+  - **"The change is small, no need to test."** Small changes break exactly the same way large ones do. Run the test.
+  - **"The CI will catch it."** CI is the second line of defense, not the first. Verify locally before the push so the iteration loop stays tight.
+  - **Confusing exit code with content.** `pytest -k some-pattern` exits 0 even when the pattern matches nothing. Always check the summary line.
+  - **Running only the new test.** A new green test next to a now-red existing test is a regression, not a completion. Run the full suite.
+
+  ## Verification for non-deterministic surfaces
+
+  When the surface is non-deterministic (network, time, randomness), verification falls back to bounded sampling: run the command three to five times, confirm a stable result. If results vary, the test is itself the bug — fix the determinism before claiming completion.
+
+  For UI changes, type-check + linter + dev-server smoke test in a browser. Pixel-level regressions need a visual-regression tool (Chromatic, Percy) or human review; do not claim a UI change is complete on the strength of a passing build alone.
+
+  ## Reporting verification
+
+  When you report a task complete, name the verification you ran. "Tests pass" is unverifiable; "Ran `pnpm test --filter @app/core`, 47 passed, 0 failed, 0 skipped at HEAD" is verifiable. The receiving reviewer can re-run the same command and confirm.
+
+  If the verification surfaces a partial pass, do not round up. "Mostly working" or "should be fine" are red flags — they indicate the writer skipped a check and is hoping. Surface the unverified part explicitly so the reviewer can decide whether to merge anyway.
+
+  ## When verification is genuinely impossible
+
+  Some changes cannot be verified in the local environment — ones that require production credentials, third-party staging, or specific hardware. In that case:
+
+  1. Verify the parts you can verify locally (type check, unit tests, lint).
+  2. Document explicitly what is unverified and why.
+  3. Plan the verification that will run post-merge and name who runs it.
+
+  Do not claim the unverified part works. The cost of a false-positive completion is rework + a regression hunt; the cost of an honest "verified locally, prod path needs Q4 verification before deploy" is one extra sentence in the PR.
+
+  ## Verification
+
+  - [ ] The exact command run is named in the PR / completion message (e.g. `pnpm test --filter @app/core`, `uv run pytest tests/`).
+  - [ ] The full test suite ran, not just the changed module.
+  - [ ] The output summary line was read; skip count is zero or every skip is intentional.
+  - [ ] For UI changes, the dev server was started and the affected interaction was exercised in a browser.
+  - [ ] For type-affecting changes, the type checker ran clean.
+  - [ ] Anything not verified locally is flagged in the completion message with the reason.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Verification Before Completion
+
+      Verification before completion is the discipline of running the verification command and reading its output before claiming work is done. The rule is one sentence: evidence before assertions, always. Most "task complete" claims that turn out to be wrong fail this rule — the writer assumed the change worked, did not run the check, and shipped the assumption.
+
+      ## Why this discipline exists
+
+      Three failure modes recur across reviews:
+
+      - **Type-check passing is not feature passing.** A change can satisfy `tsc` or `mypy` while the runtime behavior is wrong. Type checking proves the shapes line up; it does not prove the function does the thing.
+      - **One test passing is not the suite passing.** A green unit test on the changed file says nothing about the integration tests that exercise the same surface. The suite is the contract.
+      - **Reading the output matters.** A command that exits 0 with `0 passed, 17 skipped` is not a passing run — the suite skipped everything because the test discovery glob was wrong. The exit code is a coarse signal; the body of the output is the actual evidence.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## The verification step
+
+      Before claiming completion, run the verification command for the change and read every line of the output. The verification command depends on the change:
+
+      - Code change to a unit-tested module: run the unit test for that module AND the full test suite for the package.
+      - Type-affecting change: run `tsc --noEmit` (TypeScript), `mypy` or `pyright` (Python), or the language equivalent.
+      - Migration or schema change: apply the migration to a clean DB, run the integration suite against it.
+      - UI change: start the dev server, navigate to the changed surface, exercise the interaction. Watch the browser console for errors.
+      - Build / packaging change: run `pnpm build` or `uv build`, inspect the artifact, confirm the dist tree matches expectation.
+
+      Run the highest-fidelity verification you can afford. Type-check is fast but proves little. Unit tests prove more but skip integration paths. Integration tests prove the most but cost more wall-clock. Pick the highest tier that fits the change's blast radius.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Read the output
+
+      After the command finishes, read the output. Specifically look for:
+
+      - **Skip count.** A non-zero skip count means tests were excluded. Confirm each skip is intentional (marker-driven) and not a discovery failure.
+      - **Warning lines.** Deprecation warnings often precede the next breaking-change cycle; suppress with a marker only after recording the fix as tech debt.
+      - **Suite summary.** "5 passed, 0 failed, 0 skipped" is the floor. Anything else is a partial pass — investigate before claiming completion.
+      - **Build-time output for UI changes.** Vite, Next.js, and similar print warnings about dynamic imports, bundle size, and unresolved deps; these often surface real bugs that the type checker misses.
+
+  - sequence: 4
+    fragment_type: guardrail
+    content: |
+      ## Verification anti-patterns
+
+      - **"It compiles, ship it."** Compilation is a precondition, not a verification. Run the test.
+      - **"The change is small, no need to test."** Small changes break exactly the same way large ones do. Run the test.
+      - **"The CI will catch it."** CI is the second line of defense, not the first. Verify locally before the push so the iteration loop stays tight.
+      - **Confusing exit code with content.** `pytest -k some-pattern` exits 0 even when the pattern matches nothing. Always check the summary line.
+      - **Running only the new test.** A new green test next to a now-red existing test is a regression, not a completion. Run the full suite.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Verification for non-deterministic surfaces
+
+      When the surface is non-deterministic (network, time, randomness), verification falls back to bounded sampling: run the command three to five times, confirm a stable result. If results vary, the test is itself the bug — fix the determinism before claiming completion.
+
+      For UI changes, type-check + linter + dev-server smoke test in a browser. Pixel-level regressions need a visual-regression tool (Chromatic, Percy) or human review; do not claim a UI change is complete on the strength of a passing build alone.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Reporting verification
+
+      When you report a task complete, name the verification you ran. "Tests pass" is unverifiable; "Ran `pnpm test --filter @app/core`, 47 passed, 0 failed, 0 skipped at HEAD" is verifiable. The receiving reviewer can re-run the same command and confirm.
+
+      If the verification surfaces a partial pass, do not round up. "Mostly working" or "should be fine" are red flags — they indicate the writer skipped a check and is hoping. Surface the unverified part explicitly so the reviewer can decide whether to merge anyway.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## When verification is genuinely impossible
+
+      Some changes cannot be verified in the local environment — ones that require production credentials, third-party staging, or specific hardware. In that case:
+
+      1. Verify the parts you can verify locally (type check, unit tests, lint).
+      2. Document explicitly what is unverified and why.
+      3. Plan the verification that will run post-merge and name who runs it.
+
+      Do not claim the unverified part works. The cost of a false-positive completion is rework + a regression hunt; the cost of an honest "verified locally, prod path needs Q4 verification before deploy" is one extra sentence in the PR.
+
+  - sequence: 8
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] The exact command run is named in the PR / completion message (e.g. `pnpm test --filter @app/core`, `uv run pytest tests/`).
+      - [ ] The full test suite ran, not just the changed module.
+      - [ ] The output summary line was read; skip count is zero or every skip is intentional.
+      - [ ] For UI changes, the dev server was started and the affected interaction was exercised in a browser.
+      - [ ] For type-affecting changes, the type checker ran clean.
+      - [ ] Anything not verified locally is flagged in the completion message with the reason.

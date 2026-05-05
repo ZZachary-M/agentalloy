@@ -1,0 +1,238 @@
+skill_type: domain
+skill_id: writing-api-docs
+canonical_name: Writing API Documentation (Reference, Examples, and Guarantees)
+category: design
+skill_class: domain
+domain_tags: [api-reference, openapi, code-examples, contract-documentation, generated-docs]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Diátaxis documentation framework https://diataxis.fr/ (verified 2026-05-04 against fixtures/upstream/curated/docs.yaml topic `diataxis`) for the reference/tutorial/howto/explanation distinction; OpenAPI spec https://spec.openapis.org/oas/v3.1.0 for HTTP API reference shape; Stripe and Twilio docs as widely-cited exemplars. Skill scope: writing reference documentation for an API — REST, library, SDK, CLI; not tutorials or onboarding (different artifact in the Diátaxis split), not READMEs (covered separately).
+
+raw_prose: |
+  # Writing API Documentation
+
+  API documentation is the contract between the API author and its callers, written down. The rule is one sentence: an API doc page tells the caller what to send, what they will get back, what can go wrong, and what the API guarantees — with at least one runnable example. Most API docs that fail their callers fail this rule somewhere — they describe the parameters but not the failure modes, they show the happy path but skip the error responses, or they list signatures without a single end-to-end example. The result is callers writing fragile clients that crash the first time reality diverges from the doc, and reputational damage to the API that is much harder to recover than to prevent.
+
+  ## Reference is one of four kinds of doc
+
+  The Diátaxis framework splits documentation into four mutually-exclusive kinds, each with a different purpose:
+
+  - **Tutorial.** Learning-oriented. Walks a beginner through their first success. Has narrative.
+  - **How-to guide.** Task-oriented. Solves one specific problem. Assumes context.
+  - **Reference.** Information-oriented. Describes what exists. Comprehensive, terse, neutral.
+  - **Explanation.** Understanding-oriented. Discusses why and how things work. Has opinions.
+
+  API docs are reference. They list endpoints, parameters, return shapes, error codes. They do not narrate, they do not pitch, they do not editorialize. The tutorial and explanation pieces live elsewhere; mixing them into reference makes the reference unscannable.
+
+  ## What every reference entry needs
+
+  Each function, endpoint, or method gets a reference entry. The minimum fields:
+
+  - **Name and signature.** Function name plus parameter types. For HTTP, method + path + content-type.
+  - **One-line summary.** What the call does in one sentence. The summary is what shows in indexes and tooltips.
+  - **Parameters.** Each one: name, type, required-or-optional, default if any, semantic description. "What does this do" — not just "string."
+  - **Return value / response shape.** Type, structure, and what each field means. For HTTP, both the success body and the headers callers care about.
+  - **Errors / exceptions.** Each error code or exception class the call may produce, with the conditions that trigger it. "Throws `ValueError` if x is negative" is reference; "may throw" is not.
+  - **Side effects.** What the call changes outside its return value — state mutated, files written, events emitted, network calls made. If the function is pure, say so.
+  - **Example.** At least one runnable example showing realistic input and the expected output.
+
+  Skipping side effects is the most common omission. Callers cannot reason about whether a call is safe to retry without knowing what it changes.
+
+  ## Examples must be runnable, not pseudo-runnable
+
+  An example with `<your-api-key-here>` and `<your-data>` placeholders is half an example. The caller cannot copy-paste it; they have to mentally substitute and hope they got it right. Provide examples with realistic-but-fake values that make clear what shape the real value should be.
+
+  Two patterns that work:
+
+  - **Test-derived examples.** Pull the example straight from a passing integration test. The example is correct because the test exercises it. When the test breaks, the example breaks visibly.
+  - **Generator-derived examples.** Tools like `openapi-cli` or Stripe's docs pipeline generate examples from the spec. Run the spec; render the example. Spec drift means doc drift, but at least it is mechanical.
+
+  Hand-written examples in flat text drift faster than any other doc surface, because nothing forces them to stay correct. If you write them by hand, schedule a quarterly check.
+
+  ## Document failure modes, not just success
+
+  Every API call has a happy path and a set of failure modes. The reference must cover both. Specifically:
+
+  - **Validation errors.** What inputs are rejected and how. "400 with `{error: "invalid email"}` if email field is missing or malformed."
+  - **Authorization errors.** Who is allowed to call this and what they get if they are not. "401 if no auth token; 403 if token lacks `orders:read` scope."
+  - **State errors.** Failures that depend on state of the resource. "409 if order is already shipped."
+  - **Server errors.** What 5xx the caller may see and whether retry is safe. "500 means internal error; safe to retry with the same idempotency key."
+  - **Rate limits.** If applicable, the limit, the response on hit, and how to back off.
+
+  Callers who do not know the failure modes write fragile clients. The first time the API returns a 409 in production, the client crashes because no one told it 409 was possible.
+
+  ## State guarantees explicitly
+
+  The doc should name what the API guarantees. Common guarantees worth writing:
+
+  - **Idempotency.** "Safe to retry with the same `Idempotency-Key`." Or "not idempotent — retries create duplicates." Pick one and say which.
+  - **Ordering.** "Events delivered in order per user_id." Or "no ordering guaranteed." Without this, callers assume ordering and break.
+  - **Latency / consistency.** "Read-your-own-writes within the same session." Or "eventually consistent, up to N seconds." Callers need to know.
+  - **Stability.** "v1 endpoints are stable; breaking changes go to v2." Or "v0 is unstable, may change." Without this, callers cannot plan migrations.
+
+  Guarantees are commitments. Do not list a guarantee you cannot keep — better to say "no guarantee" than to break callers when reality diverges from the doc.
+
+  ## Generated docs over hand-written, where possible
+
+  Hand-written API docs drift the moment the code changes. Generated docs (OpenAPI from FastAPI/Express, JSDoc/TSDoc from typed code, Sphinx from Python docstrings, godoc from Go) regenerate on every build, so the reference reflects the current code by construction.
+
+  Use generated docs as the reference layer. Write tutorials, how-tos, and explanations as separate hand-written pages. The hand-written pages link to the generated reference; readers cross between them.
+
+  When generation is not possible (legacy codebase, polyglot system, custom protocol), write the reference by hand but pin a quarterly review and a doc-update entry in PR templates.
+
+  ## Anti-patterns
+
+  - **Tutorial inside reference.** Long narrative explanation of why the API exists in the middle of a parameter list. Move to an explanation page.
+  - **Pseudo-runnable examples.** `<placeholder>` values the caller has to substitute without guidance.
+  - **Missing failure modes.** Only the 200 response documented. Callers learn the others by hitting them in production.
+  - **Generated docs presented without examples.** A bare type signature with no usage example. Generated reference + hand-written examples is the right combo.
+  - **Stale examples.** Examples that no longer compile or no longer return the documented shape. The doc lies; callers learn to distrust.
+  - **Marketing in reference.** "Our blazing-fast endpoint" tells the reader nothing actionable. Save for landing pages.
+  - **Undocumented changes.** API behavior changed; doc still describes the old behavior. Update the doc in the same PR as the code.
+
+  ## Versioning the docs
+
+  When the API has versions, the docs have versions. A v2 doc must not silently overwrite the v1 doc — callers on v1 still need their reference. Most doc generators support versioning natively (Docusaurus, Read the Docs, Mintlify); use it.
+
+  When deprecating an endpoint or parameter, the doc says so, says what to use instead, and says when removal is planned. "Deprecated since v2.3, removed in v3.0, use `newEndpoint` instead." Without dates and replacement, deprecation is a surprise.
+
+  ## Verification
+
+  - [ ] Each reference entry includes: name + signature, one-line summary, parameters with types and semantics, return/response shape, errors/exceptions, side effects, at least one runnable example.
+  - [ ] Examples are copy-pasteable with realistic-but-fake values; no unexplained `<placeholder>` substitutions.
+  - [ ] Failure modes are documented (validation errors, auth errors, state errors, 5xx behavior, rate limits if applicable).
+  - [ ] Guarantees are stated explicitly (idempotency, ordering, consistency, stability) — or stated as "not guaranteed."
+  - [ ] Generated docs are used where possible; hand-written reference has a scheduled review cadence.
+  - [ ] Doc was updated in the same PR as the API change that motivated it.
+  - [ ] Versioned docs preserve prior versions; deprecations name the replacement and the removal version.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Writing API Documentation
+
+      API documentation is the contract between the API author and its callers, written down. The rule is one sentence: an API doc page tells the caller what to send, what they will get back, what can go wrong, and what the API guarantees — with at least one runnable example. Most API docs that fail their callers fail this rule somewhere — they describe the parameters but not the failure modes, they show the happy path but skip the error responses, or they list signatures without a single end-to-end example. The result is callers writing fragile clients that crash the first time reality diverges from the doc, and reputational damage to the API that is much harder to recover than to prevent.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Reference is one of four kinds of doc
+
+      The Diátaxis framework splits documentation into four mutually-exclusive kinds, each with a different purpose:
+
+      - **Tutorial.** Learning-oriented. Walks a beginner through their first success. Has narrative.
+      - **How-to guide.** Task-oriented. Solves one specific problem. Assumes context.
+      - **Reference.** Information-oriented. Describes what exists. Comprehensive, terse, neutral.
+      - **Explanation.** Understanding-oriented. Discusses why and how things work. Has opinions.
+
+      API docs are reference. They list endpoints, parameters, return shapes, error codes. They do not narrate, they do not pitch, they do not editorialize. The tutorial and explanation pieces live elsewhere; mixing them into reference makes the reference unscannable.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## What every reference entry needs
+
+      Each function, endpoint, or method gets a reference entry. The minimum fields:
+
+      - **Name and signature.** Function name plus parameter types. For HTTP, method + path + content-type.
+      - **One-line summary.** What the call does in one sentence. The summary is what shows in indexes and tooltips.
+      - **Parameters.** Each one: name, type, required-or-optional, default if any, semantic description. "What does this do" — not just "string."
+      - **Return value / response shape.** Type, structure, and what each field means. For HTTP, both the success body and the headers callers care about.
+      - **Errors / exceptions.** Each error code or exception class the call may produce, with the conditions that trigger it. "Throws `ValueError` if x is negative" is reference; "may throw" is not.
+      - **Side effects.** What the call changes outside its return value — state mutated, files written, events emitted, network calls made. If the function is pure, say so.
+      - **Example.** At least one runnable example showing realistic input and the expected output.
+
+      Skipping side effects is the most common omission. Callers cannot reason about whether a call is safe to retry without knowing what it changes.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Examples must be runnable, not pseudo-runnable
+
+      An example with `<your-api-key-here>` and `<your-data>` placeholders is half an example. The caller cannot copy-paste it; they have to mentally substitute and hope they got it right. Provide examples with realistic-but-fake values that make clear what shape the real value should be.
+
+      Two patterns that work:
+
+      - **Test-derived examples.** Pull the example straight from a passing integration test. The example is correct because the test exercises it. When the test breaks, the example breaks visibly.
+      - **Generator-derived examples.** Tools like `openapi-cli` or Stripe's docs pipeline generate examples from the spec. Run the spec; render the example. Spec drift means doc drift, but at least it is mechanical.
+
+      Hand-written examples in flat text drift faster than any other doc surface, because nothing forces them to stay correct. If you write them by hand, schedule a quarterly check.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Document failure modes, not just success
+
+      Every API call has a happy path and a set of failure modes. The reference must cover both. Specifically:
+
+      - **Validation errors.** What inputs are rejected and how. "400 with `{error: "invalid email"}` if email field is missing or malformed."
+      - **Authorization errors.** Who is allowed to call this and what they get if they are not. "401 if no auth token; 403 if token lacks `orders:read` scope."
+      - **State errors.** Failures that depend on state of the resource. "409 if order is already shipped."
+      - **Server errors.** What 5xx the caller may see and whether retry is safe. "500 means internal error; safe to retry with the same idempotency key."
+      - **Rate limits.** If applicable, the limit, the response on hit, and how to back off.
+
+      Callers who do not know the failure modes write fragile clients. The first time the API returns a 409 in production, the client crashes because no one told it 409 was possible.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## State guarantees explicitly
+
+      The doc should name what the API guarantees. Common guarantees worth writing:
+
+      - **Idempotency.** "Safe to retry with the same `Idempotency-Key`." Or "not idempotent — retries create duplicates." Pick one and say which.
+      - **Ordering.** "Events delivered in order per user_id." Or "no ordering guaranteed." Without this, callers assume ordering and break.
+      - **Latency / consistency.** "Read-your-own-writes within the same session." Or "eventually consistent, up to N seconds." Callers need to know.
+      - **Stability.** "v1 endpoints are stable; breaking changes go to v2." Or "v0 is unstable, may change." Without this, callers cannot plan migrations.
+
+      Guarantees are commitments. Do not list a guarantee you cannot keep — better to say "no guarantee" than to break callers when reality diverges from the doc.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Generated docs over hand-written, where possible
+
+      Hand-written API docs drift the moment the code changes. Generated docs (OpenAPI from FastAPI/Express, JSDoc/TSDoc from typed code, Sphinx from Python docstrings, godoc from Go) regenerate on every build, so the reference reflects the current code by construction.
+
+      Use generated docs as the reference layer. Write tutorials, how-tos, and explanations as separate hand-written pages. The hand-written pages link to the generated reference; readers cross between them.
+
+      When generation is not possible (legacy codebase, polyglot system, custom protocol), write the reference by hand but pin a quarterly review and a doc-update entry in PR templates.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Tutorial inside reference.** Long narrative explanation of why the API exists in the middle of a parameter list. Move to an explanation page.
+      - **Pseudo-runnable examples.** `<placeholder>` values the caller has to substitute without guidance.
+      - **Missing failure modes.** Only the 200 response documented. Callers learn the others by hitting them in production.
+      - **Generated docs presented without examples.** A bare type signature with no usage example. Generated reference + hand-written examples is the right combo.
+      - **Stale examples.** Examples that no longer compile or no longer return the documented shape. The doc lies; callers learn to distrust.
+      - **Marketing in reference.** "Our blazing-fast endpoint" tells the reader nothing actionable. Save for landing pages.
+      - **Undocumented changes.** API behavior changed; doc still describes the old behavior. Update the doc in the same PR as the code.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Versioning the docs
+
+      When the API has versions, the docs have versions. A v2 doc must not silently overwrite the v1 doc — callers on v1 still need their reference. Most doc generators support versioning natively (Docusaurus, Read the Docs, Mintlify); use it.
+
+      When deprecating an endpoint or parameter, the doc says so, says what to use instead, and says when removal is planned. "Deprecated since v2.3, removed in v3.0, use `newEndpoint` instead." Without dates and replacement, deprecation is a surprise.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Each reference entry includes: name + signature, one-line summary, parameters with types and semantics, return/response shape, errors/exceptions, side effects, at least one runnable example.
+      - [ ] Examples are copy-pasteable with realistic-but-fake values; no unexplained `<placeholder>` substitutions.
+      - [ ] Failure modes are documented (validation errors, auth errors, state errors, 5xx behavior, rate limits if applicable).
+      - [ ] Guarantees are stated explicitly (idempotency, ordering, consistency, stability) — or stated as "not guaranteed."
+      - [ ] Generated docs are used where possible; hand-written reference has a scheduled review cadence.
+      - [ ] Doc was updated in the same PR as the API change that motivated it.
+      - [ ] Versioned docs preserve prior versions; deprecations name the replacement and the removal version.

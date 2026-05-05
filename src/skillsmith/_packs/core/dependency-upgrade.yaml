@@ -1,0 +1,208 @@
+skill_type: domain
+skill_id: dependency-upgrade
+canonical_name: Dependency Upgrade (Safe, Incremental, Verified)
+category: tooling
+skill_class: domain
+domain_tags: [semver, lockfile, breaking-changes, transitive-deps, upgrade-one-at-a-time]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — semver spec https://semver.org/ (verified 2026-05-04 against fixtures/upstream/curated/semver.yaml topic `version_ranges`); pnpm lockfile docs https://pnpm.io/git#lockfiles; Renovate/Dependabot best-practices guides; internal review history on big-bang upgrades that flushed out 5 unrelated breakages at once. Skill scope: the discipline of moving a project from one version of a dependency to another without breaking it; not initial dependency selection (architectural), not security-vuln triage (covered in security pack).
+
+raw_prose: |
+  # Dependency Upgrade
+
+  Dependency upgrade is the discipline of moving a project from one version of a dependency to another without breaking the project. The rule is one sentence: upgrade one dependency at a time, with the lockfile in version control, and run the full verification suite after each. Most upgrade-related regressions broke this rule somewhere — multiple deps upgraded in one PR (so the regression bisects to "the upgrade PR" but not to a specific dep), the lockfile was omitted from the commit (so CI got different versions than local), or the verification was a type check instead of a full test run.
+
+  ## Read the changelog before upgrading
+
+  Every non-trivial upgrade starts by reading the changelog or release notes for the version range you are crossing. Specifically:
+
+  - **Breaking changes.** Most ecosystems use semver, so any major-version bump (`1.x` → `2.x`) is allowed to break compatibility. Read the migration guide. Skipping the migration guide and hoping the tests catch the breakages is the most common upgrade failure.
+  - **Deprecations.** Minor and patch versions can deprecate APIs. Deprecations now mean breakage in the next major. Note them as tech debt.
+  - **Behavior changes.** Some changelogs flag "this used to do X, now it does Y" without a version bump. These are the silent regressions — do not skip the changelog.
+
+  When the dep does not maintain a changelog (it happens), diff the source between the two tags. If the source diff is too large to read, that is itself a signal — pin and defer the upgrade until the dep has a maintainer who documents changes.
+
+  ## One dep at a time
+
+  Upgrade one dependency per PR. The reason is bisectability — if a regression appears, the responsible upgrade must be identifiable in one step. A PR that upgrades 12 deps at once turns the next regression into a 12-dep search.
+
+  Exception: deps that must be upgraded together (e.g. a framework's core and its plugins, where the plugins target a specific core version). Bundle those into one PR explicitly with a note in the description.
+
+  Order the upgrades. Start with deps that have no dependents inside the project (leaf deps); they are safest. Move outward toward deps that many internal modules touch. Framework upgrades (React, Next.js, Django) come last because they touch the most surface.
+
+  ## Lockfile is part of the upgrade
+
+  Every upgrade PR includes the lockfile change (`pnpm-lock.yaml`, `package-lock.json`, `uv.lock`, `Cargo.lock`, `go.sum`). Without the lockfile, CI installs different transitive versions than the developer tested locally, and the upgrade can pass locally but fail in CI for reasons unrelated to the diff.
+
+  Never edit the lockfile by hand. If the lockfile looks wrong, run the package manager to regenerate it from a clean state (`pnpm install`, `uv sync`, `cargo update -p <pkg>`). Hand-edits introduce inconsistencies the resolver cannot fix.
+
+  ## Run the full test suite — twice
+
+  The verification for an upgrade is the full test suite, not the type check, not the changed-file test. Type checks miss runtime behavior changes. Subset tests miss integration regressions in code that did not appear in the diff.
+
+  Run the suite twice — once before the upgrade (to confirm a green baseline), once after. If the post-upgrade suite is red, the diff is the upgrade plus whatever was already broken. Without a green baseline, you cannot tell which.
+
+  For UI changes, the suite alone is not enough. Start the dev server and exercise the affected surfaces in a browser. Many UI regressions (style drift, focus management, animation) do not appear in unit tests.
+
+  ## Transitive deps are real upgrades too
+
+  When you upgrade a direct dep, its transitive dep tree often changes. The lockfile diff shows this — read it. A patch upgrade of `react` may pull in a major upgrade of an internal `scheduler` package, which is what actually breaks something.
+
+  If the transitive change is large, pin the transitive dep to its prior version using your package manager's override mechanism (`pnpm.overrides`, `npm overrides`, `[tool.uv.override-dependencies]`) until you have time to verify the larger surface. Pin overrides are tech debt — track them as items to revisit at the next upgrade window.
+
+  ## Major-version upgrades deserve their own work item
+
+  A major-version upgrade is a small migration project, not a one-line PR. It typically involves:
+
+  - Reading the migration guide.
+  - Identifying every call site of removed/renamed APIs in the project.
+  - Updating call sites in a series of small commits.
+  - Re-running the full suite at each commit.
+  - Adding regression tests for behavior that the migration guide warned about.
+
+  Plan this work explicitly. A "quick" major upgrade rarely is. The hidden cost is in the integration testing, not the package.json line.
+
+  ## Anti-patterns
+
+  - **Bundle upgrades.** Upgrading 12 deps in one PR. The next regression bisects to the bundle, not to a dep. Avoid.
+  - **Lockfile omitted.** PR upgrades the manifest but not the lockfile (or vice versa). CI installs different versions than the developer tested. Avoid.
+  - **Type-check-only verification.** "It compiles, ship it." Compilation does not exercise the runtime behavior the new version changed. Run the full suite.
+  - **Ignoring the changelog.** "We have tests, they'll catch it." Tests catch the breakages your tests cover. The changelog is where you learn about the breakages your tests do not cover yet.
+  - **Hand-editing the lockfile.** Resolves a merge conflict in the moment, introduces an inconsistency that the package manager cannot reconcile later.
+  - **Skipping major upgrades indefinitely.** Each skipped major makes the next upgrade harder. Plan major upgrades on a schedule (quarterly is reasonable for most stacks); the cost compounds otherwise.
+
+  ## Automated upgrade tools
+
+  Tools like Renovate, Dependabot, and `npm-check-updates` lower the cost of staying current. Configure them with the same discipline:
+
+  - **Group only deps that must move together.** Group framework + plugins. Do not group all deps into one weekly PR.
+  - **Auto-merge only patch versions for trusted leaf deps.** Patches should not introduce breaking changes per semver, but lockfile churn from auto-merged transitive bumps still wants a human eye.
+  - **Require CI green before merge.** No upgrade lands without the suite passing.
+  - **Treat the bot's PRs like any other PR.** Read the changelog the bot posts, run the suite locally for non-trivial bumps, do not rubber-stamp.
+
+  ## Verification
+
+  - [ ] One dependency (or one explicitly-grouped set) upgraded per PR; PR title names the dep and the version range.
+  - [ ] The lockfile diff is included in the same commit as the manifest diff.
+  - [ ] Changelog or release notes for the version range were read; breaking changes and deprecations are noted in the PR description.
+  - [ ] The full test suite passed before the upgrade (green baseline) and after (post-upgrade green).
+  - [ ] For UI deps, the dev server was started and affected surfaces exercised in a browser.
+  - [ ] Transitive dep changes were inspected; any pin overrides added were tracked as tech debt.
+  - [ ] Major-version upgrades were planned as their own work item with a migration-guide pass; not landed in a "quick" PR.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Dependency Upgrade
+
+      Dependency upgrade is the discipline of moving a project from one version of a dependency to another without breaking the project. The rule is one sentence: upgrade one dependency at a time, with the lockfile in version control, and run the full verification suite after each. Most upgrade-related regressions broke this rule somewhere — multiple deps upgraded in one PR (so the regression bisects to "the upgrade PR" but not to a specific dep), the lockfile was omitted from the commit (so CI got different versions than local), or the verification was a type check instead of a full test run.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## Read the changelog before upgrading
+
+      Every non-trivial upgrade starts by reading the changelog or release notes for the version range you are crossing. Specifically:
+
+      - **Breaking changes.** Most ecosystems use semver, so any major-version bump (`1.x` → `2.x`) is allowed to break compatibility. Read the migration guide. Skipping the migration guide and hoping the tests catch the breakages is the most common upgrade failure.
+      - **Deprecations.** Minor and patch versions can deprecate APIs. Deprecations now mean breakage in the next major. Note them as tech debt.
+      - **Behavior changes.** Some changelogs flag "this used to do X, now it does Y" without a version bump. These are the silent regressions — do not skip the changelog.
+
+      When the dep does not maintain a changelog (it happens), diff the source between the two tags. If the source diff is too large to read, that is itself a signal — pin and defer the upgrade until the dep has a maintainer who documents changes.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## One dep at a time
+
+      Upgrade one dependency per PR. The reason is bisectability — if a regression appears, the responsible upgrade must be identifiable in one step. A PR that upgrades 12 deps at once turns the next regression into a 12-dep search.
+
+      Exception: deps that must be upgraded together (e.g. a framework's core and its plugins, where the plugins target a specific core version). Bundle those into one PR explicitly with a note in the description.
+
+      Order the upgrades. Start with deps that have no dependents inside the project (leaf deps); they are safest. Move outward toward deps that many internal modules touch. Framework upgrades (React, Next.js, Django) come last because they touch the most surface.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Lockfile is part of the upgrade
+
+      Every upgrade PR includes the lockfile change (`pnpm-lock.yaml`, `package-lock.json`, `uv.lock`, `Cargo.lock`, `go.sum`). Without the lockfile, CI installs different transitive versions than the developer tested locally, and the upgrade can pass locally but fail in CI for reasons unrelated to the diff.
+
+      Never edit the lockfile by hand. If the lockfile looks wrong, run the package manager to regenerate it from a clean state (`pnpm install`, `uv sync`, `cargo update -p <pkg>`). Hand-edits introduce inconsistencies the resolver cannot fix.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Run the full test suite — twice
+
+      The verification for an upgrade is the full test suite, not the type check, not the changed-file test. Type checks miss runtime behavior changes. Subset tests miss integration regressions in code that did not appear in the diff.
+
+      Run the suite twice — once before the upgrade (to confirm a green baseline), once after. If the post-upgrade suite is red, the diff is the upgrade plus whatever was already broken. Without a green baseline, you cannot tell which.
+
+      For UI changes, the suite alone is not enough. Start the dev server and exercise the affected surfaces in a browser. Many UI regressions (style drift, focus management, animation) do not appear in unit tests.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Transitive deps are real upgrades too
+
+      When you upgrade a direct dep, its transitive dep tree often changes. The lockfile diff shows this — read it. A patch upgrade of `react` may pull in a major upgrade of an internal `scheduler` package, which is what actually breaks something.
+
+      If the transitive change is large, pin the transitive dep to its prior version using your package manager's override mechanism (`pnpm.overrides`, `npm overrides`, `[tool.uv.override-dependencies]`) until you have time to verify the larger surface. Pin overrides are tech debt — track them as items to revisit at the next upgrade window.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Major-version upgrades deserve their own work item
+
+      A major-version upgrade is a small migration project, not a one-line PR. It typically involves:
+
+      - Reading the migration guide.
+      - Identifying every call site of removed/renamed APIs in the project.
+      - Updating call sites in a series of small commits.
+      - Re-running the full suite at each commit.
+      - Adding regression tests for behavior that the migration guide warned about.
+
+      Plan this work explicitly. A "quick" major upgrade rarely is. The hidden cost is in the integration testing, not the package.json line.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Bundle upgrades.** Upgrading 12 deps in one PR. The next regression bisects to the bundle, not to a dep. Avoid.
+      - **Lockfile omitted.** PR upgrades the manifest but not the lockfile (or vice versa). CI installs different versions than the developer tested. Avoid.
+      - **Type-check-only verification.** "It compiles, ship it." Compilation does not exercise the runtime behavior the new version changed. Run the full suite.
+      - **Ignoring the changelog.** "We have tests, they'll catch it." Tests catch the breakages your tests cover. The changelog is where you learn about the breakages your tests do not cover yet.
+      - **Hand-editing the lockfile.** Resolves a merge conflict in the moment, introduces an inconsistency that the package manager cannot reconcile later.
+      - **Skipping major upgrades indefinitely.** Each skipped major makes the next upgrade harder. Plan major upgrades on a schedule (quarterly is reasonable for most stacks); the cost compounds otherwise.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Automated upgrade tools
+
+      Tools like Renovate, Dependabot, and `npm-check-updates` lower the cost of staying current. Configure them with the same discipline:
+
+      - **Group only deps that must move together.** Group framework + plugins. Do not group all deps into one weekly PR.
+      - **Auto-merge only patch versions for trusted leaf deps.** Patches should not introduce breaking changes per semver, but lockfile churn from auto-merged transitive bumps still wants a human eye.
+      - **Require CI green before merge.** No upgrade lands without the suite passing.
+      - **Treat the bot's PRs like any other PR.** Read the changelog the bot posts, run the suite locally for non-trivial bumps, do not rubber-stamp.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] One dependency (or one explicitly-grouped set) upgraded per PR; PR title names the dep and the version range.
+      - [ ] The lockfile diff is included in the same commit as the manifest diff.
+      - [ ] Changelog or release notes for the version range were read; breaking changes and deprecations are noted in the PR description.
+      - [ ] The full test suite passed before the upgrade (green baseline) and after (post-upgrade green).
+      - [ ] For UI deps, the dev server was started and affected surfaces exercised in a browser.
+      - [ ] Transitive dep changes were inspected; any pin overrides added were tracked as tech debt.
+      - [ ] Major-version upgrades were planned as their own work item with a migration-guide pass; not landed in a "quick" PR.

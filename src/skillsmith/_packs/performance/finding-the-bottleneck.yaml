@@ -1,0 +1,250 @@
+skill_type: domain
+skill_id: finding-the-bottleneck
+canonical_name: Finding the Bottleneck (Amdahl's Law and Hot-Path Identification)
+category: design
+skill_class: domain
+domain_tags: [amdahls-law, use-method, latency-breakdown, n-plus-one, lock-contention]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Gene Amdahl's 1967 paper "Validity of the Single Processor Approach to Achieving Large-Scale Computing Capabilities" (verified 2026-05-04 against fixtures/upstream/curated/perf.yaml topic `amdahl`); Brendan Gregg's USE Method documentation https://www.brendangregg.com/usemethod.html; internal review history on N+1 query bugs and lock-contention misdiagnoses. Skill scope: how to identify which part of a system is the bottleneck and how much improvement is available; not optimization techniques, not profiler usage.
+
+raw_prose: |
+  # Finding the Bottleneck
+
+  A bottleneck is the resource that limits overall performance. The rule is one sentence: identify the bottleneck before optimizing — Amdahl's law says optimizing anything else cannot help — and recognize the common bottleneck shapes (CPU, IO, lock contention, N+1, memory, GC). Most performance work that did not move the needle skipped this step. The author optimized something that was not the bottleneck, and Amdahl's math says the improvement was capped by the unfixed bottleneck regardless of how much faster the optimized part became.
+
+  ## Amdahl's law in plain terms
+
+  Amdahl's law says: if a fraction *p* of total time can be sped up by a factor *s*, the maximum overall speedup is `1 / ((1 - p) + p/s)`. The implication that matters in practice: if you optimize something that is 10% of total time, your maximum possible improvement is 11.1%, no matter how fast you make that 10%. If you optimize something that is 50% of total time, your maximum is 2x. If you optimize something that is 90% of total time, your maximum is 10x.
+
+  This is why finding the bottleneck matters more than the optimization itself. Speeding up a non-bottleneck by 100x produces a small overall improvement; speeding up the bottleneck by 2x produces a large one.
+
+  Concretely: when you propose an optimization, estimate what fraction of total time the target represents. If that fraction is small, the maximum improvement is small. Optimize the bottleneck or accept the cap.
+
+  ## How to find the bottleneck — break down the time
+
+  The first move is to break observed end-to-end time into components. For a request:
+
+  - **Wait time vs work time.** Where is the request blocked? Database, downstream service, lock, queue.
+  - **CPU time vs IO time.** Is the work CPU-bound or waiting on IO? Different profilers, different fixes.
+  - **Per-component contribution.** Of N components in the path, what fraction of total time does each consume? The largest fraction is the candidate bottleneck.
+
+  The simplest way to break down time is logging at component boundaries: start time, end time, durations for each step. Run a representative request and read the breakdown. Without instrumentation, the system is opaque and bottleneck identification is guessing.
+
+  Modern observability tools (OpenTelemetry traces, datadog APM, honeycomb) make this breakdown automatic for distributed requests. If they are present, use them — a span breakdown of a slow request is the cheapest bottleneck identification available.
+
+  ## Common bottleneck shapes
+
+  Most production performance issues fall into a handful of recognizable shapes. Knowing the shapes makes diagnosis faster.
+
+  - **N+1 queries.** Code in a loop that calls the database (or any expensive remote) once per iteration. Looks like one query per row. Fix: batch into a single query, or eager-load with a join.
+  - **Lock contention.** Many threads waiting on a mutex; CPU underutilized despite load. Fix: reduce critical section, partition data so threads contend less, or replace with lock-free structures.
+  - **GC pauses.** Allocation-heavy code in a managed runtime; latency spikes correlated with GC events. Fix: reduce churn (object pooling, value types, streaming), tune GC, or move to a different allocator.
+  - **Cache miss / poor locality.** Code that walks pointer-heavy structures, missing cache repeatedly. Fix: restructure data (struct-of-arrays vs array-of-structs), pack hot fields together.
+  - **IO-bound waiting.** CPU idle, waiting on disk or network. Fix: parallel IO, batching, prefetch, faster underlying IO.
+  - **Tail latency.** Mean is fine, p99 is bad. Some requests hit a slow path (cold cache, unlucky GC, hot lock). Fix: identify the path and either remove it or hedge against it.
+  - **Quadratic algorithms on growing data.** Code that is O(n²) running on n that grew from 100 to 10,000. Fix: change the algorithm (often O(n) or O(n log n) is reachable).
+
+  Each shape has telltale signs in profiles, traces, and metrics. Recognition saves time.
+
+  ## The USE method — for systems
+
+  Brendan Gregg's USE method gives a structured approach for system-level bottlenecks. For each resource (CPU, memory, network, disk, etc.):
+
+  - **Utilization.** What fraction of the resource is in use? Above 70% is yellow; above 90% is suspicious.
+  - **Saturation.** Is there a queue building? Saturated resources are the bottleneck even if utilization is below 100%.
+  - **Errors.** Is the resource producing errors? Retries, timeouts, ECC errors all add latency.
+
+  Walk the resource list once. If a resource is saturated or close to it, that is the bottleneck. If everything is comfortable but the system is still slow, the bottleneck is at a higher layer (algorithmic, in code, in cross-service coordination).
+
+  This method scales from a single machine to a distributed system, applied per-machine and per-service.
+
+  ## When the bottleneck is downstream
+
+  Sometimes the slow component is something you do not control — a third-party API, a shared database, a managed service. The bottleneck is real but the lever is not yours.
+
+  Two paths:
+
+  - **Reduce dependence on the slow component.** Cache its responses, batch your calls to it, parallelize where it allows, use it less.
+  - **Negotiate with whoever owns it.** Show data — "your endpoint adds 800ms to our p99" — and ask for a fix or an alternative endpoint.
+
+  Neither path is the textbook "optimize the bottleneck"; both are valid responses to a bottleneck you cannot directly fix.
+
+  ## Bottlenecks shift after each fix
+
+  The bottleneck is not a fixed property of the system; it is what limits performance *right now*. Optimize one bottleneck and another takes its place. The sequence:
+
+  1. Identify the current bottleneck.
+  2. Estimate the maximum improvement available from fixing it (Amdahl).
+  3. Fix it.
+  4. Re-measure. The system is faster; what is the new bottleneck?
+  5. Repeat until further fixes are not worth their cost.
+
+  This is iterative, like profile-guided optimization. Treat the bottleneck list as a moving target, not a one-time audit.
+
+  ## Anti-patterns
+
+  - **Optimize first, find the bottleneck later.** Fix something easy without checking if it is the bottleneck. Amdahl says: little or no overall improvement.
+  - **Trust intuition about where time goes.** Programmers are notoriously bad at guessing performance. Measure.
+  - **Optimize CPU when the bottleneck is IO.** A tight CPU loop fixed in a program waiting on the database. CPU goes down; total time unchanged.
+  - **Treat mean latency as the metric when tail is the issue.** Optimizing mean while leaving p99 untouched. Users feel p99.
+  - **Skip Amdahl's-law check.** Spend two days for a 5% improvement that the breakdown would have predicted. Estimate the ceiling first.
+  - **Diagnose without breakdown.** "It's slow" is not a diagnosis. Break the time down into components; the largest is the suspect.
+  - **Call something a bottleneck without saturation evidence.** "CPU is at 60%, must be CPU-bound." 60% utilized is not saturated. Look for the actual queue.
+
+  ## When the bottleneck is "everything a little"
+
+  Sometimes the breakdown shows no single dominant component — every step takes 5–10% of total time, evenly. This is rarer than it looks (usually one component is a clear bottleneck), but when it is real, the implication is:
+
+  - **No single optimization will move the needle much.** Amdahl caps each at 5–10%.
+  - **Architectural changes are needed.** Pipeline things in parallel, batch across requests, change the topology.
+  - **It may not be worth optimizing.** If overall performance is acceptable, leave it; if not, the cost of architectural change must be evaluated against the gain.
+
+  Recognizing this case prevents the trap of chasing each 5% improvement in turn for diminishing total returns.
+
+  ## Verification
+
+  - [ ] End-to-end time was broken down into components (per-step durations, per-resource utilization, wait vs work time) before optimizing.
+  - [ ] The bottleneck was identified explicitly — a named component, query, lock, or resource that consumes the largest fraction of time.
+  - [ ] Amdahl's-law ceiling was estimated for the proposed optimization (max overall speedup, not just local speedup).
+  - [ ] The optimization targets the bottleneck, not a non-bottleneck that happens to be easier to fix.
+  - [ ] Common bottleneck shapes (N+1 queries, lock contention, GC pauses, cache misses, IO waits, tail latency, quadratic algorithms) were considered before assuming a less common cause.
+  - [ ] After the fix, the breakdown was re-run; the bottleneck has moved, the new bottleneck is identified, or further optimization is judged not worth its cost.
+  - [ ] When the bottleneck is downstream, the response is dependence-reduction (cache, batch, parallel) or negotiation, not optimization of the local code that is not the limit.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Finding the Bottleneck
+
+      A bottleneck is the resource that limits overall performance. The rule is one sentence: identify the bottleneck before optimizing — Amdahl's law says optimizing anything else cannot help — and recognize the common bottleneck shapes (CPU, IO, lock contention, N+1, memory, GC). Most performance work that did not move the needle skipped this step. The author optimized something that was not the bottleneck, and Amdahl's math says the improvement was capped by the unfixed bottleneck regardless of how much faster the optimized part became.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Amdahl's law in plain terms
+
+      Amdahl's law says: if a fraction *p* of total time can be sped up by a factor *s*, the maximum overall speedup is `1 / ((1 - p) + p/s)`. The implication that matters in practice: if you optimize something that is 10% of total time, your maximum possible improvement is 11.1%, no matter how fast you make that 10%. If you optimize something that is 50% of total time, your maximum is 2x. If you optimize something that is 90% of total time, your maximum is 10x.
+
+      This is why finding the bottleneck matters more than the optimization itself. Speeding up a non-bottleneck by 100x produces a small overall improvement; speeding up the bottleneck by 2x produces a large one.
+
+      Concretely: when you propose an optimization, estimate what fraction of total time the target represents. If that fraction is small, the maximum improvement is small. Optimize the bottleneck or accept the cap.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## How to find the bottleneck — break down the time
+
+      The first move is to break observed end-to-end time into components. For a request:
+
+      - **Wait time vs work time.** Where is the request blocked? Database, downstream service, lock, queue.
+      - **CPU time vs IO time.** Is the work CPU-bound or waiting on IO? Different profilers, different fixes.
+      - **Per-component contribution.** Of N components in the path, what fraction of total time does each consume? The largest fraction is the candidate bottleneck.
+
+      The simplest way to break down time is logging at component boundaries: start time, end time, durations for each step. Run a representative request and read the breakdown. Without instrumentation, the system is opaque and bottleneck identification is guessing.
+
+      Modern observability tools (OpenTelemetry traces, datadog APM, honeycomb) make this breakdown automatic for distributed requests. If they are present, use them — a span breakdown of a slow request is the cheapest bottleneck identification available.
+
+  - sequence: 4
+    fragment_type: rationale
+    content: |
+      ## Common bottleneck shapes
+
+      Most production performance issues fall into a handful of recognizable shapes. Knowing the shapes makes diagnosis faster.
+
+      - **N+1 queries.** Code in a loop that calls the database (or any expensive remote) once per iteration. Looks like one query per row. Fix: batch into a single query, or eager-load with a join.
+      - **Lock contention.** Many threads waiting on a mutex; CPU underutilized despite load. Fix: reduce critical section, partition data so threads contend less, or replace with lock-free structures.
+      - **GC pauses.** Allocation-heavy code in a managed runtime; latency spikes correlated with GC events. Fix: reduce churn (object pooling, value types, streaming), tune GC, or move to a different allocator.
+      - **Cache miss / poor locality.** Code that walks pointer-heavy structures, missing cache repeatedly. Fix: restructure data (struct-of-arrays vs array-of-structs), pack hot fields together.
+      - **IO-bound waiting.** CPU idle, waiting on disk or network. Fix: parallel IO, batching, prefetch, faster underlying IO.
+      - **Tail latency.** Mean is fine, p99 is bad. Some requests hit a slow path (cold cache, unlucky GC, hot lock). Fix: identify the path and either remove it or hedge against it.
+      - **Quadratic algorithms on growing data.** Code that is O(n²) running on n that grew from 100 to 10,000. Fix: change the algorithm (often O(n) or O(n log n) is reachable).
+
+      Each shape has telltale signs in profiles, traces, and metrics. Recognition saves time.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## The USE method — for systems
+
+      Brendan Gregg's USE method gives a structured approach for system-level bottlenecks. For each resource (CPU, memory, network, disk, etc.):
+
+      - **Utilization.** What fraction of the resource is in use? Above 70% is yellow; above 90% is suspicious.
+      - **Saturation.** Is there a queue building? Saturated resources are the bottleneck even if utilization is below 100%.
+      - **Errors.** Is the resource producing errors? Retries, timeouts, ECC errors all add latency.
+
+      Walk the resource list once. If a resource is saturated or close to it, that is the bottleneck. If everything is comfortable but the system is still slow, the bottleneck is at a higher layer (algorithmic, in code, in cross-service coordination).
+
+      This method scales from a single machine to a distributed system, applied per-machine and per-service.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## When the bottleneck is downstream
+
+      Sometimes the slow component is something you do not control — a third-party API, a shared database, a managed service. The bottleneck is real but the lever is not yours.
+
+      Two paths:
+
+      - **Reduce dependence on the slow component.** Cache its responses, batch your calls to it, parallelize where it allows, use it less.
+      - **Negotiate with whoever owns it.** Show data — "your endpoint adds 800ms to our p99" — and ask for a fix or an alternative endpoint.
+
+      Neither path is the textbook "optimize the bottleneck"; both are valid responses to a bottleneck you cannot directly fix.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Bottlenecks shift after each fix
+
+      The bottleneck is not a fixed property of the system; it is what limits performance *right now*. Optimize one bottleneck and another takes its place. The sequence:
+
+      1. Identify the current bottleneck.
+      2. Estimate the maximum improvement available from fixing it (Amdahl).
+      3. Fix it.
+      4. Re-measure. The system is faster; what is the new bottleneck?
+      5. Repeat until further fixes are not worth their cost.
+
+      This is iterative, like profile-guided optimization. Treat the bottleneck list as a moving target, not a one-time audit.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Optimize first, find the bottleneck later.** Fix something easy without checking if it is the bottleneck. Amdahl says: little or no overall improvement.
+      - **Trust intuition about where time goes.** Programmers are notoriously bad at guessing performance. Measure.
+      - **Optimize CPU when the bottleneck is IO.** A tight CPU loop fixed in a program waiting on the database. CPU goes down; total time unchanged.
+      - **Treat mean latency as the metric when tail is the issue.** Optimizing mean while leaving p99 untouched. Users feel p99.
+      - **Skip Amdahl's-law check.** Spend two days for a 5% improvement that the breakdown would have predicted. Estimate the ceiling first.
+      - **Diagnose without breakdown.** "It's slow" is not a diagnosis. Break the time down into components; the largest is the suspect.
+      - **Call something a bottleneck without saturation evidence.** "CPU is at 60%, must be CPU-bound." 60% utilized is not saturated. Look for the actual queue.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## When the bottleneck is "everything a little"
+
+      Sometimes the breakdown shows no single dominant component — every step takes 5–10% of total time, evenly. This is rarer than it looks (usually one component is a clear bottleneck), but when it is real, the implication is:
+
+      - **No single optimization will move the needle much.** Amdahl caps each at 5–10%.
+      - **Architectural changes are needed.** Pipeline things in parallel, batch across requests, change the topology.
+      - **It may not be worth optimizing.** If overall performance is acceptable, leave it; if not, the cost of architectural change must be evaluated against the gain.
+
+      Recognizing this case prevents the trap of chasing each 5% improvement in turn for diminishing total returns.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] End-to-end time was broken down into components (per-step durations, per-resource utilization, wait vs work time) before optimizing.
+      - [ ] The bottleneck was identified explicitly — a named component, query, lock, or resource that consumes the largest fraction of time.
+      - [ ] Amdahl's-law ceiling was estimated for the proposed optimization (max overall speedup, not just local speedup).
+      - [ ] The optimization targets the bottleneck, not a non-bottleneck that happens to be easier to fix.
+      - [ ] Common bottleneck shapes (N+1 queries, lock contention, GC pauses, cache misses, IO waits, tail latency, quadratic algorithms) were considered before assuming a less common cause.
+      - [ ] After the fix, the breakdown was re-run; the bottleneck has moved, the new bottleneck is identified, or further optimization is judged not worth its cost.
+      - [ ] When the bottleneck is downstream, the response is dependence-reduction (cache, batch, parallel) or negotiation, not optimization of the local code that is not the limit.

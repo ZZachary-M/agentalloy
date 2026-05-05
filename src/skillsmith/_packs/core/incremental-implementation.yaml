@@ -1,0 +1,171 @@
+skill_type: domain
+skill_id: incremental-implementation
+canonical_name: Incremental Implementation (Always-Working Tree)
+category: engineering
+skill_class: domain
+domain_tags: [small-commits, working-tree-discipline, integration-frequency, stop-at-green, scope-creep]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — internal review history, git workflow conventions, observed correlations between commit-frequency and bug-discovery latency. Skill scope: the discipline of keeping the working tree green at every step; not the planning step that decided what to slice (covered in planning-and-task-breakdown).
+
+raw_prose: |
+  # Incremental Implementation
+
+  Incremental implementation is the discipline of keeping the working tree in a runnable, tested state at every step. The rule: between any two consecutive `git commit` invocations, the project builds, the tests pass, and a reasonable verification command succeeds. This rule sounds restrictive; it is not. It compounds — every step is a checkpoint, every regression is caught the moment it appears, and rollback is always one commit away.
+
+  The opposite is the long-running branch with twenty-three commits, each WIP, that finally compiles two weeks later. Most "where did this bug come from" investigations land in such branches.
+
+  ## Always green between commits
+
+  Before each commit:
+
+  1. The build runs clean (no compile errors, no type errors).
+  2. The tests pass — at minimum the package-level suite for the changed area, ideally the full suite.
+  3. A smoke check works — `curl` the endpoint, click through the UI surface, run the CLI command. The smoke check is the runtime evidence that complements the test suite.
+
+  If any of the three fails, do not commit on the main slice. Either revert and shrink the change, or commit on a side branch with an explicit `WIP:` prefix that signals "do not merge this yet."
+
+  ## Small commits, with intent
+
+  A commit is the smallest change that makes sense to revert as a unit. "Add the User model" is a commit. "Add the User model + the migration that creates the table + a smoke test that the model can be saved" is also a commit — they form one revert unit. "Fix typo + add User model + start refactor of unrelated module" is three commits, not one.
+
+  Aim for commits between 50 and 300 lines of diff. Below 50 lines is fine — small commits are cheap. Above 300 is a smell: the commit probably should have been split.
+
+  Commit messages follow the conventional-commits prefix (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`) with a subject under 70 characters and a body that explains the why. The subject is what shows up in `git log --oneline`; make it scannable.
+
+  ## Stop at green
+
+  When the verification passes, stop. Do not bolt on a "while I'm here" addition. The next commit is for the next deliberate change.
+
+  Stopping at green serves three purposes. First, it preserves the testable checkpoint — the commit you made is a known-good state you can return to. Second, it limits the blast radius of the next change — a commit that only touches one concern is easier to review and revert. Third, it prevents scope creep, which is the dominant source of "this PR turned out larger than I thought."
+
+  ## Refactor before, not during, a feature
+
+  When a feature requires touching code whose shape is wrong, refactor first as a separate commit. The refactor is verified independently — the test suite passes before and after, no behavior changes. Then the feature lands on top of the cleaned shape.
+
+  Mixing refactor and feature in the same commit makes review impossible: the reviewer cannot tell which lines changed because of the feature versus which changed because of the refactor. Mixing them in the same PR is acceptable only when the refactor is so small it would be silly to split (one renamed variable, one extracted helper).
+
+  ## Branch hygiene
+
+  Long-running feature branches accumulate divergence from main. Rebase or merge from main daily on any branch that lives more than three days. The conflict cost grows roughly quadratically with branch age — a four-day-old branch is dramatically harder to integrate than a one-day-old branch.
+
+  Squash before merge when the branch's commits are not individually meaningful (a series of WIPs that converged on one feature). Preserve the commit history when each commit IS individually meaningful (a stack of refactor + feature + tests, each landing as a separate revertable unit).
+
+  ## Bisect-friendliness
+
+  Every commit should be bisectable — `git bisect` between any two commits should land on a commit that builds and tests pass. A non-buildable commit in the middle defeats bisect, which means the team's regression-finding tool is broken.
+
+  This is the practical reason for the "always green between commits" rule: bisect needs every commit to be a valid candidate. A WIP commit in the main branch costs the team every time someone bisects through that range.
+
+  ## Anti-patterns
+
+  - **The end-of-day dump commit.** "WIP — will fix tomorrow" merged into main. The next person who pulls finds a broken tree. Use `git stash` or a side branch instead.
+  - **Mega-commits.** Two weeks of work in one commit. Reviewers cannot read it; bisect cannot use it; revert is all-or-nothing.
+  - **Commit-then-fix-the-tests.** Test failures discovered post-commit get a follow-up "fix tests" commit. Reorder the work — fix the tests in the same commit as the change that caused them to fail.
+  - **Refactor + feature in one commit.** Reviewer cannot separate the concerns. Split.
+  - **Skipping commits because "I'll commit when it's done."** "Done" stretches; commits compound. Commit at every green checkpoint, not at perceived milestones.
+
+  ## Verification
+
+  - [ ] After each commit, the project builds clean (no compile / type errors).
+  - [ ] After each commit, the test suite for the changed area passes.
+  - [ ] Each commit message uses a conventional-commits prefix and a subject under 70 characters.
+  - [ ] No commit mixes refactor and feature changes; refactors land separately.
+  - [ ] No "WIP" commits in shared branches; WIP stays on local or named-side branches.
+  - [ ] `git bisect` between any two recent commits lands on a buildable, testable state.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Incremental Implementation
+
+      Incremental implementation is the discipline of keeping the working tree in a runnable, tested state at every step. The rule: between any two consecutive `git commit` invocations, the project builds, the tests pass, and a reasonable verification command succeeds. This rule sounds restrictive; it is not. It compounds — every step is a checkpoint, every regression is caught the moment it appears, and rollback is always one commit away.
+
+      The opposite is the long-running branch with twenty-three commits, each WIP, that finally compiles two weeks later. Most "where did this bug come from" investigations land in such branches.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Always green between commits
+
+      Before each commit:
+
+      1. The build runs clean (no compile errors, no type errors).
+      2. The tests pass — at minimum the package-level suite for the changed area, ideally the full suite.
+      3. A smoke check works — `curl` the endpoint, click through the UI surface, run the CLI command. The smoke check is the runtime evidence that complements the test suite.
+
+      If any of the three fails, do not commit on the main slice. Either revert and shrink the change, or commit on a side branch with an explicit `WIP:` prefix that signals "do not merge this yet."
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Small commits, with intent
+
+      A commit is the smallest change that makes sense to revert as a unit. "Add the User model" is a commit. "Add the User model + the migration that creates the table + a smoke test that the model can be saved" is also a commit — they form one revert unit. "Fix typo + add User model + start refactor of unrelated module" is three commits, not one.
+
+      Aim for commits between 50 and 300 lines of diff. Below 50 lines is fine — small commits are cheap. Above 300 is a smell: the commit probably should have been split.
+
+      Commit messages follow the conventional-commits prefix (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`) with a subject under 70 characters and a body that explains the why. The subject is what shows up in `git log --oneline`; make it scannable.
+
+  - sequence: 4
+    fragment_type: rationale
+    content: |
+      ## Stop at green
+
+      When the verification passes, stop. Do not bolt on a "while I'm here" addition. The next commit is for the next deliberate change.
+
+      Stopping at green serves three purposes. First, it preserves the testable checkpoint — the commit you made is a known-good state you can return to. Second, it limits the blast radius of the next change — a commit that only touches one concern is easier to review and revert. Third, it prevents scope creep, which is the dominant source of "this PR turned out larger than I thought."
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Refactor before, not during, a feature
+
+      When a feature requires touching code whose shape is wrong, refactor first as a separate commit. The refactor is verified independently — the test suite passes before and after, no behavior changes. Then the feature lands on top of the cleaned shape.
+
+      Mixing refactor and feature in the same commit makes review impossible: the reviewer cannot tell which lines changed because of the feature versus which changed because of the refactor. Mixing them in the same PR is acceptable only when the refactor is so small it would be silly to split (one renamed variable, one extracted helper).
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Branch hygiene
+
+      Long-running feature branches accumulate divergence from main. Rebase or merge from main daily on any branch that lives more than three days. The conflict cost grows roughly quadratically with branch age — a four-day-old branch is dramatically harder to integrate than a one-day-old branch.
+
+      Squash before merge when the branch's commits are not individually meaningful (a series of WIPs that converged on one feature). Preserve the commit history when each commit IS individually meaningful (a stack of refactor + feature + tests, each landing as a separate revertable unit).
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## Bisect-friendliness
+
+      Every commit should be bisectable — `git bisect` between any two commits should land on a commit that builds and tests pass. A non-buildable commit in the middle defeats bisect, which means the team's regression-finding tool is broken when someone needs it most: a regression has been reported, the team is hunting it, and the search range contains a commit that cannot even be tested.
+
+      This is the practical reason for the "always green between commits" rule: bisect needs every commit to be a valid candidate. A WIP commit in the main branch costs the team every time someone bisects through that range, and bisects are most often run during incidents — exactly when the cost of a delay is highest.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **The end-of-day dump commit.** "WIP — will fix tomorrow" merged into main. The next person who pulls finds a broken tree. Use `git stash` or a side branch instead.
+      - **Mega-commits.** Two weeks of work in one commit. Reviewers cannot read it; bisect cannot use it; revert is all-or-nothing.
+      - **Commit-then-fix-the-tests.** Test failures discovered post-commit get a follow-up "fix tests" commit. Reorder the work — fix the tests in the same commit as the change that caused them to fail.
+      - **Refactor + feature in one commit.** Reviewer cannot separate the concerns. Split.
+      - **Skipping commits because "I'll commit when it's done."** "Done" stretches; commits compound. Commit at every green checkpoint, not at perceived milestones.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] After each commit, the project builds clean (no compile / type errors).
+      - [ ] After each commit, the test suite for the changed area passes.
+      - [ ] Each commit message uses a conventional-commits prefix and a subject under 70 characters.
+      - [ ] No commit mixes refactor and feature changes; refactors land separately.
+      - [ ] No "WIP" commits in shared branches; WIP stays on local or named-side branches.
+      - [ ] `git bisect` between any two recent commits lands on a buildable, testable state.

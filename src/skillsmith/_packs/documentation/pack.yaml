@@ -1,0 +1,24 @@
+name: documentation
+version: 1.0.0
+tier: foundation
+description: Documentation practices that span stacks — README, API reference, changelogs, inline comments. Always installed for foundation-tier coverage.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: [core]
+skills:
+  - skill_id: writing-readmes
+    file: writing-readmes.yaml
+    fragment_count: 9
+  - skill_id: writing-api-docs
+    file: writing-api-docs.yaml
+    fragment_count: 10
+  - skill_id: writing-changelogs
+    file: writing-changelogs.yaml
+    fragment_count: 10
+  - skill_id: inline-comments-and-docstrings
+    file: inline-comments-and-docstrings.yaml
+    fragment_count: 11

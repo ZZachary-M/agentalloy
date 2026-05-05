@@ -1,0 +1,236 @@
+skill_type: domain
+skill_id: incident-response
+canonical_name: Incident Response (Triage, Mitigate, Communicate, Resolve)
+category: design
+skill_class: domain
+domain_tags: [incident-commander, mitigate-before-diagnose, severity-triage, status-comms, rollback-first]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Google SRE Book chapter 14 "Managing Incidents" https://sre.google/sre-book/managing-incidents/ (verified 2026-05-04 against fixtures/upstream/curated/sre.yaml topic `incident_management`); PagerDuty incident response guide https://response.pagerduty.com/; internal review history on diagnose-first incidents that extended outages by hours. Skill scope: live response while an incident is open — triage, role assignment, mitigation, communication, resolution declaration; not the post-incident postmortem (covered in postmortem).
+
+raw_prose: |
+  # Incident Response
+
+  Incident response is what you do while an incident is happening — the live response, not the post-incident analysis. The rule is one sentence: stop the bleeding first, diagnose second, and keep the people who care informed throughout. Most incidents that became extended outages broke this rule — the responder dove into root-cause analysis while users were still affected, instead of mitigating the impact and then investigating from a stable state. The discipline is uncomfortable in practice. Diagnosing first feels productive; mitigating without yet understanding the cause feels reckless. The data argues otherwise: a rollback that restores known-good behavior buys the team time to investigate carefully, while a diagnose-first response keeps users in the failure mode until the responder happens to find the answer.
+
+  ## Step zero — declare the incident
+
+  An incident is declared, not detected. Detection is when an alert fires or a user reports a problem; declaration is when someone names it as an incident and opens a response channel. Without declaration, the response is ad-hoc — multiple people poking at the same symptom in different channels, no one in charge, no record.
+
+  Declare early. The cost of declaring an incident that turns out to be minor is one rollback announcement; the cost of *not* declaring an incident that turns out to be major is a 90-minute outage with three people accidentally fighting each other for the deploy slot.
+
+  ## Triage by severity, not by interest
+
+  Assign a severity within the first few minutes. A common scale:
+
+  - **SEV1**: Total outage or data loss in progress. All-hands, page leadership.
+  - **SEV2**: Major degradation affecting many users. Page on-call, notify stakeholders.
+  - **SEV3**: Partial degradation, minor user impact, or single-customer issue. On-call works it during business hours.
+  - **SEV4**: Internal-only or non-urgent. Can wait for a normal sprint.
+
+  The severity decides the response shape. A SEV1 deserves an incident commander, dedicated channel, executive comms, and customer comms. A SEV3 is one engineer in a thread.
+
+  Severity can rise. If a SEV3 gets worse, escalate. The cost of escalating is a few minutes of attention; the cost of not escalating is a SEV1 that nobody noticed.
+
+  ## Roles — name them out loud
+
+  In a SEV1 or SEV2, three roles must be filled, even if by the same person.
+
+  - **Incident Commander (IC).** Owns the response. Decides what to try, who is doing what, when to escalate, when to declare resolved. Does not debug — coordinates the people debugging.
+  - **Operations / Tech lead.** Drives the technical mitigation and investigation. Is the IC's hands.
+  - **Communications lead.** Posts updates to the incident channel and external status surfaces. Translates between the technical work and the audiences who need to know.
+
+  In a small team, the IC may also be the operations lead. That is acceptable but fragile — the IC should explicitly say "I am also driving ops; if anyone joins, take comms first" so the role gap is visible.
+
+  ## Mitigate before diagnose
+
+  The first move on any incident is to stop the bleeding. The single highest-leverage action is usually a rollback to the last known-good state. Rollbacks beat hotfixes — they revert to a state already proven to work, where a hotfix is a new untested change applied under stress.
+
+  Other mitigations in priority order:
+
+  1. **Rollback.** Revert the deploy that caused it. Cheapest, fastest, most reversible.
+  2. **Feature flag.** Disable the feature, leave the deploy in place. Useful when the bad change is one of many in the deploy.
+  3. **Failover.** Shift traffic to a healthy region or replica. Useful when the issue is regional.
+  4. **Throttle / shed.** Drop a percentage of requests to keep the rest healthy. A last resort — degrades for everyone but keeps the system up.
+
+  Diagnosis comes after mitigation. Once user impact is gone, the incident is in observation mode and the team has time to find the root cause without users watching.
+
+  ## Communicate continuously
+
+  Every 15–30 minutes during a SEV1/SEV2, post an update — even if the update is "still investigating." Silence reads as "no one is working on this" to people outside the response. The cost of an update is one paragraph; the cost of silence is a flood of side-channel pings that interrupt the responders.
+
+  Update structure:
+
+  - What is the current state ("API still returning 500 for ~20% of checkout requests").
+  - What has been tried ("rollback of deploy abc123 did not resolve; investigating cache layer").
+  - What is being tried next ("running cache flush in production").
+  - Next update at [time].
+
+  Customer-facing comms (status page, email, in-product banner) are separate from internal comms and need their own owner. Wording goes through the comms lead, not the IC, so the IC can stay focused on the response.
+
+  ## Declare resolved with criteria
+
+  An incident is resolved when the user-visible impact is gone *and* the system is stable for a defined observation window. The observation window is usually 15–30 minutes for a service incident; longer for incidents involving data corruption or correctness bugs that may have a long tail.
+
+  Do not declare resolved on a hunch. The recurring failure mode is "looks fine now, declaring resolved" followed by re-pageout 10 minutes later because the root cause was not actually addressed and the recovery was coincidental.
+
+  At resolution, schedule the postmortem before everyone leaves the channel. Without a scheduled time, the postmortem slides; with one, it ships.
+
+  ## Anti-patterns
+
+  - **Diagnose-first response.** "Let me figure out what's broken before I roll back." Users wait while you investigate. Roll back, then investigate.
+  - **Hotfix under fire.** Applying a new untested code change to a production incident. The hotfix usually breaks something else. Roll back to known-good first.
+  - **No incident commander.** Three engineers all debugging in parallel, no coordination. They duplicate work, contradict each other, and miss the obvious.
+  - **Silent response.** "I'll post when I know more." External observers escalate to executives who escalate back, multiplying the chaos. Post early, post often.
+  - **Resolved on hope.** "Seems fine now, closing." Reopens 10 minutes later. Hold for the observation window first.
+  - **Skipping the postmortem.** Once the incident is resolved, the team disperses and the lessons evaporate. Schedule the postmortem before the channel empties.
+
+  ## When the response is one person
+
+  Small teams often have an incident response of exactly one person. The roles still exist — they collapse into one human. That human must consciously switch hats:
+
+  - As IC: name the severity, post that an incident is declared, set a timer for the next status update.
+  - As ops: try the mitigation.
+  - As comms: post the update.
+
+  Switch deliberately, and announce switches in the channel ("declaring resolved, switching to post-incident notes"). The discipline of naming the role keeps a one-person response from drifting into uncoordinated debugging.
+
+  ## Verification
+
+  - [ ] The incident was declared (named, severity assigned, response channel opened) within 5 minutes of detection.
+  - [ ] Severity (SEV1–SEV4) was assigned in the first few minutes; escalations were re-recorded explicitly.
+  - [ ] An incident commander was named for any SEV1/SEV2; the role was distinct from the ops lead even if held by the same person.
+  - [ ] Mitigation (rollback, flag, failover, or shed) was attempted before deep root-cause diagnosis.
+  - [ ] Status updates posted at least every 30 minutes during active response, with a scheduled next-update time.
+  - [ ] Resolution was declared only after a defined observation window with no re-occurrence.
+  - [ ] A postmortem was scheduled before the response channel was closed.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Incident Response
+
+      Incident response is what you do while an incident is happening — the live response, not the post-incident analysis. The rule is one sentence: stop the bleeding first, diagnose second, and keep the people who care informed throughout. Most incidents that became extended outages broke this rule — the responder dove into root-cause analysis while users were still affected, instead of mitigating the impact and then investigating from a stable state. The discipline is uncomfortable in practice. Diagnosing first feels productive; mitigating without yet understanding the cause feels reckless. The data argues otherwise: a rollback that restores known-good behavior buys the team time to investigate carefully, while a diagnose-first response keeps users in the failure mode until the responder happens to find the answer.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Step zero — declare the incident
+
+      An incident is declared, not detected. Detection is when an alert fires or a user reports a problem; declaration is when someone names it as an incident and opens a response channel. Without declaration, the response is ad-hoc — multiple people poking at the same symptom in different channels, no one in charge, no record.
+
+      Declare early. The cost of declaring an incident that turns out to be minor is one rollback announcement; the cost of *not* declaring an incident that turns out to be major is a 90-minute outage with three people accidentally fighting each other for the deploy slot.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Triage by severity, not by interest
+
+      Assign a severity within the first few minutes. A common scale:
+
+      - **SEV1**: Total outage or data loss in progress. All-hands, page leadership.
+      - **SEV2**: Major degradation affecting many users. Page on-call, notify stakeholders.
+      - **SEV3**: Partial degradation, minor user impact, or single-customer issue. On-call works it during business hours.
+      - **SEV4**: Internal-only or non-urgent. Can wait for a normal sprint.
+
+      The severity decides the response shape. A SEV1 deserves an incident commander, dedicated channel, executive comms, and customer comms. A SEV3 is one engineer in a thread.
+
+      Severity can rise. If a SEV3 gets worse, escalate. The cost of escalating is a few minutes of attention; the cost of not escalating is a SEV1 that nobody noticed.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Roles — name them out loud
+
+      In a SEV1 or SEV2, three roles must be filled, even if by the same person.
+
+      - **Incident Commander (IC).** Owns the response. Decides what to try, who is doing what, when to escalate, when to declare resolved. Does not debug — coordinates the people debugging.
+      - **Operations / Tech lead.** Drives the technical mitigation and investigation. Is the IC's hands.
+      - **Communications lead.** Posts updates to the incident channel and external status surfaces. Translates between the technical work and the audiences who need to know.
+
+      In a small team, the IC may also be the operations lead. That is acceptable but fragile — the IC should explicitly say "I am also driving ops; if anyone joins, take comms first" so the role gap is visible.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Mitigate before diagnose
+
+      The first move on any incident is to stop the bleeding. The single highest-leverage action is usually a rollback to the last known-good state. Rollbacks beat hotfixes — they revert to a state already proven to work, where a hotfix is a new untested change applied under stress.
+
+      Other mitigations in priority order:
+
+      1. **Rollback.** Revert the deploy that caused it. Cheapest, fastest, most reversible.
+      2. **Feature flag.** Disable the feature, leave the deploy in place. Useful when the bad change is one of many in the deploy.
+      3. **Failover.** Shift traffic to a healthy region or replica. Useful when the issue is regional.
+      4. **Throttle / shed.** Drop a percentage of requests to keep the rest healthy. A last resort — degrades for everyone but keeps the system up.
+
+      Diagnosis comes after mitigation. Once user impact is gone, the incident is in observation mode and the team has time to find the root cause without users watching.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Communicate continuously
+
+      Every 15–30 minutes during a SEV1/SEV2, post an update — even if the update is "still investigating." Silence reads as "no one is working on this" to people outside the response. The cost of an update is one paragraph; the cost of silence is a flood of side-channel pings that interrupt the responders.
+
+      Update structure:
+
+      - What is the current state ("API still returning 500 for ~20% of checkout requests").
+      - What has been tried ("rollback of deploy abc123 did not resolve; investigating cache layer").
+      - What is being tried next ("running cache flush in production").
+      - Next update at [time].
+
+      Customer-facing comms (status page, email, in-product banner) are separate from internal comms and need their own owner. Wording goes through the comms lead, not the IC, so the IC can stay focused on the response.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Declare resolved with criteria
+
+      An incident is resolved when the user-visible impact is gone *and* the system is stable for a defined observation window. The observation window is usually 15–30 minutes for a service incident; longer for incidents involving data corruption or correctness bugs that may have a long tail.
+
+      Do not declare resolved on a hunch. The recurring failure mode is "looks fine now, declaring resolved" followed by re-pageout 10 minutes later because the root cause was not actually addressed and the recovery was coincidental.
+
+      At resolution, schedule the postmortem before everyone leaves the channel. Without a scheduled time, the postmortem slides; with one, it ships.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Diagnose-first response.** "Let me figure out what's broken before I roll back." Users wait while you investigate. Roll back, then investigate.
+      - **Hotfix under fire.** Applying a new untested code change to a production incident. The hotfix usually breaks something else. Roll back to known-good first.
+      - **No incident commander.** Three engineers all debugging in parallel, no coordination. They duplicate work, contradict each other, and miss the obvious.
+      - **Silent response.** "I'll post when I know more." External observers escalate to executives who escalate back, multiplying the chaos. Post early, post often.
+      - **Resolved on hope.** "Seems fine now, closing." Reopens 10 minutes later. Hold for the observation window first.
+      - **Skipping the postmortem.** Once the incident is resolved, the team disperses and the lessons evaporate. Schedule the postmortem before the channel empties.
+
+  - sequence: 9
+    fragment_type: example
+    content: |
+      ## When the response is one person
+
+      Small teams often have an incident response of exactly one person. The roles still exist — they collapse into one human. That human must consciously switch hats:
+
+      - As IC: name the severity, post that an incident is declared, set a timer for the next status update.
+      - As ops: try the mitigation.
+      - As comms: post the update.
+
+      Switch deliberately, and announce switches in the channel ("declaring resolved, switching to post-incident notes"). The discipline of naming the role keeps a one-person response from drifting into uncoordinated debugging.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] The incident was declared (named, severity assigned, response channel opened) within 5 minutes of detection.
+      - [ ] Severity (SEV1–SEV4) was assigned in the first few minutes; escalations were re-recorded explicitly.
+      - [ ] An incident commander was named for any SEV1/SEV2; the role was distinct from the ops lead even if held by the same person.
+      - [ ] Mitigation (rollback, flag, failover, or shed) was attempted before deep root-cause diagnosis.
+      - [ ] Status updates posted at least every 30 minutes during active response, with a scheduled next-update time.
+      - [ ] Resolution was declared only after a defined observation window with no re-occurrence.
+      - [ ] A postmortem was scheduled before the response channel was closed.

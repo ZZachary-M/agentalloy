@@ -1,0 +1,177 @@
+skill_type: domain
+skill_id: naming-things
+canonical_name: Naming Things (Names That Survive Refactors)
+category: design
+skill_class: domain
+domain_tags: [naming-conventions, domain-language, ubiquitous-language, rename-discipline, abbreviation-anti-pattern]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Phil Karlton's "two hard things" attribution https://www.karlton.org/2017/12/naming-things-hard/ (verified 2026-05-04); Eric Evans, *Domain-Driven Design*, ch. 14 ("Maintaining Model Integrity") on ubiquitous language; Kent Beck, *Implementation Patterns*, ch. 4 ("Class") on intention-revealing names; internal review history on names that aged badly. Skill scope: choosing names for symbols, files, and concepts, and renaming them when they no longer fit; not file structure (covered in conventions pack), not API URL design (covered in protocol/rest).
+
+raw_prose: |
+  # Naming Things
+
+  Naming is the discipline of choosing words that survive the next reader and the next refactor. The rule is one sentence: a name should reveal intent, match the domain, and stay accurate as the code evolves. Most code that became hard to maintain failed this rule — names accreted abbreviations the original author understood, drifted away from the domain language the team uses in conversation, or kept their original wording long after the underlying concept changed. The cost is silent and compounds: every reader who has to decode a confusing name pays a small tax, and every conversation that needs translation between code-speak and team-speak spends real time. Phil Karlton's quip that naming is one of the two hard problems in computing is half a joke and half an honest reckoning with how much leverage names carry.
+
+  ## Names reveal intent, not implementation
+
+  A good name tells the reader *what the thing is for*, not *how it works*. `getActiveUsers` is better than `filterUsersByStatus` — the second describes the implementation, which the next refactor may change. The name should survive the implementation.
+
+  Concretely:
+
+  - **Verbs for actions.** Functions that do something get verbs (`sendInvoice`, `parseQuery`, `applyDiscount`).
+  - **Nouns for things.** Variables, classes, and types that represent things get nouns (`Invoice`, `Query`, `User`).
+  - **Adjectives for qualifiers, not standalone.** `active`, `pending`, `validated` describe state; they belong attached to a noun (`activeSession`), not standing alone.
+  - **Booleans answer yes/no.** Prefix with `is`, `has`, `should`, `can` (`isActive`, `hasPermission`, `canEdit`). A boolean named `userStatus` is asking for confusion.
+
+  ## Match the domain language
+
+  When the team talks about "subscriptions", the code should not call them "billing records." When users talk about "carts", the code should not call them "order drafts." Domain terminology drifting between conversation and code creates a tax on every conversation about that code — someone has to translate every time.
+
+  This is what Eric Evans called *ubiquitous language*: the same words in the conversation, the docs, the database, and the code. When the team coins a new term, the code follows. When the term changes, the code is renamed. The cost of staying in sync is small; the cost of letting code and conversation drift is paid every meeting forever.
+
+  ## Names should be searchable
+
+  A name like `i`, `tmp`, `data`, or `mgr` cannot be grepped — too many false positives. Reserve single-letter names for true scratch variables (loop indices in a tight scope, lambda parameters whose meaning is obvious from context). For anything that lives more than a few lines, pick a name a reader can search for and find only the relevant uses.
+
+  Avoid abbreviations that are not standard in the domain. `usrAuthCfg` saves three keystrokes and costs every future reader a moment of decoding. `usr` and `cfg` are not domain terms; spell them out.
+
+  Standard abbreviations are different. `URL`, `ID`, `HTTP`, `HTML` are universal. Use them consistently — `userId` not `userID` if the codebase uses camelCase, but pick one and stick with it.
+
+  ## Length follows scope
+
+  A name's length should roughly match the size of the scope it lives in. A loop-local index can be `i`. A function-local variable can be a single word (`count`, `result`). A module-level constant or exported function deserves a fully-spelled name (`MAX_RETRY_ATTEMPTS`, `parseConfigFile`).
+
+  The reverse anti-pattern is also real: `theListThatHoldsAllTheActiveUsersAfterFiltering` is unreadable. If a name needs that many words to be clear, the function it lives in is doing too much; split it. A long name is sometimes a smell about the code, not just the name.
+
+  ## Rename when the meaning shifts
+
+  Code evolves; names should follow. When a function used to "validate" but now also "normalize", rename it. When a class used to represent a "subscription" but now represents a "subscription event", rename it. The cost of a rename — find/replace in modern editors, plus a re-test — is small. The cost of a name that lies about what the code does compounds with every reader.
+
+  Tooling helps. Most editors have safe rename via LSP that updates all references. Use it; do not manually find/replace. If the codebase has a graph-aware rename tool (`gitnexus_rename`, JetBrains rename, `tsserver` rename), use that — it understands the call graph and avoids string-collision false positives.
+
+  When you rename across a public API, deprecate first if external consumers exist. The breaking change is usually not worth the rename benefit on its own; bundle it with another breaking-change cycle.
+
+  ## Anti-patterns
+
+  - **Hungarian-ish prefixes that duplicate the type.** `strName`, `intCount`, `boolActive`. The type system already knows. The prefix adds noise.
+  - **Generic suffixes.** `UserManager`, `OrderHelper`, `DataProcessor`. "Manager" tells you nothing — it manages what, how? Replace with the verb the class actually performs.
+  - **Pluralization confusion.** A function called `getUser` that returns a list, or `getUsers` that returns a single user. Plural matches plural, singular matches singular.
+  - **Negation in booleans.** `isNotEmpty`, `disableLogging`. Inverting a name forces every caller to invert it back: `if (!isNotEmpty)` reads worse than `if (isEmpty)`. Name the positive case.
+  - **Number-suffixed siblings.** `processData2`, `userServiceV2`, `oldHandler`. The number tells you nothing about the difference. If two implementations exist, name the difference (`processDataStreaming`, `processDataBatched`).
+  - **Misleading legacy names.** A function named `validateEmail` that now also normalizes case and trims whitespace. The name lies. Rename or split.
+
+  ## Naming things you cannot name yet
+
+  Sometimes the right name is unclear because the concept itself is not crisp. That is a signal: the design is not done. A function whose purpose you cannot name in five words probably should not exist as one function. Either narrow its job until naming is easy, or recognize it as a placeholder and revisit when the concept clarifies.
+
+  Placeholder names (`_doStuff`, `tempSolution`) are acceptable in scratch code. They are not acceptable in shipped code. If a placeholder name reaches main, the design did not converge — block on naming or split the function before merging.
+
+  ## Verification
+
+  - [ ] Function names start with verbs; class/variable/type names are nouns; boolean names start with `is`/`has`/`should`/`can`.
+  - [ ] Names match the team's spoken domain vocabulary (no untranslated jargon between conversation and code).
+  - [ ] No abbreviations except domain-standard or universal ones (`URL`, `ID`, `HTTP`); no Hungarian-style type prefixes.
+  - [ ] No generic `Manager`/`Helper`/`Util`/`Processor` suffixes — names describe what the symbol actually does.
+  - [ ] No negated booleans (`isNotX`); name the positive case.
+  - [ ] Renames used the editor's safe-rename / LSP rename, not manual find/replace.
+  - [ ] No placeholder names (`tmp`, `_doStuff`, `OldThing`, `ThingV2`) survived into the merged commit.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Naming Things
+
+      Naming is the discipline of choosing words that survive the next reader and the next refactor. The rule is one sentence: a name should reveal intent, match the domain, and stay accurate as the code evolves. Most code that became hard to maintain failed this rule — names accreted abbreviations the original author understood, drifted away from the domain language the team uses in conversation, or kept their original wording long after the underlying concept changed. The cost is silent and compounds: every reader who has to decode a confusing name pays a small tax, and every conversation that needs translation between code-speak and team-speak spends real time. Phil Karlton's quip that naming is one of the two hard problems in computing is half a joke and half an honest reckoning with how much leverage names carry.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Names reveal intent, not implementation
+
+      A good name tells the reader *what the thing is for*, not *how it works*. `getActiveUsers` is better than `filterUsersByStatus` — the second describes the implementation, which the next refactor may change. The name should survive the implementation.
+
+      Concretely:
+
+      - **Verbs for actions.** Functions that do something get verbs (`sendInvoice`, `parseQuery`, `applyDiscount`).
+      - **Nouns for things.** Variables, classes, and types that represent things get nouns (`Invoice`, `Query`, `User`).
+      - **Adjectives for qualifiers, not standalone.** `active`, `pending`, `validated` describe state; they belong attached to a noun (`activeSession`), not standing alone.
+      - **Booleans answer yes/no.** Prefix with `is`, `has`, `should`, `can` (`isActive`, `hasPermission`, `canEdit`). A boolean named `userStatus` is asking for confusion.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Match the domain language
+
+      When the team talks about "subscriptions", the code should not call them "billing records." When users talk about "carts", the code should not call them "order drafts." Domain terminology drifting between conversation and code creates a tax on every conversation about that code — someone has to translate every time.
+
+      This is what Eric Evans called *ubiquitous language*: the same words in the conversation, the docs, the database, and the code. When the team coins a new term, the code follows. When the term changes, the code is renamed. The cost of staying in sync is small; the cost of letting code and conversation drift is paid every meeting forever.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Names should be searchable
+
+      A name like `i`, `tmp`, `data`, or `mgr` cannot be grepped — too many false positives. Reserve single-letter names for true scratch variables (loop indices in a tight scope, lambda parameters whose meaning is obvious from context). For anything that lives more than a few lines, pick a name a reader can search for and find only the relevant uses.
+
+      Avoid abbreviations that are not standard in the domain. `usrAuthCfg` saves three keystrokes and costs every future reader a moment of decoding. `usr` and `cfg` are not domain terms; spell them out.
+
+      Standard abbreviations are different. `URL`, `ID`, `HTTP`, `HTML` are universal. Use them consistently — `userId` not `userID` if the codebase uses camelCase, but pick one and stick with it.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Length follows scope
+
+      A name's length should roughly match the size of the scope it lives in. A loop-local index can be `i`. A function-local variable can be a single word (`count`, `result`). A module-level constant or exported function deserves a fully-spelled name (`MAX_RETRY_ATTEMPTS`, `parseConfigFile`).
+
+      The reverse anti-pattern is also real: `theListThatHoldsAllTheActiveUsersAfterFiltering` is unreadable. If a name needs that many words to be clear, the function it lives in is doing too much; split it. A long name is sometimes a smell about the code, not just the name.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Rename when the meaning shifts
+
+      Code evolves; names should follow. When a function used to "validate" but now also "normalize", rename it. When a class used to represent a "subscription" but now represents a "subscription event", rename it. The cost of a rename — find/replace in modern editors, plus a re-test — is small. The cost of a name that lies about what the code does compounds with every reader.
+
+      Tooling helps. Most editors have safe rename via LSP that updates all references. Use it; do not manually find/replace. If the codebase has a graph-aware rename tool (`gitnexus_rename`, JetBrains rename, `tsserver` rename), use that — it understands the call graph and avoids string-collision false positives.
+
+      When you rename across a public API, deprecate first if external consumers exist. The breaking change is usually not worth the rename benefit on its own; bundle it with another breaking-change cycle.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Hungarian-ish prefixes that duplicate the type.** `strName`, `intCount`, `boolActive`. The type system already knows. The prefix adds noise.
+      - **Generic suffixes.** `UserManager`, `OrderHelper`, `DataProcessor`. "Manager" tells you nothing — it manages what, how? Replace with the verb the class actually performs.
+      - **Pluralization confusion.** A function called `getUser` that returns a list, or `getUsers` that returns a single user. Plural matches plural, singular matches singular.
+      - **Negation in booleans.** `isNotEmpty`, `disableLogging`. Inverting a name forces every caller to invert it back: `if (!isNotEmpty)` reads worse than `if (isEmpty)`. Name the positive case.
+      - **Number-suffixed siblings.** `processData2`, `userServiceV2`, `oldHandler`. The number tells you nothing about the difference. If two implementations exist, name the difference (`processDataStreaming`, `processDataBatched`).
+      - **Misleading legacy names.** A function named `validateEmail` that now also normalizes case and trims whitespace. The name lies. Rename or split.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Naming things you cannot name yet
+
+      Sometimes the right name is unclear because the concept itself is not crisp. That is a signal: the design is not done. A function whose purpose you cannot name in five words probably should not exist as one function. Either narrow its job until naming is easy, or recognize it as a placeholder and revisit when the concept clarifies.
+
+      Placeholder names (`_doStuff`, `tempSolution`) are acceptable in scratch code. They are not acceptable in shipped code. If a placeholder name reaches main, the design did not converge — block on naming or split the function before merging.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Function names start with verbs; class/variable/type names are nouns; boolean names start with `is`/`has`/`should`/`can`.
+      - [ ] Names match the team's spoken domain vocabulary (no untranslated jargon between conversation and code).
+      - [ ] No abbreviations except domain-standard or universal ones (`URL`, `ID`, `HTTP`); no Hungarian-style type prefixes.
+      - [ ] No generic `Manager`/`Helper`/`Util`/`Processor` suffixes — names describe what the symbol actually does.
+      - [ ] No negated booleans (`isNotX`); name the positive case.
+      - [ ] Renames used the editor's safe-rename / LSP rename, not manual find/replace.
+      - [ ] No placeholder names (`tmp`, `_doStuff`, `OldThing`, `ThingV2`) survived into the merged commit.

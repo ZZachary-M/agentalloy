@@ -13,3 +13,36 @@ skills:
   - skill_id: test-driven-development
     file: test-driven-development.yaml
     fragment_count: 9
+  - skill_id: verification-before-completion
+    file: verification-before-completion.yaml
+    fragment_count: 8
+  - skill_id: code-review-practices
+    file: code-review-practices.yaml
+    fragment_count: 9
+  - skill_id: debugging-systematic
+    file: debugging-systematic.yaml
+    fragment_count: 9
+  - skill_id: planning-and-task-breakdown
+    file: planning-and-task-breakdown.yaml
+    fragment_count: 10
+  - skill_id: incremental-implementation
+    file: incremental-implementation.yaml
+    fragment_count: 9
+  - skill_id: brainstorming
+    file: brainstorming.yaml
+    fragment_count: 9
+  - skill_id: git-workflow
+    file: git-workflow.yaml
+    fragment_count: 8
+  - skill_id: dispatching-parallel-agents
+    file: dispatching-parallel-agents.yaml
+    fragment_count: 9
+  - skill_id: postmortem
+    file: postmortem.yaml
+    fragment_count: 9
+  - skill_id: incident-response
+    file: incident-response.yaml
+    fragment_count: 10
+  - skill_id: dependency-upgrade
+    file: dependency-upgrade.yaml
+    fragment_count: 10

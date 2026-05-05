@@ -1,0 +1,24 @@
+name: performance
+version: 1.0.0
+tier: foundation
+description: Performance practices that span stacks — measure first, profile correctly, optimize the bottleneck, know when to stop. Always installed.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: [core, engineering]
+skills:
+  - skill_id: measure-before-optimizing
+    file: measure-before-optimizing.yaml
+    fragment_count: 10
+  - skill_id: profiling-correctly
+    file: profiling-correctly.yaml
+    fragment_count: 10
+  - skill_id: finding-the-bottleneck
+    file: finding-the-bottleneck.yaml
+    fragment_count: 10
+  - skill_id: performance-budgets
+    file: performance-budgets.yaml
+    fragment_count: 11

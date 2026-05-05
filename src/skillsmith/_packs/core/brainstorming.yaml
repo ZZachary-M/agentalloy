@@ -1,0 +1,167 @@
+skill_type: domain
+skill_id: brainstorming
+canonical_name: Brainstorming (Exploring Intent and Design Before Implementation)
+category: design
+skill_class: domain
+domain_tags: [user-intent, requirements-discovery, design-exploration, premature-implementation, divergent-then-convergent]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — internal review history on misaligned implementations that passed tests but solved the wrong problem; sdd-spec/sdd-design conventions in this repo; superpowers `brainstorming` skill heuristics observed in practice. Skill scope: the discipline of exploring what the user actually wants and what designs are possible before committing to one; not estimation, not planning task breakdown (covered in planning-and-task-breakdown), not feature-dev architecture sketching.
+
+raw_prose: |
+  # Brainstorming
+
+  Brainstorming is the discipline of separating "what does the user want?" and "what designs could solve that?" from "which design am I going to build?" The rule is one sentence: do not commit to an implementation until intent is clear and at least two designs have been weighed. Most rework — code that compiled, tests that passed, reviewers who shipped — failed this rule. The author skipped from a one-sentence prompt to a chosen approach without checking what the user actually wanted or whether a different shape would have been simpler.
+
+  ## When this discipline applies
+
+  Apply brainstorming before any creative work — new feature, new component, new behavior, non-trivial refactor. Skip it for reactive tasks where the next action is dictated by a tool result you just read (a failing test, a linter error, a stack trace). Also skip it for narrow asks where the user has already specified the shape ("rename X to Y", "add a CLI flag --json").
+
+  The signal you need brainstorming: the prompt is a noun phrase ("auth system", "dashboard", "retry logic") rather than an action with a clear before/after. Noun-phrase prompts hide a design space. Acting on the first design that comes to mind throws away the value of having explored alternatives.
+
+  ## Two phases — diverge, then converge
+
+  Brainstorming has two phases and they must not be mixed.
+
+  Diverge first. List multiple shapes the solution could take. Three is the floor — fewer than three and you have not actually explored. Each shape gets a one-paragraph description: what it is, what it costs, what it buys. Resist evaluation during this phase. The point is to surface options, not to pick a winner.
+
+  Converge second. Compare the shapes against the user's stated and inferred priorities. Name the trade-off explicitly: "shape A is faster to ship but does not handle X; shape B handles X but pulls in dependency Y." Recommend one and explain why. Surface the next-best alternative so the user can redirect.
+
+  Mixing the phases — discarding shape ideas as you generate them because "that won't work" — is the most common failure. The discarded shape often turns out to be the best one once a constraint surfaces later.
+
+  ## Surface intent before designs
+
+  Before generating shapes, restate the user's request in your own words and confirm the read. "You want X so that Y, with Z as a hard constraint — is that right?" gives the user a low-cost place to correct a misread.
+
+  Two specific intent checks:
+
+  - **What is the success criterion?** A feature without a success criterion has no design constraint. "Add caching" is underspecified; "add caching so the dashboard loads under 200ms p95" is designable.
+  - **What is in scope vs. out of scope?** Most over-built solutions started from a prompt that did not name the boundary. Ask. The user often has a tighter scope than the prompt suggests.
+
+  ## Recommendations are proposals, not decisions
+
+  When you present a recommendation, frame it as something the user can redirect. "I'd suggest X because Y, with Z as the main trade-off — does that fit?" lets the user adjust. "I'll do X" pre-commits before they have weighed in.
+
+  This applies even when you are confident. Confidence does not replace consent. The user has context — past decisions, deployment constraints, organizational politics — that you do not. A confident wrong direction costs more than a tentative right one.
+
+  ## When to skip ahead
+
+  Brainstorming has a cost: extra round-trips before any code is written. For small tasks, the cost outweighs the value. The rule of thumb: if the prompt is a clear delta against existing code (rename, add flag, fix bug, update copy), skip brainstorming and proceed. If the prompt names a new capability or a non-trivial change in shape, brainstorm.
+
+  When in doubt, do a thirty-second intent check ("is this what you want?") and let the user decide whether to expand into a full brainstorm. The check is cheap and catches the misreads.
+
+  ## Anti-patterns
+
+  - **Jumping to implementation.** First idea becomes "the plan" within seconds. Ship a half-done thing that turns out to solve a different problem than the user had.
+  - **One option presented as inevitable.** "I'm going to do X" foreclosing options the user would have weighed.
+  - **Three options that are the same option.** "We could use library A, library B, or library C" — all three are the same shape (pull in a library). Real divergence requires shape variation, not vendor variation.
+  - **Brainstorming without a success criterion.** Designs cannot be compared without something to compare them against. Pin the criterion first.
+  - **Endless brainstorming.** Some tasks invite analysis paralysis. Once two viable shapes are weighed and one is clearly better for the stated criterion, converge. Do not explore for its own sake.
+
+  ## Recording the result
+
+  Brainstorming output is short. A handful of sentences naming the chosen shape, the alternatives considered, and the trade-off. Save it inline in the conversation — do not create a planning document unless the user asks. The plan document is downstream of the brainstorm, and a one-line decision recorded in chat is enough scaffolding for most work.
+
+  If the work is large enough to warrant a written plan, the brainstorm becomes the "Approach" section of that plan, summarizing why this shape was chosen over the alternatives.
+
+  ## Verification
+
+  - [ ] User intent was restated in my own words and confirmed (or the prompt was a clear delta where confirmation would have been wasteful).
+  - [ ] At least two distinct shapes were considered before recommending one.
+  - [ ] The recommendation names the main trade-off and the next-best alternative.
+  - [ ] The recommendation was framed as a proposal the user can redirect, not a decided plan.
+  - [ ] No implementation work began before the user accepted the direction (or the task was small enough to skip).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Brainstorming
+
+      Brainstorming is the discipline of separating "what does the user want?" and "what designs could solve that?" from "which design am I going to build?" The rule is one sentence: do not commit to an implementation until intent is clear and at least two designs have been weighed. Most rework — code that compiled, tests that passed, reviewers who shipped — failed this rule. The author skipped from a one-sentence prompt to a chosen approach without checking what the user actually wanted or whether a different shape would have been simpler.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## When this discipline applies
+
+      Apply brainstorming before any creative work — new feature, new component, new behavior, non-trivial refactor. Skip it for reactive tasks where the next action is dictated by a tool result you just read (a failing test, a linter error, a stack trace). Also skip it for narrow asks where the user has already specified the shape ("rename X to Y", "add a CLI flag --json").
+
+      The signal you need brainstorming: the prompt is a noun phrase ("auth system", "dashboard", "retry logic") rather than an action with a clear before/after. Noun-phrase prompts hide a design space. Acting on the first design that comes to mind throws away the value of having explored alternatives.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Two phases — diverge, then converge
+
+      Brainstorming has two phases and they must not be mixed.
+
+      Diverge first. List multiple shapes the solution could take. Three is the floor — fewer than three and you have not actually explored. Each shape gets a one-paragraph description: what it is, what it costs, what it buys. Resist evaluation during this phase. The point is to surface options, not to pick a winner.
+
+      Converge second. Compare the shapes against the user's stated and inferred priorities. Name the trade-off explicitly: "shape A is faster to ship but does not handle X; shape B handles X but pulls in dependency Y." Recommend one and explain why. Surface the next-best alternative so the user can redirect.
+
+      Mixing the phases — discarding shape ideas as you generate them because "that won't work" — is the most common failure. The discarded shape often turns out to be the best one once a constraint surfaces later.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Surface intent before designs
+
+      Before generating shapes, restate the user's request in your own words and confirm the read. "You want X so that Y, with Z as a hard constraint — is that right?" gives the user a low-cost place to correct a misread.
+
+      Two specific intent checks:
+
+      - **What is the success criterion?** A feature without a success criterion has no design constraint. "Add caching" is underspecified; "add caching so the dashboard loads under 200ms p95" is designable.
+      - **What is in scope vs. out of scope?** Most over-built solutions started from a prompt that did not name the boundary. Ask. The user often has a tighter scope than the prompt suggests.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Recommendations are proposals, not decisions
+
+      When you present a recommendation, frame it as something the user can redirect. "I'd suggest X because Y, with Z as the main trade-off — does that fit?" lets the user adjust. "I'll do X" pre-commits before they have weighed in.
+
+      This applies even when you are confident. Confidence does not replace consent. The user has context — past decisions, deployment constraints, organizational politics — that you do not. A confident wrong direction costs more than a tentative right one.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## When to skip ahead
+
+      Brainstorming has a cost: extra round-trips before any code is written. For small tasks, the cost outweighs the value. The rule of thumb: if the prompt is a clear delta against existing code (rename, add flag, fix bug, update copy), skip brainstorming and proceed. If the prompt names a new capability or a non-trivial change in shape, brainstorm.
+
+      When in doubt, do a thirty-second intent check ("is this what you want?") and let the user decide whether to expand into a full brainstorm. The check is cheap and catches the misreads.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Jumping to implementation.** First idea becomes "the plan" within seconds. Ship a half-done thing that turns out to solve a different problem than the user had.
+      - **One option presented as inevitable.** "I'm going to do X" foreclosing options the user would have weighed.
+      - **Three options that are the same option.** "We could use library A, library B, or library C" — all three are the same shape (pull in a library). Real divergence requires shape variation, not vendor variation.
+      - **Brainstorming without a success criterion.** Designs cannot be compared without something to compare them against. Pin the criterion first.
+      - **Endless brainstorming.** Some tasks invite analysis paralysis. Once two viable shapes are weighed and one is clearly better for the stated criterion, converge. Do not explore for its own sake.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## Recording the result
+
+      Brainstorming output is short. A handful of sentences naming the chosen shape, the alternatives considered, and the trade-off. Save it inline in the conversation — do not create a planning document unless the user asks. The plan document is downstream of the brainstorm, and a one-line decision recorded in chat is enough scaffolding for most work.
+
+      If the work is large enough to warrant a written plan, the brainstorm becomes the "Approach" section of that plan, summarizing why this shape was chosen over the alternatives.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] User intent was restated in my own words and confirmed (or the prompt was a clear delta where confirmation would have been wasteful).
+      - [ ] At least two distinct shapes were considered before recommending one.
+      - [ ] The recommendation names the main trade-off and the next-best alternative.
+      - [ ] The recommendation was framed as a proposal the user can redirect, not a decided plan.
+      - [ ] No implementation work began before the user accepted the direction (or the task was small enough to skip).

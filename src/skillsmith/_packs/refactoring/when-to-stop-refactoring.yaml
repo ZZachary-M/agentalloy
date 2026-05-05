@@ -1,0 +1,212 @@
+skill_type: domain
+skill_id: when-to-stop-refactoring
+canonical_name: When to Stop Refactoring (Good Enough Beats Perfect)
+category: design
+skill_class: domain
+domain_tags: [diminishing-returns, perfect-is-the-enemy, scope-creep, revert-as-option, time-boxing]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Kent Beck's "make it work, make it right, make it fast" sequencing https://wiki.c2.com/?MakeItWorkMakeItRightMakeItFast (verified 2026-05-04 against fixtures/upstream/curated/c2-wiki.yaml topic `incremental_design`); internal review history on refactor PRs that grew unbounded and never merged. Skill scope: knowing when to stop a refactor and ship it; not knowing when to start (covered in refactoring-when-and-why), not specific moves (covered in common-refactoring-moves).
+
+raw_prose: |
+  # When to Stop Refactoring
+
+  Knowing when to stop a refactor is harder than knowing when to start. The rule is one sentence: stop when the next change is easy enough — not when the code is perfect — and ship the refactor before scope creep makes it unreviewable. Most refactor PRs that never merged failed this rule. The author saw "one more thing" they could improve, then another, then another, and what started as a 50-line cleanup became a 1500-line rewrite that stalled and eventually rotted on a stale branch.
+
+  ## The goal is "next change easy", not "code perfect"
+
+  The motivating change for the refactor — the feature, the fix, the reading task — is the criterion. Refactor until that change is easy to make, then stop. Code that is "easier still" but no easier for the actual next change is wasted effort, paid for in review time and regression risk.
+
+  Specifically: when the test you couldn't write becomes easy to write, stop. When the feature you couldn't add cleanly fits naturally, stop. When the bug you couldn't fix without scattering changes everywhere is now localized, stop.
+
+  Code is never perfect. There is always a cleaner shape. Recognizing the next-cleaner shape is not the same as needing to implement it now.
+
+  ## Diminishing returns kick in fast
+
+  The first hour of a refactor often produces 80% of the value: the obvious extraction, the rename that clarifies the whole file, the move that puts code where it belongs. The next hour produces 15% — useful, but not transformative. The third hour produces 5%, and the fourth hour starts producing negative value as the diff grows past what a reviewer can hold in their head.
+
+  Track the value curve. When you notice you are picking at small things — adjusting whitespace, renaming variables that already had reasonable names, splitting functions that did not need splitting — you are past the inflection. Stop and ship.
+
+  ## Time-box refactors
+
+  Set a time budget before starting. "I will spend up to two hours refactoring before I either ship the result or back out and revisit." The budget forces convergence; without it, refactors expand to fill available time.
+
+  When the budget runs out:
+
+  - **The refactor is shippable as-is.** Ship.
+  - **The refactor is unfinished but reaches a green stable point.** Commit, ship the partial refactor, leave a debt-ledger entry for the rest.
+  - **The refactor has gotten worse.** Revert. The code now is worse than what you started with; back out and try a different shape.
+
+  The third option is the one most often skipped. Authors keep pushing because they have invested time, and reverting feels like loss. Sunk cost fallacy. Two hours of bad refactor reverted is cheaper than four hours of bad refactor merged.
+
+  ## Refactor in service of one motivating change
+
+  When a refactor is tied to a specific upcoming change, the scope is naturally bounded — the refactor stops when the change becomes easy. When a refactor is "general cleanup" with no anchor, the scope is unbounded by design.
+
+  This is why opportunistic refactoring (refactor as part of feature work) tends to converge: the feature is the anchor. Refactoring sprints without a feature anchor tend to sprawl: there is no signal for "done" except the author's taste, and taste is unbounded.
+
+  When you find yourself refactoring without a downstream change motivating it, that is the moment to stop. Either find a real motivating change to anchor the refactor or accept that this is taste and shelve the work.
+
+  ## Reviewable size is a hard ceiling
+
+  PRs above ~500 changed lines are not reviewed; they are rubber-stamped or sit. A refactor that exceeds this size has stopped being a refactor and become a rewrite. The discipline:
+
+  - **Slice early.** As soon as the diff approaches 300–400 lines, look for a stopping point. Ship what you have; the rest waits.
+  - **Slice by move.** Each named refactoring move (extract, rename, move) is a slice candidate. A PR titled "extract sendInvoice and rename usr→user" is one PR; a third move goes to the next.
+  - **Do not bundle for "context".** "I might as well do these all together since I'm in here" is how scope creeps. Each move stands alone.
+
+  Slicing is a discipline against the natural author-side gravity to keep going.
+
+  ## Stop when the friction goes away
+
+  The clearest signal to stop is when the original friction — the thing that motivated the refactor — is gone. The feature that was hard now fits naturally; the fix that needed three places to change now needs one; the test that was painful is now easy to write.
+
+  At that point, the refactor has done its job. Continuing means refactoring for an imaginary future motivating change, which is speculative.
+
+  This is why "make the change easy, then make the easy change" is a useful frame: the easy change is the test. If you can make it now, the refactor is done. If you cannot, the refactor is not done. The "easy change" itself is what tells you the refactor has converged.
+
+  ## Anti-patterns
+
+  - **Refactor scope expansion.** "I'll just clean up this neighboring function while I'm here." Each detour adds risk and review burden.
+  - **No time budget.** Refactor ends when the author runs out of energy. Often after the value curve has gone negative.
+  - **Sunk cost continuation.** "I've already done two hours of this; I might as well finish." If finishing makes things worse, revert. The two hours are gone either way.
+  - **Refactoring to a personal aesthetic.** "I prefer this pattern." If the next motivating change does not benefit, the aesthetic preference is not justification.
+  - **Bundling unrelated cleanup.** Five unrelated refactors in one PR. Reviewer cannot evaluate any of them well.
+  - **Indefinite delay before merging.** "I'll merge when it's perfect." Perfect never arrives. Ship the good-enough version; iterate later.
+  - **Reverting only as a last resort.** Reverting should be a normal option, not a failure. If the refactor went wrong, revert is the cheapest way back.
+
+  ## Stop, document, defer
+
+  When you see "one more thing" but the time budget is up, do not silently extend. Write the next thing as a debt-ledger entry — a tracker ticket, a TODO with a tracker link, or a line in the team's refactor backlog — and stop. The work is captured; it can resume next time.
+
+  This serves two purposes. First, it prevents scope creep on the current PR. Second, it gives the team visibility into the refactor backlog, which is useful when prioritizing future work or when evaluating whether a related feature should batch a related refactor.
+
+  Deferred refactors do not always get done. That is fine — most of them turn out not to matter once the team gets distance. If they do matter, the next motivating change will surface them.
+
+  ## Verification
+
+  - [ ] A time budget was set before the refactor started; the refactor stopped at or before that budget.
+  - [ ] The refactor stopped when the motivating change became easy, not when the code was "perfect."
+  - [ ] PR size is under 500 changed lines (excluding test additions); larger refactors were sliced into multiple PRs.
+  - [ ] Each PR contains one or a small group of related refactoring moves; unrelated cleanup was deferred or split.
+  - [ ] When the time budget ran out and the refactor was unfinished, the remaining work was either shipped as-is, backed out, or captured as a debt-ledger entry.
+  - [ ] No purely-aesthetic improvements rode along that did not serve the motivating change.
+  - [ ] No refactor sat on a stale branch unmerged for more than a few days; long delays mean the slice was too big.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # When to Stop Refactoring
+
+      Knowing when to stop a refactor is harder than knowing when to start. The rule is one sentence: stop when the next change is easy enough — not when the code is perfect — and ship the refactor before scope creep makes it unreviewable. Most refactor PRs that never merged failed this rule. The author saw "one more thing" they could improve, then another, then another, and what started as a 50-line cleanup became a 1500-line rewrite that stalled and eventually rotted on a stale branch.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## The goal is "next change easy", not "code perfect"
+
+      The motivating change for the refactor — the feature, the fix, the reading task — is the criterion. Refactor until that change is easy to make, then stop. Code that is "easier still" but no easier for the actual next change is wasted effort, paid for in review time and regression risk.
+
+      Specifically: when the test you couldn't write becomes easy to write, stop. When the feature you couldn't add cleanly fits naturally, stop. When the bug you couldn't fix without scattering changes everywhere is now localized, stop.
+
+      Code is never perfect. There is always a cleaner shape. Recognizing the next-cleaner shape is not the same as needing to implement it now.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Diminishing returns kick in fast
+
+      The first hour of a refactor often produces 80% of the value: the obvious extraction, the rename that clarifies the whole file, the move that puts code where it belongs. The next hour produces 15% — useful, but not transformative. The third hour produces 5%, and the fourth hour starts producing negative value as the diff grows past what a reviewer can hold in their head.
+
+      Track the value curve. When you notice you are picking at small things — adjusting whitespace, renaming variables that already had reasonable names, splitting functions that did not need splitting — you are past the inflection. Stop and ship.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Time-box refactors
+
+      Set a time budget before starting. "I will spend up to two hours refactoring before I either ship the result or back out and revisit." The budget forces convergence; without it, refactors expand to fill available time.
+
+      When the budget runs out:
+
+      - **The refactor is shippable as-is.** Ship.
+      - **The refactor is unfinished but reaches a green stable point.** Commit, ship the partial refactor, leave a debt-ledger entry for the rest.
+      - **The refactor has gotten worse.** Revert. The code now is worse than what you started with; back out and try a different shape.
+
+      The third option is the one most often skipped. Authors keep pushing because they have invested time, and reverting feels like loss. Sunk cost fallacy. Two hours of bad refactor reverted is cheaper than four hours of bad refactor merged.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Refactor in service of one motivating change
+
+      When a refactor is tied to a specific upcoming change, the scope is naturally bounded — the refactor stops when the change becomes easy. When a refactor is "general cleanup" with no anchor, the scope is unbounded by design.
+
+      This is why opportunistic refactoring (refactor as part of feature work) tends to converge: the feature is the anchor. Refactoring sprints without a feature anchor tend to sprawl: there is no signal for "done" except the author's taste, and taste is unbounded.
+
+      When you find yourself refactoring without a downstream change motivating it, that is the moment to stop. Either find a real motivating change to anchor the refactor or accept that this is taste and shelve the work.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Reviewable size is a hard ceiling
+
+      PRs above ~500 changed lines are not reviewed; they are rubber-stamped or sit. A refactor that exceeds this size has stopped being a refactor and become a rewrite. The discipline:
+
+      - **Slice early.** As soon as the diff approaches 300–400 lines, look for a stopping point. Ship what you have; the rest waits.
+      - **Slice by move.** Each named refactoring move (extract, rename, move) is a slice candidate. A PR titled "extract sendInvoice and rename usr→user" is one PR; a third move goes to the next.
+      - **Do not bundle for "context".** "I might as well do these all together since I'm in here" is how scope creeps. Each move stands alone.
+
+      Slicing is a discipline against the natural author-side gravity to keep going.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Stop when the friction goes away
+
+      The clearest signal to stop is when the original friction — the thing that motivated the refactor — is gone. The feature that was hard now fits naturally; the fix that needed three places to change now needs one; the test that was painful is now easy to write.
+
+      At that point, the refactor has done its job. Continuing means refactoring for an imaginary future motivating change, which is speculative.
+
+      This is why "make the change easy, then make the easy change" is a useful frame: the easy change is the test. If you can make it now, the refactor is done. If you cannot, the refactor is not done. The "easy change" itself is what tells you the refactor has converged.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Refactor scope expansion.** "I'll just clean up this neighboring function while I'm here." Each detour adds risk and review burden.
+      - **No time budget.** Refactor ends when the author runs out of energy. Often after the value curve has gone negative.
+      - **Sunk cost continuation.** "I've already done two hours of this; I might as well finish." If finishing makes things worse, revert. The two hours are gone either way.
+      - **Refactoring to a personal aesthetic.** "I prefer this pattern." If the next motivating change does not benefit, the aesthetic preference is not justification.
+      - **Bundling unrelated cleanup.** Five unrelated refactors in one PR. Reviewer cannot evaluate any of them well.
+      - **Indefinite delay before merging.** "I'll merge when it's perfect." Perfect never arrives. Ship the good-enough version; iterate later.
+      - **Reverting only as a last resort.** Reverting should be a normal option, not a failure. If the refactor went wrong, revert is the cheapest way back.
+
+  - sequence: 9
+    fragment_type: execution
+    content: |
+      ## Stop, document, defer
+
+      When you see "one more thing" but the time budget is up, do not silently extend. Write the next thing as a debt-ledger entry — a tracker ticket, a TODO with a tracker link, or a line in the team's refactor backlog — and stop. The work is captured; it can resume next time.
+
+      This serves two purposes. First, it prevents scope creep on the current PR. Second, it gives the team visibility into the refactor backlog, which is useful when prioritizing future work or when evaluating whether a related feature should batch a related refactor.
+
+      Deferred refactors do not always get done. That is fine — most of them turn out not to matter once the team gets distance. If they do matter, the next motivating change will surface them.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] A time budget was set before the refactor started; the refactor stopped at or before that budget.
+      - [ ] The refactor stopped when the motivating change became easy, not when the code was "perfect."
+      - [ ] PR size is under 500 changed lines (excluding test additions); larger refactors were sliced into multiple PRs.
+      - [ ] Each PR contains one or a small group of related refactoring moves; unrelated cleanup was deferred or split.
+      - [ ] When the time budget ran out and the refactor was unfinished, the remaining work was either shipped as-is, backed out, or captured as a debt-ledger entry.
+      - [ ] No purely-aesthetic improvements rode along that did not serve the motivating change.
+      - [ ] No refactor sat on a stale branch unmerged for more than a few days; long delays mean the slice was too big.

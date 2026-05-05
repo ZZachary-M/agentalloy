@@ -1,0 +1,238 @@
+skill_type: domain
+skill_id: profiling-correctly
+canonical_name: Profiling Correctly (Sampling, Tracing, Flame Graphs)
+category: design
+skill_class: domain
+domain_tags: [sampling-profiler, instrumented-tracing, flame-graph, observer-effect, production-profiling]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Brendan Gregg's flame graph documentation https://www.brendangregg.com/flamegraphs.html (verified 2026-05-04 against fixtures/upstream/curated/perf.yaml topic `flame_graphs`); *Systems Performance* (2nd ed.) ch. 6 on profilers; pprof documentation https://go.dev/blog/pprof; py-spy https://github.com/benfred/py-spy. Skill scope: how to use profilers correctly to find bottlenecks; not optimization decisions (covered in measure-before-optimizing), not Amdahl's-law analysis (covered in finding-the-bottleneck).
+
+raw_prose: |
+  # Profiling Correctly
+
+  A profiler is a tool that tells you where the program spends its time. The rule is one sentence: pick the right kind of profiler for the question, account for the observer effect, and read the output as a hypothesis to verify — not as truth. Most profile-driven optimizations that did not improve performance read the profiler output incorrectly somewhere — they trusted a tracing profiler whose own overhead distorted the numbers, they conflated CPU time with wall-clock time, or they optimized a function that was hot only because of how the profiler measured it.
+
+  ## Sampling vs tracing — pick the right tool
+
+  Two main families of profiler exist, and they answer different questions.
+
+  - **Sampling profilers** (perf, py-spy, async-profiler, pprof CPU profile, Visual Studio sampler) periodically interrupt the program and record what is on the call stack. They have low overhead — typically under 5% — and produce statistical estimates of where time is spent. They are the right default for finding hot CPU paths.
+  - **Tracing profilers** (gprof, py `cProfile`, JS V8 inspector profile, OpenTelemetry tracing) instrument every function call with a timer. They produce exact call counts and timings, but the instrumentation itself adds overhead — sometimes 5x or more on hot paths. They are right for understanding call structure and counting calls, not for measuring wall time on hot code.
+
+  Use sampling for "where is time going?" Use tracing for "how often is X called and what does it call?" Mixing them up — using tracing to measure wall time, or using sampling to count exact calls — produces wrong answers.
+
+  ## Beware the observer effect
+
+  Both kinds of profiler add overhead. Sampling adds little but enough that hot tight loops may shift relative ranking; tracing can add enough that the profiled program behaves differently from production.
+
+  Specific failure modes:
+
+  - **Optimization based on tracing-profile output that disappears in production.** The "hot function" was hot because tracing inflated its self-time; the un-traced version was fast all along.
+  - **Profile of a debug build, optimization for production.** Compiler optimizations remove or inline functions that the profile showed as hot. The optimization had nothing to act on.
+  - **Profile under microbenchmark conditions, optimization for real load.** Cache behavior, lock contention, GC pressure differ; the profile is from a different program than what production runs.
+
+  Cross-check profile-driven hypotheses with end-to-end measurement (see measure-before-optimizing). The profile points where to look; the end-to-end metric confirms the fix.
+
+  ## Read flame graphs as a map
+
+  Flame graphs are the standard visualization for sampling profiles. Each box is a function on the call stack; width is proportional to the time samples landed in that function (or its callees). Stacks grow up: the bottom is the entry point, the top is where the CPU was when sampled.
+
+  Reading practice:
+
+  - **Wide boxes near the top are direct work.** The function does the work itself.
+  - **Wide boxes near the bottom are aggregators.** They call into other functions that do the work; the bottom function is just orchestrating.
+  - **Plateaus matter, spikes do not.** A wide flat region means the CPU spent significant time in that area; one tall narrow tower is interesting structurally but minor in time.
+  - **Look for unexpected wide boxes.** A rendering function that is 30% wide when you expected 5% is the bottleneck. Investigate why it is wide before optimizing.
+
+  Flame graphs are diagnostic, not prescriptive. They show where time goes; they do not tell you whether the time is justified or how to reduce it. That is the next step.
+
+  ## Profile in conditions that match production
+
+  A profile from a development environment running `--debug` is not the profile of production. Specific knobs to match:
+
+  - **Build flags.** Profile with the same `-O2` / `--release` / production optimization level.
+  - **Input distribution.** Profile with realistic input sizes and request patterns. A profile on a 100-byte payload may favor different optimizations than a 100-MB payload.
+  - **Concurrency level.** Profile under realistic concurrency — single-threaded profiles miss contention bottlenecks; over-threaded profiles see contention that does not exist in production.
+  - **Hardware.** Profile on hardware similar to production. Different cache sizes, different core counts, different memory bandwidth produce different bottlenecks.
+
+  When production-matching is not feasible, name the divergence in the profile report. "Profile from staging on 4-core box; production runs on 32-core box — contention may differ" is honest. Silently profiling a wrong environment is misleading.
+
+  ## Production profiling, when you can
+
+  Profiles in production are the most accurate data. Sampling profilers (Linux perf, async-profiler, py-spy with `--pid`, pprof http endpoint) can run on production processes with negligible overhead. Use them when:
+
+  - **The dev environment cannot reproduce the workload.** Real traffic shape, real cache state, real lock contention.
+  - **The bottleneck is suspected to be load-dependent.** A function that is fast at low concurrency may be slow at high concurrency for reasons (lock contention, GC pause, NUMA effects) that only show under load.
+  - **An incident has degraded performance.** A live profile during the incident shows what is consuming time; a post-incident profile may not reproduce.
+
+  The risk: profilers can occasionally cause crashes or stalls if they hit unexpected runtime states. Test the profiler-attach path in staging before depending on it in production.
+
+  ## Profile-guided optimization is iterative
+
+  A single profile rarely tells the whole story. The first profile reveals one bottleneck; optimizing it shifts the bottleneck elsewhere. Re-profile after each optimization to find the new hot spot.
+
+  This iterative loop is when profiling pays off most: each pass yields a measurable improvement, and the loop terminates when no single hot spot dominates (the flame graph becomes flat) or when the remaining bottlenecks are not worth their cost (see when-to-stop-optimizing in performance-budgets).
+
+  Profile-driven optimization without re-profiling is half the work — the first optimization may have made another spot relatively hotter, and the same fix that worked on bottleneck A may be the wrong fix for bottleneck B.
+
+  ## Anti-patterns
+
+  - **Trusting tracing-profiler wall times.** The instrumentation overhead distorts. Use it for call counts and structure, not timing.
+  - **Profiling a debug build.** The compiler did not run its optimizations; the profile reflects code that does not exist in production.
+  - **Single-iteration profiling.** Optimization shifts the bottleneck. Re-profile after every change.
+  - **Profile-and-ship without measuring.** "The profile said it was hot" is a hypothesis. The end-to-end measurement is the proof.
+  - **Optimizing flame-graph spikes that are tall but narrow.** Visual height ≠ time. A tall narrow tower is structural depth, not significant CPU.
+  - **Reading inclusive vs exclusive time wrong.** Inclusive time = function + everything it calls. Exclusive time = function itself only. Optimizing inclusive time without checking exclusive can lead to fixing a function that just happens to call slow callees.
+  - **No environment match.** Profile from laptop, optimization for prod. Different hardware, different bottlenecks.
+
+  ## Memory and other resource profilers
+
+  CPU is the most-profiled resource, but the same discipline applies to other dimensions:
+
+  - **Heap profilers** (pprof heap profile, Java Flight Recorder, py-spy memory) show where allocations come from. Useful for finding leaks and high-churn allocators.
+  - **Lock profilers** show contention on mutexes. Useful when you suspect contention is the bottleneck rather than CPU.
+  - **IO profilers** (iotop, blktrace) show disk and network usage. Useful when the program is IO-bound.
+
+  Pick the profiler that matches the resource you suspect is the bottleneck. CPU profile of an IO-bound program shows the program waiting, not the cause.
+
+  ## Verification
+
+  - [ ] The profiler chosen matches the question (sampling for "where is time going", tracing for "how often is X called").
+  - [ ] The profile was taken with production-matched build flags, input distribution, concurrency level, and hardware where feasible.
+  - [ ] Tracing-profile timings were not used to measure wall time on hot code; sampling profile or end-to-end measurement was used instead.
+  - [ ] Flame graph reading distinguished wide-and-flat (real time) from tall-and-narrow (deep stack); inclusive vs exclusive time was checked.
+  - [ ] After each optimization, the profile was re-taken to see whether the bottleneck shifted.
+  - [ ] End-to-end measurement confirmed the optimization produced the gain the profile predicted.
+  - [ ] Production profiling was used when the dev/staging environment could not reproduce the workload; the production-vs-staging divergence was named in the report.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Profiling Correctly
+
+      A profiler is a tool that tells you where the program spends its time. The rule is one sentence: pick the right kind of profiler for the question, account for the observer effect, and read the output as a hypothesis to verify — not as truth. Most profile-driven optimizations that did not improve performance read the profiler output incorrectly somewhere — they trusted a tracing profiler whose own overhead distorted the numbers, they conflated CPU time with wall-clock time, or they optimized a function that was hot only because of how the profiler measured it.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## Sampling vs tracing — pick the right tool
+
+      Two main families of profiler exist, and they answer different questions.
+
+      - **Sampling profilers** (perf, py-spy, async-profiler, pprof CPU profile, Visual Studio sampler) periodically interrupt the program and record what is on the call stack. They have low overhead — typically under 5% — and produce statistical estimates of where time is spent. They are the right default for finding hot CPU paths.
+      - **Tracing profilers** (gprof, py `cProfile`, JS V8 inspector profile, OpenTelemetry tracing) instrument every function call with a timer. They produce exact call counts and timings, but the instrumentation itself adds overhead — sometimes 5x or more on hot paths. They are right for understanding call structure and counting calls, not for measuring wall time on hot code.
+
+      Use sampling for "where is time going?" Use tracing for "how often is X called and what does it call?" Mixing them up — using tracing to measure wall time, or using sampling to count exact calls — produces wrong answers.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Beware the observer effect
+
+      Both kinds of profiler add overhead. Sampling adds little but enough that hot tight loops may shift relative ranking; tracing can add enough that the profiled program behaves differently from production.
+
+      Specific failure modes:
+
+      - **Optimization based on tracing-profile output that disappears in production.** The "hot function" was hot because tracing inflated its self-time; the un-traced version was fast all along.
+      - **Profile of a debug build, optimization for production.** Compiler optimizations remove or inline functions that the profile showed as hot. The optimization had nothing to act on.
+      - **Profile under microbenchmark conditions, optimization for real load.** Cache behavior, lock contention, GC pressure differ; the profile is from a different program than what production runs.
+
+      Cross-check profile-driven hypotheses with end-to-end measurement (see measure-before-optimizing). The profile points where to look; the end-to-end metric confirms the fix.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Read flame graphs as a map
+
+      Flame graphs are the standard visualization for sampling profiles. Each box is a function on the call stack; width is proportional to the time samples landed in that function (or its callees). Stacks grow up: the bottom is the entry point, the top is where the CPU was when sampled.
+
+      Reading practice:
+
+      - **Wide boxes near the top are direct work.** The function does the work itself.
+      - **Wide boxes near the bottom are aggregators.** They call into other functions that do the work; the bottom function is just orchestrating.
+      - **Plateaus matter, spikes do not.** A wide flat region means the CPU spent significant time in that area; one tall narrow tower is interesting structurally but minor in time.
+      - **Look for unexpected wide boxes.** A rendering function that is 30% wide when you expected 5% is the bottleneck. Investigate why it is wide before optimizing.
+
+      Flame graphs are diagnostic, not prescriptive. They show where time goes; they do not tell you whether the time is justified or how to reduce it. That is the next step.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Profile in conditions that match production
+
+      A profile from a development environment running `--debug` is not the profile of production. Specific knobs to match:
+
+      - **Build flags.** Profile with the same `-O2` / `--release` / production optimization level.
+      - **Input distribution.** Profile with realistic input sizes and request patterns. A profile on a 100-byte payload may favor different optimizations than a 100-MB payload.
+      - **Concurrency level.** Profile under realistic concurrency — single-threaded profiles miss contention bottlenecks; over-threaded profiles see contention that does not exist in production.
+      - **Hardware.** Profile on hardware similar to production. Different cache sizes, different core counts, different memory bandwidth produce different bottlenecks.
+
+      When production-matching is not feasible, name the divergence in the profile report. "Profile from staging on 4-core box; production runs on 32-core box — contention may differ" is honest. Silently profiling a wrong environment is misleading.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Production profiling, when you can
+
+      Profiles in production are the most accurate data. Sampling profilers (Linux perf, async-profiler, py-spy with `--pid`, pprof http endpoint) can run on production processes with negligible overhead. Use them when:
+
+      - **The dev environment cannot reproduce the workload.** Real traffic shape, real cache state, real lock contention.
+      - **The bottleneck is suspected to be load-dependent.** A function that is fast at low concurrency may be slow at high concurrency for reasons (lock contention, GC pause, NUMA effects) that only show under load.
+      - **An incident has degraded performance.** A live profile during the incident shows what is consuming time; a post-incident profile may not reproduce.
+
+      The risk: profilers can occasionally cause crashes or stalls if they hit unexpected runtime states. Test the profiler-attach path in staging before depending on it in production.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Profile-guided optimization is iterative
+
+      A single profile rarely tells the whole story. The first profile reveals one bottleneck; optimizing it shifts the bottleneck elsewhere. Re-profile after each optimization to find the new hot spot.
+
+      This iterative loop is when profiling pays off most: each pass yields a measurable improvement, and the loop terminates when no single hot spot dominates (the flame graph becomes flat) or when the remaining bottlenecks are not worth their cost (see when-to-stop-optimizing in performance-budgets).
+
+      Profile-driven optimization without re-profiling is half the work — the first optimization may have made another spot relatively hotter, and the same fix that worked on bottleneck A may be the wrong fix for bottleneck B.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Trusting tracing-profiler wall times.** The instrumentation overhead distorts. Use it for call counts and structure, not timing.
+      - **Profiling a debug build.** The compiler did not run its optimizations; the profile reflects code that does not exist in production.
+      - **Single-iteration profiling.** Optimization shifts the bottleneck. Re-profile after every change.
+      - **Profile-and-ship without measuring.** "The profile said it was hot" is a hypothesis. The end-to-end measurement is the proof.
+      - **Optimizing flame-graph spikes that are tall but narrow.** Visual height ≠ time. A tall narrow tower is structural depth, not significant CPU.
+      - **Reading inclusive vs exclusive time wrong.** Inclusive time = function + everything it calls. Exclusive time = function itself only. Optimizing inclusive time without checking exclusive can lead to fixing a function that just happens to call slow callees.
+      - **No environment match.** Profile from laptop, optimization for prod. Different hardware, different bottlenecks.
+
+  - sequence: 9
+    fragment_type: rationale
+    content: |
+      ## Memory and other resource profilers
+
+      CPU is the most-profiled resource, but the same discipline applies to other dimensions:
+
+      - **Heap profilers** (pprof heap profile, Java Flight Recorder, py-spy memory) show where allocations come from. Useful for finding leaks and high-churn allocators.
+      - **Lock profilers** show contention on mutexes. Useful when you suspect contention is the bottleneck rather than CPU.
+      - **IO profilers** (iotop, blktrace) show disk and network usage. Useful when the program is IO-bound.
+
+      Pick the profiler that matches the resource you suspect is the bottleneck. CPU profile of an IO-bound program shows the program waiting, not the cause.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] The profiler chosen matches the question (sampling for "where is time going", tracing for "how often is X called").
+      - [ ] The profile was taken with production-matched build flags, input distribution, concurrency level, and hardware where feasible.
+      - [ ] Tracing-profile timings were not used to measure wall time on hot code; sampling profile or end-to-end measurement was used instead.
+      - [ ] Flame graph reading distinguished wide-and-flat (real time) from tall-and-narrow (deep stack); inclusive vs exclusive time was checked.
+      - [ ] After each optimization, the profile was re-taken to see whether the bottleneck shifted.
+      - [ ] End-to-end measurement confirmed the optimization produced the gain the profile predicted.
+      - [ ] Production profiling was used when the dev/staging environment could not reproduce the workload; the production-vs-staging divergence was named in the report.

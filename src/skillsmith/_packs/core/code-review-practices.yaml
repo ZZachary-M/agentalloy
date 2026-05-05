@@ -1,0 +1,188 @@
+skill_type: domain
+skill_id: code-review-practices
+canonical_name: Code Review Practices (Reviewer + Author Discipline)
+category: review
+skill_class: domain
+domain_tags: [pr-review, blocking-vs-nit, review-comment-tone, change-list-size, reviewer-fatigue]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Google Engineering Practices Code Review guide (https://google.github.io/eng-practices/review/), internal review history (docs/skill-review-history/2026-04-28-batch-2-stack-foundations.md). Skill scope: discipline of giving and receiving review feedback; PR-shaping and pre-review verification (covered in verification-before-completion).
+
+raw_prose: |
+  # Code Review Practices
+
+  Code review is a two-sided contract. The reviewer's job is to surface real problems quickly without becoming a bottleneck. The author's job is to ship a reviewable change and respond to feedback honestly. Most slow PRs are slow because one side defected — the reviewer nitpicked style on a 600-line PR, or the author shipped a wall of unrelated changes and asked the reviewer to sort it out.
+
+  ## What the reviewer is looking for
+
+  In priority order. If time runs out, stop low and merge. The top of the list is non-negotiable; the bottom is taste.
+
+  1. **Correctness.** Does the change do what the description claims? Walk one realistic edge case through the diff. If the case fails, that is blocking.
+  2. **Tests.** Does the change include tests for the new behavior, and do the tests fail without the production code? A change with no test for the new behavior is a regression-trap (see test-driven-development).
+  3. **Blast radius.** What does this change couple to that the author may not have noticed? Use the GitNexus impact analysis or the equivalent in the codebase. d=1 dependents that this PR breaks are blocking.
+  4. **Security and data integrity.** Authentication, authorization, input validation, secret handling, migration safety. These are blocking even when the rest of the change is fine.
+  5. **API and schema choices.** Once shipped, these are expensive to change. Ask: would I be willing to live with this surface for two years?
+  6. **Naming and structure.** Names that lie ("getUser" that mutates), structures that bury the load-bearing logic. Worth raising; not always blocking.
+  7. **Style and formatting.** Linter territory. If the linter passes and humans can read it, leave it alone — the linter is the source of truth.
+
+  Mark each comment as blocking or non-blocking explicitly. "nit:" prefix for non-blocking, plain comment for blocking, "BLOCKING:" prefix when ambiguity remains.
+
+  ## What the reviewer is NOT looking for
+
+  - **Code that the reviewer would have written.** Different is not worse. If the change works and is readable, ship it.
+  - **Improvements outside the PR's scope.** "While you are in here, could you also fix..." is a separate PR. Open a follow-up issue.
+  - **Stylistic preferences the codebase has not adopted.** If the project uses tabs and the PR uses tabs, do not ask for spaces.
+
+  ## Comment tone
+
+  Comments are read with the worst-possible interpretation by default — text strips tone. Compensate explicitly. Patterns that work:
+
+  - **State the concern, not the verdict.** "This will fail when X is empty" is better than "Wrong." The author can verify the concern; the verdict only generates a counter-verdict.
+  - **Ask, do not interrogate.** "What is the path for X here?" is a question. "Why would you ever..." is hostile. The first invites response; the second invites defensiveness.
+  - **Cite, do not quote.** When pointing at a convention, link to the convention. Memory of "the convention" varies; the link does not.
+  - **Acknowledge constraints.** "I see the time pressure here — for now this is fine, but file an issue to revisit X" is shippable. Pretending the constraint does not exist creates a reviewer who is hard to ship past.
+
+  ## Author discipline — shaping a reviewable PR
+
+  The reviewer's time is the bottleneck; everything else flows from there.
+
+  - **Keep PRs small.** Under 400 lines of diff is the empirical sweet spot for review quality. Over 1000 lines, defects slip through at increasing rates and reviewer fatigue dominates. Split a large change into a stack: refactor first, then behavior change, then tests.
+  - **One concern per PR.** Mix a refactor and a bugfix and the reviewer cannot revert one without losing the other. Keep concerns separate.
+  - **Write the description.** "What changed, why, what to look at first" — three sentences minimum. The description is what the reviewer reads first; if it is missing, they reverse-engineer it from the diff, badly.
+  - **Self-review before requesting.** Read your own diff with reviewer eyes. Most "I forgot to delete this debug line" comments are caught by a five-minute self-review.
+  - **Name the verification.** Per verification-before-completion: "Ran X, output Y." The reviewer can re-run the same command.
+
+  ## Receiving feedback
+
+  - **Disagree with technical rigor.** When a comment seems wrong, surface why with specifics ("the case the comment describes does not occur because X"); do not just push back. If the reviewer is right, you find that out before you defend the wrong position publicly.
+  - **Do not silently capitulate.** If a comment is wrong but you implement it to close the loop, the wrong code ships. Surface the conflict and resolve it before changing the code.
+  - **Resolve threads explicitly.** Do not merge with unresolved threads unless every unresolved thread is explicitly marked "deferred to follow-up #NNN."
+  - **Accept the nit.** A non-blocking style preference from the reviewer is cheap to apply. Apply it. Picking a fight over a nit costs more than the change.
+
+  ## When the reviewer and author disagree
+
+  Default: the author is the domain expert, the reviewer is the second pair of eyes. On correctness, the reviewer wins until the author can prove otherwise. On taste, the author wins until the reviewer can cite a convention.
+
+  If the disagreement persists past two round-trips, escalate to a third reviewer. Two-round-trip stalemates are usually about something neither side has named explicitly — a third party can spot it.
+
+  ## Review SLA and async culture
+
+  Reviewers should respond within one business day for normal-priority PRs. Past that, the author's branch drifts and the cost of resolving conflicts grows superlinearly. If you cannot review within a day, say so explicitly so the author can ask someone else.
+
+  Reviews are async by default. Pulling a reviewer into a synchronous walkthrough should be reserved for genuinely hard changes — most PRs do not need it. When sync review IS used, write the outcome back to the PR thread so the next reader has the context.
+
+  ## Verification
+
+  - [ ] Each review comment is marked blocking or non-blocking (nit / BLOCKING / plain) so the author can triage.
+  - [ ] The PR description states what changed, why, and what to look at first.
+  - [ ] The PR is under 400 lines of diff, or the description names why it had to be larger.
+  - [ ] The author named the verification command they ran (per verification-before-completion).
+  - [ ] No threads are unresolved at merge time except those explicitly deferred to a linked follow-up.
+  - [ ] The reviewer responded within one business day or named who else to ask.
+
+  ## Sources (verified 2026-05-04)
+
+  - Google Engineering Practices, Code Review Developer Guide: https://google.github.io/eng-practices/review/
+  - Internal review history: `docs/skill-review-history/2026-04-28-batch-2-stack-foundations.md`
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Code Review Practices
+
+      Code review is a two-sided contract. The reviewer's job is to surface real problems quickly without becoming a bottleneck. The author's job is to ship a reviewable change and respond to feedback honestly. Most slow PRs are slow because one side defected — the reviewer nitpicked style on a 600-line PR, or the author shipped a wall of unrelated changes and asked the reviewer to sort it out.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## What the reviewer is looking for
+
+      In priority order. If time runs out, stop low and merge. The top of the list is non-negotiable; the bottom is taste.
+
+      1. **Correctness.** Does the change do what the description claims? Walk one realistic edge case through the diff. If the case fails, that is blocking.
+      2. **Tests.** Does the change include tests for the new behavior, and do the tests fail without the production code? A change with no test for the new behavior is a regression-trap (see test-driven-development).
+      3. **Blast radius.** What does this change couple to that the author may not have noticed? Use the GitNexus impact analysis or the equivalent in the codebase. d=1 dependents that this PR breaks are blocking.
+      4. **Security and data integrity.** Authentication, authorization, input validation, secret handling, migration safety. These are blocking even when the rest of the change is fine.
+      5. **API and schema choices.** Once shipped, these are expensive to change. Ask: would I be willing to live with this surface for two years?
+      6. **Naming and structure.** Names that lie ("getUser" that mutates), structures that bury the load-bearing logic. Worth raising; not always blocking.
+      7. **Style and formatting.** Linter territory. If the linter passes and humans can read it, leave it alone — the linter is the source of truth.
+
+      Mark each comment as blocking or non-blocking explicitly. "nit:" prefix for non-blocking, plain comment for blocking, "BLOCKING:" prefix when ambiguity remains.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## What the reviewer is NOT looking for
+
+      - **Code that the reviewer would have written.** Different is not worse. If the change works and is readable, ship it.
+      - **Improvements outside the PR's scope.** "While you are in here, could you also fix..." is a separate PR. Open a follow-up issue.
+      - **Stylistic preferences the codebase has not adopted.** If the project uses tabs and the PR uses tabs, do not ask for spaces.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Comment tone
+
+      Comments are read with the worst-possible interpretation by default — text strips tone. Compensate explicitly. Patterns that work:
+
+      - **State the concern, not the verdict.** "This will fail when X is empty" is better than "Wrong." The author can verify the concern; the verdict only generates a counter-verdict.
+      - **Ask, do not interrogate.** "What is the path for X here?" is a question. "Why would you ever..." is hostile. The first invites response; the second invites defensiveness.
+      - **Cite, do not quote.** When pointing at a convention, link to the convention. Memory of "the convention" varies; the link does not.
+      - **Acknowledge constraints.** "I see the time pressure here — for now this is fine, but file an issue to revisit X" is shippable. Pretending the constraint does not exist creates a reviewer who is hard to ship past.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Author discipline — shaping a reviewable PR
+
+      The reviewer's time is the bottleneck; everything else flows from there.
+
+      - **Keep PRs small.** Under 400 lines of diff is the empirical sweet spot for review quality. Over 1000 lines, defects slip through at increasing rates and reviewer fatigue dominates. Split a large change into a stack: refactor first, then behavior change, then tests.
+      - **One concern per PR.** Mix a refactor and a bugfix and the reviewer cannot revert one without losing the other. Keep concerns separate.
+      - **Write the description.** "What changed, why, what to look at first" — three sentences minimum. The description is what the reviewer reads first; if it is missing, they reverse-engineer it from the diff, badly.
+      - **Self-review before requesting.** Read your own diff with reviewer eyes. Most "I forgot to delete this debug line" comments are caught by a five-minute self-review.
+      - **Name the verification.** Per verification-before-completion: "Ran X, output Y." The reviewer can re-run the same command.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Receiving feedback
+
+      - **Disagree with technical rigor.** When a comment seems wrong, surface why with specifics ("the case the comment describes does not occur because X"); do not just push back. If the reviewer is right, you find that out before you defend the wrong position publicly.
+      - **Do not silently capitulate.** If a comment is wrong but you implement it to close the loop, the wrong code ships. Surface the conflict and resolve it before changing the code.
+      - **Resolve threads explicitly.** Do not merge with unresolved threads unless every unresolved thread is explicitly marked "deferred to follow-up #NNN."
+      - **Accept the nit.** A non-blocking style preference from the reviewer is cheap to apply. Apply it. Picking a fight over a nit costs more than the change.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## When the reviewer and author disagree
+
+      Default: the author is the domain expert, the reviewer is the second pair of eyes. On correctness, the reviewer wins until the author can prove otherwise. On taste, the author wins until the reviewer can cite a convention. The split is deliberately asymmetric — correctness disagreements have a ground truth that one side can produce evidence for, and taste disagreements rarely do.
+
+      If the disagreement persists past two round-trips, escalate to a third reviewer. Two-round-trip stalemates are usually about something neither side has named explicitly — a third party can spot it. Do not let the disagreement age in the PR thread; aging issues become political, and the political version is much harder to resolve than the technical one.
+
+  - sequence: 8
+    fragment_type: setup
+    content: |
+      ## Review SLA and async culture
+
+      Reviewers should respond within one business day for normal-priority PRs. Past that, the author's branch drifts and the cost of resolving conflicts grows superlinearly. If you cannot review within a day, say so explicitly so the author can ask someone else.
+
+      Reviews are async by default. Pulling a reviewer into a synchronous walkthrough should be reserved for genuinely hard changes — most PRs do not need it. When sync review IS used, write the outcome back to the PR thread so the next reader has the context.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Each review comment is marked blocking or non-blocking (nit / BLOCKING / plain) so the author can triage.
+      - [ ] The PR description states what changed, why, and what to look at first.
+      - [ ] The PR is under 400 lines of diff, or the description names why it had to be larger.
+      - [ ] The author named the verification command they ran (per verification-before-completion).
+      - [ ] No threads are unresolved at merge time except those explicitly deferred to a linked follow-up.
+      - [ ] The reviewer responded within one business day or named who else to ask.

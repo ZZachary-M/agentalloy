@@ -1,0 +1,271 @@
+skill_type: domain
+skill_id: common-refactoring-moves
+canonical_name: Common Refactoring Moves (Extract, Inline, Rename, Replace)
+category: design
+skill_class: domain
+domain_tags: [extract-function, inline-function, rename-symbol, replace-conditional, parameter-object]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Martin Fowler, *Refactoring* (2nd ed., 2018) catalog at https://refactoring.com/catalog/ (verified 2026-05-04 against fixtures/upstream/curated/fowler.yaml topic `refactoring_catalog`); Joshua Kerievsky, *Refactoring to Patterns*; internal review history on extract-function PRs that produced the wrong abstraction. Skill scope: the small repertoire of refactoring moves that handle the majority of day-to-day cleanup; not the full Fowler catalog (>60 named moves), not refactoring decisions or safety (covered separately).
+
+raw_prose: |
+  # Common Refactoring Moves
+
+  Most day-to-day refactoring uses a small set of named moves. The rule is one sentence: learn the half-dozen moves that cover 80% of cleanup — extract function, inline function, rename, move, replace conditional with polymorphism (or its inverse), introduce parameter object — and apply them deliberately, one at a time, each with the safety net of tests. Most refactors that produce confusing code skipped this discipline by combining moves silently into "rewrites" that no reviewer can decompose.
+
+  ## Extract function — when one piece of a function does its own thing
+
+  The most common refactoring move. When a function does several things, or when a block of code inside a function has a clear distinct purpose, extract that block into its own named function.
+
+  Indicators that extraction is right:
+
+  - **A block that wants its own comment.** The comment is the name of the extracted function.
+  - **A block that is repeated in two places** (with a third occurrence on the way — see the rule of three).
+  - **A block whose variables are largely independent of the surrounding scope.** Few inputs, one output.
+  - **A function that needs scrolling to read.** Splitting it makes each piece readable on its own.
+
+  The cheap version: select the block in the editor, run "extract function" via the LSP refactoring tool. Most editors handle parameter inference and call-site updates automatically. Name the new function for what it accomplishes, not how — see naming-things.
+
+  Anti-extract: a block that uses ten of the surrounding variables and produces three. The extraction's signature is unwieldy. Either restructure first (extract a smaller block, or change the data flow) or do not extract.
+
+  ## Inline function — when a function adds noise without value
+
+  The opposite move. When a function's body is no clearer than its name, or when the function exists only to forward to another function, inline it. The caller code reads more naturally with the body inline than with a one-line indirection.
+
+  Indicators that inlining is right:
+
+  - **A function called once.** The "abstraction" has one user; the user can read the body directly.
+  - **A function whose name does not abbreviate its body.** `getUserName(u)` returning `u.name` adds a layer without a payoff.
+  - **A function that delegates to one other function with no transformation.** Pass through; no value added.
+  - **A "premature abstraction" that did not earn its keep.** See the refactoring-when-and-why skill on watching out for these.
+
+  Inlining is reversible if you change your mind — extract is one keystroke away. Use that as license to inline aggressively when the abstraction looks weak.
+
+  ## Rename — when a name no longer fits
+
+  As code evolves, names drift from accuracy. A function that "validates" but now also "normalizes" should be renamed. A variable named `data` whose meaning has crystallized into "user profile" should become `userProfile`.
+
+  The mechanics: use the editor's safe-rename / LSP rename. It updates all references atomically; manual find-and-replace introduces collisions and misses dynamic references.
+
+  See naming-things for the broader naming discipline. The refactoring move is mechanical; the decision to rename is the part that requires judgment.
+
+  ## Move function or class — when a symbol lives in the wrong place
+
+  When a function or class is in a file or module where it does not belong — referenced more by another module, or distinct from the file's primary concern — move it. The new location should be where the symbol is most used and most relevant.
+
+  Indicators a move is warranted:
+
+  - **A function in `utils.ts` that is only called from `auth.ts`.** It is an auth helper, not a util. Move it to `auth.ts` (or `auth-helpers.ts`).
+  - **A class declared in one module but operating on data from another.** It belongs with the data.
+  - **A file that has grown to hold concerns that should be separate.** Pull each concern into its own file, with the moves done one at a time.
+
+  Modern editors handle import updates on move; verify the import paths look right after the move. A move that leaves stale imports is a half-done move.
+
+  ## Replace conditional with polymorphism (and its inverse)
+
+  When a function has a long `if/else` or `switch` that branches on a type or a discriminator, polymorphism may be cleaner — each branch becomes a method on a different class implementing a shared interface.
+
+  This move is the most overused. Apply only when the conditional has multiple call sites that would all benefit from the dispatch, when new branches are likely (and would otherwise require touching every conditional site), and when the language idiomatically supports the pattern.
+
+  The inverse — replace polymorphism with a conditional — is also valid. When a class hierarchy has one or two implementations that differ trivially, collapsing to a conditional or a tagged union is often clearer than the inheritance tree.
+
+  Pick the shape that matches how the code is actually used. Hierarchies built for hypothetical future variation are premature abstraction.
+
+  ## Introduce parameter object — when functions take many related arguments
+
+  A function with five or six arguments, especially when several of them tend to move together, is a candidate for a parameter object: a small struct or interface that bundles the related arguments.
+
+  Indicators:
+
+  - **Arguments often passed together.** `(start, end, granularity, timezone)` always travel as a group.
+  - **The argument list is long enough that callers consult the signature.** A name for the bundle is more memorable than four positions.
+  - **A new related argument is being added.** Bundling now postpones the next signature change.
+
+  Do not bundle for the sake of bundling. A function with two unrelated arguments does not benefit from a wrapper struct. The cost is one more named type to learn; the benefit only pays off when the bundle is meaningful.
+
+  ## Replace magic value with named constant
+
+  When a number, string, or sentinel appears in code without explanation — a `0.85` here, a `"PENDING"` there — replace it with a named constant. The name documents the meaning.
+
+  Common targets:
+
+  - **Numeric thresholds.** `if (score > 0.85)` becomes `if (score > APPROVAL_THRESHOLD)`.
+  - **Sentinel strings.** `status === "PENDING"` becomes `status === Status.PENDING`.
+  - **Hard-coded paths or URLs.** Move to config; reference the config name.
+
+  Counter-rule: do not name constants that are obvious. `2 * Math.PI` is clearer than `TWO_PI = 2 * Math.PI`. The naming should add information.
+
+  ## Anti-patterns
+
+  - **Combining moves into one diff.** "Extract function plus rename plus move" in one commit. Reviewer cannot decompose; bisecting is hard. One move, one commit.
+  - **Extracting before duplication is real.** Pulling out an abstraction at the first repeat. The third occurrence usually reveals the extraction was wrong.
+  - **Inlining a function with multiple non-trivial callers.** Inline only when the function is called once or when the body is trivial.
+  - **Renaming via find-and-replace.** Misses dynamic references, hits unrelated text. Use LSP / graph-aware rename.
+  - **Move that breaks circular imports.** Each move has to keep the dependency graph clean. Plan for that before moving.
+  - **Polymorphism for the sake of polymorphism.** A `Strategy` pattern with one implementation is not polymorphism, it is one extra file.
+  - **Parameter object that lumps unrelated args.** Bundling for the sake of fewer parameters, when the args have nothing to do with each other. The reader has to unpack the bundle every time.
+
+  ## The catalog is bigger than this
+
+  Fowler's catalog has 60+ named moves. The seven covered here cover the bulk of day-to-day work. When you hit a refactoring problem these do not address — separating mixed concerns in a class, removing a dependency, replacing inheritance with composition — search the catalog at https://refactoring.com/catalog/ for the right named move.
+
+  Naming moves matters: a refactor that has a name is one the reviewer recognizes and can verify. "Extract function" produces a known shape; "I cleaned this up" does not.
+
+  ## Verification
+
+  - [ ] Each refactor in the PR is one named move (extract, inline, rename, move, replace conditional, introduce parameter object, replace magic value).
+  - [ ] Each move is its own commit, named for the move (e.g. `extract sendInvoice`, `rename usr to user`).
+  - [ ] Renames and moves used the LSP / graph-aware tooling, not manual find-and-replace.
+  - [ ] No extract function move was applied to code with fewer than three occurrences (or a documented exception).
+  - [ ] No inline applied to a function with multiple non-trivial callers.
+  - [ ] Polymorphism replacements have at least two real implementations; parameter objects have an articulable bundle meaning.
+  - [ ] Magic-value replacements named constants where the meaning is non-obvious; obvious values were left as literals.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Common Refactoring Moves
+
+      Most day-to-day refactoring uses a small set of named moves. The rule is one sentence: learn the half-dozen moves that cover 80% of cleanup — extract function, inline function, rename, move, replace conditional with polymorphism (or its inverse), introduce parameter object — and apply them deliberately, one at a time, each with the safety net of tests. Most refactors that produce confusing code skipped this discipline by combining moves silently into "rewrites" that no reviewer can decompose.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Extract function — when one piece of a function does its own thing
+
+      The most common refactoring move. When a function does several things, or when a block of code inside a function has a clear distinct purpose, extract that block into its own named function.
+
+      Indicators that extraction is right:
+
+      - **A block that wants its own comment.** The comment is the name of the extracted function.
+      - **A block that is repeated in two places** (with a third occurrence on the way — see the rule of three).
+      - **A block whose variables are largely independent of the surrounding scope.** Few inputs, one output.
+      - **A function that needs scrolling to read.** Splitting it makes each piece readable on its own.
+
+      The cheap version: select the block in the editor, run "extract function" via the LSP refactoring tool. Most editors handle parameter inference and call-site updates automatically. Name the new function for what it accomplishes, not how — see naming-things.
+
+      Anti-extract: a block that uses ten of the surrounding variables and produces three. The extraction's signature is unwieldy. Either restructure first (extract a smaller block, or change the data flow) or do not extract.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Inline function — when a function adds noise without value
+
+      The opposite move. When a function's body is no clearer than its name, or when the function exists only to forward to another function, inline it. The caller code reads more naturally with the body inline than with a one-line indirection.
+
+      Indicators that inlining is right:
+
+      - **A function called once.** The "abstraction" has one user; the user can read the body directly.
+      - **A function whose name does not abbreviate its body.** `getUserName(u)` returning `u.name` adds a layer without a payoff.
+      - **A function that delegates to one other function with no transformation.** Pass through; no value added.
+      - **A "premature abstraction" that did not earn its keep.** See the refactoring-when-and-why skill on watching out for these.
+
+      Inlining is reversible if you change your mind — extract is one keystroke away. Use that as license to inline aggressively when the abstraction looks weak.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Rename — when a name no longer fits
+
+      As code evolves, names drift from accuracy. A function that "validates" but now also "normalizes" should be renamed. A variable named `data` whose meaning has crystallized into "user profile" should become `userProfile`.
+
+      The mechanics: use the editor's safe-rename / LSP rename. It updates all references atomically; manual find-and-replace introduces collisions and misses dynamic references.
+
+      See naming-things for the broader naming discipline. The refactoring move is mechanical; the decision to rename is the part that requires judgment.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Move function or class — when a symbol lives in the wrong place
+
+      When a function or class is in a file or module where it does not belong — referenced more by another module, or distinct from the file's primary concern — move it. The new location should be where the symbol is most used and most relevant.
+
+      Indicators a move is warranted:
+
+      - **A function in `utils.ts` that is only called from `auth.ts`.** It is an auth helper, not a util. Move it to `auth.ts` (or `auth-helpers.ts`).
+      - **A class declared in one module but operating on data from another.** It belongs with the data.
+      - **A file that has grown to hold concerns that should be separate.** Pull each concern into its own file, with the moves done one at a time.
+
+      Modern editors handle import updates on move; verify the import paths look right after the move. A move that leaves stale imports is a half-done move.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## Replace conditional with polymorphism (and its inverse)
+
+      When a function has a long `if/else` or `switch` that branches on a type or a discriminator, polymorphism may be cleaner — each branch becomes a method on a different class implementing a shared interface.
+
+      This move is the most overused. Apply only when the conditional has multiple call sites that would all benefit from the dispatch, when new branches are likely (and would otherwise require touching every conditional site), and when the language idiomatically supports the pattern.
+
+      The inverse — replace polymorphism with a conditional — is also valid. When a class hierarchy has one or two implementations that differ trivially, collapsing to a conditional or a tagged union is often clearer than the inheritance tree.
+
+      Pick the shape that matches how the code is actually used. Hierarchies built for hypothetical future variation are premature abstraction.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Introduce parameter object — when functions take many related arguments
+
+      A function with five or six arguments, especially when several of them tend to move together, is a candidate for a parameter object: a small struct or interface that bundles the related arguments.
+
+      Indicators:
+
+      - **Arguments often passed together.** `(start, end, granularity, timezone)` always travel as a group.
+      - **The argument list is long enough that callers consult the signature.** A name for the bundle is more memorable than four positions.
+      - **A new related argument is being added.** Bundling now postpones the next signature change.
+
+      Do not bundle for the sake of bundling. A function with two unrelated arguments does not benefit from a wrapper struct. The cost is one more named type to learn; the benefit only pays off when the bundle is meaningful.
+
+  - sequence: 8
+    fragment_type: execution
+    content: |
+      ## Replace magic value with named constant
+
+      When a number, string, or sentinel appears in code without explanation — a `0.85` here, a `"PENDING"` there — replace it with a named constant. The name documents the meaning.
+
+      Common targets:
+
+      - **Numeric thresholds.** `if (score > 0.85)` becomes `if (score > APPROVAL_THRESHOLD)`.
+      - **Sentinel strings.** `status === "PENDING"` becomes `status === Status.PENDING`.
+      - **Hard-coded paths or URLs.** Move to config; reference the config name.
+
+      Counter-rule: do not name constants that are obvious. `2 * Math.PI` is clearer than `TWO_PI = 2 * Math.PI`. The naming should add information.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Combining moves into one diff.** "Extract function plus rename plus move" in one commit. Reviewer cannot decompose; bisecting is hard. One move, one commit.
+      - **Extracting before duplication is real.** Pulling out an abstraction at the first repeat. The third occurrence usually reveals the extraction was wrong.
+      - **Inlining a function with multiple non-trivial callers.** Inline only when the function is called once or when the body is trivial.
+      - **Renaming via find-and-replace.** Misses dynamic references, hits unrelated text. Use LSP / graph-aware rename.
+      - **Move that breaks circular imports.** Each move has to keep the dependency graph clean. Plan for that before moving.
+      - **Polymorphism for the sake of polymorphism.** A `Strategy` pattern with one implementation is not polymorphism, it is one extra file.
+      - **Parameter object that lumps unrelated args.** Bundling for the sake of fewer parameters, when the args have nothing to do with each other. The reader has to unpack the bundle every time.
+
+  - sequence: 10
+    fragment_type: rationale
+    content: |
+      ## The catalog is bigger than this
+
+      Fowler's catalog has 60+ named moves. The seven covered here cover the bulk of day-to-day work. When you hit a refactoring problem these do not address — separating mixed concerns in a class, removing a dependency, replacing inheritance with composition — search the catalog at https://refactoring.com/catalog/ for the right named move.
+
+      Naming moves matters: a refactor that has a name is one the reviewer recognizes and can verify. "Extract function" produces a known shape; "I cleaned this up" does not.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Each refactor in the PR is one named move (extract, inline, rename, move, replace conditional, introduce parameter object, replace magic value).
+      - [ ] Each move is its own commit, named for the move (e.g. `extract sendInvoice`, `rename usr to user`).
+      - [ ] Renames and moves used the LSP / graph-aware tooling, not manual find-and-replace.
+      - [ ] No extract function move was applied to code with fewer than three occurrences (or a documented exception).
+      - [ ] No inline applied to a function with multiple non-trivial callers.
+      - [ ] Polymorphism replacements have at least two real implementations; parameter objects have an articulable bundle meaning.
+      - [ ] Magic-value replacements named constants where the meaning is non-obvious; obvious values were left as literals.

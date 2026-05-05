@@ -1,0 +1,194 @@
+skill_type: domain
+skill_id: planning-and-task-breakdown
+canonical_name: Planning and Task Breakdown (Slicing Multi-Step Work)
+category: design
+skill_class: domain
+domain_tags: [task-decomposition, dependency-mapping, plan-checkpoint, slice-by-deliverable, integration-cost]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — internal SDD pipeline conventions (sdd-spec, sdd-design, sdd-plan), accumulated review experience on plan-driven execution. Skill scope: the discipline of breaking multi-step work into reviewable, testable units; not project management or estimation.
+
+raw_prose: |
+  # Planning and Task Breakdown
+
+  A plan is a sequence of tasks small enough to verify, ordered so each task starts from a working state. A good plan answers three questions before any code is written: what is the smallest first slice that proves the approach, what is the integration cost between slices, and what is the verification command for each slice.
+
+  Most failed plans share one symptom — a slice that cannot be verified independently. The slice ends in a half-built state, the next slice depends on the first being correct, and by the time the chain is complete, no one can tell which slice broke what.
+
+  ## Slice by deliverable, not by file
+
+  A slice ends in something that runs and can be observed. "Add the User model" is not a slice — it ends in a definition that nothing exercises. "Add the User model and the migration that creates the table" is a slice — you can observe the table.
+
+  Anti-pattern: slicing by layer (all the models, then all the controllers, then all the views). Each layer-slice ends in code that no one can verify because the surrounding layers are not yet present. Symptoms: long stretches of "trust me, this will all hook up" followed by an integration phase that flushes out a dozen surprises.
+
+  Pattern: slicing by vertical capability. The first slice ships one end-to-end path, even if that path is degenerate (one user, one product, no edge cases). The second slice extends that path. The third slice extends it further. Each slice is verifiable end-to-end against a real input.
+
+  ## Order by dependency
+
+  Slice N+1 depends on slice N being correct. If slice 3 is "wire the auth middleware" and slice 1 is "add the route handler that needs auth", slice 1's verification is meaningless until slice 3 lands. Reorder: slice 1 should be either "wire the auth middleware" or "add the route handler with auth stubbed out and a TODO marker."
+
+  Map the dependency graph before sequencing. For each candidate slice, list what it requires (precondition state) and what it produces (postcondition state). The valid sequences are the topological orderings of that graph; pick the one with the smallest first slice.
+
+  ## Size each slice for one verification cycle
+
+  Target: each slice is one to three hours of focused work, ending in a runnable state with a verification command. Larger slices accumulate untested code, making the eventual verification step a debugging session instead of a confirmation.
+
+  If a slice is genuinely larger — say, an architecture migration that cannot be split — define explicit checkpoints inside it. Each checkpoint has a partial-verification command so the slice can be paused and resumed safely.
+
+  ## Name the verification per slice
+
+  Per `verification-before-completion`, each slice's plan entry includes the exact command that proves the slice works. "Tests pass" is not a verification command; "Run `pnpm test --filter @app/checkout`, expect 12 passed, 0 failed" is.
+
+  Slices without a defined verification are unfinishable — there is no point at which "done" can be declared. If you cannot name the verification, the slice is not ready to enter the plan; refine it first.
+
+  ## Integration cost is the hidden cost
+
+  Two slices that do not depend on each other in the plan can still depend on each other at integration time — the second slice changes a function the first slice introduced, the test fixtures collide, the API surface is incompatible. Surface these costs in the plan.
+
+  When two slices share a surface, name the surface in both slice descriptions. "Slice 2 adds endpoint X; slice 4 changes the response shape of endpoint X — slice 4 must update slice 2's tests." The reviewer of slice 4 sees the cross-reference and knows what to check.
+
+  ## Plan format
+
+  Minimum content per slice:
+
+  - **What changes.** One sentence naming the deliverable. "Add the cart-to-order conversion endpoint" not "Update some files."
+  - **Preconditions.** What state must already exist? Reference earlier slices or external setup.
+  - **Verification.** The exact command and expected output.
+  - **Estimated size.** Lines of diff or hours; calibrates reviewer expectations.
+
+  Optional but high-value:
+
+  - **Risks and unknowns.** What might force a re-plan? Surface ambiguity now, not at implementation time.
+  - **Out-of-scope.** What this slice deliberately does NOT do. Prevents scope creep during review.
+
+  ## Re-planning when the plan breaks
+
+  Plans break. A slice runs into a constraint the planner did not see; a downstream slice turns out to be impossible without rework upstream. When this happens, stop and re-plan — do not patch the running plan with ad-hoc additions.
+
+  Re-plan from the current state, not from scratch. Treat the work already done as a precondition; re-derive the remaining slices from there. Most plans break in slice 2 or 3 — re-planning at that point costs little; patching costs compound.
+
+  ## Anti-patterns
+
+  - **"Plan it as we go."** Skipping the plan because "the work is small." Below ~3 hours of work, fine; above, the plan saves more time than it costs.
+  - **Layer-slicing.** All models, then all controllers, then all views. Cannot verify end-to-end until the last layer.
+  - **Slice without verification.** "Refactor the auth module" with no defined "done" condition. Refactors without verification become migrations that take months.
+  - **Plan as a wishlist.** Listing every nice-to-have alongside the load-bearing slices. Plans should bias to the smallest path that ships the capability; nice-to-haves go in a follow-up.
+  - **Hidden cross-slice dependencies.** Two slices that share a function or schema without naming the dependency. The reviewer of slice 2 has no way to know slice 5 is going to change the same code.
+
+  ## Verification
+
+  - [ ] Each slice ends in code that runs and can be observed (not a half-built state).
+  - [ ] Each slice has a verification command and expected output.
+  - [ ] The slice order respects the dependency graph; later slices do not depend on earlier slices being unverified.
+  - [ ] Cross-slice surfaces are named explicitly in the affected slices.
+  - [ ] No slice is so large that it cannot be paused with a partial-verification checkpoint.
+  - [ ] Out-of-scope is named so reviewers do not flag missing items as defects.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Planning and Task Breakdown
+
+      A plan is a sequence of tasks small enough to verify, ordered so each task starts from a working state. A good plan answers three questions before any code is written: what is the smallest first slice that proves the approach, what is the integration cost between slices, and what is the verification command for each slice.
+
+      Most failed plans share one symptom — a slice that cannot be verified independently. The slice ends in a half-built state, the next slice depends on the first being correct, and by the time the chain is complete, no one can tell which slice broke what.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Slice by deliverable, not by file
+
+      A slice ends in something that runs and can be observed. "Add the User model" is not a slice — it ends in a definition that nothing exercises. "Add the User model and the migration that creates the table" is a slice — you can observe the table.
+
+      Anti-pattern: slicing by layer (all the models, then all the controllers, then all the views). Each layer-slice ends in code that no one can verify because the surrounding layers are not yet present. Symptoms: long stretches of "trust me, this will all hook up" followed by an integration phase that flushes out a dozen surprises.
+
+      Pattern: slicing by vertical capability. The first slice ships one end-to-end path, even if that path is degenerate (one user, one product, no edge cases). The second slice extends that path. The third slice extends it further. Each slice is verifiable end-to-end against a real input.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Order by dependency
+
+      Slice N+1 depends on slice N being correct. If slice 3 is "wire the auth middleware" and slice 1 is "add the route handler that needs auth", slice 1's verification is meaningless until slice 3 lands. Reorder: slice 1 should be either "wire the auth middleware" or "add the route handler with auth stubbed out and a TODO marker."
+
+      Map the dependency graph before sequencing. For each candidate slice, list what it requires (precondition state) and what it produces (postcondition state). The valid sequences are the topological orderings of that graph; pick the one with the smallest first slice.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Size each slice for one verification cycle
+
+      Target: each slice is one to three hours of focused work, ending in a runnable state with a verification command. Larger slices accumulate untested code, making the eventual verification step a debugging session instead of a confirmation.
+
+      If a slice is genuinely larger — say, an architecture migration that cannot be split — define explicit checkpoints inside it. Each checkpoint has a partial-verification command so the slice can be paused and resumed safely.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Name the verification per slice
+
+      Per `verification-before-completion`, each slice's plan entry includes the exact command that proves the slice works. "Tests pass" is not a verification command; "Run `pnpm test --filter @app/checkout`, expect 12 passed, 0 failed" is. "The endpoint returns the right shape" is not a verification command; "Run `curl localhost:3000/api/cart -H 'authorization: bearer test'`, expect a JSON body with `items: [...]` and `total: <number>`" is.
+
+      Slices without a defined verification are unfinishable — there is no point at which "done" can be declared. If you cannot name the verification, the slice is not ready to enter the plan; refine it first. The act of writing the verification command is itself a sanity check on the slice — if writing the command exposes ambiguity in the deliverable, that ambiguity was about to become a debug session.
+
+  - sequence: 6
+    fragment_type: rationale
+    content: |
+      ## Integration cost is the hidden cost
+
+      Two slices that do not depend on each other in the plan can still depend on each other at integration time — the second slice changes a function the first slice introduced, the test fixtures collide, the API surface is incompatible. Surface these costs in the plan.
+
+      When two slices share a surface, name the surface in both slice descriptions. "Slice 2 adds endpoint X; slice 4 changes the response shape of endpoint X — slice 4 must update slice 2's tests." The reviewer of slice 4 sees the cross-reference and knows what to check.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Plan format
+
+      Minimum content per slice:
+
+      - **What changes.** One sentence naming the deliverable. "Add the cart-to-order conversion endpoint" not "Update some files."
+      - **Preconditions.** What state must already exist? Reference earlier slices or external setup.
+      - **Verification.** The exact command and expected output.
+      - **Estimated size.** Lines of diff or hours; calibrates reviewer expectations.
+
+      Optional but high-value:
+
+      - **Risks and unknowns.** What might force a re-plan? Surface ambiguity now, not at implementation time.
+      - **Out-of-scope.** What this slice deliberately does NOT do. Prevents scope creep during review.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## Re-planning when the plan breaks
+
+      Plans break. A slice runs into a constraint the planner did not see; a downstream slice turns out to be impossible without rework upstream. When this happens, stop and re-plan — do not patch the running plan with ad-hoc additions.
+
+      Re-plan from the current state, not from scratch. Treat the work already done as a precondition; re-derive the remaining slices from there. Most plans break in slice 2 or 3 — re-planning at that point costs little; patching costs compound.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **"Plan it as we go."** Skipping the plan because "the work is small." Below ~3 hours of work, fine; above, the plan saves more time than it costs.
+      - **Layer-slicing.** All models, then all controllers, then all views. Cannot verify end-to-end until the last layer.
+      - **Slice without verification.** "Refactor the auth module" with no defined "done" condition. Refactors without verification become migrations that take months.
+      - **Plan as a wishlist.** Listing every nice-to-have alongside the load-bearing slices. Plans should bias to the smallest path that ships the capability; nice-to-haves go in a follow-up.
+      - **Hidden cross-slice dependencies.** Two slices that share a function or schema without naming the dependency. The reviewer of slice 2 has no way to know slice 5 is going to change the same code.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Each slice ends in code that runs and can be observed (not a half-built state).
+      - [ ] Each slice has a verification command and expected output.
+      - [ ] The slice order respects the dependency graph; later slices do not depend on earlier slices being unverified.
+      - [ ] Cross-slice surfaces are named explicitly in the affected slices.
+      - [ ] No slice is so large that it cannot be paused with a partial-verification checkpoint.
+      - [ ] Out-of-scope is named so reviewers do not flag missing items as defects.

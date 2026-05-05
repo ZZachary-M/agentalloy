@@ -1,0 +1,27 @@
+name: engineering
+version: 2.0.0
+tier: foundation
+description: Engineering practices that span stacks — error handling, naming, ADRs, technical-debt management, reading code. Always installed. Re-authored 2026-05-04 against R1 tiered sourcing; pre-POC v1 archived to archive/pre-poc-packs-2026-05-04/.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: true
+depends_on: [core]
+skills:
+  - skill_id: error-handling-patterns
+    file: error-handling-patterns.yaml
+    fragment_count: 9
+  - skill_id: naming-things
+    file: naming-things.yaml
+    fragment_count: 9
+  - skill_id: architecture-decision-records
+    file: architecture-decision-records.yaml
+    fragment_count: 10
+  - skill_id: handling-technical-debt
+    file: handling-technical-debt.yaml
+    fragment_count: 9
+  - skill_id: reading-unfamiliar-code
+    file: reading-unfamiliar-code.yaml
+    fragment_count: 11

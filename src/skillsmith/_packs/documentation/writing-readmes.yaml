@@ -1,0 +1,207 @@
+skill_type: domain
+skill_id: writing-readmes
+canonical_name: Writing READMEs (The First Page Users See)
+category: design
+skill_class: domain
+domain_tags: [readme-structure, quickstart, install-instructions, project-pitch, audience-tiers]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Standard Readme spec https://github.com/RichardLitt/standard-readme (verified 2026-05-04 against fixtures/upstream/curated/docs.yaml topic `readme_structure`); GitHub's README guidance https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes; internal review history on README-less OSS projects that lost adoption to better-documented competitors. Skill scope: writing the project README — the first page users encounter; not API reference docs (covered separately) or marketing landing pages.
+
+raw_prose: |
+  # Writing READMEs
+
+  A README is the first page a new user sees and the last page a returning user re-reads. The rule is one sentence: the README answers what the project is, why someone would use it, and how to get to a working install in under five minutes. Most projects whose READMEs lost users failed this rule — the README started with a wall of installation prerequisites, buried the "what is this for" paragraph below the fold, or assumed the reader already knew the project's category. The cost is silent: people who do not understand what a project is for in 30 seconds rarely give it a second look, and the project loses the adoption it deserved on technical merit alone.
+
+  ## The first 30 seconds decide adoption
+
+  Readers who land on a README give it about 30 seconds before deciding whether to keep going. In that window, three questions need clear answers:
+
+  - **What is this?** A one-sentence description in plain language. "A static site generator for technical blogs" beats "A flexible, plugin-based, markdown-aware processing pipeline."
+  - **Who is it for?** Who would benefit from using this. "For developers who want a blog without a Node build step" tells the reader if they are in scope.
+  - **What does using it look like?** A code block or screenshot showing the simplest use case. Not setup — actual use.
+
+  Get all three above the fold (the first screenful). Everything else is the next layer.
+
+  ## Standard structure
+
+  Most successful READMEs share a similar shape. From top to bottom:
+
+  - **Title.** Project name, optionally a logo, optionally a one-line tagline.
+  - **Badges.** CI status, version, license, package manager. Keep to four or five — more becomes noise.
+  - **One-paragraph description.** The "what + who + why" answer.
+  - **Quickstart / minimal example.** A code block that shows the project working end-to-end on the simplest possible input. The reader should be able to copy-paste it.
+  - **Installation.** How to install. Multi-platform if applicable. Pin a version (or document how to discover the latest).
+  - **Usage.** A handful of common patterns. Not exhaustive — link to the full docs for that.
+  - **Configuration.** Environment variables, config files, common knobs.
+  - **Contributing.** How to develop locally, run tests, submit a PR. Often a separate `CONTRIBUTING.md` linked from here.
+  - **License.** SPDX identifier and full license text or a link to it.
+
+  Skip sections that do not apply — a CLI does not need a "configuration via environment variables" section if it has none. A README with empty sections looks unfinished.
+
+  ## Quickstart is the most-read section
+
+  After the description, the quickstart is the single most-read part of any README. It must:
+
+  - **Be copy-pasteable.** A reader should be able to paste each block in order and have it work. No `<placeholders>` they need to substitute without explanation.
+  - **Show end-to-end use, not just install.** "Run `pip install foo`" is install; "Now generate your first report with `foo report --input data.csv`" is use. Both belong; use is the goal.
+  - **Use realistic but minimal data.** Not "your real production data", not "lorem ipsum". A small concrete example the reader can mentally connect to their use case.
+  - **Show one happy path.** Not all options. Not edge cases. The first taste of success.
+
+  If the quickstart is more than 5–10 lines of code plus 2–3 lines of prose, the project is too complex for a quickstart and needs a "first steps" tutorial linked from the README instead.
+
+  ## Audience tiers — write for the new user, link for the expert
+
+  Different readers want different things. New users want orientation; experienced users want the specific config flag they remember half of. The README serves the new user; the expert finds what they need via the table of contents (built into Markdown viewers automatically) or by grepping the file.
+
+  Do not try to be the full documentation. Long READMEs (>500 lines) become unscannable and the experts give up too. Push depth to dedicated docs, dedicated wiki pages, or a `/docs` directory. The README is the index.
+
+  ## Update the README when behavior changes
+
+  The README ages faster than any other file in the project. Every breaking change, every new install method, every renamed flag is potentially a README change. Treat README updates as part of the change that caused them — not a "documentation sprint" later.
+
+  PRs that change behavior should update the README in the same diff. Reviewers should flag missing README updates the same way they flag missing tests. A README that lies about the project is worse than no README, because it teaches readers to distrust the project.
+
+  ## Anti-patterns
+
+  - **Buried lede.** The "what is this" sentence appears below installation instructions, badges, or a long preamble.
+  - **Marketing-speak.** "Cutting-edge, best-in-class, enterprise-ready solution." Tells the reader nothing concrete. Replace with what the project does.
+  - **Quickstart that is not a quickstart.** A quickstart that requires three external services to be set up first is a setup guide; rename it.
+  - **Walls of badges.** A double row of CI/coverage/style/security/etc. badges drowns the description. Pick the four or five readers actually look for.
+  - **Stale screenshots.** A screenshot from version 1 in a v3 README confuses the reader more than no screenshot. Update or remove.
+  - **Linking to docs that do not exist.** Links to an empty wiki, a 404 docs page, or a vaporware tutorial. Either the doc exists, or do not link it.
+  - **No license declared.** Without a license, no one can legally use the project. SPDX identifier minimum (`MIT`, `Apache-2.0`, etc.) plus a `LICENSE` file in the repo.
+
+  ## What to put outside the README
+
+  Some content is tempting to include but better placed elsewhere:
+
+  - **Full API reference.** Generate it; link to it. A 2000-line README of method signatures repels readers.
+  - **Detailed contributor onboarding.** Move to `CONTRIBUTING.md`; link from README.
+  - **Roadmap, design discussions.** Move to a `docs/` folder, GitHub Discussions, or an issue tracker. The README is for shipped features.
+  - **Long FAQ.** A short FAQ (3–5 entries) is fine; longer goes to `docs/faq.md`.
+  - **Acknowledgements / credits beyond a one-liner.** Move to `AUTHORS.md` or `CONTRIBUTORS.md`.
+
+  ## Verification
+
+  - [ ] First 30 seconds (above the fold) answer: what is this, who is it for, what does use look like.
+  - [ ] Quickstart is copy-pasteable, shows end-to-end use (not just install), and is under 10 lines of code.
+  - [ ] Installation section names a specific version or shows how to discover it; works on the platforms the project supports.
+  - [ ] License is declared (SPDX identifier minimum) and a `LICENSE` file exists in the repo.
+  - [ ] No badges that mislead (failing CI badge that is actually green, or vice versa); links to docs/wiki/discussions resolve.
+  - [ ] README was updated in the same PR as any breaking change, renamed flag, or new install method.
+  - [ ] README is under ~500 lines; deeper material lives in `docs/` or a wiki and is linked.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Writing READMEs
+
+      A README is the first page a new user sees and the last page a returning user re-reads. The rule is one sentence: the README answers what the project is, why someone would use it, and how to get to a working install in under five minutes. Most projects whose READMEs lost users failed this rule — the README started with a wall of installation prerequisites, buried the "what is this for" paragraph below the fold, or assumed the reader already knew the project's category. The cost is silent: people who do not understand what a project is for in 30 seconds rarely give it a second look, and the project loses the adoption it deserved on technical merit alone.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## The first 30 seconds decide adoption
+
+      Readers who land on a README give it about 30 seconds before deciding whether to keep going. In that window, three questions need clear answers:
+
+      - **What is this?** A one-sentence description in plain language. "A static site generator for technical blogs" beats "A flexible, plugin-based, markdown-aware processing pipeline."
+      - **Who is it for?** Who would benefit from using this. "For developers who want a blog without a Node build step" tells the reader if they are in scope.
+      - **What does using it look like?** A code block or screenshot showing the simplest use case. Not setup — actual use.
+
+      Get all three above the fold (the first screenful). Everything else is the next layer.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Standard structure
+
+      Most successful READMEs share a similar shape. From top to bottom:
+
+      - **Title.** Project name, optionally a logo, optionally a one-line tagline.
+      - **Badges.** CI status, version, license, package manager. Keep to four or five — more becomes noise.
+      - **One-paragraph description.** The "what + who + why" answer.
+      - **Quickstart / minimal example.** A code block that shows the project working end-to-end on the simplest possible input. The reader should be able to copy-paste it.
+      - **Installation.** How to install. Multi-platform if applicable. Pin a version (or document how to discover the latest).
+      - **Usage.** A handful of common patterns. Not exhaustive — link to the full docs for that.
+      - **Configuration.** Environment variables, config files, common knobs.
+      - **Contributing.** How to develop locally, run tests, submit a PR. Often a separate `CONTRIBUTING.md` linked from here.
+      - **License.** SPDX identifier and full license text or a link to it.
+
+      Skip sections that do not apply — a CLI does not need a "configuration via environment variables" section if it has none. A README with empty sections looks unfinished.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Quickstart is the most-read section
+
+      After the description, the quickstart is the single most-read part of any README. It must:
+
+      - **Be copy-pasteable.** A reader should be able to paste each block in order and have it work. No `<placeholders>` they need to substitute without explanation.
+      - **Show end-to-end use, not just install.** "Run `pip install foo`" is install; "Now generate your first report with `foo report --input data.csv`" is use. Both belong; use is the goal.
+      - **Use realistic but minimal data.** Not "your real production data", not "lorem ipsum". A small concrete example the reader can mentally connect to their use case.
+      - **Show one happy path.** Not all options. Not edge cases. The first taste of success.
+
+      If the quickstart is more than 5–10 lines of code plus 2–3 lines of prose, the project is too complex for a quickstart and needs a "first steps" tutorial linked from the README instead.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Audience tiers — write for the new user, link for the expert
+
+      Different readers want different things. New users want orientation; experienced users want the specific config flag they remember half of. The README serves the new user; the expert finds what they need via the table of contents (built into Markdown viewers automatically) or by grepping the file.
+
+      Do not try to be the full documentation. Long READMEs (>500 lines) become unscannable and the experts give up too. Push depth to dedicated docs, dedicated wiki pages, or a `/docs` directory. The README is the index.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Update the README when behavior changes
+
+      The README ages faster than any other file in the project. Every breaking change, every new install method, every renamed flag is potentially a README change. Treat README updates as part of the change that caused them — not a "documentation sprint" later.
+
+      PRs that change behavior should update the README in the same diff. Reviewers should flag missing README updates the same way they flag missing tests. A README that lies about the project is worse than no README, because it teaches readers to distrust the project.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Buried lede.** The "what is this" sentence appears below installation instructions, badges, or a long preamble.
+      - **Marketing-speak.** "Cutting-edge, best-in-class, enterprise-ready solution." Tells the reader nothing concrete. Replace with what the project does.
+      - **Quickstart that is not a quickstart.** A quickstart that requires three external services to be set up first is a setup guide; rename it.
+      - **Walls of badges.** A double row of CI/coverage/style/security/etc. badges drowns the description. Pick the four or five readers actually look for.
+      - **Stale screenshots.** A screenshot from version 1 in a v3 README confuses the reader more than no screenshot. Update or remove.
+      - **Linking to docs that do not exist.** Links to an empty wiki, a 404 docs page, or a vaporware tutorial. Either the doc exists, or do not link it.
+      - **No license declared.** Without a license, no one can legally use the project. SPDX identifier minimum (`MIT`, `Apache-2.0`, etc.) plus a `LICENSE` file in the repo.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## What to put outside the README
+
+      Some content is tempting to include but better placed elsewhere:
+
+      - **Full API reference.** Generate it; link to it. A 2000-line README of method signatures repels readers.
+      - **Detailed contributor onboarding.** Move to `CONTRIBUTING.md`; link from README.
+      - **Roadmap, design discussions.** Move to a `docs/` folder, GitHub Discussions, or an issue tracker. The README is for shipped features.
+      - **Long FAQ.** A short FAQ (3–5 entries) is fine; longer goes to `docs/faq.md`.
+      - **Acknowledgements / credits beyond a one-liner.** Move to `AUTHORS.md` or `CONTRIBUTORS.md`.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] First 30 seconds (above the fold) answer: what is this, who is it for, what does use look like.
+      - [ ] Quickstart is copy-pasteable, shows end-to-end use (not just install), and is under 10 lines of code.
+      - [ ] Installation section names a specific version or shows how to discover it; works on the platforms the project supports.
+      - [ ] License is declared (SPDX identifier minimum) and a `LICENSE` file exists in the repo.
+      - [ ] No badges that mislead (failing CI badge that is actually green, or vice versa); links to docs/wiki/discussions resolve.
+      - [ ] README was updated in the same PR as any breaking change, renamed flag, or new install method.
+      - [ ] README is under ~500 lines; deeper material lives in `docs/` or a wiki and is linked.

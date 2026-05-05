@@ -1,0 +1,221 @@
+skill_type: domain
+skill_id: reading-unfamiliar-code
+canonical_name: Reading Unfamiliar Code (Orient Before You Edit)
+category: design
+skill_class: domain
+domain_tags: [code-comprehension, entry-points, call-graph, runtime-tracing, breadth-first-then-depth]
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-04. Sources — Felienne Hermans, *The Programmer's Brain* https://www.manning.com/books/the-programmers-brain (verified 2026-05-04 against fixtures/upstream/curated/comprehension.yaml topic `code_reading`); Diomidis Spinellis, *Code Reading*; internal review history on edits made before the editor understood the code, leading to broken contracts. Skill scope: the discipline of reading and understanding unfamiliar code before changing it; not refactoring (covered separately), not learning a new language (covered in language packs).
+
+raw_prose: |
+  # Reading Unfamiliar Code
+
+  Reading unfamiliar code is the discipline of understanding what a codebase does before changing it. The rule is one sentence: orient breadth-first, then go depth-first on the surface you need to change. Most edits that broke unrelated code skipped this step — the editor went straight to the function they thought they needed to change, did not read its callers or its callees, and shipped a fix that broke a contract elsewhere. Reading is not preamble to the work; it is the work. A senior engineer in unfamiliar code spends more than half their time reading and tracing, and the actual edit is short because the reading was thorough. Skipping the reading does not save time; it relocates the cost into a debugging session two days later.
+
+  ## Start at the entry points, not at the file you came to edit
+
+  When dropped into an unfamiliar codebase, the temptation is to open the file the bug or task points at. Resist for a moment. First, find the entry points: where execution actually starts. For a CLI, that is `main`. For a web app, the route handlers. For a library, the exported public surface. For a worker, the queue subscriber.
+
+  Five minutes spent finding the entry points and tracing one happy-path execution from edge to leaf saves an hour of confusion later. The single file you came to edit is somewhere in that path; the surrounding context tells you what the file is for and what it is allowed to assume about its inputs.
+
+  ## Use the tools that exist
+
+  Modern tooling does most of the orientation work if you let it.
+
+  - **Static call graphs.** LSP-aware editors show "find references" and "go to definition" instantly. Tools like `gitnexus`, `tree-sitter` queries, or `ctags` make the call graph queryable.
+  - **Runtime traces.** Setting a breakpoint or adding a `print` at the entry point and running one canonical scenario shows what actually executes. Static reading misses dynamic dispatch and config-driven branches; running the code reveals them.
+  - **Tests as documentation.** Existing tests are worked examples of the code's contract. Read the tests for the surface you intend to change before reading the implementation. The tests show you what the code is supposed to do; the implementation shows how.
+  - **Recent commit history.** `git log -p` on the file you came to edit shows what changed recently and why. The most recent few commits often explain the surface.
+
+  Reading code purely top-to-bottom in an editor is slow. The tools turn an hour of reading into ten minutes of targeted lookups.
+
+  ## Trace one realistic input through
+
+  Pick one realistic input — a real request, a real file, a real CLI invocation — and trace its path through the code. Watch where the input is validated, where it is transformed, where it branches, where it is persisted. Three to five layers deep is usually enough.
+
+  This works because most codebases have one or two main scenarios that exercise 80% of the interesting paths. Trace one; you will have a model of how the system flows. The remaining 20% (edge cases, error paths, admin paths) can be explored as needed, anchored against the model you built.
+
+  Tracing on paper or in a sketch beats tracing in your head. Write down the file path, the function, what it does, what it calls. Three pages of sketches becomes a map you can refer to for the rest of the session.
+
+  ## Read tests before reading implementation
+
+  Tests are the cheapest source of executable documentation. A function's test file shows what inputs it accepts, what outputs it produces, what edge cases the original author cared about, and what behavior the team has explicitly committed to.
+
+  When tests are absent or thin, that is itself information — the surface is undertested, and your edit needs to add tests as part of the change.
+
+  When tests exist but are unclear, read them anyway. Confused tests reveal confused code; you have learned something about the code without reading the implementation yet.
+
+  ## Run the code, do not just read it
+
+  Reading without running is unreliable. The author's mental model of the code may not match what the code actually does, and reading-only catches the model, not the behavior. Run the code with one realistic input, watch what happens, then read the parts that surprised you.
+
+  Specifically, when you have an edit to make, run the existing code first — confirm a green baseline. Then make the edit. The before-and-after comparison is the most reliable check that your change does what you intended and nothing more.
+
+  ## Note your assumptions
+
+  As you read, you will form assumptions: "this function is only called from X", "this field is always non-null", "this loop runs at most 10 times". Write them down. They are hypotheses, not facts; the next step is to verify each one.
+
+  Verification is mechanical: grep for callers to verify "only called from X", read schema to verify "always non-null", read config to verify "at most 10 times". An assumption that survives verification becomes load-bearing context for your edit. An assumption that fails is a chance to learn what the code actually does.
+
+  Most subtle bugs are introduced when an editor makes a change consistent with their assumptions rather than the code's actual behavior. Listing the assumptions explicitly makes them auditable.
+
+  ## When the code resists understanding
+
+  Some code is genuinely hard to read — long functions, indirect control flow, magic strings, unclear naming. When you hit a stretch of code that defeats your reading after reasonable effort, the options are:
+
+  - **Ask.** A teammate familiar with the code can answer in 90 seconds what you would spend three hours decoding.
+  - **Add a debug log and run it.** "What is `xyz` actually equal to here?" Five minutes of runtime observation beats fifty minutes of static reading.
+  - **Refactor for understanding.** Sometimes the cheapest path to understanding is to extract small pieces, name them, and run the tests. The refactor is throwaway if you do not commit it; the comprehension is durable.
+  - **Document what you learn.** Once you understand the code, leave a note — a comment, a README, a wiki page — for the next reader. The next reader is sometimes you in three months.
+
+  Hard-to-read code is often the highest-leverage place to leave a comment that explains *why*, since the *what* is unclear from the code alone.
+
+  ## Anti-patterns
+
+  - **Editing the file you arrived at without orienting.** Skipping breadth-first context. The local change looks right; it breaks a contract two layers up.
+  - **Reading exclusively top-to-bottom.** Slow and prone to losing track. Use the call graph and runtime traces to navigate.
+  - **Trusting one's mental model without running the code.** "I think this returns null on missing inputs." Run it and see.
+  - **Ignoring the tests.** Tests are documentation; skipping them throws away free information.
+  - **Letting hard-to-read code defeat you silently.** Hours of confused reading without progress. Ask, log, or refactor for understanding.
+  - **Editing without recording assumptions.** The edit is "consistent with my reading" until the reading turns out wrong.
+
+  ## Reading is part of the work, not preamble
+
+  Junior developers sometimes treat reading code as overhead — "I'm not getting anything done while I'm reading." The data argues otherwise: the time spent orienting is recovered many times over in edits that work the first time. A senior engineer often spends more than half their time on a complex change reading and tracing, and a smaller fraction actually editing. The edit is short because the reading was thorough.
+
+  When estimating, budget reading time explicitly. A "half-day task" in unfamiliar code is two hours of reading and two hours of editing, not four hours of editing.
+
+  ## Verification
+
+  - [ ] Identified the entry points (CLI `main`, route handlers, exported public API, worker subscribers) before reading the target file.
+  - [ ] Traced one realistic input through 3–5 layers of code, with notes on each layer's role.
+  - [ ] Read existing tests for the target surface before reading the implementation.
+  - [ ] Ran the code with a realistic input and confirmed a green baseline before making changes.
+  - [ ] Wrote down assumptions formed during reading and verified each one (grep, schema, config) before relying on it.
+  - [ ] Used LSP / call-graph tools (find references, go to definition, gitnexus, ctags) rather than relying on reading top-to-bottom.
+  - [ ] Documented anything non-obvious learned during reading (comment, README, wiki) for the next reader.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Reading Unfamiliar Code
+
+      Reading unfamiliar code is the discipline of understanding what a codebase does before changing it. The rule is one sentence: orient breadth-first, then go depth-first on the surface you need to change. Most edits that broke unrelated code skipped this step — the editor went straight to the function they thought they needed to change, did not read its callers or its callees, and shipped a fix that broke a contract elsewhere. Reading is not preamble to the work; it is the work. A senior engineer in unfamiliar code spends more than half their time reading and tracing, and the actual edit is short because the reading was thorough. Skipping the reading does not save time; it relocates the cost into a debugging session two days later.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Start at the entry points, not at the file you came to edit
+
+      When dropped into an unfamiliar codebase, the temptation is to open the file the bug or task points at. Resist for a moment. First, find the entry points: where execution actually starts. For a CLI, that is `main`. For a web app, the route handlers. For a library, the exported public surface. For a worker, the queue subscriber.
+
+      Five minutes spent finding the entry points and tracing one happy-path execution from edge to leaf saves an hour of confusion later. The single file you came to edit is somewhere in that path; the surrounding context tells you what the file is for and what it is allowed to assume about its inputs.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Use the tools that exist
+
+      Modern tooling does most of the orientation work if you let it.
+
+      - **Static call graphs.** LSP-aware editors show "find references" and "go to definition" instantly. Tools like `gitnexus`, `tree-sitter` queries, or `ctags` make the call graph queryable.
+      - **Runtime traces.** Setting a breakpoint or adding a `print` at the entry point and running one canonical scenario shows what actually executes. Static reading misses dynamic dispatch and config-driven branches; running the code reveals them.
+      - **Tests as documentation.** Existing tests are worked examples of the code's contract. Read the tests for the surface you intend to change before reading the implementation. The tests show you what the code is supposed to do; the implementation shows how.
+      - **Recent commit history.** `git log -p` on the file you came to edit shows what changed recently and why. The most recent few commits often explain the surface.
+
+      Reading code purely top-to-bottom in an editor is slow. The tools turn an hour of reading into ten minutes of targeted lookups.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Trace one realistic input through
+
+      Pick one realistic input — a real request, a real file, a real CLI invocation — and trace its path through the code. Watch where the input is validated, where it is transformed, where it branches, where it is persisted. Three to five layers deep is usually enough.
+
+      This works because most codebases have one or two main scenarios that exercise 80% of the interesting paths. Trace one; you will have a model of how the system flows. The remaining 20% (edge cases, error paths, admin paths) can be explored as needed, anchored against the model you built.
+
+      Tracing on paper or in a sketch beats tracing in your head. Write down the file path, the function, what it does, what it calls. Three pages of sketches becomes a map you can refer to for the rest of the session.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Read tests before reading implementation
+
+      Tests are the cheapest source of executable documentation. A function's test file shows what inputs it accepts, what outputs it produces, what edge cases the original author cared about, and what behavior the team has explicitly committed to.
+
+      When tests are absent or thin, that is itself information — the surface is undertested, and your edit needs to add tests as part of the change.
+
+      When tests exist but are unclear, read them anyway. Confused tests reveal confused code; you have learned something about the code without reading the implementation yet.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Run the code, do not just read it
+
+      Reading without running is unreliable. The author's mental model of the code may not match what the code actually does, and reading-only catches the model, not the behavior. Run the code with one realistic input, watch what happens, then read the parts that surprised you.
+
+      Specifically, when you have an edit to make, run the existing code first — confirm a green baseline. Then make the edit. The before-and-after comparison is the most reliable check that your change does what you intended and nothing more.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Note your assumptions
+
+      As you read, you will form assumptions: "this function is only called from X", "this field is always non-null", "this loop runs at most 10 times". Write them down. They are hypotheses, not facts; the next step is to verify each one.
+
+      Verification is mechanical: grep for callers to verify "only called from X", read schema to verify "always non-null", read config to verify "at most 10 times". An assumption that survives verification becomes load-bearing context for your edit. An assumption that fails is a chance to learn what the code actually does.
+
+      Most subtle bugs are introduced when an editor makes a change consistent with their assumptions rather than the code's actual behavior. Listing the assumptions explicitly makes them auditable.
+
+  - sequence: 8
+    fragment_type: rationale
+    content: |
+      ## When the code resists understanding
+
+      Some code is genuinely hard to read — long functions, indirect control flow, magic strings, unclear naming. When you hit a stretch of code that defeats your reading after reasonable effort, the options are:
+
+      - **Ask.** A teammate familiar with the code can answer in 90 seconds what you would spend three hours decoding.
+      - **Add a debug log and run it.** "What is `xyz` actually equal to here?" Five minutes of runtime observation beats fifty minutes of static reading.
+      - **Refactor for understanding.** Sometimes the cheapest path to understanding is to extract small pieces, name them, and run the tests. The refactor is throwaway if you do not commit it; the comprehension is durable.
+      - **Document what you learn.** Once you understand the code, leave a note — a comment, a README, a wiki page — for the next reader. The next reader is sometimes you in three months.
+
+      Hard-to-read code is often the highest-leverage place to leave a comment that explains *why*, since the *what* is unclear from the code alone.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Editing the file you arrived at without orienting.** Skipping breadth-first context. The local change looks right; it breaks a contract two layers up.
+      - **Reading exclusively top-to-bottom.** Slow and prone to losing track. Use the call graph and runtime traces to navigate.
+      - **Trusting one's mental model without running the code.** "I think this returns null on missing inputs." Run it and see.
+      - **Ignoring the tests.** Tests are documentation; skipping them throws away free information.
+      - **Letting hard-to-read code defeat you silently.** Hours of confused reading without progress. Ask, log, or refactor for understanding.
+      - **Editing without recording assumptions.** The edit is "consistent with my reading" until the reading turns out wrong.
+
+  - sequence: 10
+    fragment_type: rationale
+    content: |
+      ## Reading is part of the work, not preamble
+
+      Junior developers sometimes treat reading code as overhead — "I'm not getting anything done while I'm reading." The data argues otherwise: the time spent orienting is recovered many times over in edits that work the first time. A senior engineer often spends more than half their time on a complex change reading and tracing, and a smaller fraction actually editing. The edit is short because the reading was thorough.
+
+      When estimating, budget reading time explicitly. A "half-day task" in unfamiliar code is two hours of reading and two hours of editing, not four hours of editing.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Identified the entry points (CLI `main`, route handlers, exported public API, worker subscribers) before reading the target file.
+      - [ ] Traced one realistic input through 3–5 layers of code, with notes on each layer's role.
+      - [ ] Read existing tests for the target surface before reading the implementation.
+      - [ ] Ran the code with a realistic input and confirmed a green baseline before making changes.
+      - [ ] Wrote down assumptions formed during reading and verified each one (grep, schema, config) before relying on it.
+      - [ ] Used LSP / call-graph tools (find references, go to definition, gitnexus, ctags) rather than relying on reading top-to-bottom.
+      - [ ] Documented anything non-obvious learned during reading (comment, README, wiki) for the next reader.
