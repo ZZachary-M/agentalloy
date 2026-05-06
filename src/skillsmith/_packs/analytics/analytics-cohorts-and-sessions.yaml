@@ -1,0 +1,359 @@
+skill_type: domain
+skill_id: analytics-cohorts-and-sessions
+canonical_name: Analytics — Cohorts and Sessions
+category: ops
+skill_class: domain
+domain_tags:
+  - analytics
+  - cohorts
+  - sessions
+  - user-segmentation
+  - session-boundaries
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Analytics — Cohorts and Sessions
+
+  ## Overview
+
+  Cohorts and sessions are the two primary aggregation axes in product analytics. Cohorts answer 'which users?'; sessions answer 'which periods of activity?'. This skill covers both.
+
+  Sourced from https://posthog.com/docs/data/cohorts and https://posthog.com/docs/data/sessions.
+
+  ## Cohorts - Docs
+
+  ## What are cohorts?
+
+  Cohorts enable you to easily create a list of users who have something in common, such as completing an [action](/docs/data/actions.md) or having the same [property](/docs/product-analytics/person-properties.md).
+
+  Here are a few examples of the cohorts you can create:
+
+  -   Users who work at the same company.
+  -   Users who used your app in the last week.
+  -   Users who churned from your product.
+  -   Users who signed up recently.
+  -   Users who viewed the signup page, but didn't convert.
+
+  Your cohorts are available in the [People](https://us.posthog.com/persons) page under the [Cohorts](https://us.posthog.com/cohorts) tab.
+
+  > **Note:** Cohorts rely on [person properties](/docs/product-analytics/person-properties.md), so you need to capture identified events to create them.
+
+  ## Where can you use cohorts?
+
+  You can use cohorts in many different ways, such as:
+
+  -   As a filter in [trends](/docs/product-analytics/trends.md), funnels, retention, user paths, stickiness, and lifecycle insights
+  -   As a [breakdown](/docs/product-analytics/trends.md#breaking-down-by-properties) dimension in trends and funnels
+  -   As a filter on any product analytics dashboard
+  -   To target feature flags, experiments, and user surveys
+  -   To filter the session replay list and create playlists
+  -   Filter live events on the [activity page](/docs/activity.md)
+  -   Filter users on the People page
+  -   To [filter out internal and test users](/tutorials/filter-internal-users.md) in test account filters
+
+  > **Note:** Cohorts used in [CDP](/docs/cdp.md) destination filters must contain **exclusively person property filters**. Person-property-only cohorts are automatically inlined and work in real-time CDP destinations. Cohorts with behavioral filters or no properties defined will cause CDP destinations to error. All cohort types work for analytics queries (insights, dashboards).
+
+  You can use cohorts to answer questions like:
+
+  -   "Are people at company X using our app frequently?"
+  -   "What percentage of the users who signed up last week are still using our app?"
+  -   "Which features are power users using the most?"
+
+  ## How are cohorts different from groups?
+
+  Cohorts are sometimes confused with [groups](/docs/product-analytics/group-analytics.md), but they each serve different purposes:
+
+  -   **Cohorts** represent a specific set of users – e.g., a list of users whose email contains a certain string (like a company's domain).
+
+  -   **Groups** aggregate events based on entities, such as organizations or companies, but do not necessarily connect to a user. They enable you to analyze trends, insights, and dashboards at an entity-level (like a company or organization), as opposed to a user-level.
+
+  If your only goal is to create a **list of users** with something in common, we recommend cohorts instead of groups.
+
+  Groups require additional code in your app to set up, while cohorts are created in PostHog and don't require additional code. This makes cohorts easier to use and quicker to get started.
+
+  ## How to create a cohort
+
+  Once you've captured identified events, there are three ways to create a new cohort:
+
+  ### Method 1: Create a new cohort directly from an insight
+
+  You can create cohorts using data from insights such as trends, [funnels](/docs/product-analytics/funnels.md), [user paths](/docs/product-analytics/paths.md) and [lifecycles](/docs/product-analytics/lifecycle.md).
+
+  1.  Go to [insights](https://us.posthog.com/insights) and open any insight that's aggregated at a user-level, like `unique users` or `weekly active user`.
+
+  2.  Click a data point in the visualization to view the [persons](/docs/data/persons.md) represented in the underlying data.
+
+  3.  In the modal popup, click **Save as cohort** at the bottom.
+
+  The video below shows how to create a new cohort from a trend, although you can similarly create a cohort from a funnel, user path, or any other insight.
+
+  ### Method 2: Create a new cohort from the cohorts page
+
+  1.  Navigate to the [People](https://us.posthog.com/persons) page within the sidebar, then click on the [Cohorts tab](https://us.posthog.com/cohorts).
+
+  2.  Click **\+ New Cohort** on the top right.
+
+  ![left hand navigation for cohorts](https://res.cloudinary.com/dmukukwp6/image/upload/posthog.com/contents/images/features/cohorts/cohorts-page-light-mode.png)![left hand navigation for cohorts](https://res.cloudinary.com/dmukukwp6/image/upload/posthog.com/contents/images/features/cohorts/cohorts-page-dark-mode.png)
+
+  ### Method 3: Create a cohort using AI and MCP
+
+  You can create and manage cohorts using AI agents through the PostHog [MCP server](/docs/model-context-protocol.md). Ask your AI agent to create, list, retrieve, update, or delete cohorts and it uses the appropriate MCP tools.
+
+  For static cohorts, you can also ask the agent to add or remove persons by their UUIDs.
+
+  Example prompts:
+
+  -   "Create a dynamic cohort called 'power-users' for users who completed the purchase event more than 5 times"
+  -   "Create a static cohort called 'beta-testers' that I can manually add users to"
+  -   "List all cohorts in my project"
+
+  See the [MCP documentation](/docs/model-context-protocol.md) for setup instructions and the full list of available tools.
+
+  ## Sessions - Docs
+
+  A session is a set of events that try to capture a single use of your product or visit to your website. They are used in multiple areas of PostHog:
+
+  -   Session replays
+  -   Web analytics
+  -   Session aggregations
+  -   Session properties
+
+  Sessions enable you to analyze how exactly users are using your product, their entry and exit points, how long they spend on your site, how active they are, bounce rate, and more.
+
+  ## How does PostHog define a session?
+
+  Our [JavaScript Web library](/docs/libraries/js.md) and mobile SDKs (Android, iOS, React Native, and Flutter) add a `$session_id` property to each event. Events captured from the same user, browser, and device get the same `$session_id` within the same session, until a new session is started. A new session is started by default when either there's **no activity for 30 minutes** or the session has reached the maximum session duration of 24 hours. Subsequent events are grouped into a new session and a new session triggers a new session replay.
+
+  A session can span multiple tabs and windows, but only on the same browser and device. For example, if a user goes from one Chrome tab to another, it counts as a single session. If they go from Chrome to Firefox, a new session is created. You can also create a new session by calling `posthog.reset()` (which also starts a new session replay).
+
+  Activity is defined as any event sent from the client including autocapture events and replay activity like mouse movement. The inactivity period can be configured using the `session_idle_timeout_seconds` [configuration option](/docs/libraries/js/config.md).
+
+  > **Note:** If you are [migrating data](/docs/migrate.md) or [using a CDP](/docs/advanced/cdp.md), you may need to manually set the `$session_id` property if you want to query sessions or connect them to session replays. If you are using the JavaScript Web SDK alongside your CDP, you can get this value by calling `posthog.get_session_id()`.
+
+  ## Session properties
+
+  Session properties are data about the session that is autocaptured by PostHog and separate from event or person data. They can be queried and used like other properties in aggregations, filters, breakdowns, and more. Session properties include:
+
+  | Session property | Description |
+  | --- | --- |
+  | $session_id | Unique identifier for a session, persists across events in the same session |
+  | $start_timestamp | Timestamp when the session started |
+  | $end_timestamp | Timestamp when the session ended |
+  | $entry_current_url | URL of the page where the session started |
+  | $entry_pathname | Pathname of the page where the session started |
+  | $exit_current_url | URL of the page where the session ended |
+  | $exit_pathname | Pathname of the page where the session ended |
+  | $entry_utm_source | UTM source of the session start page |
+  | $entry_utm_campaign | UTM campaign of the session start page |
+  | $entry_utm_medium | UTM medium of the session start page |
+  | $entry_utm_term | UTM term of the session start page |
+  | $entry_utm_content | UTM content of the session start page |
+  | $entry_referring_domain | Referring domain of the session start page |
+  | $entry_gclid | Google Click ID when the session started |
+  | $entry_gad_source | Google Ads source when the session started |
+  | $pageview_count | Total number of pageviews during the session |
+  | $autocapture_count | Total number of autocapture events during the session |
+  | $channel_type | [Type of channel](/docs/data/channel-type.md) through which the session was initiated |
+  | $session_duration | Total duration of the session |
+  | $is_bounce | Indicates if the session was a bounce (single pageview session) |
+
+  You can query all of these from the `sessions` table using [SQL insights](/docs/product-analytics/sql.md).
+
+  ## Session entry properties on events
+
+  For ease of use, some session properties are also available as event properties. These properties are prefixed with `$session_entry_` and are captured at the start of the session. They remain constant on all events for the duration of the session.
+
+  The following session entry properties are automatically captured:
+
+  | Event property | Description |
+  | --- | --- |
+  | $session_entry_url | Full URL captured at the start of the session |
+  | $session_entry_host | Host captured at the start of the session |
+  | $session_entry_pathname | Pathname captured at the start of the session |
+  | $session_entry_referrer | Referrer captured at the start of the session |
+
+  Additionally, UTM parameters and other attribution properties (like `gclid`) are also available as event properties with the `$session_entry_` prefix. This means you can access these properties directly when querying events, without needing to join with the sessions table.
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      ## Overview
+
+      Cohorts and sessions are the two primary aggregation axes in product analytics. Cohorts answer 'which users?'; sessions answer 'which periods of activity?'. This skill covers both.
+
+      Sourced from https://posthog.com/docs/data/cohorts and https://posthog.com/docs/data/sessions.
+  - fragment_type: rationale
+    sequence: 2
+    content: |
+      ## What are cohorts?
+
+      Cohorts enable you to easily create a list of users who have something in common, such as completing an [action](/docs/data/actions.md) or having the same [property](/docs/product-analytics/person-properties.md).
+
+      Here are a few examples of the cohorts you can create:
+
+      -   Users who work at the same company.
+      -   Users who used your app in the last week.
+      -   Users who churned from your product.
+      -   Users who signed up recently.
+      -   Users who viewed the signup page, but didn't convert.
+
+      Your cohorts are available in the [People](https://us.posthog.com/persons) page under the [Cohorts](https://us.posthog.com/cohorts) tab.
+
+      > **Note:** Cohorts rely on [person properties](/docs/product-analytics/person-properties.md), so you need to capture identified events to create them.
+  - fragment_type: rationale
+    sequence: 3
+    content: |
+      ## Where can you use cohorts?
+
+      You can use cohorts in many different ways, such as:
+
+      -   As a filter in [trends](/docs/product-analytics/trends.md), funnels, retention, user paths, stickiness, and lifecycle insights
+      -   As a [breakdown](/docs/product-analytics/trends.md#breaking-down-by-properties) dimension in trends and funnels
+      -   As a filter on any product analytics dashboard
+      -   To target feature flags, experiments, and user surveys
+      -   To filter the session replay list and create playlists
+      -   Filter live events on the [activity page](/docs/activity.md)
+      -   Filter users on the People page
+      -   To [filter out internal and test users](/tutorials/filter-internal-users.md) in test account filters
+
+      > **Note:** Cohorts used in [CDP](/docs/cdp.md) destination filters must contain **exclusively person property filters**. Person-property-only cohorts are automatically inlined and work in real-time CDP destinations. Cohorts with behavioral filters or no properties defined will cause CDP destinations to error. All cohort types work for analytics queries (insights, dashboards).
+
+      You can use cohorts to answer questions like:
+
+      -   "Are people at company X using our app frequently?"
+      -   "What percentage of the users who signed up last week are still using our app?"
+      -   "Which features are power users using the most?"
+  - fragment_type: rationale
+    sequence: 4
+    content: |
+      ## How are cohorts different from groups?
+
+      Cohorts are sometimes confused with [groups](/docs/product-analytics/group-analytics.md), but they each serve different purposes:
+
+      -   **Cohorts** represent a specific set of users – e.g., a list of users whose email contains a certain string (like a company's domain).
+
+      -   **Groups** aggregate events based on entities, such as organizations or companies, but do not necessarily connect to a user. They enable you to analyze trends, insights, and dashboards at an entity-level (like a company or organization), as opposed to a user-level.
+
+      If your only goal is to create a **list of users** with something in common, we recommend cohorts instead of groups.
+
+      Groups require additional code in your app to set up, while cohorts are created in PostHog and don't require additional code. This makes cohorts easier to use and quicker to get started.
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      ## How to create a cohort
+
+      Once you've captured identified events, there are three ways to create a new cohort:
+
+      ### Method 1: Create a new cohort directly from an insight
+
+      You can create cohorts using data from insights such as trends, [funnels](/docs/product-analytics/funnels.md), [user paths](/docs/product-analytics/paths.md) and [lifecycles](/docs/product-analytics/lifecycle.md).
+
+      1.  Go to [insights](https://us.posthog.com/insights) and open any insight that's aggregated at a user-level, like `unique users` or `weekly active user`.
+
+      2.  Click a data point in the visualization to view the [persons](/docs/data/persons.md) represented in the underlying data.
+
+      3.  In the modal popup, click **Save as cohort** at the bottom.
+
+      The video below shows how to create a new cohort from a trend, although you can similarly create a cohort from a funnel, user path, or any other insight.
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      ### Method 2: Create a new cohort from the cohorts page
+
+      1.  Navigate to the [People](https://us.posthog.com/persons) page within the sidebar, then click on the [Cohorts tab](https://us.posthog.com/cohorts).
+
+      2.  Click **\+ New Cohort** on the top right.
+
+      ![left hand navigation for cohorts](https://res.cloudinary.com/dmukukwp6/image/upload/posthog.com/contents/images/features/cohorts/cohorts-page-light-mode.png)![left hand navigation for cohorts](https://res.cloudinary.com/dmukukwp6/image/upload/posthog.com/contents/images/features/cohorts/cohorts-page-dark-mode.png)
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      ### Method 3: Create a cohort using AI and MCP
+
+      You can create and manage cohorts using AI agents through the PostHog [MCP server](/docs/model-context-protocol.md). Ask your AI agent to create, list, retrieve, update, or delete cohorts and it uses the appropriate MCP tools.
+
+      For static cohorts, you can also ask the agent to add or remove persons by their UUIDs.
+
+      Example prompts:
+
+      -   "Create a dynamic cohort called 'power-users' for users who completed the purchase event more than 5 times"
+      -   "Create a static cohort called 'beta-testers' that I can manually add users to"
+      -   "List all cohorts in my project"
+
+      See the [MCP documentation](/docs/model-context-protocol.md) for setup instructions and the full list of available tools.
+  - fragment_type: rationale
+    sequence: 8
+    content: |
+      ## Sessions - Docs
+
+      A session is a set of events that try to capture a single use of your product or visit to your website. They are used in multiple areas of PostHog:
+
+      -   Session replays
+      -   Web analytics
+      -   Session aggregations
+      -   Session properties
+
+      Sessions enable you to analyze how exactly users are using your product, their entry and exit points, how long they spend on your site, how active they are, bounce rate, and more.
+  - fragment_type: rationale
+    sequence: 9
+    content: |
+      ## How does PostHog define a session?
+
+      Our [JavaScript Web library](/docs/libraries/js.md) and mobile SDKs (Android, iOS, React Native, and Flutter) add a `$session_id` property to each event. Events captured from the same user, browser, and device get the same `$session_id` within the same session, until a new session is started. A new session is started by default when either there's **no activity for 30 minutes** or the session has reached the maximum session duration of 24 hours. Subsequent events are grouped into a new session and a new session triggers a new session replay.
+
+      A session can span multiple tabs and windows, but only on the same browser and device. For example, if a user goes from one Chrome tab to another, it counts as a single session. If they go from Chrome to Firefox, a new session is created. You can also create a new session by calling `posthog.reset()` (which also starts a new session replay).
+
+      Activity is defined as any event sent from the client including autocapture events and replay activity like mouse movement. The inactivity period can be configured using the `session_idle_timeout_seconds` [configuration option](/docs/libraries/js/config.md).
+
+      > **Note:** If you are [migrating data](/docs/migrate.md) or [using a CDP](/docs/advanced/cdp.md), you may need to manually set the `$session_id` property if you want to query sessions or connect them to session replays. If you are using the JavaScript Web SDK alongside your CDP, you can get this value by calling `posthog.get_session_id()`.
+  - fragment_type: example
+    sequence: 10
+    content: |
+      ## Session properties
+
+      Session properties are data about the session that is autocaptured by PostHog and separate from event or person data. They can be queried and used like other properties in aggregations, filters, breakdowns, and more. Session properties include:
+
+      | Session property | Description |
+      | --- | --- |
+      | $session_id | Unique identifier for a session, persists across events in the same session |
+      | $start_timestamp | Timestamp when the session started |
+      | $end_timestamp | Timestamp when the session ended |
+      | $entry_current_url | URL of the page where the session started |
+      | $entry_pathname | Pathname of the page where the session started |
+      | $exit_current_url | URL of the page where the session ended |
+      | $exit_pathname | Pathname of the page where the session ended |
+      | $entry_utm_source | UTM source of the session start page |
+      | $entry_utm_campaign | UTM campaign of the session start page |
+      | $entry_utm_medium | UTM medium of the session start page |
+      | $entry_utm_term | UTM term of the session start page |
+      | $entry_utm_content | UTM content of the session start page |
+      | $entry_referring_domain | Referring domain of the session start page |
+      | $entry_gclid | Google Click ID when the session started |
+      | $entry_gad_source | Google Ads source when the session started |
+      | $pageview_count | Total number of pageviews during the session |
+      | $autocapture_count | Total number of autocapture events during the session |
+      | $channel_type | [Type of channel](/docs/data/channel-type.md) through which the session was initiated |
+      | $session_duration | Total duration of the session |
+      | $is_bounce | Indicates if the session was a bounce (single pageview session) |
+
+      You can query all of these from the `sessions` table using [SQL insights](/docs/product-analytics/sql.md).
+  - fragment_type: example
+    sequence: 11
+    content: |
+      ## Session entry properties on events
+
+      For ease of use, some session properties are also available as event properties. These properties are prefixed with `$session_entry_` and are captured at the start of the session. They remain constant on all events for the duration of the session.
+
+      The following session entry properties are automatically captured:
+
+      | Event property | Description |
+      | --- | --- |
+      | $session_entry_url | Full URL captured at the start of the session |
+      | $session_entry_host | Host captured at the start of the session |
+      | $session_entry_pathname | Pathname captured at the start of the session |
+      | $session_entry_referrer | Referrer captured at the start of the session |
+
+      Additionally, UTM parameters and other attribution properties (like `gclid`) are also available as event properties with the `$session_entry_` prefix. This means you can access these properties directly when querying events, without needing to join with the sessions table.

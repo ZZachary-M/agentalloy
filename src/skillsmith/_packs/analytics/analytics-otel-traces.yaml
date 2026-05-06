@@ -1,0 +1,359 @@
+skill_type: domain
+skill_id: analytics-otel-traces
+canonical_name: OpenTelemetry — Distributed Tracing
+category: ops
+skill_class: domain
+domain_tags:
+  - distributed tracing
+  - opentelemetry
+  - spans
+  - context propagation
+  - trace events
+always_apply: false
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # OpenTelemetry — Distributed Tracing
+
+  ## Overview
+
+  Distributed tracing follows a request through every service it touches. OTel models this as spans (units of work) linked into a trace via context propagation. Sampling controls cost; semantic conventions normalize attribute names. This skill covers the trace surface.
+
+  Sourced from https://opentelemetry.io/docs/concepts/signals/traces.
+
+  **Traces** give us the big picture of what happens when a request is made to an
+  application. Whether your application is a monolith with a single database or a
+  sophisticated mesh of services, traces are essential to understanding the full
+  "path" a request takes in your application.
+
+  Let's explore this with three units of work, represented as [Spans](#spans):
+
+  > [!NOTE]
+  >
+  > The following JSON examples do not represent a specific format, and especially
+  > not [OTLP/JSON](/docs/specs/otlp/#json-protobuf-encoding), which is more
+  > verbose.
+
+  `hello` span:
+
+  ```json
+  {
+    "name": "hello",
+    "context": {
+      "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+      "span_id": "051581bf3cb55c13"
+    },
+    "parent_id": null,
+    "start_time": "2022-04-29T18:52:58.114201Z",
+    "end_time": "2022-04-29T18:52:58.114687Z",
+    "attributes": {
+      "http.route": "some_route1"
+    },
+    "events": [
+      {
+        "name": "Guten Tag!",
+        "timestamp": "2022-04-29T18:52:58.114561Z",
+        "attributes": {
+          "event_attributes": 1
+        }
+      }
+    ]
+  }
+  ```
+
+  This is the root span, denoting the beginning and end of the entire operation.
+  Note that it has a `trace_id` field indicating the trace, but has no
+  `parent_id`. That's how you know it's the root span.
+
+  `hello-greetings` span:
+
+  ```json
+  {
+    "name": "hello-greetings",
+    "context": {
+      "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+      "span_id": "5fb397be34d26b51"
+    },
+    "parent_id": "051581bf3cb55c13",
+    "start_time": "2022-04-29T18:52:58.114304Z",
+    "end_time": "2022-04-29T22:52:58.114561Z",
+    "attributes": {
+      "http.route": "some_route2"
+    },
+    "events": [
+      {
+        "name": "hey there!",
+        "timestamp": "2022-04-29T18:52:58.114561Z",
+        "attributes": {
+          "event_attributes": 1
+        }
+      },
+      {
+        "name": "bye now!",
+        "timestamp": "2022-04-29T18:52:58.114585Z",
+        "attributes": {
+          "event_attributes": 1
+        }
+      }
+    ]
+  }
+  ```
+
+  This span encapsulates specific tasks, like saying greetings, and its parent is
+  the `hello` span. Note that it shares the same `trace_id` as the root span,
+  indicating it's a part of the same trace. Additionally, it has a `parent_id`
+  that matches the `span_id` of the `hello` span.
+
+  `hello-salutations` span:
+
+  ```json
+  {
+    "name": "hello-salutations",
+    "context": {
+      "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+      "span_id": "93564f51e1abe1c2"
+    },
+    "parent_id": "051581bf3cb55c13",
+    "start_time": "2022-04-29T18:52:58.114492Z",
+    "end_time": "2022-04-29T18:52:58.114631Z",
+    "attributes": {
+      "http.route": "some_route3"
+    },
+    "events": [
+      {
+        "name": "hey there!",
+        "timestamp": "2022-04-29T18:52:58.114561Z",
+        "attributes": {
+          "event_attributes": 1
+        }
+      }
+    ]
+  }
+  ```
+
+  This span represents the third operation in this trace and, like the previous
+  one, it's a child of the `hello` span. That also makes it a sibling of the
+  `hello-greetings` span.
+
+  These three blocks of JSON all share the same `trace_id`, and the `parent_id`
+  field represents a hierarchy. That makes it a Trace!
+
+  Another thing you'll note is that each Span looks like a structured log. That's
+  because it kind of is! One way to think of Traces is that they're a collection
+  of structured logs with context, correlation, hierarchy, and more baked in.
+  However, these "structured logs" can come from different processes, services,
+  VMs, data centers, and so on. This is what allows tracing to represent an
+  end-to-end view of any system.
+
+  To understand how tracing in OpenTelemetry works, let's look at a list of
+  components that will play a part in instrumenting our code.
+
+  ## Tracer Provider
+
+  A Tracer Provider (sometimes called `TracerProvider`) is a factory for
+  `Tracer`s. In most applications, a Tracer Provider is initialized once and its
+  lifecycle matches the application's lifecycle. Tracer Provider initialization
+  also includes Resource and Exporter initialization. It is typically the first
+  step in tracing with OpenTelemetry. In some language SDKs, a global Tracer
+  Provider is already initialized for you.
+
+  ## Tracer
+
+  A Tracer creates spans containing more information about what is happening for a
+  given operation, such as a request in a service. Tracers are created from Tracer
+  Providers.
+
+  ## Trace Exporters
+
+  Trace Exporters send traces to a consumer. This consumer can be standard output
+  for debugging and development-time, the OpenTelemetry Collector, or any open
+  source or vendor backend of your choice.
+
+  ## Context Propagation
+
+  Context Propagation is the core concept that enables Distributed Tracing. With
+  Context Propagation, Spans can be correlated with each other and assembled into
+  a trace, regardless of where Spans are generated. To learn more about this
+  topic, see the concept page on [Context Propagation](../../context-propagation).
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Distributed tracing follows a request through every service it touches. OTel models this as spans (units of work) linked into a trace via context propagation. Sampling controls cost; semantic conventions normalize attribute names. This skill covers the trace surface.
+
+      Sourced from https://opentelemetry.io/docs/concepts/signals/traces.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      **Traces** give us the big picture of what happens when a request is made to an
+      application. Whether your application is a monolith with a single database or a
+      sophisticated mesh of services, traces are essential to understanding the full
+      "path" a request takes in your application.
+
+      Let's explore this with three units of work, represented as [Spans](#spans):
+
+      > [!NOTE]
+      >
+      > The following JSON examples do not represent a specific format, and especially
+      > not [OTLP/JSON](/docs/specs/otlp/#json-protobuf-encoding), which is more
+      > verbose.
+  - fragment_type: example
+    sequence: 3
+    content: |
+      `hello` span:
+
+      ```json
+      {
+        "name": "hello",
+        "context": {
+          "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+          "span_id": "051581bf3cb55c13"
+        },
+        "parent_id": null,
+        "start_time": "2022-04-29T18:52:58.114201Z",
+        "end_time": "2022-04-29T18:52:58.114687Z",
+        "attributes": {
+          "http.route": "some_route1"
+        },
+        "events": [
+          {
+            "name": "Guten Tag!",
+            "timestamp": "2022-04-29T18:52:58.114561Z",
+            "attributes": {
+              "event_attributes": 1
+            }
+          }
+        ]
+      }
+      ```
+
+      This is the root span, denoting the beginning and end of the entire operation.
+      Note that it has a `trace_id` field indicating the trace, but has no
+      `parent_id`. That's how you know it's the root span.
+  - fragment_type: example
+    sequence: 4
+    content: |
+      `hello-greetings` span:
+
+      ```json
+      {
+        "name": "hello-greetings",
+        "context": {
+          "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+          "span_id": "5fb397be34d26b51"
+        },
+        "parent_id": "051581bf3cb55c13",
+        "start_time": "2022-04-29T18:52:58.114304Z",
+        "end_time": "2022-04-29T22:52:58.114561Z",
+        "attributes": {
+          "http.route": "some_route2"
+        },
+        "events": [
+          {
+            "name": "hey there!",
+            "timestamp": "2022-04-29T18:52:58.114561Z",
+            "attributes": {
+              "event_attributes": 1
+            }
+          },
+          {
+            "name": "bye now!",
+            "timestamp": "2022-04-29T18:52:58.114585Z",
+            "attributes": {
+              "event_attributes": 1
+            }
+          }
+        ]
+      }
+      ```
+
+      This span encapsulates specific tasks, like saying greetings, and its parent is
+      the `hello` span. Note that it shares the same `trace_id` as the root span,
+      indicating it's a part of the same trace. Additionally, it has a `parent_id`
+      that matches the `span_id` of the `hello` span.
+  - fragment_type: example
+    sequence: 5
+    content: |
+      `hello-salutations` span:
+
+      ```json
+      {
+        "name": "hello-salutations",
+        "context": {
+          "trace_id": "5b8aa5a2d2c872e8321cf37308d69df2",
+          "span_id": "93564f51e1abe1c2"
+        },
+        "parent_id": "051581bf3cb55c13",
+        "start_time": "2022-04-29T18:52:58.114492Z",
+        "end_time": "2022-04-29T18:52:58.114631Z",
+        "attributes": {
+          "http.route": "some_route3"
+        },
+        "events": [
+          {
+            "name": "hey there!",
+            "timestamp": "2022-04-29T18:52:58.114561Z",
+            "attributes": {
+              "event_attributes": 1
+            }
+          }
+        ]
+      }
+      ```
+
+      This span represents the third operation in this trace and, like the previous
+      one, it's a child of the `hello` span. That also makes it a sibling of the
+      `hello-greetings` span.
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      These three blocks of JSON all share the same `trace_id`, and the `parent_id`
+      field represents a hierarchy. That makes it a Trace!
+
+      Another thing you'll note is that each Span looks like a structured log. That's
+      because it kind of is! One way to think of Traces is that they're a collection
+      of structured logs with context, correlation, hierarchy, and more baked in.
+      However, these "structured logs" can come from different processes, services,
+      VMs, data centers, and so on. This is what allows tracing to represent an
+      end-to-end view of any system.
+
+      To understand how tracing in OpenTelemetry works, let's look at a list of
+      components that will play a part in instrumenting our code.
+  - fragment_type: rationale
+    sequence: 7
+    content: |
+      ## Tracer Provider
+
+      A Tracer Provider (sometimes called `TracerProvider`) is a factory for
+      `Tracer`s. In most applications, a Tracer Provider is initialized once and its
+      lifecycle matches the application's lifecycle. Tracer Provider initialization
+      also includes Resource and Exporter initialization. It is typically the first
+      step in tracing with OpenTelemetry. In some language SDKs, a global Tracer
+      Provider is already initialized for you.
+  - fragment_type: rationale
+    sequence: 8
+    content: |
+      ## Tracer
+
+      A Tracer creates spans containing more information about what is happening for a
+      given operation, such as a request in a service. Tracers are created from Tracer
+      Providers.
+  - fragment_type: rationale
+    sequence: 9
+    content: |
+      ## Trace Exporters
+
+      Trace Exporters send traces to a consumer. This consumer can be standard output
+      for debugging and development-time, the OpenTelemetry Collector, or any open
+      source or vendor backend of your choice.
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      ## Context Propagation
+
+      Context Propagation is the core concept that enables Distributed Tracing. With
+      Context Propagation, Spans can be correlated with each other and assembled into
+      a trace, regardless of where Spans are generated. To learn more about this
+      topic, see the concept page on [Context Propagation](../../context-propagation).
