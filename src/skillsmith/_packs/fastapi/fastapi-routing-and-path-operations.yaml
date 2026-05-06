@@ -1,0 +1,483 @@
+skill_type: domain
+skill_id: fastapi-routing-and-path-operations
+canonical_name: "FastAPI Routing and Path Operations (Path/Query Params, APIRouter, Tags, Status Codes)"
+category: engineering
+skill_class: domain
+domain_tags:
+  - path-operation-decorator
+  - query-string-defaults
+  - apirouter-prefix
+  - status-code-response
+  - openapi-tags-summary
+always_apply: false
+phase_scope: null
+category_scope: framework
+author: navistone
+change_summary: "Initial authoring 2026-05-06 — scaffolded with citations against fastapi.tiangolo.com (tutorial/path-params, tutorial/query-params, tutorial/path-operation-configuration, tutorial/bigger-applications, reference/apirouter) verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure. FastAPI 0.115+. Original authoring — not a verbatim import of upstream prose."
+raw_prose: |
+  # FastAPI Routing and Path Operations
+
+  FastAPI generates an OpenAPI schema directly from the signature of each path
+  operation function. The decorator (`@app.get`, `@app.post`, `@app.put`,
+  `@app.delete`, `@app.patch`) attaches an HTTP method + URL template to a
+  Python function; the function's parameters, type annotations, and `Annotated`
+  metadata are introspected at startup to produce request validation, response
+  serialization, and the `/docs` (Swagger UI) and `/redoc` documents. The
+  function below the decorator is the *path operation function*; the decorator
+  itself is the *path operation decorator*. Cited against
+  fastapi.tiangolo.com/tutorial/path-params and
+  fastapi.tiangolo.com/tutorial/path-operation-configuration (verified
+  2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3
+  fallback_root procedure). FastAPI 0.115+.
+
+  Targets in this skill: declaring routes, declaring path and query parameters
+  with type-driven validation, composing routers with `APIRouter`, setting
+  status codes, and shaping the OpenAPI document with `tags`, `summary`,
+  `description`, `response_description`, `responses=`, and `deprecated=`.
+
+  ## Declaring a path operation
+
+  A minimal route attaches a function to an HTTP method and URL template. The
+  function returns a value FastAPI serializes to JSON.
+
+  ```python
+  from fastapi import FastAPI
+
+  app = FastAPI()
+
+  @app.get("/items/{item_id}")
+  def read_item(item_id: int) -> dict:
+      return {"item_id": item_id}
+  ```
+
+  Names inside `{...}` in the URL template become *path parameters*. They must
+  appear as parameters of the function. Anything else in the function signature
+  that is not a path parameter, request body, header, or dependency is
+  interpreted as a *query parameter*. The `int` annotation on `item_id` drives
+  both validation (request to `/items/foo` returns 422) and the OpenAPI schema
+  (the parameter is documented as `integer`). An unannotated path parameter is
+  treated as `str`.
+
+  ## Path parameter order matters
+
+  FastAPI matches routes in declaration order. A more-specific static route
+  must be declared *before* a sibling dynamic route, or the dynamic route
+  swallows the static path. The canonical edge case: defining `/users/me`
+  *after* `/users/{user_id}` causes a request to `/users/me` to be dispatched
+  to `read_user(user_id="me")`. If `user_id` is annotated `int`, the
+  request fails validation with 422; if it is `str`, the wrong handler runs
+  silently. Always declare static paths first.
+
+  ```python
+  @app.get("/users/me")
+  def read_current_user() -> dict:
+      return {"user_id": "the_current_user"}
+
+  @app.get("/users/{user_id}")
+  def read_user(user_id: str) -> dict:
+      return {"user_id": user_id}
+  ```
+
+  Two further predicate types are useful: an `Enum` subclass narrows a path
+  parameter to a fixed set of values (FastAPI documents the enum and rejects
+  others with 422), and the `:path` converter (`/files/{file_path:path}`)
+  matches a remainder that itself contains `/` characters — needed when the
+  path parameter is itself a path.
+
+  ## Constraining path and query parameters with `Annotated`
+
+  Past FastAPI 0.95 the recommended style for parameter metadata is
+  `typing.Annotated`. Defaults moved off the parameter and into the metadata
+  object. This style avoids confusing default-vs-metadata semantics and is the
+  form documented in current FastAPI 0.115+ tutorials (verified 2026-05-06).
+
+  ```python
+  from typing import Annotated
+  from fastapi import FastAPI, Path, Query
+
+  app = FastAPI()
+
+  @app.get("/items/{item_id}")
+  def read_item(
+      item_id: Annotated[int, Path(ge=1, le=1000)],
+      q: Annotated[str | None, Query(max_length=50)] = None,
+      tags: Annotated[list[str], Query()] = [],
+  ) -> dict:
+      return {"item_id": item_id, "q": q, "tags": tags}
+  ```
+
+  `Path(ge=1, le=1000)` enforces the integer range and surfaces the bounds in
+  OpenAPI; without it, a value of `0` casts cleanly to `int` and reaches the
+  function — type validation alone does not enforce range. `Query(...)` with
+  no default makes the query parameter required; an `= None` default makes it
+  optional. A `list[str]` annotation on a `Query()` parameter accepts repeated
+  query keys (`?tags=red&tags=blue`).
+
+  ## Composing routers with `APIRouter`
+
+  `APIRouter` is the unit of route composition. It carries a `prefix`, default
+  `tags`, default `dependencies`, and default `responses`. Mount it on the app
+  with `app.include_router(router, prefix=...)`. Cited against
+  fastapi.tiangolo.com/tutorial/bigger-applications and
+  fastapi.tiangolo.com/reference/apirouter (verified 2026-05-06).
+
+  ```python
+  # app/routers/items.py
+  from fastapi import APIRouter, HTTPException, status
+
+  router = APIRouter(
+      prefix="/items",
+      tags=["items"],
+      responses={404: {"description": "Not found"}},
+  )
+
+  @router.get("/", status_code=status.HTTP_200_OK)
+  def list_items() -> list[dict]:
+      return [{"item_id": "foo"}]
+
+  @router.get("/{item_id}")
+  def read_item(item_id: str) -> dict:
+      if item_id != "foo":
+          raise HTTPException(status_code=404, detail="Item not found")
+      return {"item_id": item_id}
+  ```
+
+  ```python
+  # app/main.py
+  from fastapi import FastAPI
+  from app.routers import items, users
+
+  app = FastAPI()
+  app.include_router(items.router, prefix="/api/v1")
+  app.include_router(users.router, prefix="/api/v1")
+  ```
+
+  The router's own `prefix="/items"` composes with the include's
+  `prefix="/api/v1"` to produce `/api/v1/items/...`. Avoid declaring two
+  routers with overlapping fully-resolved prefixes — request dispatch becomes
+  declaration-order-dependent and changes silently when include order shifts.
+
+  ## Status codes and OpenAPI configuration
+
+  Pass a non-default status code on the decorator. Use the `status` constants
+  from `fastapi.status` rather than bare integers — the constants document
+  intent and survive grep audits.
+
+  ```python
+  from fastapi import FastAPI, status
+  from pydantic import BaseModel
+
+  app = FastAPI()
+
+  class Item(BaseModel):
+      name: str
+      price: float
+
+  @app.post(
+      "/items/",
+      status_code=status.HTTP_201_CREATED,
+      tags=["items"],
+      summary="Create an item",
+      response_description="The created item",
+      responses={409: {"description": "Item already exists"}},
+      deprecated=False,
+  )
+  def create_item(item: Item) -> Item:
+      """
+      Create an item with the supplied name and price.
+
+      The first line of the docstring becomes the OpenAPI summary if no
+      `summary=` is passed; the rest becomes the description.
+      """
+      return item
+  ```
+
+  `tags=` groups operations in `/docs`. `summary=` and `description=` populate
+  the OpenAPI operation; if `description=` is omitted, FastAPI uses the
+  function's docstring. `response_description=` documents the success
+  response (defaults to `"Successful Response"`). `responses=` declares
+  *additional* response shapes for the OpenAPI document — pair them with a
+  `model` (`responses={409: {"model": ErrorOut}}`) to keep generated clients
+  type-safe. `deprecated=True` marks the operation deprecated in `/docs`
+  without removing it. Treat these OpenAPI metadata fields as part of your API
+  contract: changing a `summary` or moving an operation between `tags`
+  reshapes generated client SDKs and the developer-portal navigation. Set
+  `tags` early so the docs UI grouping drives coarse-grained organization;
+  pair `summary` and `description` — `summary` shows in the operation list,
+  `description` shows on the expanded view, and Markdown is allowed in both.
+
+  ## Anti-patterns
+
+  - Declaring a dynamic route before a sibling static route (`/users/{id}`
+    before `/users/me`).
+  - Using `int` on a path parameter where the range matters, without
+    `Path(ge=..., le=...)` — the type cast catches non-integers but not
+    out-of-range integers.
+  - Bare integer status codes (`status_code=201`) instead of
+    `status.HTTP_201_CREATED`.
+  - Two `APIRouter` instances mounted with overlapping resolved prefixes —
+    dispatch order silently follows include order.
+  - `responses={409: {"description": "..."}}` without a `model` — generated
+    OpenAPI clients lose the response type and downgrade to `Any`.
+  - Setting `response_model=Item` on a path that returns dynamically-shaped
+    dictionaries — Pydantic strips fields not on the model and the mismatch
+    is silent at runtime.
+
+  ## Verification
+
+  1. `pytest tests/` exits 0; integration tests cover the static-before-dynamic
+     route ordering case.
+  2. `curl -s http://localhost:8000/openapi.json | jq '.paths | keys'` lists
+     every expected path.
+  3. `curl -i http://localhost:8000/items/0` returns HTTP 422 when
+     `Path(ge=1)` is in effect.
+  4. `grep -rn "status_code=[0-9]" src/` returns zero hits — all status codes
+     reference `fastapi.status` constants.
+  5. `grep -rn "@app\\.\\(get\\|post\\|put\\|delete\\|patch\\)" src/` audits
+     decorators not yet migrated to an `APIRouter`.
+  6. Visiting `/docs` shows operations grouped under their declared `tags` and
+     each operation displays `summary`, `description`, and the declared
+     additional `responses`.
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # FastAPI Routing and Path Operations
+
+      FastAPI generates an OpenAPI schema directly from the signature of each path
+      operation function. The decorator (`@app.get`, `@app.post`, `@app.put`,
+      `@app.delete`, `@app.patch`) attaches an HTTP method + URL template to a
+      Python function; the function's parameters, type annotations, and `Annotated`
+      metadata are introspected at startup to produce request validation, response
+      serialization, and the `/docs` (Swagger UI) and `/redoc` documents. The
+      function below the decorator is the *path operation function*; the decorator
+      itself is the *path operation decorator*. Cited against
+      fastapi.tiangolo.com/tutorial/path-params and
+      fastapi.tiangolo.com/tutorial/path-operation-configuration (verified
+      2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3
+      fallback_root procedure). FastAPI 0.115+.
+
+      Targets in this skill: declaring routes, declaring path and query parameters
+      with type-driven validation, composing routers with `APIRouter`, setting
+      status codes, and shaping the OpenAPI document with `tags`, `summary`,
+      `description`, `response_description`, `responses=`, and `deprecated=`.
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Declaring a path operation
+
+      A minimal route attaches a function to an HTTP method and URL template. The
+      function returns a value FastAPI serializes to JSON.
+
+      ```python
+      from fastapi import FastAPI
+
+      app = FastAPI()
+
+      @app.get("/items/{item_id}")
+      def read_item(item_id: int) -> dict:
+          return {"item_id": item_id}
+      ```
+
+      Names inside `{...}` in the URL template become *path parameters*. They must
+      appear as parameters of the function. Anything else in the function signature
+      that is not a path parameter, request body, header, or dependency is
+      interpreted as a *query parameter*. The `int` annotation on `item_id` drives
+      both validation (request to `/items/foo` returns 422) and the OpenAPI schema
+      (the parameter is documented as `integer`). An unannotated path parameter is
+      treated as `str`.
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## Path parameter order matters
+
+      FastAPI matches routes in declaration order. A more-specific static route
+      must be declared *before* a sibling dynamic route, or the dynamic route
+      swallows the static path. The canonical edge case: defining `/users/me`
+      *after* `/users/{user_id}` causes a request to `/users/me` to be dispatched
+      to `read_user(user_id="me")`. If `user_id` is annotated `int`, the
+      request fails validation with 422; if it is `str`, the wrong handler runs
+      silently. Always declare static paths first.
+
+      ```python
+      @app.get("/users/me")
+      def read_current_user() -> dict:
+          return {"user_id": "the_current_user"}
+
+      @app.get("/users/{user_id}")
+      def read_user(user_id: str) -> dict:
+          return {"user_id": user_id}
+      ```
+
+      Two further predicate types are useful: an `Enum` subclass narrows a path
+      parameter to a fixed set of values (FastAPI documents the enum and rejects
+      others with 422), and the `:path` converter (`/files/{file_path:path}`)
+      matches a remainder that itself contains `/` characters — needed when the
+      path parameter is itself a path.
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Constraining path and query parameters with `Annotated`
+
+      Past FastAPI 0.95 the recommended style for parameter metadata is
+      `typing.Annotated`. Defaults moved off the parameter and into the metadata
+      object. This style avoids confusing default-vs-metadata semantics and is the
+      form documented in current FastAPI 0.115+ tutorials (verified 2026-05-06).
+
+      ```python
+      from typing import Annotated
+      from fastapi import FastAPI, Path, Query
+
+      app = FastAPI()
+
+      @app.get("/items/{item_id}")
+      def read_item(
+          item_id: Annotated[int, Path(ge=1, le=1000)],
+          q: Annotated[str | None, Query(max_length=50)] = None,
+          tags: Annotated[list[str], Query()] = [],
+      ) -> dict:
+          return {"item_id": item_id, "q": q, "tags": tags}
+      ```
+
+      `Path(ge=1, le=1000)` enforces the integer range and surfaces the bounds in
+      OpenAPI; without it, a value of `0` casts cleanly to `int` and reaches the
+      function — type validation alone does not enforce range. `Query(...)` with
+      no default makes the query parameter required; an `= None` default makes it
+      optional. A `list[str]` annotation on a `Query()` parameter accepts repeated
+      query keys (`?tags=red&tags=blue`).
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Composing routers with `APIRouter`
+
+      `APIRouter` is the unit of route composition. It carries a `prefix`, default
+      `tags`, default `dependencies`, and default `responses`. Mount it on the app
+      with `app.include_router(router, prefix=...)`. Cited against
+      fastapi.tiangolo.com/tutorial/bigger-applications and
+      fastapi.tiangolo.com/reference/apirouter (verified 2026-05-06).
+
+      ```python
+      # app/routers/items.py
+      from fastapi import APIRouter, HTTPException, status
+
+      router = APIRouter(
+          prefix="/items",
+          tags=["items"],
+          responses={404: {"description": "Not found"}},
+      )
+
+      @router.get("/", status_code=status.HTTP_200_OK)
+      def list_items() -> list[dict]:
+          return [{"item_id": "foo"}]
+
+      @router.get("/{item_id}")
+      def read_item(item_id: str) -> dict:
+          if item_id != "foo":
+              raise HTTPException(status_code=404, detail="Item not found")
+          return {"item_id": item_id}
+      ```
+
+      ```python
+      # app/main.py
+      from fastapi import FastAPI
+      from app.routers import items, users
+
+      app = FastAPI()
+      app.include_router(items.router, prefix="/api/v1")
+      app.include_router(users.router, prefix="/api/v1")
+      ```
+
+      The router's own `prefix="/items"` composes with the include's
+      `prefix="/api/v1"` to produce `/api/v1/items/...`. Avoid declaring two
+      routers with overlapping fully-resolved prefixes — request dispatch becomes
+      declaration-order-dependent and changes silently when include order shifts.
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Status codes and OpenAPI configuration
+
+      Pass a non-default status code on the decorator. Use the `status` constants
+      from `fastapi.status` rather than bare integers — the constants document
+      intent and survive grep audits.
+
+      ```python
+      from fastapi import FastAPI, status
+      from pydantic import BaseModel
+
+      app = FastAPI()
+
+      class Item(BaseModel):
+          name: str
+          price: float
+
+      @app.post(
+          "/items/",
+          status_code=status.HTTP_201_CREATED,
+          tags=["items"],
+          summary="Create an item",
+          response_description="The created item",
+          responses={409: {"description": "Item already exists"}},
+          deprecated=False,
+      )
+      def create_item(item: Item) -> Item:
+          """
+          Create an item with the supplied name and price.
+
+          The first line of the docstring becomes the OpenAPI summary if no
+          `summary=` is passed; the rest becomes the description.
+          """
+          return item
+      ```
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      `tags=` groups operations in `/docs`. `summary=` and `description=` populate
+      the OpenAPI operation; if `description=` is omitted, FastAPI uses the
+      function's docstring. `response_description=` documents the success
+      response (defaults to `"Successful Response"`). `responses=` declares
+      *additional* response shapes for the OpenAPI document — pair them with a
+      `model` (`responses={409: {"model": ErrorOut}}`) to keep generated clients
+      type-safe. `deprecated=True` marks the operation deprecated in `/docs`
+      without removing it. Treat these OpenAPI metadata fields as part of your
+      API contract: changing a `summary` or moving an operation between `tags`
+      reshapes generated client SDKs and the developer-portal navigation. Set
+      `tags` early so the docs UI grouping drives coarse-grained organization;
+      pair `summary` and `description` — `summary` shows in the operation list,
+      `description` shows on the expanded view, and Markdown is allowed in both.
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - Declaring a dynamic route before a sibling static route (`/users/{id}`
+        before `/users/me`).
+      - Using `int` on a path parameter where the range matters, without
+        `Path(ge=..., le=...)` — the type cast catches non-integers but not
+        out-of-range integers.
+      - Bare integer status codes (`status_code=201`) instead of
+        `status.HTTP_201_CREATED`.
+      - Two `APIRouter` instances mounted with overlapping resolved prefixes —
+        dispatch order silently follows include order.
+      - `responses={409: {"description": "..."}}` without a `model` — generated
+        OpenAPI clients lose the response type and downgrade to `Any`.
+      - Setting `response_model=Item` on a path that returns dynamically-shaped
+        dictionaries — Pydantic strips fields not on the model and the mismatch
+        is silent at runtime.
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      1. `pytest tests/` exits 0; integration tests cover the static-before-dynamic
+         route ordering case.
+      2. `curl -s http://localhost:8000/openapi.json | jq '.paths | keys'` lists
+         every expected path.
+      3. `curl -i http://localhost:8000/items/0` returns HTTP 422 when
+         `Path(ge=1)` is in effect.
+      4. `grep -rn "status_code=[0-9]" src/` returns zero hits — all status codes
+         reference `fastapi.status` constants.
+      5. `grep -rn "@app\\.\\(get\\|post\\|put\\|delete\\|patch\\)" src/` audits
+         decorators not yet migrated to an `APIRouter`.
+      6. Visiting `/docs` shows operations grouped under their declared `tags` and
+         each operation displays `summary`, `description`, and the declared
+         additional `responses`.

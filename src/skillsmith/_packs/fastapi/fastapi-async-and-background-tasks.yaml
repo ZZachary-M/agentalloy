@@ -1,0 +1,325 @@
+skill_type: domain
+skill_id: fastapi-async-and-background-tasks
+canonical_name: FastAPI Async, Lifespan, and BackgroundTasks (when async def, sync runs in threadpool, not for slow work)
+category: engineering
+skill_class: domain
+domain_tags: [async-def-handler, threadpool-sync-handler, backgroundtasks-after-response, lifespan-context-manager, concurrency-limit-uvicorn]
+always_apply: false
+phase_scope: null
+category_scope: framework
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-06. Sources — FastAPI concurrency and async/await https://fastapi.tiangolo.com/async/ (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure); background tasks https://fastapi.tiangolo.com/tutorial/background-tasks/; lifespan events https://fastapi.tiangolo.com/advanced/events/; async tests https://fastapi.tiangolo.com/advanced/async-tests/; deployment concepts https://fastapi.tiangolo.com/deployment/concepts/. Original authoring — scaffolded with citations against fastapi.tiangolo.com docs, not a verbatim copy of upstream prose. Skill scope: handler signature choice (`async def` vs `def`), the blocking-the-loop trap, `BackgroundTasks` (and when not to use it), `lifespan` context manager, app.state, async DB sessions, the Uvicorn worker concurrency model, and async tests. FastAPI 0.115+ (lifespan available since 0.93, March 2023; SQLAlchemy 2 native async since Jan 2023).
+
+raw_prose: |
+  # FastAPI Async, Lifespan, and BackgroundTasks
+
+  FastAPI is async-first but accepts both `async def` and plain `def` path operation functions, and the choice has correctness consequences. The rule in one sentence: declare a handler `async def` only if every blocking call inside it is awaited (use `httpx.AsyncClient`, `asyncpg`, etc.); otherwise declare it `def` and let Starlette run it in the threadpool. Mixing the two is where servers freeze under load.
+
+  Imports referenced throughout this skill (shown once):
+
+  ```python
+  from contextlib import asynccontextmanager
+  from fastapi import FastAPI, BackgroundTasks, Depends, Request
+  import asyncio
+  import httpx
+  ```
+
+  ## `async def` vs `def` handlers — both are first-class
+
+  FastAPI supports two handler shapes. An `async def` path operation runs directly on the main asyncio event loop. A plain `def` path operation is run by Starlette in an external threadpool, so it does not block the loop. From the FastAPI concurrency docs: "If you are using third party libraries that tell you to call them with `await`... declare your path operation functions with `async def`. If you are using a third party library that communicates with something (a database, an API, the file system, etc.) and doesn't have support for using `await`, then declare your path operation functions as normally, with just `def`."
+
+  Pick `async def` when every I/O call inside is awaitable (`httpx.AsyncClient`, `asyncpg`, `aiokafka`, `redis.asyncio`, SQLAlchemy 2 async). Pick `def` when the libraries are sync — `requests`, `psycopg2`, the legacy SQLAlchemy 1.x sync API, `boto3`. Both options are correct. The wrong combination is "`async def` plus sync I/O" — that combination blocks the event loop.
+
+  ## The blocking-the-loop trap
+
+  An `async def` handler that calls `requests.get(...)`, `time.sleep(5)`, or runs a heavy CPU loop blocks the single event loop the worker is using. While that handler is blocked, every other concurrent request on the same worker is frozen too — not slowed, frozen. This is the most common production FastAPI bug.
+
+  The fix is one of two things: either change the handler to use awaitable equivalents (`await client.get(...)`, `await asyncio.sleep(5)`), or change the handler signature from `async def` to `def` so Starlette runs it in the threadpool where blocking is harmless. Do not leave a sync blocking call inside `async def`.
+
+  ## `BackgroundTasks` runs work after the response
+
+  FastAPI's `BackgroundTasks` lets a handler queue a function to run *after* the response has been sent. From the docs: "You can define background tasks to be run after returning a response. This is useful for operations that need to happen after a request, but that the client doesn't really have to be waiting for the operation to complete before receiving the response."
+
+  ```python
+  def send_email(address: str, body: str) -> None:
+      ...  # blocking SMTP call is fine here
+
+  @app.post("/notify/{address}")
+  async def notify(address: str, bg: BackgroundTasks):
+      bg.add_task(send_email, address=address, body="hello")
+      return {"status": "queued"}
+  ```
+
+  The task function may be `def` or `async def`. It runs in the same worker process, on the same machine, after the response has flushed. That makes it good for fast follow-ups: a logging write, sending a single email, invalidating a cache key. It is bad for slow or critical work — if the worker crashes or is replaced, the task is lost. Anything that must survive a process crash needs a real queue (Celery, Arq, RQ, Dramatiq) backed by a broker.
+
+  ## `lifespan` is the modern startup/shutdown hook
+
+  Since FastAPI 0.93 (March 2023), the `lifespan` context manager is the recommended way to run code at startup and shutdown. The older `@app.on_event("startup")` and `@app.on_event("shutdown")` decorators still work but are deprecated and the docs recommend not using them in new code.
+
+  ```python
+  @asynccontextmanager
+  async def lifespan(app: FastAPI):
+      # startup
+      app.state.client = httpx.AsyncClient()
+      yield
+      # shutdown
+      await app.state.client.aclose()
+
+  app = FastAPI(lifespan=lifespan)
+  ```
+
+  Code before `yield` runs once before the app starts taking requests; code after `yield` runs once after the last request has been served. Use it for shared connection pools (`httpx.AsyncClient`, `asyncpg.create_pool`, `redis.asyncio.from_url`), warming caches, loading ML models, and closing those resources cleanly.
+
+  ## App state — share clients, do not recreate per request
+
+  Resources opened in `lifespan` belong on `app.state` and are accessed per request via `Request.app.state.client` or a small `Depends` shim. Creating an `httpx.AsyncClient()` inside every handler defeats connection pooling, blows away DNS caches, and adds TLS-handshake latency to every call.
+
+  ```python
+  def get_client(request: Request) -> httpx.AsyncClient:
+      return request.app.state.client
+
+  @app.get("/proxy")
+  async def proxy(client: httpx.AsyncClient = Depends(get_client)):
+      r = await client.get("https://example.com")
+      return r.json()
+  ```
+
+  ## Async DB sessions (SQLAlchemy 2)
+
+  SQLAlchemy 2 (released January 2023) has native async support via `create_async_engine` and `AsyncSession`. Pair the engine with a yield-based dependency that opens a session per request and closes it on the way out:
+
+  ```python
+  from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+  engine = create_async_engine("postgresql+asyncpg://...")
+  Session = async_sessionmaker(engine, expire_on_commit=False)
+
+  async def get_session():
+      async with Session() as session:
+          yield session
+  ```
+
+  Inject with `session: AsyncSession = Depends(get_session)`. Do not mix `psycopg2` (sync) into an `async def` handler — that is the blocking-the-loop trap.
+
+  ## Concurrency model — workers and the loop
+
+  By default Uvicorn runs one worker process which runs one asyncio event loop. With `--workers N`, Uvicorn forks N independent processes; each has its own loop and its own copy of `app.state`. From the FastAPI deployment concepts page, replication (multiple processes) is how you use multiple CPU cores; within a single process, async concurrency is bounded by what one event loop can interleave.
+
+  Concretely: with one worker, one slow `async def` handler that calls a sync blocking library will freeze every other concurrent request hitting that worker. With one worker and `def` handlers, Starlette's threadpool (default 40 threads) gives you ~40 concurrent slow handlers before saturation. In production, run multiple workers (one per core is a common starting point) behind a process manager — the FastAPI deployment docs walk through Gunicorn-with-Uvicorn-workers, container replication, and Kubernetes patterns.
+
+  ## Async tests
+
+  FastAPI's sync `TestClient` works against async apps but does not exercise the async loop the way real clients do. For tests that themselves need to `await`, use `httpx.AsyncClient` against the ASGI app with `pytest-asyncio` (or `anyio`):
+
+  ```python
+  # pytest.ini:  [pytest]\n  asyncio_mode = auto
+
+  import pytest, httpx
+  from myapp import app
+
+  @pytest.mark.asyncio
+  async def test_root():
+      async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+          r = await client.get("/")
+      assert r.status_code == 200
+  ```
+
+  This lets the test query an async DB or call other async helpers in the same coroutine as the request.
+
+  ## Anti-patterns
+
+  - **`requests.get(...)` (or any sync HTTP client) inside an `async def` handler.** Blocks the event loop; one slow upstream freezes the worker. Use `httpx.AsyncClient`, or change the handler to `def`.
+  - **`time.sleep(n)` inside any async coroutine.** Use `await asyncio.sleep(n)`.
+  - **Long CPU work inside `async def`.** Same problem as sync I/O. Move it to `def` (threadpool) or offload to a process pool / external worker.
+  - **Using `BackgroundTasks` for important work that must survive a process crash.** Tasks die with the worker. Use Celery/Arq/RQ for durable jobs.
+  - **`@app.on_event("startup")` / `@app.on_event("shutdown")` in new code.** Deprecated since FastAPI 0.93. Use `lifespan`.
+  - **Creating a new `httpx.AsyncClient()` per request.** No pooling, no DNS cache, extra TLS handshakes. Open one in `lifespan`, store on `app.state`, share via `Depends`.
+  - **Running `--workers 1` in production with a sync-blocking `async def` handler.** One slow request freezes every concurrent request on that worker. Either fix the handler signature or scale workers — preferably both.
+  - **Sync `psycopg2` inside `async def`.** Blocks the loop; switch to `asyncpg` / SQLAlchemy 2 async, or move the handler to `def`.
+
+  ## Verification
+
+  - [ ] `grep -rn 'requests\.\(get\|post\|put\|delete\)' src/` returns no matches inside files that also contain `async def` path operations.
+  - [ ] `grep -rn '@app\.on_event' src/` returns zero matches in new code (deprecated since FastAPI 0.93; use `lifespan`).
+  - [ ] `grep -rn 'time\.sleep' src/` returns no matches inside `async def` functions.
+  - [ ] Every `async def` handler that performs I/O uses awaitable libraries (`httpx.AsyncClient`, `asyncpg`, SQLAlchemy 2 async, `redis.asyncio`); no sync drivers.
+  - [ ] App-wide resources (HTTP client, DB engine/pool) are opened in a `lifespan` context manager, attached to `app.state`, and closed after `yield`.
+  - [ ] `BackgroundTasks` is used only for fast, best-effort follow-ups; durable jobs are handed to Celery/Arq/RQ with a broker.
+  - [ ] Async tests use `httpx.AsyncClient(app=app)` with `pytest-asyncio` (`asyncio_mode = "auto"` in `pytest.ini`); the sync `TestClient` is reserved for non-async test paths.
+  - [ ] Production deploys run multiple Uvicorn workers (e.g. one per CPU core) behind a process manager; `--workers 1` is dev-only.
+
+  ## Verified
+
+  - FastAPI `lifespan` available since 0.93 (March 2023); `@app.on_event` deprecated in favor of lifespan (verified 2026-05-06 against https://fastapi.tiangolo.com/advanced/events/).
+  - SQLAlchemy 2.0 with native async (`create_async_engine`, `AsyncSession`) released January 2023 (verified 2026-05-06).
+  - FastAPI handler dispatch — `async def` on the loop, `def` in Starlette's threadpool — verified against https://fastapi.tiangolo.com/async/ (verified 2026-05-06).
+  - `BackgroundTasks` runs after response in the same worker process, verified against https://fastapi.tiangolo.com/tutorial/background-tasks/ (verified 2026-05-06).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # FastAPI Async, Lifespan, and BackgroundTasks
+
+      FastAPI is async-first but accepts both `async def` and plain `def` path operation functions, and the choice has correctness consequences. The rule in one sentence: declare a handler `async def` only if every blocking call inside it is awaited (use `httpx.AsyncClient`, `asyncpg`, etc.); otherwise declare it `def` and let Starlette run it in the threadpool. Mixing the two is where servers freeze under load.
+
+      Imports referenced throughout this skill (shown once):
+
+      ```python
+      from contextlib import asynccontextmanager
+      from fastapi import FastAPI, BackgroundTasks, Depends, Request
+      import asyncio
+      import httpx
+      ```
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## `async def` vs `def` handlers — both are first-class
+
+      FastAPI supports two handler shapes. An `async def` path operation runs directly on the main asyncio event loop. A plain `def` path operation is run by Starlette in an external threadpool, so it does not block the loop. From the FastAPI concurrency docs: "If you are using third party libraries that tell you to call them with `await`... declare your path operation functions with `async def`. If you are using a third party library that communicates with something (a database, an API, the file system, etc.) and doesn't have support for using `await`, then declare your path operation functions as normally, with just `def`."
+
+      Pick `async def` when every I/O call inside is awaitable (`httpx.AsyncClient`, `asyncpg`, `aiokafka`, `redis.asyncio`, SQLAlchemy 2 async). Pick `def` when the libraries are sync — `requests`, `psycopg2`, the legacy SQLAlchemy 1.x sync API, `boto3`. Both options are correct. The wrong combination is "`async def` plus sync I/O" — that combination blocks the event loop.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## The blocking-the-loop trap
+
+      An `async def` handler that calls `requests.get(...)`, `time.sleep(5)`, or runs a heavy CPU loop blocks the single event loop the worker is using. While that handler is blocked, every other concurrent request on the same worker is frozen too — not slowed, frozen. This is the most common production FastAPI bug.
+
+      The fix is one of two things: either change the handler to use awaitable equivalents (`await client.get(...)`, `await asyncio.sleep(5)`), or change the handler signature from `async def` to `def` so Starlette runs it in the threadpool where blocking is harmless. Do not leave a sync blocking call inside `async def`.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## `BackgroundTasks` runs work after the response
+
+      FastAPI's `BackgroundTasks` lets a handler queue a function to run *after* the response has been sent. From the docs: "You can define background tasks to be run after returning a response. This is useful for operations that need to happen after a request, but that the client doesn't really have to be waiting for the operation to complete before receiving the response."
+
+      ```python
+      def send_email(address: str, body: str) -> None:
+          ...  # blocking SMTP call is fine here
+
+      @app.post("/notify/{address}")
+      async def notify(address: str, bg: BackgroundTasks):
+          bg.add_task(send_email, address=address, body="hello")
+          return {"status": "queued"}
+      ```
+
+      The task function may be `def` or `async def`. It runs in the same worker process, on the same machine, after the response has flushed. That makes it good for fast follow-ups: a logging write, sending a single email, invalidating a cache key. It is bad for slow or critical work — if the worker crashes or is replaced, the task is lost. Anything that must survive a process crash needs a real queue (Celery, Arq, RQ, Dramatiq) backed by a broker.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## `lifespan` is the modern startup/shutdown hook
+
+      Since FastAPI 0.93 (March 2023), the `lifespan` context manager is the recommended way to run code at startup and shutdown. The older `@app.on_event("startup")` and `@app.on_event("shutdown")` decorators still work but are deprecated and the docs recommend not using them in new code.
+
+      ```python
+      @asynccontextmanager
+      async def lifespan(app: FastAPI):
+          # startup
+          app.state.client = httpx.AsyncClient()
+          yield
+          # shutdown
+          await app.state.client.aclose()
+
+      app = FastAPI(lifespan=lifespan)
+      ```
+
+      Code before `yield` runs once before the app starts taking requests; code after `yield` runs once after the last request has been served. Use it for shared connection pools (`httpx.AsyncClient`, `asyncpg.create_pool`, `redis.asyncio.from_url`), warming caches, loading ML models, and closing those resources cleanly.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## App state — share clients, do not recreate per request
+
+      Resources opened in `lifespan` belong on `app.state` and are accessed per request via `Request.app.state.client` or a small `Depends` shim. Creating an `httpx.AsyncClient()` inside every handler defeats connection pooling, blows away DNS caches, and adds TLS-handshake latency to every call.
+
+      ```python
+      def get_client(request: Request) -> httpx.AsyncClient:
+          return request.app.state.client
+
+      @app.get("/proxy")
+      async def proxy(client: httpx.AsyncClient = Depends(get_client)):
+          r = await client.get("https://example.com")
+          return r.json()
+      ```
+
+      ## Async DB sessions (SQLAlchemy 2)
+
+      SQLAlchemy 2 (released January 2023) has native async support via `create_async_engine` and `AsyncSession`. Pair the engine with a yield-based dependency that opens a session per request and closes it on the way out:
+
+      ```python
+      from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+      engine = create_async_engine("postgresql+asyncpg://...")
+      Session = async_sessionmaker(engine, expire_on_commit=False)
+
+      async def get_session():
+          async with Session() as session:
+              yield session
+      ```
+
+      Inject with `session: AsyncSession = Depends(get_session)`. Do not mix `psycopg2` (sync) into an `async def` handler — that is the blocking-the-loop trap.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Concurrency model — workers and the loop
+
+      By default Uvicorn runs one worker process which runs one asyncio event loop. With `--workers N`, Uvicorn forks N independent processes; each has its own loop and its own copy of `app.state`. From the FastAPI deployment concepts page, replication (multiple processes) is how you use multiple CPU cores; within a single process, async concurrency is bounded by what one event loop can interleave.
+
+      Concretely: with one worker, one slow `async def` handler that calls a sync blocking library will freeze every other concurrent request hitting that worker. With one worker and `def` handlers, Starlette's threadpool (default 40 threads) gives you ~40 concurrent slow handlers before saturation. In production, run multiple workers (one per core is a common starting point) behind a process manager — the FastAPI deployment docs walk through Gunicorn-with-Uvicorn-workers, container replication, and Kubernetes patterns.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## Async tests
+
+      FastAPI's sync `TestClient` works against async apps but does not exercise the async loop the way real clients do. For tests that themselves need to `await`, use `httpx.AsyncClient` against the ASGI app with `pytest-asyncio` (or `anyio`):
+
+      ```python
+      # pytest.ini:  [pytest]\n  asyncio_mode = auto
+
+      import pytest, httpx
+      from myapp import app
+
+      @pytest.mark.asyncio
+      async def test_root():
+          async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+              r = await client.get("/")
+          assert r.status_code == 200
+      ```
+
+      This lets the test query an async DB or call other async helpers in the same coroutine as the request.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`requests.get(...)` (or any sync HTTP client) inside an `async def` handler.** Blocks the event loop; one slow upstream freezes the worker. Use `httpx.AsyncClient`, or change the handler to `def`.
+      - **`time.sleep(n)` inside any async coroutine.** Use `await asyncio.sleep(n)`.
+      - **Long CPU work inside `async def`.** Same problem as sync I/O. Move it to `def` (threadpool) or offload to a process pool / external worker.
+      - **Using `BackgroundTasks` for important work that must survive a process crash.** Tasks die with the worker. Use Celery/Arq/RQ for durable jobs.
+      - **`@app.on_event("startup")` / `@app.on_event("shutdown")` in new code.** Deprecated since FastAPI 0.93. Use `lifespan`.
+      - **Creating a new `httpx.AsyncClient()` per request.** No pooling, no DNS cache, extra TLS handshakes. Open one in `lifespan`, store on `app.state`, share via `Depends`.
+      - **Running `--workers 1` in production with a sync-blocking `async def` handler.** One slow request freezes every concurrent request on that worker. Either fix the handler signature or scale workers — preferably both.
+      - **Sync `psycopg2` inside `async def`.** Blocks the loop; switch to `asyncpg` / SQLAlchemy 2 async, or move the handler to `def`.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `grep -rn 'requests\.\(get\|post\|put\|delete\)' src/` returns no matches inside files that also contain `async def` path operations.
+      - [ ] `grep -rn '@app\.on_event' src/` returns zero matches in new code (deprecated since FastAPI 0.93; use `lifespan`).
+      - [ ] `grep -rn 'time\.sleep' src/` returns no matches inside `async def` functions.
+      - [ ] Every `async def` handler that performs I/O uses awaitable libraries (`httpx.AsyncClient`, `asyncpg`, SQLAlchemy 2 async, `redis.asyncio`); no sync drivers.
+      - [ ] App-wide resources (HTTP client, DB engine/pool) are opened in a `lifespan` context manager, attached to `app.state`, and closed after `yield`.
+      - [ ] `BackgroundTasks` is used only for fast, best-effort follow-ups; durable jobs are handed to Celery/Arq/RQ with a broker.
+      - [ ] Async tests use `httpx.AsyncClient(app=app)` with `pytest-asyncio` (`asyncio_mode = "auto"` in `pytest.ini`); the sync `TestClient` is reserved for non-async test paths.
+      - [ ] Production deploys run multiple Uvicorn workers (e.g. one per CPU core) behind a process manager; `--workers 1` is dev-only.

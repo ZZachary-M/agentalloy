@@ -1,0 +1,439 @@
+skill_type: domain
+skill_id: fastapi-dependency-injection
+canonical_name: "FastAPI Dependency Injection (Depends, Sub-deps, yield Cleanup, Class Deps, Caching)"
+category: engineering
+skill_class: domain
+domain_tags:
+  - depends-callable
+  - yield-cleanup-context
+  - dependency-cache-per-request
+  - annotated-injection
+  - router-level-dependencies
+always_apply: false
+phase_scope: null
+category_scope: framework
+author: navistone
+change_summary: "Initial authoring 2026-05-06 — scaffolded with citations against fastapi.tiangolo.com docs (tutorial/dependencies, sub-dependencies, dependencies-with-yield, global-dependencies, classes-as-dependencies). Not a verbatim copy of upstream prose."
+raw_prose: |
+  # FastAPI Dependency Injection (Depends, Sub-deps, yield Cleanup, Class Deps, Caching)
+
+  FastAPI's dependency injection system, exposed via `fastapi.Depends`, is the canonical way to share logic across path operations: authentication checks, database session creation, query-parameter parsing, paging defaults, feature flags. A dependency is any callable — function or class — that takes the same kinds of parameters a path operation takes (path/query/header/cookie/body params, plus other `Depends`). FastAPI walks the dependency graph for each request, resolves and injects results, and (with `yield`) runs cleanup after the response is sent.
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## Why dependency injection over plain helper calls
+
+  Three things the DI system buys that a plain helper function does not: (1) parameter declarations on the dependency are merged into the path operation's OpenAPI schema, so a `q: str | None = None` query param declared in the dependency shows up in `/docs` for every endpoint that uses it; (2) per-request caching deduplicates work across a deep dependency graph; (3) `app.dependency_overrides` swaps the dependency at test time without monkey-patching imports. If you just call the helper inside the handler, you lose all three. Cite: fastapi.tiangolo.com/tutorial/dependencies, /tutorial/dependencies/sub-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  Keywords for retrieval: FastAPI, Depends, dependency injection, Annotated, session, sub-dependency, override, cache.
+
+  ## Declaring a dependency with Annotated (preferred)
+
+  Since FastAPI 0.95 (March 2023), the `Annotated` form is the recommended way to declare dependencies. The older `param = Depends(...)` default-value form still works but is no longer in the tutorial's primary code paths. Use one style consistently in a codebase.
+
+  ```python
+  from typing import Annotated
+  from fastapi import Depends, FastAPI
+
+  app = FastAPI()
+
+  async def common_parameters(
+      q: str | None = None, skip: int = 0, limit: int = 100
+  ):
+      return {"q": q, "skip": skip, "limit": limit}
+
+  @app.get("/items/")
+  async def read_items(
+      commons: Annotated[dict, Depends(common_parameters)],
+  ):
+      return commons
+  ```
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies, /tutorial/dependencies/classes-as-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure). Annotated form preferred since FastAPI 0.95+ (verified 2026-05-06).
+
+  ## Sub-dependencies and per-request caching
+
+  A dependency callable can itself depend on other `Depends` callables. FastAPI builds the graph, calls each node, and passes results downward. If the same dependency appears multiple times in the resolved graph for one request, FastAPI calls it once and reuses the cached value for the rest of that request. The cache lives only for the request — the next request resolves fresh.
+
+  ```python
+  from typing import Annotated
+  from fastapi import Cookie, Depends, FastAPI
+
+  app = FastAPI()
+
+  def query_extractor(q: str | None = None):
+      return q
+
+  def query_or_cookie_extractor(
+      q: Annotated[str, Depends(query_extractor)],
+      last_query: Annotated[str | None, Cookie()] = None,
+  ):
+      if not q:
+          return last_query
+      return q
+
+  @app.get("/items/")
+  async def read_query(
+      query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],
+  ):
+      return {"q_or_cookie": query_or_default}
+  ```
+
+  Disable per-call when you need fresh evaluation each time:
+
+  ```python
+  fresh: Annotated[str, Depends(get_value, use_cache=False)]
+  ```
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies/sub-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## yield-based dependencies for setup/teardown
+
+  Use `yield` instead of `return` when the dependency manages a resource that must be cleaned up — DB session, file handle, lock. Code before `yield` runs as setup; code after `yield` runs as teardown after the response is sent. Internally FastAPI wraps the generator with Starlette's `AsyncExitStack`, so cleanup runs in reverse order of acquisition and sync/async generators mix safely.
+
+  ```python
+  # Schematic SessionLocal — replace with your project's sessionmaker.
+  from typing import Annotated
+  from fastapi import Depends, FastAPI
+
+  app = FastAPI()
+
+  def get_db():
+      db = SessionLocal()
+      try:
+          yield db
+      finally:
+          db.close()
+
+  @app.get("/users/{user_id}")
+  def read_user(user_id: int, db: Annotated["Session", Depends(get_db)]):
+      return db.query(User).get(user_id)
+  ```
+
+  Edge case: if the path handler raises `HTTPException`, the code after `yield` STILL runs — the exception propagates up through the exit stack, cleanup completes, and FastAPI sends the error response. But if you raise an exception AFTER `yield` in the dependency itself (in the `finally` block or after a successful yield), the response has already been sent to the client; the caller sees a 500 instead of your intended status. Do cleanup, not business-logic validation, after `yield`.
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## Classes as dependencies
+
+  Any callable works, including a class. FastAPI calls the class like a constructor, treating `__init__` parameters the same way it treats path-operation parameters. Useful when the dependency carries state or wants to expose attribute-style access instead of dict keys.
+
+  ```python
+  from typing import Annotated
+  from fastapi import Depends, FastAPI
+
+  app = FastAPI()
+
+  class CommonQueryParams:
+      def __init__(
+          self, q: str | None = None, skip: int = 0, limit: int = 100
+      ):
+          self.q = q
+          self.skip = skip
+          self.limit = limit
+
+  @app.get("/items/")
+  async def read_items(commons: Annotated[CommonQueryParams, Depends()]):
+      return {"q": commons.q, "skip": commons.skip, "limit": commons.limit}
+  ```
+
+  Note `Depends()` with no argument — FastAPI infers the callable from the parameter's type annotation (`CommonQueryParams`). Equivalent to `Depends(CommonQueryParams)` but without the duplication.
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies/classes-as-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## Path-, router-, and app-level dependencies
+
+  When a dependency is purely a side-effect check (auth header, feature gate, rate-limit lookup) and you do not need its return value injected, attach it via the `dependencies=[Depends(...)]` parameter on the path-operation decorator, the `APIRouter`, or the `FastAPI` app. Stable since FastAPI 0.46 (verified 2026-05-06). They run for every request in their scope; their return values are discarded.
+
+  ```python
+  from typing import Annotated
+  from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+
+  async def verify_token(x_token: Annotated[str, Header()]):
+      if x_token != "fake-super-secret-token":
+          raise HTTPException(status_code=400, detail="X-Token header invalid")
+
+  # App-wide:
+  app = FastAPI(dependencies=[Depends(verify_token)])
+
+  # Router-scoped:
+  admin_router = APIRouter(
+      prefix="/admin", dependencies=[Depends(verify_token)]
+  )
+
+  # Per-endpoint:
+  @app.get("/items/", dependencies=[Depends(verify_token)])
+  async def read_items():
+      return [{"item": "Foo"}]
+  ```
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies/global-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## Test overrides
+
+  Swap any dependency at test time via `app.dependency_overrides`, keyed by the original callable. Reset between tests so leakage does not cross test boundaries.
+
+  ```python
+  from fastapi.testclient import TestClient
+
+  def override_get_db():
+      db = TestSession()
+      try:
+          yield db
+      finally:
+          db.close()
+
+  app.dependency_overrides[get_db] = override_get_db
+  client = TestClient(app)
+  # ... run tests ...
+  app.dependency_overrides.clear()
+  ```
+
+  The override is keyed by the original dependency object — `app.dependency_overrides[get_db]`, not by name or path. The replacement follows the same callable rules as a normal dependency: it can be a function, a class, or a generator with `yield`, and it can declare its own sub-dependencies. Use this hook to inject a SQLite test database in place of Postgres, a deterministic clock in place of `datetime.now`, or a stub auth dependency that always returns a fixed user. Always clear overrides in teardown — pytest fixtures with `yield` plus `app.dependency_overrides.clear()` is the standard pattern.
+
+  Cite: fastapi.tiangolo.com/tutorial/dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+  ## Anti-patterns
+
+  - Re-declaring `Depends(verify_token)` on every endpoint when the whole router needs it — declare it once on the `APIRouter(dependencies=[...])`.
+  - Calling the dependency callable directly inside the handler (`db = get_db()`) — this defeats DI: no caching, no override hook, no OpenAPI schema merge. Use `Depends`.
+  - Per-request initialization of expensive long-lived clients (`httpx.AsyncClient()` inside a `Depends`) — leaks connections and TLS handshakes. Initialize once at startup, store on `app.state`, inject the singleton.
+  - Raising business-logic errors after `yield` in a yield-dependency. The response has already been sent; the caller sees a 500, not the status you wanted. Validate before yield or in the handler.
+  - Skipping `app.dependency_overrides` in tests — tests hit the real database, network, or auth provider, slow and flaky.
+  - Module-level mutable state captured by a closure dependency — shared across requests, races under concurrency. Use `app.state` with explicit lifecycle, or per-request construction.
+
+  ## Verification
+
+  - `grep -rn 'Depends(' src/` — every shared cross-cutting concern routed through `Depends`, no manual calls.
+  - `grep -rn 'def get_db' src/` returns one definition (single source of truth for session creation).
+  - `grep -rn 'Annotated\[' src/ | grep Depends` — Annotated form used consistently (FastAPI 0.95+ style).
+  - `grep -rn 'dependencies=' src/` — auth/side-effect deps attached at router or app level, not duplicated per endpoint.
+  - `grep -rn 'app.dependency_overrides' tests/` — overrides used in test fixtures and reset (`.clear()`) in teardown.
+  - `grep -rn 'httpx.AsyncClient()' src/` returns no matches inside `Depends` callables; long-lived clients live on `app.state`.
+  - `grep -rn 'raise HTTPException' src/` inspected for any occurrence after a `yield` in a generator dependency — none should exist.
+
+  ## Verified
+
+  - fastapi.tiangolo.com/tutorial/dependencies/ tutorial pages — verified 2026-05-06 via tier-3 fallback_root procedure against fixtures/upstream/registry.yaml entry `fastapi`.
+  - Annotated form recommended since FastAPI 0.95 (March 2023); `dependencies=` parameter on `FastAPI`/`APIRouter`/decorator stable since FastAPI 0.46 — verified 2026-05-06.
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # FastAPI Dependency Injection (Depends, Sub-deps, yield Cleanup, Class Deps, Caching)
+
+      FastAPI's dependency injection system, exposed via `fastapi.Depends`, is the canonical way to share logic across path operations: authentication checks, database session creation, query-parameter parsing, paging defaults, feature flags. A dependency is any callable — function or class — that takes the same kinds of parameters a path operation takes (path/query/header/cookie/body params, plus other `Depends`). FastAPI walks the dependency graph for each request, resolves and injects results, and (with `yield`) runs cleanup after the response is sent.
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+      ## Why dependency injection over plain helper calls
+
+      Three things the DI system buys that a plain helper function does not: (1) parameter declarations on the dependency are merged into the path operation's OpenAPI schema, so a `q: str | None = None` query param declared in the dependency shows up in `/docs` for every endpoint that uses it; (2) per-request caching deduplicates work across a deep dependency graph; (3) `app.dependency_overrides` swaps the dependency at test time without monkey-patching imports. If you just call the helper inside the handler, you lose all three. Cite: fastapi.tiangolo.com/tutorial/dependencies, /tutorial/dependencies/sub-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+
+      Keywords for retrieval: FastAPI, Depends, dependency injection, Annotated, session, sub-dependency, override, cache.
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## Declaring a dependency with Annotated (preferred)
+
+      Since FastAPI 0.95 (March 2023), the `Annotated` form is the recommended way to declare dependencies. The older `param = Depends(...)` default-value form still works but is no longer in the tutorial's primary code paths. Use one style consistently in a codebase.
+
+      ```python
+      from typing import Annotated
+      from fastapi import Depends, FastAPI
+
+      app = FastAPI()
+
+      async def common_parameters(
+          q: str | None = None, skip: int = 0, limit: int = 100
+      ):
+          return {"q": q, "skip": skip, "limit": limit}
+
+      @app.get("/items/")
+      async def read_items(
+          commons: Annotated[dict, Depends(common_parameters)],
+      ):
+          return commons
+      ```
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies, /tutorial/dependencies/classes-as-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure). Annotated form preferred since FastAPI 0.95+ (verified 2026-05-06).
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## Sub-dependencies and per-request caching
+
+      A dependency callable can itself depend on other `Depends` callables. FastAPI builds the graph, calls each node, and passes results downward. If the same dependency appears multiple times in the resolved graph for one request, FastAPI calls it once and reuses the cached value for the rest of that request. The cache lives only for the request — the next request resolves fresh.
+
+      ```python
+      from typing import Annotated
+      from fastapi import Cookie, Depends, FastAPI
+
+      app = FastAPI()
+
+      def query_extractor(q: str | None = None):
+          return q
+
+      def query_or_cookie_extractor(
+          q: Annotated[str, Depends(query_extractor)],
+          last_query: Annotated[str | None, Cookie()] = None,
+      ):
+          if not q:
+              return last_query
+          return q
+
+      @app.get("/items/")
+      async def read_query(
+          query_or_default: Annotated[str, Depends(query_or_cookie_extractor)],
+      ):
+          return {"q_or_cookie": query_or_default}
+      ```
+
+      Disable per-call when you need fresh evaluation each time:
+
+      ```python
+      fresh: Annotated[str, Depends(get_value, use_cache=False)]
+      ```
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies/sub-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## yield-based dependencies for setup/teardown
+
+      Use `yield` instead of `return` when the dependency manages a resource that must be cleaned up — DB session, file handle, lock. Code before `yield` runs as setup; code after `yield` runs as teardown after the response is sent. Internally FastAPI wraps the generator with Starlette's `AsyncExitStack`, so cleanup runs in reverse order of acquisition and sync/async generators mix safely.
+
+      ```python
+      # Schematic SessionLocal — replace with your project's sessionmaker.
+      from typing import Annotated
+      from fastapi import Depends, FastAPI
+
+      app = FastAPI()
+
+      def get_db():
+          db = SessionLocal()
+          try:
+              yield db
+          finally:
+              db.close()
+
+      @app.get("/users/{user_id}")
+      def read_user(user_id: int, db: Annotated["Session", Depends(get_db)]):
+          return db.query(User).get(user_id)
+      ```
+
+      Edge case: if the path handler raises `HTTPException`, the code after `yield` STILL runs — the exception propagates up through the exit stack, cleanup completes, and FastAPI sends the error response. But if you raise an exception AFTER `yield` in the dependency itself (in the `finally` block or after a successful yield), the response has already been sent to the client; the caller sees a 500 instead of your intended status. Do cleanup, not business-logic validation, after `yield`.
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Classes as dependencies
+
+      Any callable works, including a class. FastAPI calls the class like a constructor, treating `__init__` parameters the same way it treats path-operation parameters. Useful when the dependency carries state or wants to expose attribute-style access instead of dict keys.
+
+      ```python
+      from typing import Annotated
+      from fastapi import Depends, FastAPI
+
+      app = FastAPI()
+
+      class CommonQueryParams:
+          def __init__(
+              self, q: str | None = None, skip: int = 0, limit: int = 100
+          ):
+              self.q = q
+              self.skip = skip
+              self.limit = limit
+
+      @app.get("/items/")
+      async def read_items(commons: Annotated[CommonQueryParams, Depends()]):
+          return {"q": commons.q, "skip": commons.skip, "limit": commons.limit}
+      ```
+
+      Note `Depends()` with no argument — FastAPI infers the callable from the parameter's type annotation (`CommonQueryParams`). Equivalent to `Depends(CommonQueryParams)` but without the duplication.
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies/classes-as-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Path-, router-, and app-level dependencies
+
+      When a dependency is purely a side-effect check (auth header, feature gate, rate-limit lookup) and you do not need its return value injected, attach it via the `dependencies=[Depends(...)]` parameter on the path-operation decorator, the `APIRouter`, or the `FastAPI` app. Stable since FastAPI 0.46 (verified 2026-05-06). They run for every request in their scope; their return values are discarded.
+
+      ```python
+      from typing import Annotated
+      from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+
+      async def verify_token(x_token: Annotated[str, Header()]):
+          if x_token != "fake-super-secret-token":
+              raise HTTPException(status_code=400, detail="X-Token header invalid")
+
+      # App-wide:
+      app = FastAPI(dependencies=[Depends(verify_token)])
+
+      # Router-scoped:
+      admin_router = APIRouter(
+          prefix="/admin", dependencies=[Depends(verify_token)]
+      )
+
+      # Per-endpoint:
+      @app.get("/items/", dependencies=[Depends(verify_token)])
+      async def read_items():
+          return [{"item": "Foo"}]
+      ```
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies/global-dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Test overrides
+
+      Swap any dependency at test time via `app.dependency_overrides`, keyed by the original callable. Reset between tests so leakage does not cross test boundaries.
+
+      ```python
+      from fastapi.testclient import TestClient
+
+      def override_get_db():
+          db = TestSession()
+          try:
+              yield db
+          finally:
+              db.close()
+
+      app.dependency_overrides[get_db] = override_get_db
+      client = TestClient(app)
+      # ... run tests ...
+      app.dependency_overrides.clear()
+      ```
+
+      The override is keyed by the original dependency object — `app.dependency_overrides[get_db]`, not by name or path. The replacement follows the same callable rules as a normal dependency: it can be a function, a class, or a generator with `yield`, and it can declare its own sub-dependencies. Use this hook to inject a SQLite test database in place of Postgres, a deterministic clock in place of `datetime.now`, or a stub auth dependency that always returns a fixed user. Always clear overrides in teardown — pytest fixtures with `yield` plus `app.dependency_overrides.clear()` is the standard pattern.
+
+      Cite: fastapi.tiangolo.com/tutorial/dependencies (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure).
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - Re-declaring `Depends(verify_token)` on every endpoint when the whole router needs it — declare it once on the `APIRouter(dependencies=[...])`.
+      - Calling the dependency callable directly inside the handler (`db = get_db()`) — this defeats DI: no caching, no override hook, no OpenAPI schema merge. Use `Depends`.
+      - Per-request initialization of expensive long-lived clients (`httpx.AsyncClient()` inside a `Depends`) — leaks connections and TLS handshakes. Initialize once at startup, store on `app.state`, inject the singleton.
+      - Raising business-logic errors after `yield` in a yield-dependency. The response has already been sent; the caller sees a 500, not the status you wanted. Validate before yield or in the handler.
+      - Skipping `app.dependency_overrides` in tests — tests hit the real database, network, or auth provider, slow and flaky.
+      - Module-level mutable state captured by a closure dependency — shared across requests, races under concurrency. Use `app.state` with explicit lifecycle, or per-request construction.
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - `grep -rn 'Depends(' src/` — every shared cross-cutting concern routed through `Depends`, no manual calls.
+      - `grep -rn 'def get_db' src/` returns one definition (single source of truth for session creation).
+      - `grep -rn 'Annotated\[' src/ | grep Depends` — Annotated form used consistently (FastAPI 0.95+ style).
+      - `grep -rn 'dependencies=' src/` — auth/side-effect deps attached at router or app level, not duplicated per endpoint.
+      - `grep -rn 'app.dependency_overrides' tests/` — overrides used in test fixtures and reset (`.clear()`) in teardown.
+      - `grep -rn 'httpx.AsyncClient()' src/` returns no matches inside `Depends` callables; long-lived clients live on `app.state`.
+      - `grep -rn 'raise HTTPException' src/` inspected for any occurrence after a `yield` in a generator dependency — none should exist.
+
+      ## Verified
+
+      - fastapi.tiangolo.com/tutorial/dependencies/ tutorial pages — verified 2026-05-06 via tier-3 fallback_root procedure against fixtures/upstream/registry.yaml entry `fastapi`.
+      - Annotated form recommended since FastAPI 0.95 (March 2023); `dependencies=` parameter on `FastAPI`/`APIRouter`/decorator stable since FastAPI 0.46 — verified 2026-05-06.

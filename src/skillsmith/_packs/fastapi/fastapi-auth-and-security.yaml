@@ -1,0 +1,477 @@
+skill_type: domain
+skill_id: fastapi-auth-and-security
+canonical_name: FastAPI Auth and Security (OAuth2 Password Bearer, JWT, OpenAPI Scopes, API Keys)
+category: engineering
+skill_class: domain
+domain_tags:
+  - oauth2-password-bearer
+  - jwt-bearer-token
+  - api-key-header
+  - oauth2-scopes-openapi
+  - argon2-credential-hashing
+always_apply: false
+phase_scope: null
+category_scope: framework
+author: navistone
+change_summary: Initial authoring 2026-05-06 — scaffolded from fastapi.tiangolo.com tutorial/security and advanced/security/oauth2-scopes (verified 2026-05-06 against fixtures/upstream/registry.yaml entry fastapi via tier-3 fallback_root procedure). python-jose, passlib, and pyjwt are flagged as community-canonical (not stdlib, not part of fastapi). Original authoring — citations and structure are scaffolded against the upstream docs, not a verbatim copy of upstream prose.
+raw_prose: |
+  # FastAPI Auth and Security
+
+  FastAPI ships first-class building blocks for authentication and authorization in `fastapi.security`: `OAuth2PasswordBearer` for the OAuth2 password flow with bearer tokens, `OAuth2PasswordRequestForm` for the `/token` form-data parser, `SecurityScopes` for scoped authorization, and `APIKeyHeader` / `APIKeyQuery` / `APIKeyCookie` for service-to-service API keys. JWT signing/decoding is not built in — pick a community library (`python-jose` or `pyjwt`). Password hashing is also out-of-scope for FastAPI — use `passlib` with `bcrypt` (or modern `argon2`). This skill walks the production setup that the fastapi.tiangolo.com tutorial converges to, plus the audit checks that catch the common breakages.
+
+  Sources cited (verified 2026-05-06): `fastapi.tiangolo.com/tutorial/security/first-steps`, `/tutorial/security/get-current-user`, `/tutorial/security/simple-oauth2`, `/tutorial/security/oauth2-jwt`, and `/advanced/security/oauth2-scopes`.
+
+  ## OAuth2 Password Bearer scheme
+
+  `OAuth2PasswordBearer` is a callable that, when used with `Depends`, extracts the bearer token from the `Authorization: Bearer <token>` header and returns it as a string. It also drives the Swagger UI "Authorize" button: the `tokenUrl` argument tells the OpenAPI spec where clients exchange username + password for an access token. The path is relative to the API root.
+
+  ```python
+  from typing import Annotated
+  from fastapi import Depends, FastAPI
+  from fastapi.security import OAuth2PasswordBearer
+
+  app = FastAPI()
+  oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+  @app.get("/items/")
+  async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
+      return {"token": token}
+  ```
+
+  When no header is sent, FastAPI returns `401 Unauthorized` with `WWW-Authenticate: Bearer`. That header is required by the OAuth2 / RFC 6750 spec and by Swagger's Authorize dialog — without it, the browser does not re-prompt and the docs UI looks broken.
+
+  ## The /token endpoint with OAuth2PasswordRequestForm
+
+  `OAuth2PasswordRequestForm` parses the OAuth2 password-flow body (form-encoded `username`, `password`, optional `scope`, `grant_type`, `client_id`, `client_secret`). The endpoint must validate the user, hash-compare the password, and return `{"access_token": ..., "token_type": "bearer"}`.
+
+  ```python
+  from fastapi import HTTPException, status
+  from fastapi.security import OAuth2PasswordRequestForm
+  from passlib.context import CryptContext
+
+  pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+  def verify_password(plain: str, hashed: str) -> bool:
+      return pwd_context.verify(plain, hashed)
+
+  @app.post("/token")
+  async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+      user = get_user_from_db(form_data.username)
+      if not user or not verify_password(form_data.password, user.hashed_password):
+          raise HTTPException(
+              status_code=status.HTTP_401_UNAUTHORIZED,
+              detail="Incorrect username or password",
+              headers={"WWW-Authenticate": "Bearer"},
+          )
+      access_token = create_access_token({"sub": user.username})
+      return {"access_token": access_token, "token_type": "bearer"}
+  ```
+
+  Hash on signup AND verify on login — never compare plaintext, never trust client-side hashing. The OAuth2 spec mandates the `token_type` field be the literal string `"bearer"`.
+
+  ## JWT encoding, decoding, and claims
+
+  JWTs carry the user identity in a signed (not encrypted) payload. Standard registered claims: `sub` (subject — user id), `exp` (expiry, integer unix timestamp), `iat` (issued at), `iss` (issuer), `aud` (audience). Sign with HS256 + a 32+ byte CSPRNG-generated secret, or move to RS256 / EdDSA for asymmetric verification across services.
+
+  ```python
+  from datetime import datetime, timedelta, timezone
+  from jose import JWTError, jwt
+
+  SECRET_KEY = os.environ["JWT_SECRET"]  # 32+ random bytes, never hardcoded
+  ALGORITHM = "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES = 15
+
+  def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+      to_encode = data.copy()
+      expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+      to_encode.update({"exp": expire})
+      return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+  ```
+
+  `jose.jwt.decode` validates `exp` automatically and raises `ExpiredSignatureError` (a `JWTError` subclass). Always pass `algorithms=[ALGORITHM]` as a list — never `algorithm=` (that is encode-only); a mismatch silently invalidates every token. `pyjwt` exposes the same surface with slightly different exception names.
+
+  ## get_current_user dependency
+
+  The `get_current_user` dependency is the canonical FastAPI pattern: depend on `oauth2_scheme` to receive the raw token, decode it, fetch the user, and raise 401 on any failure. Path operations then `Depends(get_current_user)` and receive a typed `User` model.
+
+  ```python
+  from pydantic import BaseModel
+
+  class User(BaseModel):
+      username: str
+      disabled: bool = False
+
+  credentials_exception = HTTPException(
+      status_code=status.HTTP_401_UNAUTHORIZED,
+      detail="Could not validate credentials",
+      headers={"WWW-Authenticate": "Bearer"},
+  )
+
+  async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+      try:
+          payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+          username = payload.get("sub")
+          if username is None:
+              raise credentials_exception
+      except JWTError:
+          raise credentials_exception
+      user = get_user_from_db(username)
+      if user is None:
+          raise credentials_exception
+      return User(**user.dict())
+
+  @app.get("/users/me")
+  async def me(current_user: Annotated[User, Depends(get_current_user)]):
+      return current_user
+  ```
+
+  The `WWW-Authenticate: Bearer` header on every 401 is non-negotiable — the Swagger Authorize dialog and OAuth2 clients use it to detect a re-auth requirement.
+
+  ## OAuth2 scopes via Security()
+
+  Scopes are space-separated permission strings recorded in the JWT and surfaced in OpenAPI. Declare scopes on the scheme; require a scope on each path operation with `Security` (a stricter `Depends` that records the requirement in the OpenAPI schema).
+
+  ```python
+  from fastapi import Security
+  from fastapi.security import SecurityScopes
+
+  oauth2_scheme = OAuth2PasswordBearer(
+      tokenUrl="token",
+      scopes={"items:read": "Read items.", "items:write": "Write items."},
+  )
+
+  async def get_current_user(
+      security_scopes: SecurityScopes,
+      token: Annotated[str, Depends(oauth2_scheme)],
+  ) -> User:
+      authenticate_value = f'Bearer scope="{security_scopes.scope_str}"' if security_scopes.scopes else "Bearer"
+      auth_exc = HTTPException(401, "Not enough permissions", {"WWW-Authenticate": authenticate_value})
+      try:
+          payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+          token_scopes = payload.get("scopes", [])
+      except JWTError:
+          raise auth_exc
+      for required in security_scopes.scopes:
+          if required not in token_scopes:
+              raise auth_exc
+      return get_user_from_db(payload["sub"])
+
+  @app.get("/items/")
+  async def read_items(user: Annotated[User, Security(get_current_user, scopes=["items:read"])]):
+      return [...]
+  ```
+
+  Embed the granted `scopes` array in the JWT at `/token` time. `Depends` does not propagate scopes; only `Security` does.
+
+  ## API key auth for service-to-service traffic
+
+  When the client is a backend service rather than a browser, OAuth2 password flow is overkill. Use `APIKeyHeader` (or `APIKeyQuery` / `APIKeyCookie`) and validate against a config or DB. Rotate keys on a schedule and on suspected compromise.
+
+  ```python
+  from fastapi.security import APIKeyHeader
+
+  api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+  async def require_api_key(key: Annotated[str | None, Depends(api_key_header)]) -> str:
+      if key is None or key not in VALID_API_KEYS:
+          raise HTTPException(403, "Invalid API key")
+      return key
+
+  @app.get("/internal/sync", dependencies=[Depends(require_api_key)])
+  async def sync(): ...
+  ```
+
+  ## CORS and refresh tokens
+
+  Browsers enforce CORS; FastAPI ships `CORSMiddleware`. With cookie-based auth or `Authorization` headers from a different origin, the browser rejects `allow_origins=["*"]` combined with `allow_credentials=True` — list explicit origins.
+
+  ```python
+  from fastapi.middleware.cors import CORSMiddleware
+
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=["https://app.example.com"],
+      allow_credentials=True,
+      allow_methods=["*"],
+      allow_headers=["*"],
+  )
+  ```
+
+  Refresh tokens are not built in. The standard pattern: short-lived (5–15 min) access JWT in the response body; long-lived refresh token in an HTTP-only, `Secure`, `SameSite=Strict` cookie; a `/token/refresh` endpoint that reads the cookie and issues a new access token.
+
+  ## Anti-patterns and the weak-secret edge case
+
+  Walk one realistic edge case: an HS256 JWT signed with a 16-character ASCII secret like `"changeme123!!!"`. That is roughly 100 bits of entropy — trivially brute-forceable offline against a captured token in hours on commodity GPUs. The audit: `grep -rn 'JWT_SECRET\|SECRET_KEY' .env* config/` and confirm every hit is at least 32 bytes of CSPRNG output (e.g. `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Anything shorter, anything word-shaped, anything checked into git — rotate immediately.
+
+  Other anti-patterns to forbid:
+
+  - Storing the JWT secret in source code instead of an env var or secret manager.
+  - HS256 with a weak secret (use HS256 + 32+ random bytes or move to RS256).
+  - Accepting tokens without validating `exp`.
+  - Passing `algorithm=` (encode-only kwarg) to `jwt.decode` instead of `algorithms=[...]` — silently invalidates tokens.
+  - `CORSMiddleware(allow_origins=["*"], allow_credentials=True)` — browser rejects the combination.
+  - Password length / complexity checks ONLY on the client; the server must validate too.
+  - Missing `WWW-Authenticate: Bearer` on 401 — Swagger Authorize will not re-prompt.
+  - Rolling your own JWT verification instead of `jose.jwt.decode` / `pyjwt.decode`.
+  - Reusing the same JWT secret across services — compromise of one rotates all.
+
+  ## Verification
+
+  Mechanical checks an auditor or CI job can run against the repo:
+
+  - `grep -rn 'OAuth2PasswordBearer\|APIKeyHeader' src/` — at least one auth scheme is wired up.
+  - `grep -rn 'tokenUrl=' src/` — `/token` endpoint is declared.
+  - `grep -rn 'WWW-Authenticate' src/` — every `HTTPException(401, ...)` raised by an auth dep includes the header.
+  - `grep -rn 'algorithms=\[' src/` — `jwt.decode` uses the list form, not `algorithm=`.
+  - `grep -rn 'jwt.decode\|jwt.encode' src/` — JWT goes through `jose` / `pyjwt`, not a hand-rolled verifier.
+  - `python -c "import os; assert len(os.environ['JWT_SECRET']) >= 32"` — secret is at least 32 bytes.
+  - `! grep -rn 'allow_origins=\["\*"\]' src/ | grep -q 'allow_credentials=True'` — no CORS wildcard + credentials combo.
+  - `grep -rn 'pwd_context.verify\|bcrypt\|argon2' src/` — passwords are hashed, not compared as plaintext.
+  - `pytest -k auth` — auth test suite passes (covers happy path, expired token, missing token, wrong scope, wrong API key).
+
+  ## Verified
+
+  - `OAuth2PasswordBearer`, `OAuth2PasswordRequestForm`, `SecurityScopes`, `Security`, `APIKeyHeader` stable in FastAPI 0.115+ (verified 2026-05-06 against fastapi.tiangolo.com/tutorial/security and /advanced/security/oauth2-scopes).
+  - `python-jose` and `passlib[bcrypt]` are the libraries used in the upstream tutorial; both are community-maintained, not stdlib (verified 2026-05-06).
+  - `pyjwt` is an interchangeable JWT library; pick one and stick with it (verified 2026-05-06).
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # FastAPI Auth and Security
+
+      FastAPI ships first-class building blocks for authentication and authorization in `fastapi.security`: `OAuth2PasswordBearer` for the OAuth2 password flow with bearer tokens, `OAuth2PasswordRequestForm` for the `/token` form-data parser, `SecurityScopes` for scoped authorization, and `APIKeyHeader` / `APIKeyQuery` / `APIKeyCookie` for service-to-service API keys. JWT signing/decoding is not built in — pick a community library (`python-jose` or `pyjwt`). Password hashing is also out-of-scope for FastAPI — use `passlib` with `bcrypt` (or modern `argon2`). This skill walks the production setup that the fastapi.tiangolo.com tutorial converges to, plus the audit checks that catch the common breakages.
+
+      Sources cited (verified 2026-05-06): `fastapi.tiangolo.com/tutorial/security/first-steps`, `/tutorial/security/get-current-user`, `/tutorial/security/simple-oauth2`, `/tutorial/security/oauth2-jwt`, and `/advanced/security/oauth2-scopes`.
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## OAuth2 Password Bearer scheme
+
+      `OAuth2PasswordBearer` is a callable that, when used with `Depends`, extracts the bearer token from the `Authorization: Bearer <token>` header and returns it as a string. It also drives the Swagger UI "Authorize" button: the `tokenUrl` argument tells the OpenAPI spec where clients exchange username + password for an access token. The path is relative to the API root.
+
+      ```python
+      from typing import Annotated
+      from fastapi import Depends, FastAPI
+      from fastapi.security import OAuth2PasswordBearer
+
+      app = FastAPI()
+      oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+      @app.get("/items/")
+      async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
+          return {"token": token}
+      ```
+
+      When no header is sent, FastAPI returns `401 Unauthorized` with `WWW-Authenticate: Bearer`. That header is required by the OAuth2 / RFC 6750 spec and by Swagger's Authorize dialog — without it, the browser does not re-prompt and the docs UI looks broken.
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## The /token endpoint with OAuth2PasswordRequestForm
+
+      `OAuth2PasswordRequestForm` parses the OAuth2 password-flow body (form-encoded `username`, `password`, optional `scope`, `grant_type`, `client_id`, `client_secret`). The endpoint must validate the user, hash-compare the password, and return `{"access_token": ..., "token_type": "bearer"}`.
+
+      ```python
+      from fastapi import HTTPException, status
+      from fastapi.security import OAuth2PasswordRequestForm
+      from passlib.context import CryptContext
+
+      pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+      def verify_password(plain: str, hashed: str) -> bool:
+          return pwd_context.verify(plain, hashed)
+
+      @app.post("/token")
+      async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+          user = get_user_from_db(form_data.username)
+          if not user or not verify_password(form_data.password, user.hashed_password):
+              raise HTTPException(
+                  status_code=status.HTTP_401_UNAUTHORIZED,
+                  detail="Incorrect username or password",
+                  headers={"WWW-Authenticate": "Bearer"},
+              )
+          access_token = create_access_token({"sub": user.username})
+          return {"access_token": access_token, "token_type": "bearer"}
+      ```
+
+      Hash on signup AND verify on login — never compare plaintext, never trust client-side hashing. The OAuth2 spec mandates the `token_type` field be the literal string `"bearer"`.
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## JWT encoding, decoding, and claims
+
+      JWTs carry the user identity in a signed (not encrypted) payload. Standard registered claims: `sub` (subject — user id), `exp` (expiry, integer unix timestamp), `iat` (issued at), `iss` (issuer), `aud` (audience). Sign with HS256 + a 32+ byte CSPRNG-generated secret, or move to RS256 / EdDSA for asymmetric verification across services.
+
+      ```python
+      from datetime import datetime, timedelta, timezone
+      from jose import JWTError, jwt
+
+      SECRET_KEY = os.environ["JWT_SECRET"]  # 32+ random bytes, never hardcoded
+      ALGORITHM = "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES = 15
+
+      def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+          to_encode = data.copy()
+          expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+          to_encode.update({"exp": expire})
+          return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+      ```
+
+      `jose.jwt.decode` validates `exp` automatically and raises `ExpiredSignatureError` (a `JWTError` subclass). Always pass `algorithms=[ALGORITHM]` as a list — never `algorithm=` (that is encode-only); a mismatch silently invalidates every token. `pyjwt` exposes the same surface with slightly different exception names.
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## get_current_user dependency
+
+      The `get_current_user` dependency is the canonical FastAPI pattern: depend on `oauth2_scheme` to receive the raw token, decode it, fetch the user, and raise 401 on any failure. Path operations then `Depends(get_current_user)` and receive a typed `User` model.
+
+      ```python
+      from pydantic import BaseModel
+
+      class User(BaseModel):
+          username: str
+          disabled: bool = False
+
+      credentials_exception = HTTPException(
+          status_code=status.HTTP_401_UNAUTHORIZED,
+          detail="Could not validate credentials",
+          headers={"WWW-Authenticate": "Bearer"},
+      )
+
+      async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+          try:
+              payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+              username = payload.get("sub")
+              if username is None:
+                  raise credentials_exception
+          except JWTError:
+              raise credentials_exception
+          user = get_user_from_db(username)
+          if user is None:
+              raise credentials_exception
+          return User(**user.dict())
+
+      @app.get("/users/me")
+      async def me(current_user: Annotated[User, Depends(get_current_user)]):
+          return current_user
+      ```
+
+      The `WWW-Authenticate: Bearer` header on every 401 is non-negotiable — the Swagger Authorize dialog and OAuth2 clients use it to detect a re-auth requirement.
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## OAuth2 scopes via Security()
+
+      Scopes are space-separated permission strings recorded in the JWT and surfaced in OpenAPI. Declare scopes on the scheme; require a scope on each path operation with `Security` (a stricter `Depends` that records the requirement in the OpenAPI schema).
+
+      ```python
+      from fastapi import Security
+      from fastapi.security import SecurityScopes
+
+      oauth2_scheme = OAuth2PasswordBearer(
+          tokenUrl="token",
+          scopes={"items:read": "Read items.", "items:write": "Write items."},
+      )
+
+      async def get_current_user(
+          security_scopes: SecurityScopes,
+          token: Annotated[str, Depends(oauth2_scheme)],
+      ) -> User:
+          authenticate_value = f'Bearer scope="{security_scopes.scope_str}"' if security_scopes.scopes else "Bearer"
+          auth_exc = HTTPException(401, "Not enough permissions", {"WWW-Authenticate": authenticate_value})
+          try:
+              payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+              token_scopes = payload.get("scopes", [])
+          except JWTError:
+              raise auth_exc
+          for required in security_scopes.scopes:
+              if required not in token_scopes:
+                  raise auth_exc
+          return get_user_from_db(payload["sub"])
+
+      @app.get("/items/")
+      async def read_items(user: Annotated[User, Security(get_current_user, scopes=["items:read"])]):
+          return [...]
+      ```
+
+      Embed the granted `scopes` array in the JWT at `/token` time. `Depends` does not propagate scopes; only `Security` does.
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## API key auth for service-to-service traffic
+
+      When the client is a backend service rather than a browser, OAuth2 password flow is overkill. Use `APIKeyHeader` (or `APIKeyQuery` / `APIKeyCookie`) and validate against a config or DB. Rotate keys on a schedule and on suspected compromise.
+
+      ```python
+      from fastapi.security import APIKeyHeader
+
+      api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+      async def require_api_key(key: Annotated[str | None, Depends(api_key_header)]) -> str:
+          if key is None or key not in VALID_API_KEYS:
+              raise HTTPException(403, "Invalid API key")
+          return key
+
+      @app.get("/internal/sync", dependencies=[Depends(require_api_key)])
+      async def sync(): ...
+      ```
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## CORS and refresh tokens
+
+      Browsers enforce CORS; FastAPI ships `CORSMiddleware`. With cookie-based auth or `Authorization` headers from a different origin, the browser rejects `allow_origins=["*"]` combined with `allow_credentials=True` — list explicit origins.
+
+      ```python
+      from fastapi.middleware.cors import CORSMiddleware
+
+      app.add_middleware(
+          CORSMiddleware,
+          allow_origins=["https://app.example.com"],
+          allow_credentials=True,
+          allow_methods=["*"],
+          allow_headers=["*"],
+      )
+      ```
+
+      Refresh tokens are not built in. The standard pattern: short-lived (5–15 min) access JWT in the response body; long-lived refresh token in an HTTP-only, `Secure`, `SameSite=Strict` cookie; a `/token/refresh` endpoint that reads the cookie and issues a new access token.
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns and the weak-secret edge case
+
+      Walk one realistic edge case: an HS256 JWT signed with a 16-character ASCII secret like `"changeme123!!!"`. That is roughly 100 bits of entropy — trivially brute-forceable offline against a captured token in hours on commodity GPUs. The audit: `grep -rn 'JWT_SECRET\|SECRET_KEY' .env* config/` and confirm every hit is at least 32 bytes of CSPRNG output (e.g. `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Anything shorter, anything word-shaped, anything checked into git — rotate immediately.
+
+      Other anti-patterns to forbid:
+
+      - Storing the JWT secret in source code instead of an env var or secret manager.
+      - HS256 with a weak secret (use HS256 + 32+ random bytes or move to RS256).
+      - Accepting tokens without validating `exp`.
+      - Passing `algorithm=` (encode-only kwarg) to `jwt.decode` instead of `algorithms=[...]` — silently invalidates tokens.
+      - `CORSMiddleware(allow_origins=["*"], allow_credentials=True)` — browser rejects the combination.
+      - Password length / complexity checks ONLY on the client; the server must validate too.
+      - Missing `WWW-Authenticate: Bearer` on 401 — Swagger Authorize will not re-prompt.
+      - Rolling your own JWT verification instead of `jose.jwt.decode` / `pyjwt.decode`.
+      - Reusing the same JWT secret across services — compromise of one rotates all.
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      Mechanical checks an auditor or CI job can run against the repo:
+
+      - `grep -rn 'OAuth2PasswordBearer\|APIKeyHeader' src/` — at least one auth scheme is wired up.
+      - `grep -rn 'tokenUrl=' src/` — `/token` endpoint is declared.
+      - `grep -rn 'WWW-Authenticate' src/` — every `HTTPException(401, ...)` raised by an auth dep includes the header.
+      - `grep -rn 'algorithms=\[' src/` — `jwt.decode` uses the list form, not `algorithm=`.
+      - `grep -rn 'jwt.decode\|jwt.encode' src/` — JWT goes through `jose` / `pyjwt`, not a hand-rolled verifier.
+      - `python -c "import os; assert len(os.environ['JWT_SECRET']) >= 32"` — secret is at least 32 bytes.
+      - `! grep -rn 'allow_origins=\["\*"\]' src/ | grep -q 'allow_credentials=True'` — no CORS wildcard + credentials combo.
+      - `grep -rn 'pwd_context.verify\|bcrypt\|argon2' src/` — passwords are hashed, not compared as plaintext.
+      - `pytest -k auth` — auth test suite passes (covers happy path, expired token, missing token, wrong scope, wrong API key).
+
+      ## Verified
+
+      - `OAuth2PasswordBearer`, `OAuth2PasswordRequestForm`, `SecurityScopes`, `Security`, `APIKeyHeader` stable in FastAPI 0.115+ (verified 2026-05-06 against fastapi.tiangolo.com/tutorial/security and /advanced/security/oauth2-scopes).
+      - `python-jose` and `passlib[bcrypt]` are the libraries used in the upstream tutorial; both are community-maintained, not stdlib (verified 2026-05-06).
+      - `pyjwt` is an interchangeable JWT library; pick one and stick with it (verified 2026-05-06).
