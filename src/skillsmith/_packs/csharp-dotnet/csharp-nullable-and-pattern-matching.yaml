@@ -1,0 +1,414 @@
+skill_type: domain
+skill_id: csharp-nullable-and-pattern-matching
+canonical_name: C# Nullable Reference Types, Generics, and Pattern Matching
+category: engineering
+skill_class: domain
+domain_tags: [nullable-annotations, null-forgiving-operator, generic-constraints, relational-patterns, pattern-combinators]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-05. Sources — learn.microsoft.com/en-us/dotnet/csharp/programming-guide/generics/, learn.microsoft.com/en-us/dotnet/csharp/nullable-references, and learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/patterns (verified 2026-05-05 against fixtures/upstream/curated/csharp.yaml topic typing_and_generics). Targets .NET 9 / C# 13. Skill scope: nullable reference types (NRT), nullable-state attributes, generic type parameters and constraint clauses, and the pattern-matching family (type, property, relational, logical, list patterns) including switch expressions.
+
+raw_prose: |
+  # C# Nullable Reference Types, Generics, and Pattern Matching
+
+  C# 8 turned reference-type nullability into a type-system concern, C# 11 added list patterns, and C# 13 (.NET 9, November 2024) extended generic constraints with `allows ref struct` (verified 2026-05-05). The rule is one sentence: enable NRT project-wide, lean on constraint clauses (`where T : notnull`, `where T : class, new()`) and nullable-state attributes (`[NotNullWhen]`, `[MemberNotNull]`) to keep null-state legible across method boundaries, and use the pattern-matching family for shape-and-value branching instead of `is`-cast chains or polymorphism workarounds. The null-forgiving `!` operator and `dynamic` are last resorts — both silence the checker, and the checker is usually right.
+
+  ## Enabling nullable reference types
+
+  Nullable reference types (NRT) are opt-in per project. Set `<Nullable>enable</Nullable>` in the `.csproj`:
+
+  ```xml
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  ```
+
+  With NRT enabled, `string` is non-null and `string?` is nullable. The compiler emits warnings (CS8600, CS8602, CS8603, CS8618) when a possibly-null value flows into a non-null slot, when a possibly-null is dereferenced, when a non-null return is null, or when a non-null field is uninitialized in a constructor. NRT is a warning surface, not a hard error — pair with `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` or `<WarningsAsErrors>nullable</WarningsAsErrors>` for CI to fail the build on null-state violations.
+
+  Per-file overrides via `#nullable enable` / `#nullable disable` exist for incremental adoption but should be deleted once the file is clean. A codebase with mixed nullable contexts is harder to reason about than one with project-wide enable.
+
+  ## Nullable-state attributes for cross-method tracking
+
+  The compiler's flow analysis stops at method boundaries. Attributes from `System.Diagnostics.CodeAnalysis` describe null-state contracts the analyzer cannot infer:
+
+  ```csharp
+  using System;
+  using System.Diagnostics.CodeAnalysis;
+
+  public static class Parser
+  {
+      // returns true → out parameter is non-null
+      public static bool TryParseOrder(string input, [NotNullWhen(true)] out Order? order)
+      {
+          if (string.IsNullOrEmpty(input))
+          {
+              order = null;
+              return false;
+          }
+          order = new Order(input);
+          return true;
+      }
+  }
+
+  if (Parser.TryParseOrder(raw, out var order))
+  {
+      Console.WriteLine(order.Id);  // analyzer knows order is non-null here
+  }
+  ```
+
+  The TryParse-style contract — return value gates the null-state of the out parameter — is exactly what `[NotNullWhen]` encodes. Without the attribute, the call site would warn on `order.Id` because `order` is declared `Order?`.
+
+  Companion attributes:
+
+  - `[MaybeNullWhen(false)]` — out is non-null when the method returns true (mirror of NotNullWhen).
+  - `[NotNull]` on a parameter — caller must pass non-null; analyzer treats subsequent reads as non-null.
+  - `[MaybeNull]` on a return — caller must null-check.
+  - `[MemberNotNull(nameof(_field))]` on a method — calling this method guarantees the named field is non-null afterwards (useful for `Initialize()` patterns that satisfy non-null field warnings).
+
+  ## The null-forgiving operator `!`
+
+  The postfix `!` tells the compiler "trust me, this is not null":
+
+  ```csharp
+  string? maybe = GetMaybe();
+  Console.WriteLine(maybe!.Length);  // suppresses CS8602
+  ```
+
+  Use `!` only when the analyzer cannot see a guarantee that exists at runtime — e.g. a value validated by a custom helper the analyzer does not understand. When you reach for `!`, ask first: "would `[NotNullWhen]` or `[MemberNotNull]` on the helper let the analyzer figure this out?" If yes, add the attribute and remove the `!`. Sprinkling `!` to silence warnings re-introduces the null-reference bugs NRT was designed to prevent.
+
+  ## Generics — type parameters and constraints
+
+  Generic type parameters let you write code that works across types without `object` or `dynamic`:
+
+  ```csharp
+  public sealed class Cache<TKey, TValue>
+      where TKey : notnull
+      where TValue : class
+  {
+      private readonly Dictionary<TKey, TValue> _store = new();
+
+      public TValue? Get(TKey key) => _store.TryGetValue(key, out var v) ? v : null;
+      public void Set(TKey key, TValue value) => _store[key] = value;
+  }
+  ```
+
+  Constraint clauses (`where T : ...`) restrict what `T` can be and what operations are legal on values of `T`:
+
+  - `where T : class` — reference type. `T?` is nullable annotation.
+  - `where T : struct` — non-nullable value type. `T?` becomes `Nullable<T>`.
+  - `where T : notnull` — any non-nullable type (reference or value). Required to use `T` as a `Dictionary` key without warnings.
+  - `where T : new()` — has a public parameterless constructor.
+  - `where T : SomeBaseClass` / `where T : ISomeInterface` — derives from / implements.
+  - `where T : unmanaged` — blittable value type, no managed references. Required for `Span<T>` interop and `stackalloc`.
+  - `where T : allows ref struct` — C# 13 / .NET 9 — permits `T` to be substituted with `ref struct` types (e.g. `Span<int>`). Required for generic code that handles spans.
+
+  Multiple constraints stack: `where T : class, IDisposable, new()`.
+
+  ## `default(T)` across constraints
+
+  `default(T)` returns the zero value: `null` for reference types, `0` for numeric structs, the all-zero-fields struct otherwise. With NRT enabled and an unconstrained `T`, `default(T)` is typed as `T?` because the compiler cannot prove non-null:
+
+  ```csharp
+  public static T? FirstOrDefault<T>(IEnumerable<T> source)
+  {
+      foreach (var item in source) return item;
+      return default;  // T? — null for class T, zero for struct T
+  }
+  ```
+
+  When the caller has `where T : class`, returned `T?` is the nullable annotation. When the caller has `where T : struct`, returned `T?` is `Nullable<T>`. The two are different runtime shapes — the latter boxes — but at the source level both are written `T?`.
+
+  ## Pattern matching — type, property, relational, logical
+
+  C# pattern matching has grown into a small language of its own. The forms compose:
+
+  ```csharp
+  using System;
+
+  public abstract record Shape;
+  public sealed record Circle(double Radius) : Shape;
+  public sealed record Rectangle(double Width, double Height) : Shape;
+  public sealed record Triangle(double Base, double Height) : Shape;
+
+  public static double Area(Shape s) => s switch
+  {
+      Circle { Radius: > 0 } c       => Math.PI * c.Radius * c.Radius,
+      Rectangle { Width: > 0, Height: > 0 } r => r.Width * r.Height,
+      Triangle (var b, var h) when b > 0 && h > 0 => 0.5 * b * h,
+      null                           => throw new ArgumentNullException(nameof(s)),
+      _                              => throw new ArgumentException("invalid shape"),
+  };
+  ```
+
+  The forms in play:
+
+  - **Type pattern**: `Circle c` — match the runtime type and bind a variable.
+  - **Property pattern**: `{ Radius: > 0 }` — match members; nests recursively.
+  - **Positional pattern**: `Triangle (var b, var h)` — uses `Deconstruct` (records auto-generate it).
+  - **Relational pattern** (C# 9): `> 0`, `< 100`. Combines with `and`, `or`, `not`.
+  - **Logical pattern**: `not null`, `> 0 and < 100`, `"OPEN" or "PENDING"`.
+  - **`when` clause**: arbitrary boolean filter on top of the structural match.
+
+  A `switch` expression returns a value; a `switch` statement does not. Prefer the expression when every arm produces a result — it is exhaustive-ish (the compiler warns if patterns may not cover all inputs) and cannot fall through.
+
+  ## List patterns (C# 11+)
+
+  List patterns match arrays and collection types that expose `Length`/`Count` plus an indexer:
+
+  ```csharp
+  public static string Describe(int[] xs) => xs switch
+  {
+      []                  => "empty",
+      [var only]          => $"single: {only}",
+      [var first, .., var last] => $"first={first}, last={last}",
+      [_, 2, ..]          => "second is two",
+      _                   => "other",
+  };
+  ```
+
+  `..` is the slice pattern; it matches zero-or-more elements and can bind: `[var head, .. var tail]` gives `tail` as a `Span<int>` for arrays. List patterns are the cleanest way to branch on small fixed-shape collections.
+
+  ## Anti-patterns
+
+  - **Using `!` to silence NRT warnings without checking.** Every `!` is a null-deref waiting to happen. If the analyzer is wrong, fix it with `[NotNullWhen]`, `[MemberNotNull]`, or a real null-check.
+  - **Writing `Nullable<T>` instead of `T?`.** Same type, but `T?` reads better and matches the NRT syntax for reference types.
+  - **`T?` on an unconstrained generic.** Without `where T : class` or `where T : struct`, `T?` is ambiguous to the reader — pick a constraint or document the intent.
+  - **Pattern matching for type-dispatch when polymorphism would be clearer.** A `switch` over five subtypes that each have their own `Area()` method is a virtual call wearing a costume. Use the override.
+  - **`where T : class, new()` constraints when you only need `notnull`.** Over-constrained generics reject valid callers. Pick the loosest constraint that compiles.
+  - **`dynamic` to skip generic constraints.** Loses compile-time checking, boxing penalty, runtime binder errors. Almost always a missing interface or generic constraint.
+  - **`switch` statement with no `default` over a closed enum/union.** Adds a silent fall-through path. Use a `switch` expression — the compiler warns on missing arms.
+  - **Catching null with `is null` then doing nothing.** If null is invalid, throw `ArgumentNullException`; if valid, handle it. Silent skip-on-null hides bugs.
+
+  ## Verification
+
+  - [ ] `.csproj` declares `<Nullable>enable</Nullable>` (or solution-wide via `Directory.Build.props`); CI builds with `-warnaserror` or `<WarningsAsErrors>nullable</WarningsAsErrors>`.
+  - [ ] `dotnet build -warnaserror` produces zero CS8600/CS8602/CS8603/CS8618 warnings.
+  - [ ] `grep -rn '!\.[A-Za-z_]' src/ | grep -v '^\s*//'` returns only call sites with a comment explaining why the analyzer cannot see the guarantee.
+  - [ ] TryParse-style methods declare `[NotNullWhen(true)]` (or `[MaybeNullWhen(false)]`) on their out parameters; call sites do not need `!` to dereference the out.
+  - [ ] Generic type parameters used as dictionary keys or hash inputs declare `where T : notnull`.
+  - [ ] `switch` expressions are preferred over `switch` statements when every arm yields a value; the compiler emits no CS8509 (non-exhaustive) warnings.
+  - [ ] No `dynamic` in code that could be expressed with generics and an interface constraint.
+  - [ ] `dotnet format --verify-no-changes` passes.
+
+  ## Verified
+
+  - NRT introduced in C# 8 / .NET Core 3.0 (September 2019); list patterns in C# 11 (November 2022); `allows ref struct` constraint in C# 13 / .NET 9 (November 2024) — verified 2026-05-05 against learn.microsoft.com/en-us/dotnet/csharp/whats-new/csharp-13.
+  - Nullable-state attribute names verified against learn.microsoft.com/en-us/dotnet/csharp/language-reference/attributes/nullable-analysis (verified 2026-05-05).
+  - Roslyn nullable warning IDs (CS8600, CS8602, CS8603, CS8618, CS8509) verified against the Roslyn analyzer rule index (verified 2026-05-05).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # C# Nullable Reference Types, Generics, and Pattern Matching
+
+      C# 8 turned reference-type nullability into a type-system concern, C# 11 added list patterns, and C# 13 (.NET 9, November 2024) extended generic constraints with `allows ref struct` (verified 2026-05-05). The rule is one sentence: enable NRT project-wide, lean on constraint clauses (`where T : notnull`, `where T : class, new()`) and nullable-state attributes (`[NotNullWhen]`, `[MemberNotNull]`) to keep null-state legible across method boundaries, and use the pattern-matching family for shape-and-value branching instead of `is`-cast chains or polymorphism workarounds. The null-forgiving `!` operator and `dynamic` are last resorts — both silence the checker, and the checker is usually right.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## Enabling nullable reference types
+
+      Nullable reference types (NRT) are opt-in per project. Set `<Nullable>enable</Nullable>` in the `.csproj`:
+
+      ```xml
+      <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+      </PropertyGroup>
+      ```
+
+      With NRT enabled, `string` is non-null and `string?` is nullable. The compiler emits warnings (CS8600, CS8602, CS8603, CS8618) when a possibly-null value flows into a non-null slot, when a possibly-null is dereferenced, when a non-null return is null, or when a non-null field is uninitialized in a constructor. NRT is a warning surface, not a hard error — pair with `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` or `<WarningsAsErrors>nullable</WarningsAsErrors>` for CI to fail the build on null-state violations.
+
+      Per-file overrides via `#nullable enable` / `#nullable disable` exist for incremental adoption but should be deleted once the file is clean. A codebase with mixed nullable contexts is harder to reason about than one with project-wide enable.
+
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## Nullable-state attributes for cross-method tracking
+
+      The compiler's flow analysis stops at method boundaries. Attributes from `System.Diagnostics.CodeAnalysis` describe null-state contracts the analyzer cannot infer:
+
+      ```csharp
+      using System;
+      using System.Diagnostics.CodeAnalysis;
+
+      public static class Parser
+      {
+          // returns true → out parameter is non-null
+          public static bool TryParseOrder(string input, [NotNullWhen(true)] out Order? order)
+          {
+              if (string.IsNullOrEmpty(input))
+              {
+                  order = null;
+                  return false;
+              }
+              order = new Order(input);
+              return true;
+          }
+      }
+
+      if (Parser.TryParseOrder(raw, out var order))
+      {
+          Console.WriteLine(order.Id);  // analyzer knows order is non-null here
+      }
+      ```
+
+      The TryParse-style contract — return value gates the null-state of the out parameter — is exactly what `[NotNullWhen]` encodes. Without the attribute, the call site would warn on `order.Id` because `order` is declared `Order?`.
+
+      Companion attributes:
+
+      - `[MaybeNullWhen(false)]` — out is non-null when the method returns true (mirror of NotNullWhen).
+      - `[NotNull]` on a parameter — caller must pass non-null; analyzer treats subsequent reads as non-null.
+      - `[MaybeNull]` on a return — caller must null-check.
+      - `[MemberNotNull(nameof(_field))]` on a method — calling this method guarantees the named field is non-null afterwards (useful for `Initialize()` patterns that satisfy non-null field warnings).
+
+  - sequence: 4
+    fragment_type: rationale
+    content: |
+      ## The null-forgiving operator `!`
+
+      The postfix `!` tells the compiler "trust me, this is not null":
+
+      ```csharp
+      string? maybe = GetMaybe();
+      Console.WriteLine(maybe!.Length);  // suppresses CS8602
+      ```
+
+      Use `!` only when the analyzer cannot see a guarantee that exists at runtime — e.g. a value validated by a custom helper the analyzer does not understand. When you reach for `!`, ask first: "would `[NotNullWhen]` or `[MemberNotNull]` on the helper let the analyzer figure this out?" If yes, add the attribute and remove the `!`. Sprinkling `!` to silence warnings re-introduces the null-reference bugs NRT was designed to prevent.
+
+  - sequence: 5
+    fragment_type: execution
+    content: |
+      ## Generics — type parameters and constraints
+
+      Generic type parameters let you write code that works across types without `object` or `dynamic`:
+
+      ```csharp
+      public sealed class Cache<TKey, TValue>
+          where TKey : notnull
+          where TValue : class
+      {
+          private readonly Dictionary<TKey, TValue> _store = new();
+
+          public TValue? Get(TKey key) => _store.TryGetValue(key, out var v) ? v : null;
+          public void Set(TKey key, TValue value) => _store[key] = value;
+      }
+      ```
+
+      Constraint clauses (`where T : ...`) restrict what `T` can be and what operations are legal on values of `T`:
+
+      - `where T : class` — reference type. `T?` is nullable annotation.
+      - `where T : struct` — non-nullable value type. `T?` becomes `Nullable<T>`.
+      - `where T : notnull` — any non-nullable type (reference or value). Required to use `T` as a `Dictionary` key without warnings.
+      - `where T : new()` — has a public parameterless constructor.
+      - `where T : SomeBaseClass` / `where T : ISomeInterface` — derives from / implements.
+      - `where T : unmanaged` — blittable value type, no managed references. Required for `Span<T>` interop and `stackalloc`.
+      - `where T : allows ref struct` — C# 13 / .NET 9 — permits `T` to be substituted with `ref struct` types (e.g. `Span<int>`). Required for generic code that handles spans.
+
+      Multiple constraints stack: `where T : class, IDisposable, new()`.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## `default(T)` across constraints
+
+      `default(T)` returns the zero value: `null` for reference types, `0` for numeric structs, the all-zero-fields struct otherwise. With NRT enabled and an unconstrained `T`, `default(T)` is typed as `T?` because the compiler cannot prove non-null:
+
+      ```csharp
+      public static T? FirstOrDefault<T>(IEnumerable<T> source)
+      {
+          foreach (var item in source) return item;
+          return default;  // T? — null for class T, zero for struct T
+      }
+      ```
+
+      When the caller has `where T : class`, returned `T?` is the nullable annotation. When the caller has `where T : struct`, returned `T?` is `Nullable<T>`. The two are different runtime shapes — the latter boxes — but at the source level both are written `T?`.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Pattern matching — type, property, relational, logical
+
+      C# pattern matching has grown into a small language of its own. The forms compose:
+
+      ```csharp
+      using System;
+
+      public abstract record Shape;
+      public sealed record Circle(double Radius) : Shape;
+      public sealed record Rectangle(double Width, double Height) : Shape;
+      public sealed record Triangle(double Base, double Height) : Shape;
+
+      public static double Area(Shape s) => s switch
+      {
+          Circle { Radius: > 0 } c       => Math.PI * c.Radius * c.Radius,
+          Rectangle { Width: > 0, Height: > 0 } r => r.Width * r.Height,
+          Triangle (var b, var h) when b > 0 && h > 0 => 0.5 * b * h,
+          null                           => throw new ArgumentNullException(nameof(s)),
+          _                              => throw new ArgumentException("invalid shape"),
+      };
+      ```
+
+      The forms in play:
+
+      - **Type pattern**: `Circle c` — match the runtime type and bind a variable.
+      - **Property pattern**: `{ Radius: > 0 }` — match members; nests recursively.
+      - **Positional pattern**: `Triangle (var b, var h)` — uses `Deconstruct` (records auto-generate it).
+      - **Relational pattern** (C# 9): `> 0`, `< 100`. Combines with `and`, `or`, `not`.
+      - **Logical pattern**: `not null`, `> 0 and < 100`, `"OPEN" or "PENDING"`.
+      - **`when` clause**: arbitrary boolean filter on top of the structural match.
+
+      A `switch` expression returns a value; a `switch` statement does not. Prefer the expression when every arm produces a result — it is exhaustive-ish (the compiler warns if patterns may not cover all inputs) and cannot fall through.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## List patterns (C# 11+)
+
+      List patterns match arrays and collection types that expose `Length`/`Count` plus an indexer:
+
+      ```csharp
+      public static string Describe(int[] xs) => xs switch
+      {
+          []                  => "empty",
+          [var only]          => $"single: {only}",
+          [var first, .., var last] => $"first={first}, last={last}",
+          [_, 2, ..]          => "second is two",
+          _                   => "other",
+      };
+      ```
+
+      `..` is the slice pattern; it matches zero-or-more elements and can bind: `[var head, .. var tail]` gives `tail` as a `Span<int>` for arrays. List patterns are the cleanest way to branch on small fixed-shape collections.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Using `!` to silence NRT warnings without checking.** Every `!` is a null-deref waiting to happen. If the analyzer is wrong, fix it with `[NotNullWhen]`, `[MemberNotNull]`, or a real null-check.
+      - **Writing `Nullable<T>` instead of `T?`.** Same type, but `T?` reads better and matches the NRT syntax for reference types.
+      - **`T?` on an unconstrained generic.** Without `where T : class` or `where T : struct`, `T?` is ambiguous to the reader — pick a constraint or document the intent.
+      - **Pattern matching for type-dispatch when polymorphism would be clearer.** A `switch` over five subtypes that each have their own `Area()` method is a virtual call wearing a costume. Use the override.
+      - **`where T : class, new()` constraints when you only need `notnull`.** Over-constrained generics reject valid callers. Pick the loosest constraint that compiles.
+      - **`dynamic` to skip generic constraints.** Loses compile-time checking, boxing penalty, runtime binder errors. Almost always a missing interface or generic constraint.
+      - **`switch` statement with no `default` over a closed enum/union.** Adds a silent fall-through path. Use a `switch` expression — the compiler warns on missing arms.
+      - **Catching null with `is null` then doing nothing.** If null is invalid, throw `ArgumentNullException`; if valid, handle it. Silent skip-on-null hides bugs.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `.csproj` declares `<Nullable>enable</Nullable>` (or solution-wide via `Directory.Build.props`); CI builds with `-warnaserror` or `<WarningsAsErrors>nullable</WarningsAsErrors>`.
+      - [ ] `dotnet build -warnaserror` produces zero CS8600/CS8602/CS8603/CS8618 warnings.
+      - [ ] `grep -rn '!\.[A-Za-z_]' src/ | grep -v '^\s*//'` returns only call sites with a comment explaining why the analyzer cannot see the guarantee.
+      - [ ] TryParse-style methods declare `[NotNullWhen(true)]` (or `[MaybeNullWhen(false)]`) on their out parameters; call sites do not need `!` to dereference the out.
+      - [ ] Generic type parameters used as dictionary keys or hash inputs declare `where T : notnull`.
+      - [ ] `switch` expressions are preferred over `switch` statements when every arm yields a value; the compiler emits no CS8509 (non-exhaustive) warnings.
+      - [ ] No `dynamic` in code that could be expressed with generics and an interface constraint.
+      - [ ] `dotnet format --verify-no-changes` passes.

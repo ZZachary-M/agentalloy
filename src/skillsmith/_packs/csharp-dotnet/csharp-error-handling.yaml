@@ -1,0 +1,473 @@
+skill_type: domain
+skill_id: csharp-error-handling
+canonical_name: C# Error Handling (Exception Types, when/catch Filters, AggregateException, Throw Helpers)
+category: engineering
+skill_class: domain
+domain_tags: [exception-filters, aggregateexception-flatten, custom-exception-types, argumentnullexception-throw-helper, dispatch-info-rethrow]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-05. Sources — C# fundamentals exceptions guide https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/exceptions/ (verified 2026-05-05 against fixtures/upstream/curated/csharp.yaml topic `error_handling_and_exceptions`); System.Exception API reference https://learn.microsoft.com/en-us/dotnet/api/system.exception?view=net-9.0; TPL exception handling https://learn.microsoft.com/en-us/dotnet/standard/parallel-programming/exception-handling-task-parallel-library. Known gap (per curated registry): learn.microsoft.com versioned subtrees can redirect to a different .NET version — verify `view=net-9.0` is preserved on each URL when re-fetching. Skill scope: System.Exception hierarchy and the common BCL exception types, `try`/`catch`/`finally` with the `when` filter clause, `throw;` vs `throw ex;` and `ExceptionDispatchInfo`, custom exception type design, `AggregateException.Flatten` from `Task.WhenAll`, `OperationCanceledException`/`TaskCanceledException` cooperative cancellation, throw helpers (`ArgumentNullException.ThrowIfNull` and friends), `using`/`await using` and disposal-time exceptions; not logging frameworks, not ASP.NET Core middleware error handling, not source-generated diagnostics.
+
+raw_prose: |
+  # C# Error Handling
+
+  C# uses exceptions for fallible work. Every exception derives from `System.Exception`; the runtime walks the call stack looking for a matching `catch` clause, runs `finally` blocks on the way, and terminates the thread (or the process for unhandled exceptions on the main thread or a background `Task` whose result is never observed) if no handler is found. The rule is one paragraph: throw a specific BCL or custom exception type that names the failure, catch only the types you can actually handle, use `when` filters to discriminate without unwinding, preserve the original stack with `throw;` (never `throw ex;`), and reach for `ArgumentNullException.ThrowIfNull` and the other throw helpers instead of writing the `if (x is null) throw …` boilerplate. Most production C# error bugs come from `catch (Exception)` with no rethrow at the wrong layer, `throw ex;` losing the original stack, swallowing `OperationCanceledException` instead of letting cancellation propagate, observing only the first exception from a `Task.WhenAll` failure, and defining a custom `Exception` subclass for every domain concept that did not need one.
+
+  ## Exception type hierarchy
+
+  Every exception derives from `System.Exception`. Two broad subclasses exist historically — `SystemException` (runtime/BCL failures) and `ApplicationException` (originally intended for user code). `ApplicationException` is discouraged: the .NET design guidelines have recommended against deriving from it for over a decade because the SystemException/ApplicationException split never produced useful catch discrimination in practice. Derive new exception types directly from `System.Exception` (or from a more specific BCL type when one fits, e.g. `IOException` for I/O failures).
+
+  Common BCL exceptions every C# author should know by name:
+
+  - `ArgumentNullException` — a parameter was unexpectedly `null`.
+  - `ArgumentException` — a parameter was structurally invalid (not just null).
+  - `ArgumentOutOfRangeException` — a numeric or index parameter was outside its valid range.
+  - `InvalidOperationException` — the object is in a state where the operation is not legal (e.g. iterator not started, connection not open).
+  - `NotSupportedException` — the operation is intentionally not implemented for this type.
+  - `OperationCanceledException` — a cooperative cancellation was honored. Its derived form `TaskCanceledException` (which inherits from `OperationCanceledException`) is what the TPL throws when a `Task` is cancelled.
+
+  Pick the most specific type that names the failure. `throw new Exception("bad thing")` is almost never the right choice — callers cannot match on it without catching everything.
+
+  ## `try`/`catch`/`finally` and `when` filters
+
+  ```csharp
+  using System;
+  using System.Net;
+  using System.Net.Http;
+
+  try
+  {
+      var response = await httpClient.GetAsync(url, ct);
+      response.EnsureSuccessStatusCode();
+  }
+  catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+  {
+      // Predicate evaluated WITHOUT unwinding the stack.
+      // If it returns false, the next catch (or no handler) is tried.
+      return null;
+  }
+  catch (HttpRequestException ex)
+  {
+      logger.LogWarning(ex, "request to {Url} failed", url);
+      throw;
+  }
+  finally
+  {
+      // Always runs — success, handled exception, or unhandled exception.
+  }
+  ```
+
+  The `when` clause is an exception filter: the predicate is evaluated on the same stack as the throw, so the original stack frame is still intact during evaluation. This matters for diagnostic tooling — by the time a non-filtered `catch` body runs, the runtime has already begun unwinding.
+
+  Catch only what you can handle. `catch (Exception)` at a leaf method usually means "I do not know what can fail here", which is also "I cannot tell whether to retry, surface, or swallow." Top-of-stack catch-alls (an HTTP request boundary, a worker loop) are appropriate; mid-stack ones almost never are.
+
+  ## `throw;` vs `throw ex;` and `ExceptionDispatchInfo`
+
+  `throw;` (no argument) inside a `catch` rethrows the current exception with its original stack trace intact. `throw ex;` rethrows the same object but resets the stack trace to point at the rethrow site, hiding where the failure actually originated. Use `throw;`.
+
+  ```csharp
+  catch (DbException ex)
+  {
+      logger.LogError(ex, "db call failed");
+      throw;            // CORRECT — preserves the original stack
+      // throw ex;      // WRONG — resets the stack to this line
+  }
+  ```
+
+  When you need to capture an exception in one place and rethrow it later (across an async/marshaling boundary, for example), use `ExceptionDispatchInfo`:
+
+  ```csharp
+  using System.Runtime.ExceptionServices;
+
+  ExceptionDispatchInfo? captured = null;
+  try { await DoWorkAsync(); }
+  catch (Exception ex) { captured = ExceptionDispatchInfo.Capture(ex); }
+
+  // ... later, possibly on a different thread or after awaiting other work ...
+  captured?.Throw();   // re-raises with the original stack preserved
+  ```
+
+  Roslyn analyzer rule **CA2200** flags `throw ex;` automatically; enable it in the project.
+
+  ## Custom exception types
+
+  When the BCL does not have a type that names your failure, define a custom one. Keep it simple: derive from `System.Exception`, provide the three conventional constructors, and add domain-specific properties only when callers will actually read them.
+
+  ```csharp
+  public sealed class OrderNotFoundException : Exception
+  {
+      public OrderNotFoundException() { }
+      public OrderNotFoundException(string message) : base(message) { }
+      public OrderNotFoundException(string message, Exception innerException)
+          : base(message, innerException) { }
+
+      public string? OrderId { get; init; }
+  }
+  ```
+
+  Notes:
+
+  - The `[Serializable]` attribute and the `(SerializationInfo, StreamingContext)` constructor used to be mandatory. Binary serialization of exceptions is obsolete starting with .NET 5; do not add `[Serializable]` unless you genuinely cross an AppDomain or remoting boundary (almost no modern code does).
+  - Do not define a new exception type per domain noun. If the caller would treat `OrderNotFound` and `CustomerNotFound` identically, use a single `EntityNotFoundException` with an `EntityType` property, or just use `KeyNotFoundException` from the BCL.
+  - Roslyn rule **CA2208** flags `ArgumentException` subclasses that are constructed with the wrong parameter-name argument; obey it.
+
+  ## `AggregateException` and `Task.WhenAll`
+
+  `Task.WhenAll(tasks)` returns a single `Task` that completes when all input tasks complete. If multiple input tasks fault, the returned task's `Exception` property is an `AggregateException` containing every failure. Awaiting that task with `await` is convenient but lossy:
+
+  ```csharp
+  var t1 = FetchAsync("a");   // throws InvalidOperationException
+  var t2 = FetchAsync("b");   // throws HttpRequestException
+  var t3 = FetchAsync("c");   // succeeds
+
+  try
+  {
+      await Task.WhenAll(t1, t2, t3);
+  }
+  catch (Exception ex)
+  {
+      // ex is the FIRST inner exception (InvalidOperationException),
+      // NOT the AggregateException. The HttpRequestException is invisible here.
+  }
+  ```
+
+  To observe every failure, inspect the task's `Exception` property after the `await` (or wrap it):
+
+  ```csharp
+  var whenAll = Task.WhenAll(t1, t2, t3);
+  try { await whenAll; }
+  catch
+  {
+      var agg = whenAll.Exception!.Flatten();   // collapses nested AggregateExceptions
+      foreach (var inner in agg.InnerExceptions)
+      {
+          logger.LogError(inner, "task failed");
+      }
+      throw;
+  }
+  ```
+
+  `.Flatten()` is necessary because nested `Task.WhenAll` calls produce `AggregateException` containing `AggregateException` containing the real exceptions; `Flatten` collapses the tree. Per the TPL exception-handling guide, the `Exception` property on a faulted `Task` is always an `AggregateException` even when there is exactly one inner exception — the `await` keyword is what unwraps it to the first inner exception.
+
+  ## Cancellation is not an error
+
+  `OperationCanceledException` (and its derived `TaskCanceledException`) signals cooperative cancellation, not a failure. The TPL surfaces it when a `CancellationToken` was signaled and the work honored it. Cancellation is a normal control-flow outcome, not a bug — do not log it at error severity, do not wrap it in your own exception type, and do not swallow it silently. Either let it propagate, or catch it explicitly when the caller's contract specifies a non-throwing behavior on cancellation.
+
+  ```csharp
+  try
+  {
+      await DoWorkAsync(ct);
+  }
+  catch (OperationCanceledException) when (ct.IsCancellationRequested)
+  {
+      // Expected: caller asked us to stop. Return cleanly.
+      return;
+  }
+  ```
+
+  Note: `TaskCanceledException : OperationCanceledException`, so a `catch (OperationCanceledException)` block catches both. Catching `TaskCanceledException` alone misses the more general form thrown by non-`Task` APIs.
+
+  ## Throw helpers
+
+  Modern .NET ships static throw helpers on the BCL exception types. Prefer them over hand-written `if (x is null) throw new ArgumentNullException(nameof(x));` — the helpers inline cleanly, capture the argument expression for the message, and reduce boilerplate.
+
+  - `ArgumentNullException.ThrowIfNull(arg)` — added in .NET 6 (verified 2026-05-05).
+  - `ArgumentException.ThrowIfNullOrEmpty(arg)` — added in .NET 7 (verified 2026-05-05).
+  - `ArgumentException.ThrowIfNullOrWhiteSpace(arg)` — added in .NET 8 (verified 2026-05-05).
+  - `ArgumentOutOfRangeException.ThrowIfGreaterThan`, `ThrowIfLessThan`, `ThrowIfNegative`, `ThrowIfZero` — added in .NET 8 (verified 2026-05-05).
+
+  ```csharp
+  public Order GetOrder(string id, int limit)
+  {
+      ArgumentException.ThrowIfNullOrWhiteSpace(id);
+      ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+      // ...
+  }
+  ```
+
+  The helpers use `[CallerArgumentExpression]` to populate the parameter-name argument, so the thrown message names `id` and `limit` correctly without you typing `nameof(...)`.
+
+  ## `using`, `await using`, and disposal-time exceptions
+
+  `using` ensures `IDisposable.Dispose()` runs on scope exit, including via exception. `await using` does the same for `IAsyncDisposable.DisposeAsync()`. The subtle case is when both the body and `Dispose()` throw — the original body exception wins, and the disposal exception is suppressed (lost to user code, though the runtime may surface it via tooling).
+
+  ```csharp
+  await using var conn = await OpenConnectionAsync(ct);
+  await conn.ExecuteAsync(sql, ct);
+  // If ExecuteAsync throws AND DisposeAsync throws, only the ExecuteAsync
+  // exception propagates; the DisposeAsync exception is swallowed.
+  ```
+
+  If you need to observe both, catch around the `using`-equivalent `try`/`finally` manually and aggregate yourself.
+
+  ## Anti-patterns
+
+  - **`catch (Exception ex) { /* log */ }` with no rethrow at a non-boundary layer.** Swallows real failures and leaves the system in an undefined state. Either rethrow with `throw;` or do not catch.
+  - **`throw ex;`** — resets the stack trace. Use `throw;`. Roslyn rule CA2200 catches this.
+  - **One custom exception type per domain noun.** `OrderNotFoundException`, `CustomerNotFoundException`, `ProductNotFoundException` — these are the same exception with different data. Use one type with a property, or `KeyNotFoundException` from the BCL.
+  - **Exceptions for control flow.** `try { var n = int.Parse(s); } catch (FormatException) { … }` is slower and noisier than `int.TryParse(s, out var n)`. Use `Try*` patterns where the BCL provides them.
+  - **Swallowing `OperationCanceledException`.** Cancellation is cooperative; consuming it without re-throwing breaks the caller's expectation that cancellation propagates. Re-throw or return cleanly.
+  - **`catch` with no logging in library code.** A library that catches and continues without logging makes downstream failures undebuggable. At minimum log; usually rethrow.
+  - **Awaiting `Task.WhenAll` and only seeing the first failure.** `await` unwraps `AggregateException` to its first inner exception. Inspect `whenAll.Exception?.Flatten()` after the catch to observe all failures.
+  - **`[Serializable]` and the serialization constructor on new exception types.** Binary serialization of exceptions is obsolete since .NET 5. Skip both unless you actually cross an AppDomain.
+
+  ## Verification
+
+  - [ ] `dotnet build -warnaserror` exits 0; the project enables Roslyn analyzers via `<AnalysisMode>All</AnalysisMode>` in the `.csproj`.
+  - [ ] `grep -rnE 'throw\s+ex\s*;' src/` returns no results — analyzer rule CA2200 enforces this at build time but a grep catches generated/excluded files.
+  - [ ] `grep -rnE 'catch\s*\(\s*Exception(\s+\w+)?\s*\)' src/` results are reviewed: each non-boundary catch is annotated with a justification comment or rethrows with `throw;`.
+  - [ ] `grep -rnE ': ApplicationException' src/` returns no results — CA1058 also flags this.
+  - [ ] `grep -rnE 'if\s*\(.*==\s*null\)\s*throw\s+new\s+ArgumentNullException' src/` returns no results — replaced by `ArgumentNullException.ThrowIfNull`.
+  - [ ] Every `Task.WhenAll(...)` call site is followed within ten lines by either `.Exception?.Flatten()` inspection or a comment stating only-first-failure observation is intentional.
+  - [ ] No public exception type has `[Serializable]` unless its containing assembly genuinely crosses an AppDomain boundary (`grep -rnB 1 'Serializable' src/`).
+  - [ ] Custom exception types declare the three conventional constructors (default, message, message+innerException) — verifiable by reflection unit test or manual review.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # C# Error Handling
+
+      C# uses exceptions for fallible work. Every exception derives from `System.Exception`; the runtime walks the call stack looking for a matching `catch` clause, runs `finally` blocks on the way, and terminates the thread (or the process for unhandled exceptions on the main thread or a background `Task` whose result is never observed) if no handler is found. The rule is one paragraph: throw a specific BCL or custom exception type that names the failure, catch only the types you can actually handle, use `when` filters to discriminate without unwinding, preserve the original stack with `throw;` (never `throw ex;`), and reach for `ArgumentNullException.ThrowIfNull` and the other throw helpers instead of writing the `if (x is null) throw …` boilerplate. Most production C# error bugs come from `catch (Exception)` with no rethrow at the wrong layer, `throw ex;` losing the original stack, swallowing `OperationCanceledException` instead of letting cancellation propagate, observing only the first exception from a `Task.WhenAll` failure, and defining a custom `Exception` subclass for every domain concept that did not need one.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Exception type hierarchy
+
+      Every exception derives from `System.Exception`. Two broad subclasses exist historically — `SystemException` (runtime/BCL failures) and `ApplicationException` (originally intended for user code). `ApplicationException` is discouraged: the .NET design guidelines have recommended against deriving from it for over a decade because the SystemException/ApplicationException split never produced useful catch discrimination in practice. Derive new exception types directly from `System.Exception` (or from a more specific BCL type when one fits, e.g. `IOException` for I/O failures).
+
+      Common BCL exceptions every C# author should know by name:
+
+      - `ArgumentNullException` — a parameter was unexpectedly `null`.
+      - `ArgumentException` — a parameter was structurally invalid (not just null).
+      - `ArgumentOutOfRangeException` — a numeric or index parameter was outside its valid range.
+      - `InvalidOperationException` — the object is in a state where the operation is not legal (e.g. iterator not started, connection not open).
+      - `NotSupportedException` — the operation is intentionally not implemented for this type.
+      - `OperationCanceledException` — a cooperative cancellation was honored. Its derived form `TaskCanceledException` (which inherits from `OperationCanceledException`) is what the TPL throws when a `Task` is cancelled.
+
+      Pick the most specific type that names the failure. `throw new Exception("bad thing")` is almost never the right choice — callers cannot match on it without catching everything.
+
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## `try`/`catch`/`finally` and `when` filters
+
+      ```csharp
+      using System;
+      using System.Net;
+      using System.Net.Http;
+
+      try
+      {
+          var response = await httpClient.GetAsync(url, ct);
+          response.EnsureSuccessStatusCode();
+      }
+      catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+      {
+          // Predicate evaluated WITHOUT unwinding the stack.
+          // If it returns false, the next catch (or no handler) is tried.
+          return null;
+      }
+      catch (HttpRequestException ex)
+      {
+          logger.LogWarning(ex, "request to {Url} failed", url);
+          throw;
+      }
+      finally
+      {
+          // Always runs — success, handled exception, or unhandled exception.
+      }
+      ```
+
+      The `when` clause is an exception filter: the predicate is evaluated on the same stack as the throw, so the original stack frame is still intact during evaluation. This matters for diagnostic tooling — by the time a non-filtered `catch` body runs, the runtime has already begun unwinding.
+
+      Catch only what you can handle. `catch (Exception)` at a leaf method usually means "I do not know what can fail here", which is also "I cannot tell whether to retry, surface, or swallow." Top-of-stack catch-alls (an HTTP request boundary, a worker loop) are appropriate; mid-stack ones almost never are.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## `throw;` vs `throw ex;` and `ExceptionDispatchInfo`
+
+      `throw;` (no argument) inside a `catch` rethrows the current exception with its original stack trace intact. `throw ex;` rethrows the same object but resets the stack trace to point at the rethrow site, hiding where the failure actually originated. Use `throw;`.
+
+      ```csharp
+      catch (DbException ex)
+      {
+          logger.LogError(ex, "db call failed");
+          throw;            // CORRECT — preserves the original stack
+          // throw ex;      // WRONG — resets the stack to this line
+      }
+      ```
+
+      When you need to capture an exception in one place and rethrow it later (across an async/marshaling boundary, for example), use `ExceptionDispatchInfo`:
+
+      ```csharp
+      using System.Runtime.ExceptionServices;
+
+      ExceptionDispatchInfo? captured = null;
+      try { await DoWorkAsync(); }
+      catch (Exception ex) { captured = ExceptionDispatchInfo.Capture(ex); }
+
+      // ... later, possibly on a different thread or after awaiting other work ...
+      captured?.Throw();   // re-raises with the original stack preserved
+      ```
+
+      Roslyn analyzer rule **CA2200** flags `throw ex;` automatically; enable it in the project.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Custom exception types
+
+      When the BCL does not have a type that names your failure, define a custom one. Keep it simple: derive from `System.Exception`, provide the three conventional constructors, and add domain-specific properties only when callers will actually read them.
+
+      ```csharp
+      public sealed class OrderNotFoundException : Exception
+      {
+          public OrderNotFoundException() { }
+          public OrderNotFoundException(string message) : base(message) { }
+          public OrderNotFoundException(string message, Exception innerException)
+              : base(message, innerException) { }
+
+          public string? OrderId { get; init; }
+      }
+      ```
+
+      Notes:
+
+      - The `[Serializable]` attribute and the `(SerializationInfo, StreamingContext)` constructor used to be mandatory. Binary serialization of exceptions is obsolete starting with .NET 5; do not add `[Serializable]` unless you genuinely cross an AppDomain or remoting boundary (almost no modern code does).
+      - Do not define a new exception type per domain noun. If the caller would treat `OrderNotFound` and `CustomerNotFound` identically, use a single `EntityNotFoundException` with an `EntityType` property, or just use `KeyNotFoundException` from the BCL.
+      - Roslyn rule **CA2208** flags `ArgumentException` subclasses that are constructed with the wrong parameter-name argument; obey it.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## `AggregateException` and `Task.WhenAll`
+
+      `Task.WhenAll(tasks)` returns a single `Task` that completes when all input tasks complete. If multiple input tasks fault, the returned task's `Exception` property is an `AggregateException` containing every failure. Awaiting that task with `await` is convenient but lossy:
+
+      ```csharp
+      var t1 = FetchAsync("a");   // throws InvalidOperationException
+      var t2 = FetchAsync("b");   // throws HttpRequestException
+      var t3 = FetchAsync("c");   // succeeds
+
+      try
+      {
+          await Task.WhenAll(t1, t2, t3);
+      }
+      catch (Exception ex)
+      {
+          // ex is the FIRST inner exception (InvalidOperationException),
+          // NOT the AggregateException. The HttpRequestException is invisible here.
+      }
+      ```
+
+      To observe every failure, inspect the task's `Exception` property after the `await` (or wrap it):
+
+      ```csharp
+      var whenAll = Task.WhenAll(t1, t2, t3);
+      try { await whenAll; }
+      catch
+      {
+          var agg = whenAll.Exception!.Flatten();   // collapses nested AggregateExceptions
+          foreach (var inner in agg.InnerExceptions)
+          {
+              logger.LogError(inner, "task failed");
+          }
+          throw;
+      }
+      ```
+
+      `.Flatten()` is necessary because nested `Task.WhenAll` calls produce `AggregateException` containing `AggregateException` containing the real exceptions; `Flatten` collapses the tree. Per the TPL exception-handling guide, the `Exception` property on a faulted `Task` is always an `AggregateException` even when there is exactly one inner exception — the `await` keyword is what unwraps it to the first inner exception.
+
+  - sequence: 7
+    fragment_type: rationale
+    content: |
+      ## Cancellation is not an error
+
+      `OperationCanceledException` (and its derived `TaskCanceledException`) signals cooperative cancellation, not a failure. The TPL surfaces it when a `CancellationToken` was signaled and the work honored it. Cancellation is a normal control-flow outcome, not a bug — do not log it at error severity, do not wrap it in your own exception type, and do not swallow it silently. Either let it propagate, or catch it explicitly when the caller's contract specifies a non-throwing behavior on cancellation.
+
+      ```csharp
+      try
+      {
+          await DoWorkAsync(ct);
+      }
+      catch (OperationCanceledException) when (ct.IsCancellationRequested)
+      {
+          // Expected: caller asked us to stop. Return cleanly.
+          return;
+      }
+      ```
+
+      Note: `TaskCanceledException : OperationCanceledException`, so a `catch (OperationCanceledException)` block catches both. Catching `TaskCanceledException` alone misses the more general form thrown by non-`Task` APIs.
+
+  - sequence: 8
+    fragment_type: execution
+    content: |
+      ## Throw helpers
+
+      Modern .NET ships static throw helpers on the BCL exception types. Prefer them over hand-written `if (x is null) throw new ArgumentNullException(nameof(x));` — the helpers inline cleanly, capture the argument expression for the message, and reduce boilerplate.
+
+      - `ArgumentNullException.ThrowIfNull(arg)` — added in .NET 6 (verified 2026-05-05).
+      - `ArgumentException.ThrowIfNullOrEmpty(arg)` — added in .NET 7 (verified 2026-05-05).
+      - `ArgumentException.ThrowIfNullOrWhiteSpace(arg)` — added in .NET 8 (verified 2026-05-05).
+      - `ArgumentOutOfRangeException.ThrowIfGreaterThan`, `ThrowIfLessThan`, `ThrowIfNegative`, `ThrowIfZero` — added in .NET 8 (verified 2026-05-05).
+
+      ```csharp
+      public Order GetOrder(string id, int limit)
+      {
+          ArgumentException.ThrowIfNullOrWhiteSpace(id);
+          ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+          // ...
+      }
+      ```
+
+      The helpers use `[CallerArgumentExpression]` to populate the parameter-name argument, so the thrown message names `id` and `limit` correctly without you typing `nameof(...)`.
+
+  - sequence: 9
+    fragment_type: example
+    content: |
+      ## `using`, `await using`, and disposal-time exceptions
+
+      `using` ensures `IDisposable.Dispose()` runs on scope exit, including via exception. `await using` does the same for `IAsyncDisposable.DisposeAsync()`. The subtle case is when both the body and `Dispose()` throw — the original body exception wins, and the disposal exception is suppressed (lost to user code, though the runtime may surface it via tooling).
+
+      ```csharp
+      await using var conn = await OpenConnectionAsync(ct);
+      await conn.ExecuteAsync(sql, ct);
+      // If ExecuteAsync throws AND DisposeAsync throws, only the ExecuteAsync
+      // exception propagates; the DisposeAsync exception is swallowed.
+      ```
+
+      If you need to observe both, catch around the `using`-equivalent `try`/`finally` manually and aggregate yourself.
+
+  - sequence: 10
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`catch (Exception ex) { /* log */ }` with no rethrow at a non-boundary layer.** Swallows real failures and leaves the system in an undefined state. Either rethrow with `throw;` or do not catch.
+      - **`throw ex;`** — resets the stack trace. Use `throw;`. Roslyn rule CA2200 catches this.
+      - **One custom exception type per domain noun.** `OrderNotFoundException`, `CustomerNotFoundException`, `ProductNotFoundException` — these are the same exception with different data. Use one type with a property, or `KeyNotFoundException` from the BCL.
+      - **Exceptions for control flow.** `try { var n = int.Parse(s); } catch (FormatException) { … }` is slower and noisier than `int.TryParse(s, out var n)`. Use `Try*` patterns where the BCL provides them.
+      - **Swallowing `OperationCanceledException`.** Cancellation is cooperative; consuming it without re-throwing breaks the caller's expectation that cancellation propagates. Re-throw or return cleanly.
+      - **`catch` with no logging in library code.** A library that catches and continues without logging makes downstream failures undebuggable. At minimum log; usually rethrow.
+      - **Awaiting `Task.WhenAll` and only seeing the first failure.** `await` unwraps `AggregateException` to its first inner exception. Inspect `whenAll.Exception?.Flatten()` after the catch to observe all failures.
+      - **`[Serializable]` and the serialization constructor on new exception types.** Binary serialization of exceptions is obsolete since .NET 5. Skip both unless you actually cross an AppDomain.
+
+  - sequence: 11
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `dotnet build -warnaserror` exits 0; the project enables Roslyn analyzers via `<AnalysisMode>All</AnalysisMode>` in the `.csproj`.
+      - [ ] `grep -rnE 'throw\s+ex\s*;' src/` returns no results — analyzer rule CA2200 enforces this at build time but a grep catches generated/excluded files.
+      - [ ] `grep -rnE 'catch\s*\(\s*Exception(\s+\w+)?\s*\)' src/` results are reviewed: each non-boundary catch is annotated with a justification comment or rethrows with `throw;`.
+      - [ ] `grep -rnE ': ApplicationException' src/` returns no results — CA1058 also flags this.
+      - [ ] `grep -rnE 'if\s*\(.*==\s*null\)\s*throw\s+new\s+ArgumentNullException' src/` returns no results — replaced by `ArgumentNullException.ThrowIfNull`.
+      - [ ] Every `Task.WhenAll(...)` call site is followed within ten lines by either `.Exception?.Flatten()` inspection or a comment stating only-first-failure observation is intentional.
+      - [ ] No public exception type has `[Serializable]` unless its containing assembly genuinely crosses an AppDomain boundary (`grep -rnB 1 'Serializable' src/`).
+      - [ ] Custom exception types declare the three conventional constructors (default, message, message+innerException) — verifiable by reflection unit test or manual review.

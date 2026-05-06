@@ -1,0 +1,451 @@
+skill_type: domain
+skill_id: csharp-mstest-testing
+canonical_name: C# Testing with MSTest v3 (TestClass, DataRow, Async Tests, TestContext)
+category: quality
+skill_class: domain
+domain_tags: [test-class-attribute, data-row-parameterized, assert-throws-async, test-context-cancellation, assembly-initialize-cleanup]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-05. Sources — Microsoft Learn, Unit testing C# with MSTest https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-with-mstest (verified 2026-05-05 against fixtures/upstream/curated/csharp.yaml topic `testing_idioms`); Microsoft Learn, Testing in .NET https://learn.microsoft.com/en-us/dotnet/core/testing/ (verified 2026-05-05). Skill scope: Microsoft-canonical MSTest v3.x for .NET 9 / C# 13 — `[TestClass]`, `[TestMethod]`, lifecycle attributes (`[TestInitialize]`/`[ClassInitialize]`/`[AssemblyInitialize]`), `[DataRow]` and `[DynamicData]` parameterized tests, async tests with `TestContext.CancellationTokenSource`, exception assertions with `Assert.ThrowsException<T>` / `Assert.ThrowsExceptionAsync<T>`, filtering with `[TestCategory]` / `dotnet test --filter`. xUnit, NUnit, and FluentAssertions are popular community alternatives but are NOT Microsoft-canonical (R6 honesty); this skill follows the curated yaml's MSTest v3 choice. MSTest v3.0 GA May 2024 introduced the `MSTest.Sdk` project SDK style (verified 2026-05-05).
+
+raw_prose: |
+  # C# Testing with MSTest v3
+
+  MSTest v3 is the Microsoft-canonical .NET test framework — shipped, supported, and documented by the .NET team. xUnit, NUnit, and assertion libraries like FluentAssertions are widely used community alternatives, but they are not Microsoft-canonical; this skill targets MSTest v3 because the curated language fixture names it as the stdlib choice. The MSTest v3 model: a class decorated `[TestClass]` is a test container, a method decorated `[TestMethod]` is a test, the runner discovers both via reflection. Run with `dotnet test`. Most production MSTest test bugs come from `[TestMethod] public Task X()` written without the `async` keyword (the runner does not await it correctly), shared mutable state in `[ClassInitialize]` not cleared between test runs, async tests that hang because they ignore `TestContext.CancellationTokenSource.Token`, and `Assert.IsTrue(condition)` where `Assert.AreEqual(expected, actual)` would have produced a diff-style failure message.
+
+  ## Project setup with `MSTest.Sdk`
+
+  MSTest v3 introduces a project SDK that wires the runner, adapter, and analyzers in one line. New test projects use it; older `Microsoft.NET.Sdk` style still works but requires three explicit package references:
+
+  ```xml
+  <Project Sdk="MSTest.Sdk/3.6.0">
+    <PropertyGroup>
+      <TargetFramework>net9.0</TargetFramework>
+    </PropertyGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\Calculator\Calculator.csproj" />
+    </ItemGroup>
+  </Project>
+  ```
+
+  The `MSTest.Sdk` (stable since MSTest v3.0, May 2024, verified 2026-05-05) replaces the old `MSTest.TestAdapter` + `MSTest.TestFramework` + `Microsoft.NET.Test.Sdk` package trio. Run `dotnet test` from the project directory; the runner discovers every `[TestMethod]` in every `[TestClass]` and reports pass/fail with diff output for `Assert.AreEqual` failures.
+
+  ## `[TestClass]` and `[TestMethod]` discovery
+
+  Every test method must live inside a `[TestClass]`-decorated class. The class must be `public` (the runner uses reflection on public types) and the method must be `public` and return `void` or `Task`:
+
+  ```csharp
+  using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+  namespace Calculator.Tests;
+
+  [TestClass]
+  public class CalculatorTests
+  {
+      [TestMethod]
+      public void Add_TwoPositives_ReturnsSum()
+      {
+          var calc = new Calculator();
+          Assert.AreEqual(5, calc.Add(2, 3));
+      }
+  }
+  ```
+
+  `Assert.AreEqual(expected, actual)` produces messages like `Assert.AreEqual failed. Expected:<5>. Actual:<6>`. Prefer the typed asserts over `Assert.IsTrue(calc.Add(2, 3) == 5)` — `IsTrue` only reports `Assert.IsTrue failed`, with no values. Use `CollectionAssert.AreEqual` for sequences and `StringAssert.Contains` for substring matches; both produce richer diffs than `Assert.IsTrue`.
+
+  ## Lifecycle attributes: per-test, per-class, per-assembly
+
+  MSTest provides three scopes of setup/teardown. Each scope has a paired Initialize/Cleanup:
+
+  ```csharp
+  [TestClass]
+  public class OrderServiceTests
+  {
+      private static SqliteConnection _connection = null!;
+      private OrderService _service = null!;
+
+      [AssemblyInitialize]
+      public static void AssemblyInit(TestContext context)
+      {
+          // runs once for the entire test assembly, before any test
+      }
+
+      [ClassInitialize]
+      public static void ClassInit(TestContext context)
+      {
+          _connection = new SqliteConnection("Data Source=:memory:");
+          _connection.Open();
+      }
+
+      [ClassCleanup]
+      public static void ClassCleanup() => _connection.Dispose();
+
+      [TestInitialize]
+      public void TestInit() => _service = new OrderService(_connection);
+
+      [TestCleanup]
+      public void TestCleanup() { /* per-test reset */ }
+
+      [TestMethod]
+      public void PlaceOrder_PersistsRow() { /* ... */ }
+  }
+  ```
+
+  `[ClassInitialize]` and `[AssemblyInitialize]` methods MUST be `public static` and take a single `TestContext` parameter — the runner will not call them otherwise. `[TestInitialize]` is instance-level and runs before each `[TestMethod]`. The order is: AssemblyInitialize → ClassInitialize → (TestInitialize → TestMethod → TestCleanup) per test → ClassCleanup → AssemblyCleanup.
+
+  ## Parameterized tests: `[DataRow]` and `[DynamicData]`
+
+  For tabular cases, `[DataRow]` stamps out one test invocation per row:
+
+  ```csharp
+  [TestMethod]
+  [DataRow(2, 3, 5)]
+  [DataRow(-1, 1, 0)]
+  [DataRow(0, 0, 0)]
+  public void Add_VariousInputs_ReturnsSum(int a, int b, int expected)
+  {
+      Assert.AreEqual(expected, new Calculator().Add(a, b));
+  }
+  ```
+
+  Each row reports as a separate test in the runner output. For larger or computed datasets, `[DynamicData]` reads from a method or property:
+
+  ```csharp
+  public static IEnumerable<object[]> AddCases =>
+      new[] { new object[] { 2, 3, 5 }, new object[] { -1, 1, 0 } };
+
+  [TestMethod]
+  [DynamicData(nameof(AddCases))]
+  public void Add_FromDynamicData(int a, int b, int expected)
+  {
+      Assert.AreEqual(expected, new Calculator().Add(a, b));
+  }
+  ```
+
+  The data source must be `public static` and return `IEnumerable<object[]>`. Use `[DataRow]` for short literal tables; use `[DynamicData]` when cases are generated, loaded from a file, or large enough that inline literals harm readability.
+
+  ## Async tests and `TestContext` cancellation
+
+  Async tests return `Task`. The runner awaits them:
+
+  ```csharp
+  [TestClass]
+  public class OrderServiceTests
+  {
+      public TestContext TestContext { get; set; } = null!;
+
+      [TestMethod]
+      public async Task ParseAsync_ValidInput_ReturnsOrder()
+      {
+          var token = TestContext.CancellationTokenSource.Token;
+          var order = await OrderService.ParseAsync("ORD-1", token);
+          Assert.AreEqual("ORD-1", order.Id);
+      }
+  }
+  ```
+
+  `TestContext.CancellationTokenSource.Token` is cancelled when the test times out (`[Timeout(5000)]` or assembly-wide setting), so passing it into awaited operations lets the runner unblock a hung test instead of killing the process. The edge case to walk: a method written `[TestMethod] public Task X()` with NO `async` keyword and NO `await` compiles fine, and if it returns `Task.CompletedTask` it appears to pass instantly — but assertions inside an unawaited inner task are silently swallowed. The fix is to write `public async Task X()` and `await` the operation; the runner only reports failure for assertions that ran on the awaited path.
+
+  Exception assertions for async code use `Assert.ThrowsExceptionAsync<T>`:
+
+  ```csharp
+  [TestMethod]
+  public async Task ParseAsync_InvalidId_Throws()
+  {
+      await Assert.ThrowsExceptionAsync<FormatException>(
+          () => OrderService.ParseAsync("BAD", default));
+  }
+
+  [TestMethod]
+  public void Parse_InvalidId_Throws()
+  {
+      Assert.ThrowsException<FormatException>(() => OrderService.Parse("BAD"));
+  }
+  ```
+
+  Both APIs return the caught exception so you can assert on its message or properties.
+
+  ## Filtering, categories, and skipping
+
+  Decorate tests with `[TestCategory]`, `[Owner]`, and `[Priority]` to enable filtering:
+
+  ```csharp
+  [TestMethod]
+  [TestCategory("Slow")]
+  [Owner("payments-team")]
+  [Priority(2)]
+  public void EndToEnd_PlaceOrder() { /* ... */ }
+
+  [TestMethod]
+  [Ignore("flaky on Linux CI; tracked as #482")]
+  public void NetworkBound_FetchInventory() { /* ... */ }
+  ```
+
+  Run filtered subsets:
+
+  - `dotnet test --filter "TestCategory=Slow"` — only `[TestCategory("Slow")]`.
+  - `dotnet test --filter "TestCategory!=Slow"` — exclude slow.
+  - `dotnet test --filter "FullyQualifiedName~CalculatorTests"` — substring match on FQN.
+  - `dotnet test --filter "Priority=1"` — Priority attribute.
+  - `dotnet test --logger "console;verbosity=detailed"` — show each test name as it runs.
+
+  `[Ignore("reason")]` skips the test entirely; the reason string surfaces in the runner output so contributors know why. CI typically runs `dotnet test --filter "TestCategory!=Slow"` on PR and `dotnet test` (everything) on a scheduled job.
+
+  ## Anti-patterns
+
+  - **`[TestMethod] public Task X()` without `async`/`await`.** The method compiles and the runner awaits the returned `Task`, but if the body never `await`s, inner exceptions on detached tasks are swallowed. Always write `public async Task X()` and `await` every awaitable operation under test.
+  - **`Assert.IsTrue(actual == expected)` instead of `Assert.AreEqual(expected, actual)`.** `IsTrue` failures print `Assert.IsTrue failed` with no values; `AreEqual` prints both. The diff message is the entire point of the assertion library.
+  - **`Thread.Sleep(ms)` for timing-based tests.** Sleeps make tests slow and flaky on loaded CI. Use `TaskCompletionSource<T>` to await a signal, or pass `TestContext.CancellationTokenSource.Token` into a `Task.Delay` and assert cancellation.
+  - **Mutable static state in `[ClassInitialize]` not cleared between tests.** Tests run in undefined order within a class; one test mutating `_connection` state leaks into the next. Use `[TestInitialize]` to reset per-test state, or model the fixture as immutable.
+  - **`[ClassInitialize]` written without `public static` or without `TestContext` parameter.** The runner silently skips the method; the class-level setup never runs. Both modifiers and the parameter are required.
+  - **`Assert.ThrowsException<T>` on `async` code.** It will not catch the exception because the async lambda returns a `Task` that throws on await, not synchronously. Use `Assert.ThrowsExceptionAsync<T>` with `await`.
+  - **`[TestCategory]` strings inconsistent across the suite.** `"slow"` and `"Slow"` are different categories to the filter. Define category names as `const string` in a shared static class.
+  - **`[Ignore]` without a reason string.** A skipped test with no reason survives indefinitely. Always write `[Ignore("reason and ticket")]`.
+
+  ## Verification
+
+  - [ ] `dotnet test` exits 0 from the test project root; output reports the test count and pass/fail per `[TestClass]`.
+  - [ ] `dotnet test --filter "TestCategory=Slow"` exits 0 and runs only methods carrying `[TestCategory("Slow")]`.
+  - [ ] `grep -RIn '\[TestMethod\]' tests/` shows every match inside a class also carrying `[TestClass]` (run `grep -B 20 '\[TestMethod\]' tests/ | grep '\[TestClass\]'` to spot mismatches).
+  - [ ] `grep -RIn 'public Task ' tests/` returns zero matches without a preceding `async ` on the same line — every `Task`-returning test method is `async`.
+  - [ ] `grep -RIn 'Thread.Sleep' tests/` returns zero matches.
+  - [ ] `grep -RIn 'Assert.ThrowsException<' tests/` shows no `async` lambda arguments; async exception tests use `Assert.ThrowsExceptionAsync<` instead.
+  - [ ] `grep -RIn '\[Ignore\]' tests/` returns zero matches without a reason string; every `[Ignore(...)]` includes a `"..."` argument.
+  - [ ] `grep -RIn '\[ClassInitialize\]' tests/` results all have `public static` on the next non-blank line and `TestContext` in the parameter list.
+  - [ ] `dotnet test --logger "console;verbosity=detailed"` shows each `[DataRow]` invocation as a separate test entry.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # C# Testing with MSTest v3
+
+      MSTest v3 is the Microsoft-canonical .NET test framework — shipped, supported, and documented by the .NET team. xUnit, NUnit, and assertion libraries like FluentAssertions are widely used community alternatives, but they are not Microsoft-canonical; this skill targets MSTest v3 because the curated language fixture names it as the stdlib choice. The MSTest v3 model: a class decorated `[TestClass]` is a test container, a method decorated `[TestMethod]` is a test, the runner discovers both via reflection. Run with `dotnet test`. Most production MSTest test bugs come from `[TestMethod] public Task X()` written without the `async` keyword (the runner does not await it correctly), shared mutable state in `[ClassInitialize]` not cleared between test runs, async tests that hang because they ignore `TestContext.CancellationTokenSource.Token`, and `Assert.IsTrue(condition)` where `Assert.AreEqual(expected, actual)` would have produced a diff-style failure message.
+
+  - sequence: 2
+    fragment_type: setup
+    content: |
+      ## Project setup with `MSTest.Sdk`
+
+      MSTest v3 introduces a project SDK that wires the runner, adapter, and analyzers in one line. New test projects use it; older `Microsoft.NET.Sdk` style still works but requires three explicit package references:
+
+      ```xml
+      <Project Sdk="MSTest.Sdk/3.6.0">
+        <PropertyGroup>
+          <TargetFramework>net9.0</TargetFramework>
+        </PropertyGroup>
+        <ItemGroup>
+          <ProjectReference Include="..\Calculator\Calculator.csproj" />
+        </ItemGroup>
+      </Project>
+      ```
+
+      The `MSTest.Sdk` (stable since MSTest v3.0, May 2024, verified 2026-05-05) replaces the old `MSTest.TestAdapter` + `MSTest.TestFramework` + `Microsoft.NET.Test.Sdk` package trio. Run `dotnet test` from the project directory; the runner discovers every `[TestMethod]` in every `[TestClass]` and reports pass/fail with diff output for `Assert.AreEqual` failures.
+
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## `[TestClass]` and `[TestMethod]` discovery
+
+      Every test method must live inside a `[TestClass]`-decorated class. The class must be `public` (the runner uses reflection on public types) and the method must be `public` and return `void` or `Task`:
+
+      ```csharp
+      using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+      namespace Calculator.Tests;
+
+      [TestClass]
+      public class CalculatorTests
+      {
+          [TestMethod]
+          public void Add_TwoPositives_ReturnsSum()
+          {
+              var calc = new Calculator();
+              Assert.AreEqual(5, calc.Add(2, 3));
+          }
+      }
+      ```
+
+      `Assert.AreEqual(expected, actual)` produces messages like `Assert.AreEqual failed. Expected:<5>. Actual:<6>`. Prefer the typed asserts over `Assert.IsTrue(calc.Add(2, 3) == 5)` — `IsTrue` only reports `Assert.IsTrue failed`, with no values. Use `CollectionAssert.AreEqual` for sequences and `StringAssert.Contains` for substring matches; both produce richer diffs than `Assert.IsTrue`.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Lifecycle attributes: per-test, per-class, per-assembly
+
+      MSTest provides three scopes of setup/teardown. Each scope has a paired Initialize/Cleanup:
+
+      ```csharp
+      [TestClass]
+      public class OrderServiceTests
+      {
+          private static SqliteConnection _connection = null!;
+          private OrderService _service = null!;
+
+          [AssemblyInitialize]
+          public static void AssemblyInit(TestContext context)
+          {
+              // runs once for the entire test assembly, before any test
+          }
+
+          [ClassInitialize]
+          public static void ClassInit(TestContext context)
+          {
+              _connection = new SqliteConnection("Data Source=:memory:");
+              _connection.Open();
+          }
+
+          [ClassCleanup]
+          public static void ClassCleanup() => _connection.Dispose();
+
+          [TestInitialize]
+          public void TestInit() => _service = new OrderService(_connection);
+
+          [TestCleanup]
+          public void TestCleanup() { /* per-test reset */ }
+
+          [TestMethod]
+          public void PlaceOrder_PersistsRow() { /* ... */ }
+      }
+      ```
+
+      `[ClassInitialize]` and `[AssemblyInitialize]` methods MUST be `public static` and take a single `TestContext` parameter — the runner will not call them otherwise. `[TestInitialize]` is instance-level and runs before each `[TestMethod]`. The order is: AssemblyInitialize → ClassInitialize → (TestInitialize → TestMethod → TestCleanup) per test → ClassCleanup → AssemblyCleanup.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Parameterized tests: `[DataRow]` and `[DynamicData]`
+
+      For tabular cases, `[DataRow]` stamps out one test invocation per row:
+
+      ```csharp
+      [TestMethod]
+      [DataRow(2, 3, 5)]
+      [DataRow(-1, 1, 0)]
+      [DataRow(0, 0, 0)]
+      public void Add_VariousInputs_ReturnsSum(int a, int b, int expected)
+      {
+          Assert.AreEqual(expected, new Calculator().Add(a, b));
+      }
+      ```
+
+      Each row reports as a separate test in the runner output. For larger or computed datasets, `[DynamicData]` reads from a method or property:
+
+      ```csharp
+      public static IEnumerable<object[]> AddCases =>
+          new[] { new object[] { 2, 3, 5 }, new object[] { -1, 1, 0 } };
+
+      [TestMethod]
+      [DynamicData(nameof(AddCases))]
+      public void Add_FromDynamicData(int a, int b, int expected)
+      {
+          Assert.AreEqual(expected, new Calculator().Add(a, b));
+      }
+      ```
+
+      The data source must be `public static` and return `IEnumerable<object[]>`. Use `[DataRow]` for short literal tables; use `[DynamicData]` when cases are generated, loaded from a file, or large enough that inline literals harm readability.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Async tests and `TestContext` cancellation
+
+      Async tests return `Task`. The runner awaits them:
+
+      ```csharp
+      [TestClass]
+      public class OrderServiceTests
+      {
+          public TestContext TestContext { get; set; } = null!;
+
+          [TestMethod]
+          public async Task ParseAsync_ValidInput_ReturnsOrder()
+          {
+              var token = TestContext.CancellationTokenSource.Token;
+              var order = await OrderService.ParseAsync("ORD-1", token);
+              Assert.AreEqual("ORD-1", order.Id);
+          }
+      }
+      ```
+
+      `TestContext.CancellationTokenSource.Token` is cancelled when the test times out (`[Timeout(5000)]` or assembly-wide setting), so passing it into awaited operations lets the runner unblock a hung test instead of killing the process. The edge case to walk: a method written `[TestMethod] public Task X()` with NO `async` keyword and NO `await` compiles fine, and if it returns `Task.CompletedTask` it appears to pass instantly — but assertions inside an unawaited inner task are silently swallowed. The fix is to write `public async Task X()` and `await` the operation; the runner only reports failure for assertions that ran on the awaited path.
+
+      Exception assertions for async code use `Assert.ThrowsExceptionAsync<T>`:
+
+      ```csharp
+      [TestMethod]
+      public async Task ParseAsync_InvalidId_Throws()
+      {
+          await Assert.ThrowsExceptionAsync<FormatException>(
+              () => OrderService.ParseAsync("BAD", default));
+      }
+
+      [TestMethod]
+      public void Parse_InvalidId_Throws()
+      {
+          Assert.ThrowsException<FormatException>(() => OrderService.Parse("BAD"));
+      }
+      ```
+
+      Both APIs return the caught exception so you can assert on its message or properties.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      ## Filtering, categories, and skipping
+
+      Decorate tests with `[TestCategory]`, `[Owner]`, and `[Priority]` to enable filtering:
+
+      ```csharp
+      [TestMethod]
+      [TestCategory("Slow")]
+      [Owner("payments-team")]
+      [Priority(2)]
+      public void EndToEnd_PlaceOrder() { /* ... */ }
+
+      [TestMethod]
+      [Ignore("flaky on Linux CI; tracked as #482")]
+      public void NetworkBound_FetchInventory() { /* ... */ }
+      ```
+
+      Run filtered subsets:
+
+      - `dotnet test --filter "TestCategory=Slow"` — only `[TestCategory("Slow")]`.
+      - `dotnet test --filter "TestCategory!=Slow"` — exclude slow.
+      - `dotnet test --filter "FullyQualifiedName~CalculatorTests"` — substring match on FQN.
+      - `dotnet test --filter "Priority=1"` — Priority attribute.
+      - `dotnet test --logger "console;verbosity=detailed"` — show each test name as it runs.
+
+      `[Ignore("reason")]` skips the test entirely; the reason string surfaces in the runner output so contributors know why. CI typically runs `dotnet test --filter "TestCategory!=Slow"` on PR and `dotnet test` (everything) on a scheduled job.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`[TestMethod] public Task X()` without `async`/`await`.** The method compiles and the runner awaits the returned `Task`, but if the body never `await`s, inner exceptions on detached tasks are swallowed. Always write `public async Task X()` and `await` every awaitable operation under test.
+      - **`Assert.IsTrue(actual == expected)` instead of `Assert.AreEqual(expected, actual)`.** `IsTrue` failures print `Assert.IsTrue failed` with no values; `AreEqual` prints both. The diff message is the entire point of the assertion library.
+      - **`Thread.Sleep(ms)` for timing-based tests.** Sleeps make tests slow and flaky on loaded CI. Use `TaskCompletionSource<T>` to await a signal, or pass `TestContext.CancellationTokenSource.Token` into a `Task.Delay` and assert cancellation.
+      - **Mutable static state in `[ClassInitialize]` not cleared between tests.** Tests run in undefined order within a class; one test mutating `_connection` state leaks into the next. Use `[TestInitialize]` to reset per-test state, or model the fixture as immutable.
+      - **`[ClassInitialize]` written without `public static` or without `TestContext` parameter.** The runner silently skips the method; the class-level setup never runs. Both modifiers and the parameter are required.
+      - **`Assert.ThrowsException<T>` on `async` code.** It will not catch the exception because the async lambda returns a `Task` that throws on await, not synchronously. Use `Assert.ThrowsExceptionAsync<T>` with `await`.
+      - **`[TestCategory]` strings inconsistent across the suite.** `"slow"` and `"Slow"` are different categories to the filter. Define category names as `const string` in a shared static class.
+      - **`[Ignore]` without a reason string.** A skipped test with no reason survives indefinitely. Always write `[Ignore("reason and ticket")]`.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `dotnet test` exits 0 from the test project root; output reports the test count and pass/fail per `[TestClass]`.
+      - [ ] `dotnet test --filter "TestCategory=Slow"` exits 0 and runs only methods carrying `[TestCategory("Slow")]`.
+      - [ ] `grep -RIn '\[TestMethod\]' tests/` shows every match inside a class also carrying `[TestClass]` (run `grep -B 20 '\[TestMethod\]' tests/ | grep '\[TestClass\]'` to spot mismatches).
+      - [ ] `grep -RIn 'public Task ' tests/` returns zero matches without a preceding `async ` on the same line — every `Task`-returning test method is `async`.
+      - [ ] `grep -RIn 'Thread.Sleep' tests/` returns zero matches.
+      - [ ] `grep -RIn 'Assert.ThrowsException<' tests/` shows no `async` lambda arguments; async exception tests use `Assert.ThrowsExceptionAsync<` instead.
+      - [ ] `grep -RIn '\[Ignore\]' tests/` returns zero matches without a reason string; every `[Ignore(...)]` includes a `"..."` argument.
+      - [ ] `grep -RIn '\[ClassInitialize\]' tests/` results all have `public static` on the next non-blank line and `TestContext` in the parameter list.
+      - [ ] `dotnet test --logger "console;verbosity=detailed"` shows each `[DataRow]` invocation as a separate test entry.
