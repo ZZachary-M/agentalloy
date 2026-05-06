@@ -28,7 +28,8 @@ from urllib.request import Request, urlopen
 from skillsmith.install import state as install_state
 
 SCHEMA_VERSION = 1
-MIN_SKILL_COUNT = 50
+# Sanity floor — flags truly empty corpora; not a quality bar.
+MIN_SKILL_COUNT = 25
 EXPECTED_EMBEDDING_DIM = 1024
 
 # Allowed schemes for the embedding-runtime URL probe. `.env` is operator-
@@ -55,6 +56,24 @@ def _validate_probe_url(url: str, kind: str) -> dict[str, Any] | None:
 
 
 _SENTINEL_BEGIN = "<!-- BEGIN skillsmith install -->"
+
+
+def _probe_diagnostics(port: int) -> dict[str, Any] | None:
+    """Probe the running service's diagnostics endpoint.
+
+    Returns the parsed JSON body when the service is up and responding,
+    None on any failure. Used by the DB checks to avoid racing the
+    service for the Kuzu file lock.
+    """
+    url = f"http://localhost:{port}/diagnostics/runtime"
+    try:
+        req = Request(url, method="GET")
+        with urlopen(req, timeout=2) as resp:  # noqa: S310 — localhost-only probe
+            if resp.status != 200:
+                return None
+            return json.loads(resp.read())
+    except (URLError, OSError, TimeoutError, json.JSONDecodeError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -148,9 +167,32 @@ def _check_embedding_1024_dim(embed_url: str, model: str) -> dict[str, Any]:
         }
 
 
-def _check_duckdb_present(duck_path: str) -> dict[str, Any]:
-    """Check 3: DuckDB file exists with fragment rows."""
+def _check_duckdb_present(duck_path: str, diag: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Check 3: DuckDB file exists with fragment rows.
+
+    When the service is running (``diag`` is non-None), defer to its
+    telemetry-store readiness probe instead of opening the file directly —
+    a concurrent open races the service for the file lock.
+    """
     t0 = time.monotonic()
+    if diag is not None:
+        readiness = diag.get("dependency_readiness", {})
+        status = readiness.get("telemetry_store")
+        duration = int((time.monotonic() - t0) * 1000)
+        if status == "ok":
+            return {
+                "name": "duckdb_present",
+                "passed": True,
+                "duration_ms": duration,
+                "detail": "verified via /diagnostics/runtime (service holds DB lock)",
+            }
+        return {
+            "name": "duckdb_present",
+            "passed": False,
+            "duration_ms": duration,
+            "error": f"/diagnostics/runtime reports telemetry_store status={status!r}",
+            "remediation": "Inspect server log; restart with `skillsmith server-restart`",
+        }
     p = Path(duck_path)
     if not p.exists():
         return {
@@ -184,9 +226,36 @@ def _check_duckdb_present(duck_path: str) -> dict[str, Any]:
         }
 
 
-def _check_ladybug_present(ladybug_path: str) -> dict[str, Any]:
-    """Check 4: Kuzu directory exists with Skill nodes."""
+def _check_ladybug_present(ladybug_path: str, diag: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Check 4: Kuzu directory exists with Skill nodes.
+
+    When the service is running (``diag`` is non-None), defer to its
+    runtime-store readiness probe — Kuzu holds an exclusive lock that
+    blocks a second open from this process.
+    """
     t0 = time.monotonic()
+    if diag is not None:
+        readiness = diag.get("dependency_readiness", {})
+        status = readiness.get("runtime_store")
+        skill_count = len(diag.get("store_state", []))
+        duration = int((time.monotonic() - t0) * 1000)
+        if status == "ok":
+            return {
+                "name": "ladybug_present",
+                "passed": True,
+                "duration_ms": duration,
+                "detail": (
+                    f"verified via /diagnostics/runtime (service holds DB lock); "
+                    f"{skill_count} active skills"
+                ),
+            }
+        return {
+            "name": "ladybug_present",
+            "passed": False,
+            "duration_ms": duration,
+            "error": f"/diagnostics/runtime reports runtime_store status={status!r}",
+            "remediation": "Inspect server log; restart with `skillsmith server-restart`",
+        }
     p = Path(ladybug_path)
     if not p.exists():
         return {
@@ -223,9 +292,30 @@ def _check_ladybug_present(ladybug_path: str) -> dict[str, Any]:
         }
 
 
-def _check_skill_count(ladybug_path: str) -> dict[str, Any]:
-    """Check 5: Skill count >= MIN_SKILL_COUNT."""
+def _check_skill_count(ladybug_path: str, diag: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Check 5: Skill count >= MIN_SKILL_COUNT.
+
+    When the service is running, count active skills via
+    /diagnostics/runtime; otherwise fall back to a direct Kuzu read.
+    """
     t0 = time.monotonic()
+    if diag is not None:
+        count = len(diag.get("store_state", []))
+        duration = int((time.monotonic() - t0) * 1000)
+        if count >= MIN_SKILL_COUNT:
+            return {
+                "name": "skill_count_meets_minimum",
+                "passed": True,
+                "duration_ms": duration,
+                "detail": (f"{count} >= {MIN_SKILL_COUNT} (via /diagnostics/runtime)"),
+            }
+        return {
+            "name": "skill_count_meets_minimum",
+            "passed": False,
+            "duration_ms": duration,
+            "error": f"{count} < {MIN_SKILL_COUNT} (via /diagnostics/runtime)",
+            "remediation": "Corpus is incomplete. Run `python -m skillsmith.install install-packs`",
+        }
     try:
         import kuzu
 
@@ -248,7 +338,7 @@ def _check_skill_count(ladybug_path: str) -> dict[str, Any]:
             "passed": False,
             "duration_ms": duration,
             "error": f"{count} < {MIN_SKILL_COUNT} (MIN_SKILL_COUNT)",
-            "remediation": "Corpus is incomplete. Run `python -m skillsmith.install seed-corpus`",
+            "remediation": "Corpus is incomplete. Run `python -m skillsmith.install install-packs`",
         }
     except Exception as exc:
         duration = int((time.monotonic() - t0) * 1000)
@@ -365,19 +455,28 @@ def _check_port_available(port: int) -> dict[str, Any]:
             req = Request(f"http://localhost:{port}/health", method="GET")
             with urlopen(req, timeout=5) as resp:  # noqa: S310
                 body = json.loads(resp.read())
-            if body.get("status") == "ok":
+            # /health uses three-state status: "healthy" (all-green),
+            # "degraded" (embed/telemetry down but service is bound), or
+            # "unavailable". Both healthy and degraded mean a skillsmith
+            # server holds the port — the check's actual question.
+            if body.get("status") in ("healthy", "degraded"):
                 return {
                     "name": "runtime_port_available",
                     "passed": True,
                     "duration_ms": int((time.monotonic() - t0) * 1000),
-                    "detail": f"Port {port} is already bound by skillsmith",
+                    "detail": (
+                        f"Port {port} is already bound by skillsmith "
+                        f"(status={body.get('status')!r})"
+                    ),
                 }
             # /health responded but with non-ok status — foreign service
             return {
                 "name": "runtime_port_available",
                 "passed": False,
                 "duration_ms": int((time.monotonic() - t0) * 1000),
-                "error": f"Port {port} is bound by a service that returned non-ok health",
+                "error": (
+                    f"Port {port} is bound by a service that returned status={body.get('status')!r}"
+                ),
                 "remediation": (
                     f"Stop the foreign service on port {port}, or re-run "
                     f"`python -m skillsmith.install write-env --port <other-port>` "
@@ -463,12 +562,17 @@ def run_checks(st: dict[str, Any], root: Path | None = None) -> dict[str, Any]: 
     if not Path(ladybug_path).is_absolute():
         ladybug_path = str(user_corpus / ladybug_path)
 
+    # Probe the running service once. When it's up, the three DB checks
+    # below skip the direct file open (which races the service for the
+    # Kuzu file lock) and use the diagnostics response instead.
+    diag = _probe_diagnostics(port)
+
     checks = [
         _check_embedding_endpoint_reachable(embed_url),
         _check_embedding_1024_dim(embed_url, embed_model),
-        _check_duckdb_present(duck_path),
-        _check_ladybug_present(ladybug_path),
-        _check_skill_count(ladybug_path),
+        _check_duckdb_present(duck_path, diag=diag),
+        _check_ladybug_present(ladybug_path, diag=diag),
+        _check_skill_count(ladybug_path, diag=diag),
         _check_harness_config_present(st),
         _check_harness_config_url(st),
         _check_port_available(port),

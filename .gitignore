@@ -72,3 +72,4 @@ eval/runs/
 /agent-skills/
 /.claude/
 .gitnexus
+docs/*.patch

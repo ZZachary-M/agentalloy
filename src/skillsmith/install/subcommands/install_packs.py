@@ -41,6 +41,14 @@ def add_parser(
         action="store_true",
         help="Force non-TTY mode (install only always-on packs unless --packs is given).",
     )
+    p.add_argument(
+        "--ignore-unknown",
+        action="store_true",
+        help=(
+            "Continue with the known subset when --packs lists names that "
+            "don't exist (default: fail with the available pack list)."
+        ),
+    )
     p.set_defaults(func=_run)
 
 
@@ -75,7 +83,32 @@ def _run(args: argparse.Namespace) -> int:
         return 1
 
     interactive = sys.stdin.isatty() and not args.non_interactive
-    selected = _select_packs(available, args.packs, interactive=interactive)
+    selected, unknown = _select_packs(available, args.packs, interactive=interactive)
+
+    if unknown and not args.ignore_unknown:
+        result = {
+            "schema_version": SCHEMA_VERSION,
+            "action": "unknown_packs",
+            "unknown": sorted(unknown),
+            "available": sorted(available),
+        }
+        json.dump(result, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        print(
+            f"install-packs: unknown pack(s): {sorted(unknown)}",
+            file=sys.stderr,
+        )
+        print(
+            "FIX:   re-run with valid pack names (see `available` above), "
+            "or pass --ignore-unknown to skip them.",
+            file=sys.stderr,
+        )
+        return 1
+    if unknown and args.ignore_unknown:
+        print(
+            f"install-packs: ignoring unknown pack(s): {sorted(unknown)}",
+            file=sys.stderr,
+        )
 
     print(f"install-packs: installing {len(selected)} pack(s)", file=sys.stderr)
     t0 = time.monotonic()
@@ -153,31 +186,34 @@ def _select_packs(
     packs_flag: str | None,
     *,
     interactive: bool,
-) -> list[str]:
-    """Pick packs honoring (in priority order): --packs flag > TTY prompt > defaults."""
+) -> tuple[list[str], list[str]]:
+    """Pick packs honoring (in priority order): --packs flag > TTY prompt > defaults.
+
+    Returns ``(selected, unknown)``. ``unknown`` is the list of names from
+    ``--packs`` that don't match any available pack — the caller decides
+    whether to fail or continue with the known subset.
+    """
     always_on = [n for n, m in available.items() if m.get("always_install")]
+    unknown: list[str] = []
 
     # Explicit --packs flag wins
     if packs_flag:
         if packs_flag.strip().lower() == "all":
             chosen = list(available)
         else:
-            chosen = [p.strip() for p in packs_flag.split(",") if p.strip()]
-            unknown = [p for p in chosen if p not in available]
-            if unknown:
-                print(f"install-packs: unknown pack(s): {unknown}", file=sys.stderr)
-                # Ignore unknowns rather than abort — the rest still install.
-                chosen = [p for p in chosen if p in available]
+            requested = [p.strip() for p in packs_flag.split(",") if p.strip()]
+            unknown = [p for p in requested if p not in available]
+            chosen = [p for p in requested if p in available]
         # Always include always-on packs even if user didn't list them.
-        return _ordered_with_deps(set(chosen) | set(always_on), available)
+        return _ordered_with_deps(set(chosen) | set(always_on), available), unknown
 
     if not interactive:
         # Non-TTY default: only install always-on packs.
-        return _ordered_with_deps(set(always_on), available)
+        return _ordered_with_deps(set(always_on), available), unknown
 
     # Interactive multi-select.
     chosen = _prompt_for_packs(available, always_on)
-    return _ordered_with_deps(set(chosen) | set(always_on), available)
+    return _ordered_with_deps(set(chosen) | set(always_on), available), unknown
 
 
 def _prompt_for_packs(

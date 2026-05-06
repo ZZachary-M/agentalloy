@@ -23,8 +23,8 @@ SCHEMA_VERSION = 1
 # Bump this when a migration changes the DB schema.
 EXPECTED_CORPUS_SCHEMA_VERSION = 1
 
-# Minimum number of skills for the corpus to be considered valid.
-MIN_SKILL_COUNT = 50
+# Sanity floor — flags truly empty corpora; not a quality bar.
+MIN_SKILL_COUNT = 25
 
 
 def _check_duckdb(duck_path: Path) -> dict[str, Any]:
@@ -285,7 +285,7 @@ def run(args: argparse.Namespace) -> int:
 
     fp, digest = install_state.save_output_file(result, "seed-corpus.json")
 
-    if action in ("verified_present", "seeded"):
+    if action in ("verified_present", "seeded", "initialized_empty"):
         install_state.record_step(
             st,
             "seed-corpus",

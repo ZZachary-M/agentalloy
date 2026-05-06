@@ -10,6 +10,8 @@ Process-management code is awkward to unit-test, so we cover:
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import subprocess
 import sys
@@ -21,6 +23,7 @@ import pytest
 
 from skillsmith.install import server_proc
 from skillsmith.install.__main__ import build_parser
+from skillsmith.install.subcommands import server_stop
 
 # ---------------------------------------------------------------------------
 # find_listening_pid — output-parsing
@@ -224,3 +227,24 @@ class TestDispatcherRegistration:
         args = parser.parse_args([verb])
         assert args.subcommand == verb
         assert callable(args.func)
+
+
+class TestServerStopAlreadyStopped:
+    """`server-stop` against an idle port is success, not EXIT_NOOP.
+
+    Stopping an already-stopped service is the desired post-condition;
+    scripts that care can read `action: "already_stopped"` from JSON.
+    """
+
+    def test_returns_zero_with_already_stopped(self, capsys: pytest.CaptureFixture[str]) -> None:
+        with (
+            patch.object(server_proc, "find_listening_pid", return_value=None),
+            patch.object(server_proc, "configured_port", return_value=47950),
+        ):
+            args = argparse.Namespace(port=None, timeout=10.0)
+            rc = server_stop._run(args)
+        captured = capsys.readouterr()
+        assert rc == 0
+        payload = json.loads(captured.out)
+        assert payload["action"] == "already_stopped"
+        assert payload["port"] == 47950

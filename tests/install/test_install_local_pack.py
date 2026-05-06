@@ -383,11 +383,12 @@ class TestPackSelector:
             "nodejs": {"always_install": False, "depends_on": []},
             "vue": {"always_install": False, "depends_on": []},
         }
-        chosen = ips._select_packs(available, "nodejs", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown = ips._select_packs(available, "nodejs", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert "core" in chosen
         assert "engineering" in chosen
         assert "nodejs" in chosen
         assert "vue" not in chosen
+        assert unknown == []
 
     def test_all_keyword(self) -> None:
         available = {
@@ -395,8 +396,9 @@ class TestPackSelector:
             "vue": {"always_install": False, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen = ips._select_packs(available, "all", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown = ips._select_packs(available, "all", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert set(chosen) >= {"core", "vue", "nodejs"}
+        assert unknown == []
 
     def test_non_interactive_no_flag_only_always_on(self) -> None:
         available = {
@@ -404,16 +406,18 @@ class TestPackSelector:
             "engineering": {"always_install": True, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen = ips._select_packs(available, None, interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown = ips._select_packs(available, None, interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert set(chosen) == {"core", "engineering"}
+        assert unknown == []
 
-    def test_unknown_pack_in_flag_ignored(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_unknown_pack_in_flag_surfaced(self) -> None:
+        """`_select_packs` returns unknown names; the caller decides
+        whether to fail-fast or fall through with --ignore-unknown."""
         available = {
             "core": {"always_install": True, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen = ips._select_packs(available, "nodejs,nonexistent", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown = ips._select_packs(available, "nodejs,nonexistent", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert "nodejs" in chosen
         assert "nonexistent" not in chosen
-        err = capsys.readouterr().err
-        assert "unknown pack" in err
+        assert unknown == ["nonexistent"]

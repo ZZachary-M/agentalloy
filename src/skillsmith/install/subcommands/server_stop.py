@@ -7,13 +7,13 @@ port is still discoverable. SIGTERM first; SIGKILL after ``--timeout``.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from skillsmith.install import server_proc
 
 EXIT_OK = 0
 EXIT_USER = 1
-EXIT_NOOP = 4
 
 
 def add_parser(
@@ -41,8 +41,14 @@ def _run(args: argparse.Namespace) -> int:
     port = args.port if args.port is not None else server_proc.configured_port()
     pid = server_proc.find_listening_pid(port)
     if pid is None:
+        # Nothing listening is the desired post-condition of stop —
+        # report success so scripts and the setup composer don't treat
+        # idempotent re-runs as failure. The "already_stopped" action
+        # lets callers distinguish if they care.
+        json.dump({"action": "already_stopped", "port": port}, sys.stdout, indent=2)
+        sys.stdout.write("\n")
         print(f"server-stop: nothing listening on :{port}", file=sys.stderr)
-        return EXIT_NOOP
+        return EXIT_OK
 
     try:
         outcome = server_proc.stop(pid, timeout_s=args.timeout)
@@ -50,6 +56,12 @@ def _run(args: argparse.Namespace) -> int:
         print(f"server-stop: {e}", file=sys.stderr)
         return EXIT_USER
 
+    json.dump(
+        {"action": "stopped", "port": port, "pid": pid, "signal": outcome.upper()},
+        sys.stdout,
+        indent=2,
+    )
+    sys.stdout.write("\n")
     print(
         f"server-stop: pid {pid} on :{port} stopped via SIG{outcome.upper()}",
         file=sys.stderr,

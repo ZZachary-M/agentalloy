@@ -5,6 +5,8 @@ Maps to test-plan.md § Seed corpus integrity.
 
 from __future__ import annotations
 
+import argparse
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +15,7 @@ import pytest
 from skillsmith.install.subcommands.seed_corpus import (
     SCHEMA_VERSION,
     check_corpus,
+    run,
 )
 
 
@@ -132,6 +135,28 @@ class TestNoNetworkCalls:
         with patch("urllib.request.urlopen", side_effect=AssertionError("Network call detected!")):
             result = check_corpus(repo_root)
         assert result["action"] == "verified_present"
+
+
+class TestRunEntrypoint:
+    """The CLI entrypoint must treat `initialized_empty` as success.
+
+    Regression: previously fell through to `return 1`, breaking the
+    fresh-install happy path documented in the docstring.
+    """
+
+    def test_initialized_empty_exits_zero(
+        self, repo_root: Path, no_bundled_corpus: None, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from skillsmith.install import state as install_state
+
+        rc = run(argparse.Namespace())
+        captured = capsys.readouterr()
+        assert rc == 0, captured.err
+        payload = json.loads(captured.out)
+        assert payload["action"] == "initialized_empty"
+        # State should record the step so subsequent runs short-circuit.
+        st = install_state.load_state()
+        assert install_state.is_step_completed(st, "seed-corpus")
 
 
 class TestDurationTracking:

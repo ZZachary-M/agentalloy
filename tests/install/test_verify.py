@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 
 from skillsmith.install.subcommands.verify import (
+    MIN_SKILL_COUNT,
     SCHEMA_VERSION,
     _check_duckdb_present,  # pyright: ignore[reportPrivateUsage]
     _check_embedding_1024_dim,  # pyright: ignore[reportPrivateUsage]
@@ -20,6 +21,7 @@ from skillsmith.install.subcommands.verify import (
     _check_harness_config_url,  # pyright: ignore[reportPrivateUsage]
     _check_ladybug_present,  # pyright: ignore[reportPrivateUsage]
     _check_port_available,  # pyright: ignore[reportPrivateUsage]
+    _check_skill_count,  # pyright: ignore[reportPrivateUsage]
     run_checks,
 )
 
@@ -174,6 +176,125 @@ class TestPortAvailable:
         # Might pass or fail depending on what's running, but should not error
         assert "name" in result
         assert result["name"] == "runtime_port_available"
+
+
+class TestPortAvailableHealthStatus:
+    """`_check_port_available` consults `/health` when the port is bound.
+
+    Regression: previously compared `status == "ok"`, but the service
+    returns `"healthy"` / `"degraded"` / `"unavailable"`.
+    """
+
+    @patch("skillsmith.install.subcommands.verify.urlopen")
+    @patch("skillsmith.install.subcommands.verify.socket.socket")
+    def test_healthy_status_passes(self, mock_sock: MagicMock, mock_urlopen: MagicMock) -> None:
+        # Mock the TCP connect_ex to return 0 (port in use).
+        sock_inst = MagicMock()
+        sock_inst.connect_ex.return_value = 0
+        sock_inst.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        sock_inst.__exit__ = MagicMock(return_value=False)
+        mock_sock.return_value = sock_inst
+
+        body = json.dumps({"status": "healthy"}).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+
+        result = _check_port_available(47950)
+        assert result["passed"] is True
+
+    @patch("skillsmith.install.subcommands.verify.urlopen")
+    @patch("skillsmith.install.subcommands.verify.socket.socket")
+    def test_degraded_status_passes(self, mock_sock: MagicMock, mock_urlopen: MagicMock) -> None:
+        sock_inst = MagicMock()
+        sock_inst.connect_ex.return_value = 0
+        sock_inst.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        sock_inst.__exit__ = MagicMock(return_value=False)
+        mock_sock.return_value = sock_inst
+
+        body = json.dumps({"status": "degraded"}).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+
+        result = _check_port_available(47950)
+        assert result["passed"] is True
+
+    @patch("skillsmith.install.subcommands.verify.urlopen")
+    @patch("skillsmith.install.subcommands.verify.socket.socket")
+    def test_unavailable_status_fails(self, mock_sock: MagicMock, mock_urlopen: MagicMock) -> None:
+        sock_inst = MagicMock()
+        sock_inst.connect_ex.return_value = 0
+        sock_inst.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        sock_inst.__exit__ = MagicMock(return_value=False)
+        mock_sock.return_value = sock_inst
+
+        body = json.dumps({"status": "unavailable"}).encode()
+        resp = MagicMock()
+        resp.read.return_value = body
+        resp.__enter__ = lambda s: s  # pyright: ignore[reportUnknownLambdaType]
+        resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = resp
+
+        result = _check_port_available(47950)
+        assert result["passed"] is False
+        assert "'unavailable'" in result.get("error", "")
+
+
+class TestDBChecksWithServiceUp:
+    """When `diag` is provided, the three DB checks must NOT touch the
+    DB files — the service holds the locks. They derive pass/fail from
+    the diagnostics response instead.
+    """
+
+    def _diag(self, *, runtime: str, telemetry: str, skills: int) -> dict[str, Any]:
+        return {
+            "dependency_readiness": {
+                "runtime_store": runtime,
+                "telemetry_store": telemetry,
+                "embedding_runtime": "ok",
+                "runtime_cache": "ok",
+            },
+            "store_state": [{"skill_id": f"s{i}"} for i in range(skills)],
+        }
+
+    def test_duckdb_passes_when_telemetry_ok(self) -> None:
+        diag = self._diag(runtime="ok", telemetry="ok", skills=29)
+        result = _check_duckdb_present("/path/that/does/not/exist.duck", diag=diag)
+        assert result["passed"] is True
+        assert "/diagnostics/runtime" in result["detail"]
+
+    def test_duckdb_fails_when_telemetry_unavailable(self) -> None:
+        diag = self._diag(runtime="ok", telemetry="unavailable", skills=29)
+        result = _check_duckdb_present("/path/that/does/not/exist.duck", diag=diag)
+        assert result["passed"] is False
+        assert "telemetry_store" in result["error"]
+
+    def test_ladybug_passes_when_runtime_ok(self) -> None:
+        diag = self._diag(runtime="ok", telemetry="ok", skills=29)
+        result = _check_ladybug_present("/path/that/does/not/exist", diag=diag)
+        assert result["passed"] is True
+        assert "29 active skills" in result["detail"]
+
+    def test_ladybug_fails_when_runtime_unavailable(self) -> None:
+        diag = self._diag(runtime="unavailable", telemetry="ok", skills=29)
+        result = _check_ladybug_present("/path/that/does/not/exist", diag=diag)
+        assert result["passed"] is False
+        assert "runtime_store" in result["error"]
+
+    def test_skill_count_passes_when_at_minimum(self) -> None:
+        diag = self._diag(runtime="ok", telemetry="ok", skills=MIN_SKILL_COUNT)
+        result = _check_skill_count("/unused", diag=diag)
+        assert result["passed"] is True
+
+    def test_skill_count_fails_when_below_minimum(self) -> None:
+        diag = self._diag(runtime="ok", telemetry="ok", skills=MIN_SKILL_COUNT - 1)
+        result = _check_skill_count("/unused", diag=diag)
+        assert result["passed"] is False
 
 
 # ---------------------------------------------------------------------------
