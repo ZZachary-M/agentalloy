@@ -1,0 +1,356 @@
+skill_type: domain
+skill_id: snowflake-tasks-and-automation
+canonical_name: Snowflake Tasks and Scheduled Automation
+category: engineering
+skill_class: domain
+domain_tags:
+  - snowflake
+  - tasks
+  - automation
+  - scheduled-execution
+  - dag
+always_apply: false
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Snowflake Tasks and Scheduled Automation
+
+  ## Overview
+
+  Tasks execute SQL statements on a schedule (CRON or interval) or in response to a parent task completing. They form DAGs via the AFTER clause and can gate execution on a WHEN expression. Tasks bind a warehouse for compute. This skill covers task definition, scheduling, and DAG composition.
+
+  Sourced from https://docs.snowflake.com/en/user-guide/tasks-intro.html.
+
+  > ## Documentation Index
+  > Fetch the complete documentation index at: https://docs.snowflake.com/llms.txt
+  > Use this file to discover all available pages before exploring further.
+
+  # Introduction to tasks
+
+  Tasks are a powerful way to automate data processing and to optimize business procedures on your data pipeline.
+
+  Tasks can run at scheduled times or can be triggered by events, such as when new data arrives in a [stream](streams-intro.md).
+
+  Tasks can run SQL commands and stored procedures that use [supported languages and tools](../developer-guide/stored-procedure/stored-procedures-overview.md),
+  including JavaScript, Python, Java, Scala, and [Snowflake scripting](../developer-guide/snowflake-scripting/index.md).
+
+  For complex workflows, you can create sequences of tasks called [task graphs](tasks-graphs.md).
+  Task graphs can use logic to perform dynamic behavior, running tasks in parallel or in series.
+
+  ## Task creation workflow overview
+
+  1. Create a task administrator role that can run the commands in the following steps.
+  2. Define a new task using [CREATE TASK](../sql-reference/sql/create-task.md).
+
+     * Define compute resources
+     * Define schedules or triggers
+     * Define what happens when a task fails
+     * Define additional session parameters
+  3. Manually test tasks using EXECUTE TASK.
+  4. Allow the task to run continuously using [ALTER TASK … RESUME](../sql-reference/sql/alter-task.md).
+  5. Monitor task costs
+  6. Refine the task as needed using [ALTER TASK](../sql-reference/sql/alter-task.md).
+
+  For information about running tasks, see:
+
+  > * Versioning of task runs
+  > * View the task history for your account
+  > * Task costs
+
+  ## Define compute resources
+
+  Tasks require compute resources to run statements and procedures.
+  You can choose between the following two models:
+
+  * Serverless tasks: Snowflake predicts resources that are needed and assigns them automatically.
+  * User-managed virtual warehouse model: You manage the compute resources using a virtual warehouse.
+
+  ### Serverless tasks
+
+  With this model, you set when you want the task to run, and Snowflake predicts and assigns compute resources needed to complete the task in that time.
+  The prediction is based on a dynamic analysis of the most recent runs of the same task.
+
+  #### Limitations
+
+  * The maximum compute size for a serverless task is equivalent to an XXLARGE [virtual warehouse](warehouses.md).
+
+  #### Create a task using the serverless compute model
+
+  Use [CREATE TASK](../sql-reference/sql/create-task.md) to define the task. Don’t include the WAREHOUSE parameter.
+
+  The role that runs the task must have the global EXECUTE MANAGED TASK privilege. For more information, see Task security.
+
+  The following example creates a task that runs every hour.
+
+  SQLPython
+
+  ```sqlexample
+  CREATE TASK SCHEDULED_T1
+    SCHEDULE='60 MINUTES'
+    AS SELECT 1;
+  ```
+
+  ```python
+  from datetime import timedelta
+  from snowflake.core.task import Cron, Task
+
+  tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+  task = tasks.create(
+      Task(
+          name="SCHEDULED_T1",
+          definition="SELECT 1",
+          schedule=timedelta(minutes=60),
+          ),
+      )
+  ```
+
+  #### Cost and performance: Warehouse sizes
+
+  To make sure serverless tasks run efficiently, you can set the minimum and maximum [warehouse sizes](warehouses-overview.md) by setting the following parameters:
+
+  * SERVERLESS_TASK_MIN_STATEMENT_SIZE: the minimum warehouse size for predictable performance (default: XSMALL).
+  * SERVERLESS_TASK_MAX_STATEMENT_SIZE: the maximum warehouse size to prevent unexpected costs (default: XXLARGE).
+
+  After a task completes, Snowflake reviews the performance and adjusts compute resources for future runs within these limits.
+
+  The following example shows a task that runs every 30 seconds, with a minimum warehouse size of SMALL and a maximum warehouse size of LARGE.
+
+  SQLPython
+
+  ```sqlexample
+  CREATE TASK SCHEDULED_T2
+    SCHEDULE='30 SECONDS'
+    SERVERLESS_TASK_MIN_STATEMENT_SIZE='SMALL'
+    SERVERLESS_TASK_MAX_STATEMENT_SIZE='LARGE'
+    AS SELECT 1;
+  ```
+
+  ```python
+  from datetime import timedelta
+  from snowflake.core.task import Cron, Task
+
+  tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+  task = tasks.create(
+      Task(
+          name="SCHEDULED_T2",
+          definition="SELECT 1",
+          schedule=timedelta(seconds=30),
+          serverless_task_min_statement_size="SMALL",
+          serverless_task_max_statement_size="LARGE",
+          ),
+      )
+  ```
+
+  #### Target completion interval
+
+  You can set an earlier target for a serverless task to complete.
+  A target completion interval is required for [serverless triggered tasks](tasks-triggered.md).
+
+  When set, Snowflake estimates and scales resources to complete within the target completion interval.
+  When a task is already at its maximum warehouse size and is running too long, the target completion interval is ignored.
+
+  In the following example, a task runs every day at midnight, with a target of completing by 2 a.m.
+  The start time and time zone are defined by [USING CRON](../sql-reference/sql/create-task.md).
+  If the task gets to the largest warehouse size, it may run as long as three hours before finally triggering a timeout.
+
+  SQLPython
+
+  ```sqlexample
+  CREATE TASK SCHEDULED_T3
+    SCHEDULE='USING CRON 0 * * * * America/Los_Angeles'
+    TARGET_COMPLETION_INTERVAL='120 MINUTE'
+    SERVERLESS_TASK_MAX_STATEMENT_SIZE='LARGE'
+    USER_TASK_TIMEOUT_MS = 10800000         -- (3 hours)
+    SUSPEND_TASK_AFTER_NUM_FAILURES = 3
+    AS SELECT 1;
+  ```
+
+  ```python
+  from datetime import timedelta
+  from snowflake.core.task import Cron, Task
+
+  tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+  task = tasks.create(
+      Task(
+          name="SCHEDULED_T3",
+          definition="SELECT 1",
+          schedule=Cron("0 * * * *", "America/Los_Angeles"),
+          target_completion_interval=timedelta(minutes=120),
+          serverless_task_max_statement_size="LARGE",
+          user_task_timeout_ms=10800000,  # (3 hours)
+          suspend_task_after_num_failures=3,
+      ),
+  )
+  ```
+
+  ### User-managed virtual warehouse model
+
+  With this model, you have full control of the compute resources used for each workload.
+
+  #### Choose a warehouse
+
+  When choosing a warehouse, consider the following:
+
+  * Review the best practices in [Warehouse considerations](warehouses-considerations.md).
+  * Analyze average task run times using different warehouses based on warehouse size and clustering.
+    For more information, see Task duration.
+  * If the warehouse is shared by multiple processes, consider the impact of the task on other workloads.
+
+  #### Create a task using the user-managed compute model
+
+  Use [CREATE TASK](../sql-reference/sql/create-task.md), and include the WAREHOUSE parameter.
+
+  The role that runs the task must have the global EXECUTE MANAGED TASK privilege.
+  For more information, see Task security.
+
+  The following example creates a task that runs every hour.
+
+  ```sqlexample
+  CREATE TASK SCHEDULED_T1
+    WAREHOUSE='COMPUTE_WH'
+    SCHEDULE='60 MINUTES'
+    AS SELECT 1;
+  ```
+
+  ### Recommendations for choosing a compute model
+
+  The following table describes various factors that can help you decide when to use serverless tasks versus user-managed tasks:
+
+  | Category | Serverless tasks | User-managed tasks | Notes |
+  | --- | --- | --- | --- |
+  | Number, duration, and predictability of concurrent task workloads | Recommended for under-utilized warehouses with too few tasks running concurrently, or completing quickly.  Tasks with relatively stable runs are good candidates for serverless tasks. | Recommended for fully utilized warehouses with multiple concurrent tasks.  Also recommended for unpredictable loads on compute resources. [Multi-cluster warehouses](warehouses-multicluster.md) with [auto-suspend and auto-resume](warehouses-overview.md) enabled could help moderate your credit consumption. | For serverless tasks, Snowflake bills your account based on the actual compute resource usage.  For user-managed tasks, billing for warehouses is based on warehouse size, with a 60-second minimum each time the warehouse is resumed. |
+  | Schedule interval | Recommended when adherence to the schedule interval is highly important.  If a run of a standalone task or scheduled task graph exceeds the interval, Snowflake increases the size of the compute resources. | Recommended when adherence to the schedule interval is less important. | *Schedule interval* refers to the interval of time between scheduled runs of a standalone task or the root task in a task graph.  Increasing the compute resources can reduce the runtime of some, but not all, SQL code. It doesn’t ensure a task run is completed within the batch window. |
+
+  The maximum size for a serverless task run is equivalent to an XXLARGE warehouse.
+  If a task workload requires a larger warehouse, create a user-managed task with a warehouse of the required size.
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Tasks execute SQL statements on a schedule (CRON or interval) or in response to a parent task completing. They form DAGs via the AFTER clause and can gate execution on a WHEN expression. Tasks bind a warehouse for compute. This skill covers task definition, scheduling, and DAG composition.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      1. Create a task administrator role that can run the commands in the following steps.
+      2. Define a new task using [CREATE TASK](../sql-reference/sql/create-task.md).
+
+         * Define compute resources
+         * Define schedules or triggers
+         * Define what happens when a task fails
+         * Define additional session parameters
+      3. Manually test tasks using EXECUTE TASK.
+      4. Allow the task to run continuously using [ALTER TASK … RESUME](../sql-reference/sql/alter-task.md).
+      5. Monitor task costs
+      6. Refine the task as needed using [ALTER TASK](../sql-reference/sql/alter-task.md).
+
+      The following example creates a task that runs every hour.
+
+      SQLPython
+
+      ```sqlexample
+      CREATE TASK SCHEDULED_T1
+        SCHEDULE='60 MINUTES'
+        AS SELECT 1;
+      ```
+
+      ```python
+      from datetime import timedelta
+      from snowflake.core.task import Cron, Task
+
+      tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+      task = tasks.create(
+          Task(
+              name="SCHEDULED_T1",
+              definition="SELECT 1",
+              schedule=timedelta(minutes=60),
+          ),
+      )
+      ```
+  - fragment_type: example
+    sequence: 3
+    content: |
+      SQLPython
+
+      ```sqlexample
+      CREATE TASK SCHEDULED_T2
+        SCHEDULE='30 SECONDS'
+        SERVERLESS_TASK_MIN_STATEMENT_SIZE='SMALL'
+        SERVERLESS_TASK_MAX_STATEMENT_SIZE='LARGE'
+        AS SELECT 1;
+      ```
+
+      ```python
+      from datetime import timedelta
+      from snowflake.core.task import Cron, Task
+
+      tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+      task = tasks.create(
+          Task(
+              name="SCHEDULED_T2",
+              definition="SELECT 1",
+              schedule=timedelta(seconds=30),
+              serverless_task_min_statement_size="SMALL",
+              serverless_task_max_statement_size="LARGE",
+          ),
+      )
+      ```
+  - fragment_type: example
+    sequence: 4
+    content: |
+      SQLPython
+
+      ```sqlexample
+      CREATE TASK SCHEDULED_T3
+        SCHEDULE='USING CRON 0 * * * * America/Los_Angeles'
+        TARGET_COMPLETION_INTERVAL='120 MINUTE'
+        SERVERLESS_TASK_MAX_STATEMENT_SIZE='LARGE'
+        USER_TASK_TIMEOUT_MS = 10800000         -- (3 hours)
+        SUSPEND_TASK_AFTER_NUM_FAILURES = 3
+        AS SELECT 1;
+      ```
+
+      ```python
+      from datetime import timedelta
+      from snowflake.core.task import Cron, Task
+
+      tasks = root.databases["TEST_DB"].schemas["TEST_SCHEMA"].tasks
+
+      task = tasks.create(
+          Task(
+              name="SCHEDULED_T3",
+              definition="SELECT 1",
+              schedule=Cron("0 * * * *", "America/Los_Angeles"),
+              target_completion_interval=timedelta(minutes=120),
+              serverless_task_max_statement_size="LARGE",
+              user_task_timeout_ms=10800000,  # (3 hours)
+              suspend_task_after_num_failures=3,
+          ),
+      )
+      ```
+  - fragment_type: example
+    sequence: 5
+    content: |
+      ```sqlexample
+      CREATE TASK SCHEDULED_T1
+        WAREHOUSE='COMPUTE_WH'
+        SCHEDULE='60 MINUTES'
+        AS SELECT 1;
+      ```
+
+      The following table describes various factors that can help you decide when to use serverless tasks versus user-managed tasks:
+
+      | Category | Serverless tasks | User-managed tasks | Notes |
+      | --- | --- | --- | --- |
+      | Number, duration, and predictability of concurrent task workloads | Recommended for under-utilized warehouses with too few tasks running concurrently, or completing quickly.  Tasks with relatively stable runs are good candidates for serverless tasks. | Recommended for fully utilized warehouses with multiple concurrent tasks.  Also recommended for unpredictable loads on compute resources. [Multi-cluster warehouses](warehouses-multicluster.md) with [auto-suspend and auto-resume](warehouses-overview.md) enabled could help moderate your credit consumption. | For serverless tasks, Snowflake bills your account based on the actual compute resource usage.  For user-managed tasks, billing for warehouses is based on warehouse size, with a 60-second minimum each time the warehouse is resumed. |
+      | Schedule interval | Recommended when adherence to the schedule interval is highly important.  If a run of a standalone task or scheduled task graph exceeds the interval, Snowflake increases the size of the compute resources. | Recommended when adherence to the schedule interval is less important. | *Schedule interval* refers to the interval of time between scheduled runs of a standalone task or the root task in a task graph.  Increasing the compute resources can reduce the runtime of some, but not all, SQL code. It doesn’t ensure a task run is completed within the batch window. |
+
+      The maximum size for a serverless task run is equivalent to an XXLARGE warehouse.
+      If a task workload requires a larger warehouse, create a user-managed task with a warehouse of the required size.

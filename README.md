@@ -1,12 +1,28 @@
-# skillsmith
+<p align="center">
+  <img src="docs/Skithsmith_cover.png" alt="Skillsmith — Runtime Skill Composition Service" width="720" />
+</p>
 
-> **Skills your coding agent doesn't have to memorize.**
+<p align="center">
+  <b>Skills your coding agent doesn't have to memorize.</b>
+</p>
 
-A runtime corpus of engineering skills — testing, error handling, deployment, observability, security, framework patterns — composed dynamically per task and served to your agent over HTTP. The runtime holds **no generative LLM**. Just embeddings + a graph + your agent.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/nrmeyers/skillsmith?color=blue" alt="license" /></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="python 3.12+" />
+  &nbsp;
+  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv" /></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/runtime-no--LLM-success" alt="no LLM in runtime" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/packs-22-orange" alt="22 packs" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/skills-110+-orange" alt="110+ skills" />
+</p>
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+<p align="center">
+A runtime corpus of engineering skills — testing, error handling, deployment, observability, security, framework patterns — composed dynamically per task and served to your agent over HTTP. The runtime holds <b>no generative LLM</b>. Just embeddings + a graph + your agent.
+</p>
 
 ---
 

@@ -1,0 +1,251 @@
+skill_type: domain
+skill_id: snowflake-warehouses-and-cost
+canonical_name: Snowflake Virtual Warehouses and Cost
+category: engineering
+skill_class: domain
+domain_tags:
+  - virtual warehouses
+  - cost optimization
+  - sizing
+  - scaling
+  - credit consumption
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Snowflake Virtual Warehouses and Cost
+
+  ## Overview
+
+  Snowflake separates compute (virtual warehouses) from storage. Each warehouse is an independent compute cluster sized X-Small through 6X-Large; idle warehouses suspend automatically, billed only while running. Multi-cluster warehouses scale out for concurrency. This skill covers sizing, scaling, and cost tradeoffs.
+
+  Sourced from https://docs.snowflake.com/en/user-guide/warehouses-overview.html and https://docs.snowflake.com/en/user-guide/warehouses-considerations.html.
+
+  > ## Documentation Index
+  > Fetch the complete documentation index at: https://docs.snowflake.com/llms.txt
+  > Use this file to discover all available pages before exploring further.
+
+  # Overview of warehouses
+
+  Warehouses are required for queries, as well as all DML operations, including loading data into tables. In addition to being defined by its
+  type as either Standard or Snowpark-optimized, a warehouse is defined by its size, as well as the other properties that can be set to help
+  control and automate warehouse activity.
+
+  Warehouses can be started and stopped at any time. They can also be resized at any time, even while running, to accommodate the need for more
+  or less compute resources, based on the type of operations being performed by the warehouse.
+
+  ## Warehouse size
+
+  Size specifies the amount of compute resources available per cluster in a warehouse. Snowflake supports the following warehouse sizes:
+
+  | Warehouse size | Credits / hour (Gen1 warehouses) | Credits / second (Gen1 warehouses) | Notes |
+  | --- | --- | --- | --- |
+  | X-Small | 1 | 0.0003 | Default size for warehouses created in Snowsight and using [CREATE WAREHOUSE](../sql-reference/sql/create-warehouse.md). |
+  | Small | 2 | 0.0006 |  |
+  | Medium | 4 | 0.0011 |  |
+  | Large | 8 | 0.0022 |  |
+  | X-Large | 16 | 0.0044 | Default size for warehouses created using Snowsight. |
+  | 2X-Large | 32 | 0.0089 |  |
+  | 3X-Large | 64 | 0.0178 |  |
+  | 4X-Large | 128 | 0.0356 |  |
+  | 5X-Large | 256 | 0.0711 | Generally available in Amazon Web Services (AWS) and Microsoft Azure regions, and in preview in US Government regions. |
+  | 6X-Large | 512 | 0.1422 | Generally available in Amazon Web Services (AWS) and Microsoft Azure regions, and in preview in US Government regions. |
+
+  The numbers in the preceding table refer to the first generation (Gen1) of Snowflake standard warehouses.
+  For usage information about the newer Gen2 warehouses, see [Snowflake generation 2 standard warehouses](warehouses-gen2.md).
+  For information about credit consumption for generation 2 standard warehouses,
+  see the [Snowflake Service Consumption Table](https://www.snowflake.com/legal-files/CreditConsumptionTable.pdf).
+  Gen2 warehouses aren’t yet available for all cloud service providers or for all regions, and currently are not the default
+  when you create a standard warehouse.
+
+  > **Tip:**
+  >
+  > For information about cost implications of changing the RESOURCE_CONSTRAINT property, see
+  > [considerations for changing RESOURCE_CONSTRAINT while a warehouse is running or suspended](warehouses-gen2.md).
+
+  Another way that you can scale the capacity of Snowflake warehouses without changing the warehouse size is by using
+  multi-cluster warehouses. For more information about that feature, see [Multi-cluster warehouses](warehouses-multicluster.md).
+
+  ### Larger warehouse sizes
+
+  Larger warehouse sizes 5X-Large and 6X-Large are generally available in all Amazon Web Services (AWS) and Microsoft Azure regions.
+
+  Larger warehouse sizes are in preview in US Government regions (requires FIPS support on ARM).
+
+  ### Impact on credit usage and billing
+
+  As shown in the above table, there is a doubling of credit usage as you increase in size to the next larger warehouse size for each full
+  hour that the warehouse runs; however, note that Snowflake utilizes per-second billing (with a 60-second minimum each time the warehouse
+  starts) so warehouses are billed only for the credits they actually consume.
+
+  The total number of credits billed depends on how long the warehouse runs continuously. For comparison purposes, the following table shows
+  the billing totals for three different size Gen1 standard warehouses based on their running time (totals rounded to the nearest 1000th of a credit):
+
+  | Running Time | Credits . (X-Small) | Credits . (X-Large) | Credits . (5X-Large) |
+  | --- | --- | --- | --- |
+  | 0-60 seconds | 0.017 | 0.267 | 4.268 |
+  | 61 seconds | 0.017 | 0.271 | 4.336 |
+  | 2 minutes | 0.033 | 0.533 | 8.532 |
+  | 10 minutes | 0.167 | 2.667 | 42.668 |
+  | 1 hour | 1.000 | 16.000 | 256.000 |
+
+  > **Note:**
+  >
+  > * For a [multi-cluster warehouse](warehouses-multicluster.md), the number of credits billed is calculated based on the
+  >   warehouse size and the number of clusters that run within the time period.
+  >
+  >   For example, if a 3X-Large multi-cluster warehouse runs 1 cluster for one full hour and then runs 2 clusters for the next full
+  >   hour, the total number of credits billed would be 192 (i.e. 64 + 128).
+  >
+  >   Multi-cluster warehouses are an [Enterprise Edition](intro-editions.md) feature.
+
+  ### Impact on data loading
+
+  Increasing the size of a warehouse does not always improve data loading performance. Data loading performance is influenced more by
+  the number of files being loaded (and the size of each file) than the size of the warehouse.
+
+  > **Tip:**
+  >
+  > Unless you are bulk loading a large number of files concurrently (i.e. hundreds or thousands of files), a smaller warehouse
+  > (Small, Medium, Large) is generally sufficient. Using a larger warehouse (X-Large, 2X-Large, etc.) will consume more credits and may not
+  > result in any performance increase.
+  >
+  > For more data loading tips and guidelines, see [Data loading considerations](data-load-considerations.md).
+
+  ### Impact on query processing
+
+  The size of a warehouse can impact the amount of time required to execute queries submitted to the warehouse, particularly for larger, more
+  complex queries. In general, query performance scales with warehouse size because larger warehouses
+
+  ---
+
+  > ## Documentation Index
+  > Fetch the complete documentation index at: https://docs.snowflake.com/llms.txt
+  > Use this file to discover all available pages before exploring further.
+
+  # Warehouse considerations
+
+  This topic provides general guidelines and best practices for using virtual warehouses in Snowflake to process queries. It does
+  not provide specific or absolute numbers, values, or recommendations because every query scenario is different and is affected by
+  numerous factors, including number of concurrent users/queries, number of tables being queried, and data size and composition, as well as
+  your specific requirements for warehouse availability, latency, and cost.
+
+  It also does not cover warehouse considerations for data loading, which are covered in another topic (see the sidebar).
+
+  The keys to using warehouses effectively and efficiently are:
+
+  1. Experiment with different types of queries and different warehouse sizes to determine the combinations that best meet your
+     specific query needs and workload.
+  2. Don’t focus on warehouse size. Snowflake utilizes per-second billing, so you can run larger warehouses (Large, X-Large,
+     2X-Large, etc.) and simply suspend them when not in use.
+
+  > **Note:**
+  >
+  > These guidelines and best practices apply to both single-cluster warehouses, which are standard for all accounts, and
+  > [multi-cluster warehouses](warehouses-multicluster.md), which are available in [Snowflake Enterprise Edition](intro-editions.md) (and higher).
+
+  ## How are credits charged for warehouses?
+
+  Credit charges are calculated based on:
+
+  * The warehouse size.
+  * The number of clusters (if using [multi-cluster warehouses](warehouses-multicluster.md)).
+  * The length of time the compute resources in each cluster runs.
+
+  For example:
+
+  X-Small:
+  :   Bills 1 credit per full, continuous hour that each cluster runs; each successive size generally doubles the number of compute
+      resources per warehouse.
+
+  4X-Large:
+  :   Bills 128 credits per full, continuous hour that each cluster runs.
+
+  Note the following:
+
+  * When compute resources are provisioned for a warehouse:
+
+    + The minimum billing charge for provisioning compute resources is 1 minute (i.e. 60 seconds).
+    + There is no benefit to stopping a warehouse before the first 60-second period is over because the credits have already
+      been billed for that period.
+    + After the first 60 seconds, all subsequent billing for a running warehouse is per-second (until all its compute resources are shut down).
+      Three examples are provided below:
+
+      - If a warehouse runs for 30 to 60 seconds, it is billed for 60 seconds.
+      - If a warehouse runs for 61 seconds, it is billed for only 61 seconds.
+      - If a warehouse runs for 61 seconds, shuts down, and then restarts and runs for less than 60 seconds, it is billed for 121 seconds (60 + 1 + 60).
+  * Resizing a warehouse provisions additional compute resources for each cluster in the warehouse:
+
+    + This results in a corresponding increase in the number of credits billed for the warehouse (while the additional compute resources are running).
+    + The additional compute resources are billed when they are provisioned (i.e. credits for the additional resources are billed relative
+      to the time when the warehouse was resized).
+    + Resizing between a 5XL or 6XL warehouse to a 4XL or smaller warehouse results in a brief period during which the customer is
+      charged for both the new warehouse and the old warehouse while the old warehouse is quiesced.
+    + Credit usage is displayed in hour increments. With per-second billing, you will see fractional amounts for credit usage/billing.
+
+  > **Tip:**
+  >
+  > For information about cost implications of changing the RESOURCE_CONSTRAINT property, see
+  > [considerations for changing RESOURCE_CONSTRAINT while a warehouse is running or suspended](warehouses-gen2.md).
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Snowflake separates compute (virtual warehouses) from storage. Each warehouse is an independent compute cluster sized X-Small through 6X-Large; idle warehouses suspend automatically, billed only while running. Multi-cluster warehouses scale out for concurrency.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      Warehouses can be started and stopped at any time. They can also be resized at any time, even while running, to accommodate the need for more or less compute resources, based on the type of operations being performed by the warehouse.
+  - fragment_type: example
+    sequence: 3
+    content: |
+      | Warehouse size | Credits / hour (Gen1 warehouses) | Credits / second (Gen1 warehouses) | Notes |
+      | --- | --- | --- | --- |
+      | X-Small | 1 | 0.0003 | Default size for warehouses created in Snowsight and using [CREATE WAREHOUSE](../sql-reference/sql/create-warehouse.md). |
+      | Small | 2 | 0.0006 |  |
+      | Medium | 4 | 0.0011 |  |
+      | Large | 8 | 0.0022 |  |
+      | X-Large | 16 | 0.0044 | Default size for warehouses created using Snowsight. |
+      | 2X-Large | 32 | 0.0089 |  |
+      | 3X-Large | 64 | 0.0178 |  |
+      | 4X-Large | 128 | 0.0356 |  |
+      | 5X-Large | 256 | 0.0711 | Generally available in Amazon Web Services (AWS) and Microsoft Azure regions, and in preview in US Government regions. |
+      | 6X-Large | 512 | 0.1422 | Generally available in Amazon Web Services (AWS) and Microsoft Azure regions, and in preview in US Government regions. |
+  - fragment_type: rationale
+    sequence: 4
+    content: |
+      The numbers in the preceding table refer to the first generation (Gen1) of Snowflake standard warehouses.
+      For usage information about the newer Gen2 warehouses, see [Snowflake generation 2 standard warehouses](warehouses-gen2.md).
+      For information about credit consumption for generation 2 standard warehouses,
+      see the [Snowflake Service Consumption Table](https://www.snowflake.com/legal-files/CreditConsumptionTable.pdf).
+      Gen2 warehouses aren’t yet available for all cloud service providers or for all regions, and currently are not the default
+      when you create a standard warehouse.
+  - fragment_type: example
+    sequence: 5
+    content: |
+      | Running Time | Credits . (X-Small) | Credits . (X-Large) | Credits . (5X-Large) |
+      | --- | --- | --- | --- |
+      | 0-60 seconds | 0.017 | 0.267 | 4.268 |
+      | 61 seconds | 0.017 | 0.271 | 4.336 |
+      | 2 minutes | 0.033 | 0.533 | 8.532 |
+      | 10 minutes | 0.167 | 2.667 | 42.668 |
+      | 1 hour | 1.000 | 16.000 | 256.000 |
+  - fragment_type: rationale
+    sequence: 6
+    content: |
+      The keys to using warehouses effectively and efficiently are:
+      1. Experiment with different types of queries and different warehouse sizes to determine the combinations that best meet your
+         specific query needs and workload.
+      2. Don’t focus on warehouse size. Snowflake utilizes per-second billing, so you can run larger warehouses (Large, X-Large,
+         2X-Large, etc.) and simply suspend them when not in use.
+  - fragment_type: example
+    sequence: 7
+    content: |
+      X-Small:
+      :   Bills 1 credit per full, continuous hour that each cluster runs; each successive size generally doubles the number of compute
+          resources per warehouse.
+
+      4X-Large:
+      :   Bills 128 credits per full, continuous hour that each cluster runs.

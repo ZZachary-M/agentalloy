@@ -1,0 +1,225 @@
+skill_type: domain
+skill_id: snowflake-data-loading
+canonical_name: Snowflake Data Loading — COPY and Snowpipe
+category: engineering
+skill_class: domain
+domain_tags:
+  - data loading
+  - snowflake
+  - copy into
+  - snowpipe
+  - file formats
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Snowflake Data Loading — COPY and Snowpipe
+
+  ## Overview
+
+  Snowflake supports two ingestion paths: bulk COPY INTO commands for batch loads from stages, and Snowpipe for continuous serverless ingestion triggered by cloud-storage events. Both support CSV, JSON, Parquet, Avro, ORC, and XML via FILE FORMAT objects. This skill covers both paths.
+
+  Sourced from https://docs.snowflake.com/en/user-guide/data-load-overview.html and https://docs.snowflake.com/en/user-guide/data-load-snowpipe-intro.html.
+
+  > ## Documentation Index
+  > Fetch the complete documentation index at: https://docs.snowflake.com/llms.txt
+  > Use this file to discover all available pages before exploring further.
+
+  # Overview of data loading
+
+  This topic provides an overview of the main options available to load data into Snowflake.
+
+  To easily and accurately measure the ingestion latency of your data pipelines, use row timestamps. For more information, see [Use row timestamps to measure latency in your pipelines](data-engineering/row-timestamps.md).
+
+  ## Supported file locations
+
+  Snowflake refers to the location of data files in cloud storage as a *stage*.
+  The [COPY INTO <table>](../sql-reference/sql/copy-into-table.md) command used for both bulk and continuous data loads (Snowpipe) supports
+  cloud storage accounts managed by your business entity (*external stages*) as well as cloud storage contained in your Snowflake account
+  (*internal stages*).
+
+  ### External stages
+
+  Loading data from any of the following cloud storage services is supported regardless of the [cloud platform](intro-cloud-platforms.md) that hosts your Snowflake account:
+
+  * Amazon S3
+  * Google Cloud Storage
+  * Microsoft Azure
+
+  You cannot access data held in archival cloud storage classes that requires restoration before it can be retrieved. These archival storage classes include, for example, the Amazon S3 Glacier Flexible Retrieval or Glacier Deep Archive storage class, or Microsoft Azure Archive Storage.
+
+  Upload (i.e. *stage*) files to your cloud storage account using the tools provided by the cloud storage service.
+
+  A named external stage is a database object created in a schema. This object stores the URL to files in cloud storage, the settings used to access the cloud storage account, and convenience settings such as the options that describe the format of staged files. Create stages using the [CREATE STAGE](../sql-reference/sql/create-stage.md) command.
+
+  > **Note:**
+  >
+  > Some data transfer billing charges may apply when loading data from files in a cloud storage service in a different region or cloud platform from your Snowflake account. For more information, see [Understanding data transfer cost](cost-understanding-data-transfer.md).
+
+  ### Internal stages
+
+  Snowflake maintains the following stage types in your account:
+
+  User:
+  :   A user stage is allocated to each user for storing files. This stage type is designed to store files that are staged and managed by a single user but can be loaded into multiple tables. User stages cannot be altered or dropped.
+
+  Table:
+  :   A table stage is available for each table created in Snowflake. This stage type is designed to store files that are staged and managed by one or more users but only loaded into a single table. Table stages cannot be altered or dropped.
+
+      Note that a table stage is not a separate database object; rather, it is an implicit stage tied to the table itself. A table stage has no grantable privileges of its own. To stage files to a table stage, list the files, query them on the stage, or drop them, you must be the table owner (have the role with the OWNERSHIP privilege on the table).
+
+  Named:
+  :   A named internal stage is a database object created in a schema. This stage type can store files that are staged and managed by one or more users and loaded into one or more tables. Because named stages are database objects, the ability to create, modify, use, or drop them can be controlled using security access control privileges. Create stages using the [CREATE STAGE](../sql-reference/sql/create-stage.md) command.
+
+  Upload files to any of the internal stage types from your local file system using the [PUT](../sql-reference/sql/put.md) command.
+
+  > ## Documentation Index
+  > Fetch the complete documentation index at: https://docs.snowflake.com/llms.txt
+  > Use this file to discover all available pages before exploring further.
+
+  # Snowpipe
+
+  Snowpipe enables loading data from files as soon as they’re available in a stage. This means you can load data from files in micro-batches, making it available to users within minutes, rather than manually executing COPY statements on a schedule to load larger batches.
+
+  ## How does Snowpipe work?
+
+  Snowpipe loads data from files as soon as they are available in a stage. The data is loaded according to the COPY statement defined in a referenced pipe.
+
+  A pipe is a named, first-class Snowflake object that contains a COPY statement used by Snowpipe. The COPY statement identifies the source location of the data files (i.e., a stage) and a target table. All data types are supported, including semi-structured data types such as JSON and Avro.
+
+  Different mechanisms for detecting the staged files are available:
+
+  * Automating Snowpipe using cloud messaging
+
+    Automated data loads leverage event notifications for cloud storage to inform Snowpipe of the arrival of new data files to load. Snowpipe
+    polls the event notifications from a queue. By using the metadata in the queue, Snowpipe loads the new data files into the target table in a continuous, serverless fashion based on the parameters
+    defined in a specified pipe object.
+  * Calling Snowpipe REST endpoints
+
+    Your client application calls a public REST endpoint with the name of a pipe object and a list of data filenames. If new data files
+    matching the list are discovered in the stage referenced by the pipe object, they are queued for loading. Snowflake-provided compute
+    resources load data from the queue into a Snowflake table based on parameters defined in the pipe.
+
+  ### Supported Cloud Storage services
+
+  The following table indicates the cloud storage service support for automated Snowpipe and Snowpipe REST API calls from Snowflake accounts hosted on each
+  [cloud platform](intro-cloud-platforms.md):
+
+  | Snowflake Account Host | Amazon S3 | Google Cloud Storage | Microsoft Azure Blob storage | Microsoft Data Lake Storage Gen2 | Microsoft Azure General-purpose v2 |
+  | --- | --- | --- | --- | --- | --- |
+  | Amazon Web Services | ✔ | ✔ | ✔ | ✔ | ✔ |
+  | Google Cloud | ✔ | ✔ | ✔ | ✔ | ✔ |
+  | Microsoft Azure | ✔ | ✔ | ✔ | ✔ | ✔ |
+
+  For more information, see [Automate continuous data loading with cloud messaging](data-load-snowpipe-auto.md) and [Overview of the Snowpipe REST endpoints to load data](data-load-snowpipe-rest-overview.md).
+
+  Note that the government regions of the cloud providers do not allow event notifications to be sent to or from other commercial regions. For more information, see [AWS GovCloud (US)](https://docs.aws.amazon.com/govcloud-us/latest/UserGuide/govcloud-s3.html) and [Azure Government](https://learn.microsoft.com/en-us/azure/azure-government/).
+
+  > **Important:**
+  >
+  > Snowflake recommends that you enable cloud event filtering for Snowpipe to reduce costs, event noise, and latency. For more information about configuring event filtering for each cloud provider, see the following pages:
+  >
+  > * [Configuring event notifications using object key name filtering - Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-filtering.html)
+  > * [Understand event filtering for Event Grid subscriptions - Azure](https://docs.microsoft.com/en-us/azure/event-grid/event-filtering)
+  > * [Filtering messages - Google Pub/Sub](https://cloud.google.com/pubsub/docs/filtering)
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Snowflake supports two ingestion paths: bulk COPY INTO commands for batch loads from stages, and Snowpipe for continuous serverless ingestion triggered by cloud-storage events. Both support CSV, JSON, Parquet, Avro, ORC, and XML via FILE FORMAT objects. This skill covers both paths.
+
+      Sourced from https://docs.snowflake.com/en/user-guide/data-load-overview.html and https://docs.snowflake.com/en/user-guide/data-load-snowpipe-intro.html.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      To easily and accurately measure the ingestion latency of your data pipelines, use row timestamps. For more information, see [Use row timestamps to measure latency in your pipelines](data-engineering/row-timestamps.md).
+  - fragment_type: setup
+    sequence: 3
+    content: |
+      Snowflake refers to the location of data files in cloud storage as a *stage*.
+      The [COPY INTO <table>](../sql-reference/sql/copy-into-table.md) command used for both bulk and continuous data loads (Snowpipe) supports
+      cloud storage accounts managed by your business entity (*external stages*) as well as cloud storage contained in your Snowflake account
+      (*internal stages*).
+
+      Loading data from any of the following cloud storage services is supported regardless of the [cloud platform](intro-cloud-platforms.md) that hosts your Snowflake account:
+
+      * Amazon S3
+      * Google Cloud Storage
+      * Microsoft Azure
+
+      You cannot access data held in archival cloud storage classes that requires restoration before it can be retrieved. These archival storage classes include, for example, the Amazon S3 Glacier Flexible Retrieval or Glacier Deep Archive storage class, or Microsoft Azure Archive Storage.
+
+      Upload (i.e. *stage*) files to your cloud storage account using the tools provided by the cloud storage service.
+  - fragment_type: setup
+    sequence: 4
+    content: |
+      A named external stage is a database object created in a schema. This object stores the URL to files in cloud storage, the settings used to access the cloud storage account, and convenience settings such as the options that describe the format of staged files. Create stages using the [CREATE STAGE](../sql-reference/sql/create-stage.md) command.
+
+      Some data transfer billing charges may apply when loading data from files in a cloud storage service in a different region or cloud platform from your Snowflake account. For more information, see [Understanding data transfer cost](cost-understanding-data-transfer.md).
+  - fragment_type: setup
+    sequence: 5
+    content: |
+      Snowflake maintains the following stage types in your account:
+
+      User:
+      :   A user stage is allocated to each user for storing files. This stage type is designed to store files that are staged and managed by a single user but can be loaded into multiple tables. User stages cannot be altered or dropped.
+
+      Table:
+      :   A table stage is available for each table created in Snowflake. This stage type is designed to store files that are staged and managed by one or more users but only loaded into a single table. Table stages cannot be altered or dropped.
+
+          Note that a table stage is not a separate database object; rather, it is an implicit stage tied to the table itself. A table stage has no grantable privileges of its own. To stage files to a table stage, list the files, query them on the stage, or drop them, you must be the table owner (have the role with the OWNERSHIP privilege on the table).
+
+      Named:
+      :   A named internal stage is a database object created in a schema. This stage type can store files that are staged and managed by one or more users and loaded into one or more tables. Because named stages are database objects, the ability to create, modify, use, or drop them can be controlled using security access control privileges. Create stages using the [CREATE STAGE](../sql-reference/sql/create-stage.md) command.
+  - fragment_type: setup
+    sequence: 6
+    content: |
+      Upload files to any of the internal stage types from your local file system using the [PUT](../sql-reference/sql/put.md) command.
+
+      Snowpipe enables loading data from files as soon as they’re available in a stage. This means you can load data from files in micro-batches, making it available to users within minutes, rather than manually executing COPY statements on a schedule to load larger batches.
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      Snowpipe loads data from files as soon as they are available in a stage. The data is loaded according to the COPY statement defined in a referenced pipe.
+
+      A pipe is a named, first-class Snowflake object that contains a COPY statement used by Snowpipe. The COPY statement identifies the source location of the data files (i.e., a stage) and a target table. All data types are supported, including semi-structured data types such as JSON and Avro.
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      Different mechanisms for detecting the staged files are available:
+
+      * Automating Snowpipe using cloud messaging
+
+        Automated data loads leverage event notifications for cloud storage to inform Snowpipe of the arrival of new data files to load. Snowpipe
+        polls the event notifications from a queue. By using the metadata in the queue, Snowpipe loads the new data files into the target table in a continuous, serverless fashion based on the parameters
+        defined in a specified pipe object.
+      * Calling Snowpipe REST endpoints
+
+        Your client application calls a public REST endpoint with the name of a pipe object and a list of data filenames. If new data files
+        matching the list are discovered in the stage referenced by the pipe object, they are queued for loading. Snowflake-provided compute
+        resources load data from the queue into a Snowflake table based on parameters defined in the pipe.
+  - fragment_type: setup
+    sequence: 9
+    content: |
+      The following table indicates the cloud storage service support for automated Snowpipe and Snowpipe REST API calls from Snowflake accounts hosted on each
+      [cloud platform](intro-cloud-platforms.md):
+
+      | Snowflake Account Host | Amazon S3 | Google Cloud Storage | Microsoft Azure Blob storage | Microsoft Data Lake Storage Gen2 | Microsoft Azure General-purpose v2 |
+      | --- | --- | --- | --- | --- | --- |
+      | Amazon Web Services | ✔ | ✔ | ✔ | ✔ | ✔ |
+      | Google Cloud | ✔ | ✔ | ✔ | ✔ | ✔ |
+      | Microsoft Azure | ✔ | ✔ | ✔ | ✔ | ✔ |
+
+      For more information, see [Automate continuous data loading with cloud messaging](data-load-snowpipe-auto.md) and [Overview of the Snowpipe REST endpoints to load data](data-load-snowpipe-rest-overview.md).
+
+      Note that the government regions of the cloud providers do not allow event notifications to be sent to or from other commercial regions. For more information, see [AWS GovCloud (US)](https://docs.aws.amazon.com/govcloud-us/latest/UserGuide/govcloud-s3.html) and [Azure Government](https://learn.microsoft.com/en-us/azure/azure-government/).
+  - fragment_type: setup
+    sequence: 10
+    content: |
+      Snowflake recommends that you enable cloud event filtering for Snowpipe to reduce costs, event noise, and latency. For more information about configuring event filtering for each cloud provider, see the following pages:
+      * [Configuring event notifications using object key name filtering - Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-filtering.html)
+      * [Understand event filtering for Event Grid subscriptions - Azure](https://docs.microsoft.com/en-us/azure/event-grid/event-filtering)
+      * [Filtering messages - Google Pub/Sub](https://cloud.google.com/pubsub/docs/filtering)
