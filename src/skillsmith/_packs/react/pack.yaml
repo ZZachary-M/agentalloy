@@ -1,0 +1,28 @@
+name: react
+version: 1.0.0
+tier: framework
+description: |
+  React 19+ framework patterns — hooks rules and deps, useEffect lifecycle and cleanup, state management with useState/useReducer/Context, Server Components + Suspense streaming + use() hook, rendering model with keys/reconciliation/memoization. Precision-favored framework tier; sourced from react.dev per R1 tier-2 procedure (registry llms_url https://react.dev/llms.txt).
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: [core, engineering, typescript]
+skills:
+  - skill_id: react-hooks-rules-and-deps
+    file: react-hooks-rules-and-deps.yaml
+    fragment_count: 10
+  - skill_id: react-effects-and-cleanup
+    file: react-effects-and-cleanup.yaml
+    fragment_count: 9
+  - skill_id: react-state-and-context
+    file: react-state-and-context.yaml
+    fragment_count: 8
+  - skill_id: react-server-components-and-suspense
+    file: react-server-components-and-suspense.yaml
+    fragment_count: 10
+  - skill_id: react-rendering-keys-and-memoization
+    file: react-rendering-keys-and-memoization.yaml
+    fragment_count: 10
