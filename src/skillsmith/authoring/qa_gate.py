@@ -224,18 +224,48 @@ def run_critic(
         + (f"{semantic_tag_block}\n\n" if semantic_tag_block else "")
         + "Return JSON only. Schema per your system prompt."
     )
+    # LM Studio supports OpenAI-style ``json_schema`` Structured Outputs;
+    # ``json_object`` is rejected. We pin the schema to the QA verdict
+    # shape so the model can't return a bare ``tag_verdicts`` array (a
+    # failure mode observed with granite-4.1-30b on 2026-05-05). The
+    # schema is permissive on inner shapes (``additional_properties``)
+    # to tolerate model paraphrasing.
+    qa_verdict_schema = {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": ["approve", "revise", "reject"]},
+            "summary": {"type": "string"},
+            "blocking_issues": {"type": "array", "items": {"type": "string"}},
+            "per_fragment": {"type": "array", "items": {"type": "object"}},
+            "dedup_decisions": {"type": "array", "items": {"type": "object"}},
+            "suggested_edits": {"type": "string"},
+            "tag_verdicts": {"type": "array", "items": {"type": "object"}},
+            "prompt_version": {"type": "string"},
+        },
+        "required": [
+            "verdict",
+            "summary",
+            "blocking_issues",
+            "per_fragment",
+            "dedup_decisions",
+            "suggested_edits",
+            "tag_verdicts",
+        ],
+    }
     try:
         raw = client.chat(
             model=model,
             system=qa_prompt,
             user=user_prompt,
             temperature=0.0,
-            # LM Studio's backend rejects ``json_object`` — only ``json_schema``
-            # or ``text`` are supported. The sys-skill-qa prompt already
-            # mandates JSON-only output; we parse defensively below and tolerate
-            # a stray code fence. For stricter conformance we could upgrade to
-            # a full json_schema here later.
-            response_format={"type": "text"},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "qa_verdict",
+                    "strict": True,
+                    "schema": qa_verdict_schema,
+                },
+            },
         )
     except LMClientError as exc:
         return CriticVerdict.unparseable("<llm error>", str(exc))
