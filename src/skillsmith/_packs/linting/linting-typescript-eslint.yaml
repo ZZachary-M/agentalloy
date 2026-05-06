@@ -1,0 +1,506 @@
+skill_type: domain
+skill_id: linting-typescript-eslint
+canonical_name: typescript-eslint Setup and Type-Aware Linting
+category: tooling
+skill_class: domain
+domain_tags:
+  - typescript
+  - eslint
+  - linting
+  - type-aware
+  - configuration
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # typescript-eslint Setup and Type-Aware Linting
+
+  ## Overview
+
+  typescript-eslint is the official toolchain for linting TypeScript with ESLint. It provides a parser (`@typescript-eslint/parser`), a plugin (`@typescript-eslint/eslint-plugin`), and a config helper (`tseslint.config()`). Type-aware rules require `parserOptions.project` to be set so ESLint can read the TypeScript program's type info. This skill covers setup + type-aware linting.
+
+  Sourced from https://typescript-eslint.io/getting-started/quickstart and https://typescript-eslint.io/getting-started/typed-linting.
+
+  ## Ts Eslint Quickstart
+
+  ## Quickstart
+
+  This page is a quick-start for [ESLint's new "flat" config format](https://eslint.org/docs/latest/use/configure/configuration-files-new) to go from zero to linting with our recommended rules on your TypeScript code as quickly as possible.
+
+  ::note
+
+  - For the same guide but for [ESLint's legacy format](https://eslint.org/docs/latest/use/configure/configuration-files-deprecated) — see [Legacy ESLint Setup](./Legacy_ESLint_Setup.mdx).
+  - For quickstart information on linting with type information — see [Typed Linting](./Typed_Linting.mdx).
+
+  :::
+
+  ### Step 1: Installation
+
+  First, install the required packages for [ESLint](https://eslint.org), [TypeScript](https://typescriptlang.org), and [our tooling](../packages/TypeScript_ESLint.mdx):
+
+  ```bash npm2yarn
+  npm install --save-dev eslint @eslint/js typescript typescript-eslint
+  ```
+
+  ### Step 2: Configuration
+
+  Next, create an `eslint.config.mjs` config file in the root of your project, and populate it with the following:
+
+  ```js title="eslint.config.mjs"
+  // @ts-check
+
+
+  export default defineConfig(
+    js.configs.recommended,
+    tseslint.configs.recommended,
+  );
+  ```
+
+  This code will enable our [recommended configuration](../users/Shared_Configurations.mdx) for linting.
+
+  #### Details
+
+  - `defineConfig(...)` is an optional helper function built in to current versions of ESLint. See [the ESLint configuration docs](https://eslint.org/docs/latest/use/configure/configuration-files) for more detail.
+  - `'@eslint/js'` / `js.configs.recommended` turns on [eslint's recommended config](https://www.npmjs.com/package/@eslint/js).
+  - `tseslint.configs.recommended` turns on [our recommended config](../users/Shared_Configurations.mdx#recommended).
+
+  <details>
+  <summary>Aside on file extensions</summary>
+
+  The `.mjs` extension makes the file use the [ES modules (ESM)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) format. Node interprets `.js` files in the [CommonJS (CJS)](https://nodejs.org/api/modules.html) format by default, but if you have `"type": "module"` in your `package.json`, you can also use `eslint.config.js`.
+
+  </details>
+
+  ### Step 3: Running ESLint
+
+  Open a terminal to the root of your project and run the following command:
+
+  <Tabs groupId="npm2yarn">
+  <TabItem value="npm">
+
+  ```bash
+  npx eslint .
+  ```
+
+  </TabItem>
+  <TabItem value="Yarn">
+
+  ```bash
+  yarn eslint .
+  ```
+
+  </TabItem>
+  <TabItem value="pnpm">
+
+  ```bash
+  pnpm eslint .
+  ```
+
+  </TabItem>
+  </Tabs>
+
+  ESLint will lint all TypeScript compatible files within the current folder, and will output the results to your terminal.
+
+  ## Next Steps
+
+  If you're having problems getting this working, please have a look at our [Troubleshooting & FAQs](../troubleshooting/faqs/General.mdx).
+
+  ### Additional Configs
+
+  We recommend you consider enabling the following two configs:
+
+  - [`strict`](../users/Shared_Configurations.mdx#strict): a superset of `recommended` that includes more opinionated rules which may also catch bugs.
+  - [`stylistic`](../users/Shared_Configurations.mdx#stylistic): additional rules that enforce consistent styling without significantly catching bugs or changing logic.
+
+  ```js title="eslint.config.mjs"
+  export default defineConfig(
+    js.configs.recommended,
+    // Remove this line
+    tseslint.configs.recommended,
+    // Add this line
+    tseslint.configs.strict,
+    // Add this line
+    tseslint.configs.stylistic,
+  );
+  ```
+
+  You can read more about these in our [shared configurations docs](../users/Shared_Configurations.mdx).
+
+  ### Typed Linting
+
+  We also provide a plethora of powerful rules that utilize the power of TypeScript's type information.
+  [Visit the next page for a typed rules setup guide](./Typed_Linting.mdx).
+
+  ## Ts Eslint Typed Linting
+
+  Some typescript-eslint rules utilize TypeScript's type checking APIs to provide much deeper insights into your code.
+  This requires TypeScript to analyze your entire project instead of just the file being linted.
+  As a result, these rules are slower than traditional lint rules but are much more powerful.
+
+  To enable typed linting, there are two small changes you need to make to your config file:
+
+  <Tabs groupId="eslint-config">
+  <TabItem value="Flat Config">
+
+  1. Add `TypeChecked` to the name of any preset configs you're using, namely `recommended`, `strict`, and `stylistic`.
+  2. Add `languageOptions.parserOptions` to tell our parser how to find the TSConfig for each source file.
+
+  ```js title="eslint.config.mjs"
+
+  export default defineConfig(
+    js.configs.recommended,
+    // Remove this line
+    tseslint.configs.recommended,
+    // Added lines start
+    tseslint.configs.recommendedTypeChecked,
+    {
+      languageOptions: {
+        parserOptions: {
+          projectService: true,
+        },
+      },
+    },
+    // Added lines end
+  );
+  ```
+
+  In more detail:
+
+  - `tseslint.configs.recommendedTypeChecked` is a [shared configuration](../users/Shared_Configurations.mdx). It contains recommended rules that additionally require type information.
+  - `parserOptions.projectService: true` indicates to ask TypeScript's type checking service for each source file's type information (see [Parser > Project Service](../packages/Parser.mdx#projectservice)).
+
+  </TabItem>
+  <TabItem value="Legacy Config">
+
+  1. Add `-type-checked` to the name of any preset configs you're using, namely `recommended`, `strict`, and `stylistic`.
+  2. Add `parserOptions` to tell our parser how to find the TSConfig for each source file.
+
+  ```js title=".eslintrc.cjs"
+  /* eslint-env node */
+  module.exports = {
+    extends: [
+      'eslint:recommended',
+      // Remove this line
+      'plugin:@typescript-eslint/recommended',
+      // Add this line
+      'plugin:@typescript-eslint/recommended-type-checked',
+    ],
+    plugins: ['@typescript-eslint'],
+    parser: '@typescript-eslint/parser',
+    // Added lines start
+    parserOptions: {
+      projectService: true,
+      tsconfigRootDir: __dirname,
+    },
+    // Added lines end
+    root: true,
+  };
+  ```
+
+  In more detail:
+
+  - `plugin:@typescript-eslint/recommended-type-checked` is a [shared configuration](../users/Shared_Configurations.mdx). It contains recommended rules that additionally require type information.
+  - `parserOptions.projectService: true` indicates to ask TypeScript's type checking service for each source file's type information (see [Parser > `projectService`](../packages/Parser.mdx#projectservice)).
+  - `parserOptions.tsconfigRootDir` tells our parser the absolute path of your project's root directory (see [Parser > `tsconfigRootDir`](../packages/Parser.mdx#tsconfigrootdir)).
+
+  </TabItem>
+  </Tabs>
+
+  :::caution
+  Your ESLint config file may start receiving a parsing error about type information.
+  See [our TSConfig inclusion FAQ](../../troubleshooting/typed-linting#i-get-errors-telling-me-eslint-was-configured-to-run--however-that-tsconfig-does-not--none-of-those-tsconfigs-include-this-file).
+  :::
+
+  With that done, run the same lint command you ran before.
+  You may see new rules reporting errors based on type information!
+
+  ## Shared Configurations
+
+  If you enabled the [`strict` shared config](../users/Shared_Configurations.mdx#strict) and/or [`stylistic` shared config](../users/Shared_Configurations.mdx#stylistic) in a previous step, be sure to replace them with [`strictTypeChecked`](../users/Shared_Configurations.mdx#strict-type-checked) and [`stylisticTypeChecked`](../users/Shared_Configurations.mdx#stylistic-type-checked) respectively to add their type-checked rules.
+
+  <Tabs groupId="eslint-config">
+  <TabItem value="Flat Config">
+
+  ```js title="eslint.config.mjs"
+  export default defineConfig(
+    js.configs.recommended,
+    // Removed lines start
+    tseslint.configs.strict,
+    tseslint.configs.stylistic,
+    // Removed lines end
+    // Added lines start
+    tseslint.configs.strictTypeChecked,
+    tseslint.configs.stylisticTypeChecked,
+    // Added lines end
+    // ...
+  );
+  ```
+
+  </TabItem>
+  <TabItem value="Legacy Config">
+
+  ```js title=".eslintrc.cjs"
+  /* eslint-env node */
+  module.exports = {
+    extends: [
+      'eslint:recommended',
+      // Removed lines start
+      'plugin:@typescript-eslint/strict',
+      'plugin:@typescript-eslint/stylistic',
+      // Removed lines end
+      // Added lines start
+      'plugin:@typescript-eslint/strict-type-checked',
+      'plugin:@typescript-eslint/stylistic-type-checked',
+      // Added lines end
+    ],
+    // ...
+  };
+  ```
+
+  </TabItem>
+  </Tabs>
+
+  You can read more about the rules provided by typescript-eslint in our [rules docs](/rules) and [shared configurations docs](../users/Shared_Configurations.mdx).
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      ### Step 1: Installation
+
+      First, install the required packages for [ESLint](https://eslint.org), [TypeScript](https://typescriptlang.org), and [our tooling](../packages/TypeScript_ESLint.mdx):
+
+      ```bash npm2yarn
+      npm install --save-dev eslint @eslint/js typescript typescript-eslint
+      ```
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      ### Step 2: Configuration
+
+      Next, create an `eslint.config.mjs` config file in the root of your project, and populate it with the following:
+
+      ```js title="eslint.config.mjs"
+      // @ts-check
+
+
+      export default defineConfig(
+        js.configs.recommended,
+        tseslint.configs.recommended,
+      );
+      ```
+
+      This code will enable our [recommended configuration](../users/Shared_Configurations.mdx) for linting.
+
+      #### Details
+
+      - `defineConfig(...)` is an optional helper function built in to current versions of ESLint. See [the ESLint configuration docs](https://eslint.org/docs/latest/use/configure/configuration-files) for more detail.
+      - `'@eslint/js'` / `js.configs.recommended` turns on [eslint's recommended config](https://www.npmjs.com/package/@eslint/js).
+      - `tseslint.configs.recommended` turns on [our recommended config](../users/Shared_Configurations.mdx#recommended).
+
+      <details>
+      <summary>Aside on file extensions</summary>
+
+      The `.mjs` extension makes the file use the [ES modules (ESM)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) format. Node interprets `.js` files in the [CommonJS (CJS)](https://nodejs.org/api/modules.html) format by default, but if you have `"type": "module"` in your `package.json`, you can also use `eslint.config.js`.
+
+      </details>
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      ### Step 3: Running ESLint
+
+      Open a terminal to the root of your project and run the following command:
+
+      <Tabs groupId="npm2yarn">
+      <TabItem value="npm">
+
+      ```bash
+      npx eslint .
+      ```
+
+      </TabItem>
+      <TabItem value="Yarn">
+
+      ```bash
+      yarn eslint .
+      ```
+
+      </TabItem>
+      <TabItem value="pnpm">
+
+      ```bash
+      pnpm eslint .
+      ```
+
+      </TabItem>
+      </Tabs>
+
+      ESLint will lint all TypeScript compatible files within the current folder, and will output the results to your terminal.
+  - fragment_type: rationale
+    sequence: 4
+    content: |
+      ## Next Steps
+
+      If you're having problems getting this working, please have a look at our [Troubleshooting & FAQs](../troubleshooting/faqs/General.mdx).
+
+      ### Additional Configs
+
+      We recommend you consider enabling the following two configs:
+
+      - [`strict`](../users/Shared_Configurations.mdx#strict): a superset of `recommended` that includes more opinionated rules which may also catch bugs.
+      - [`stylistic`](../users/Shared_Configurations.mdx#stylistic): additional rules that enforce consistent styling without significantly catching bugs or changing logic.
+
+      ```js title="eslint.config.mjs"
+      export default defineConfig(
+        js.configs.recommended,
+        // Remove this line
+        tseslint.configs.recommended,
+        // Add this line
+        tseslint.configs.strict,
+        // Add this line
+        tseslint.configs.stylistic,
+      );
+      ```
+
+      You can read more about these in our [shared configurations docs](../users/Shared_Configurations.mdx).
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      ### Typed Linting
+
+      We also provide a plethora of powerful rules that utilize the power of TypeScript's type information.
+      [Visit the next page for a typed rules setup guide](./Typed_Linting.mdx).
+
+      ## Ts Eslint Typed Linting
+
+      Some typescript-eslint rules utilize TypeScript's type checking APIs to provide much deeper insights into your code.
+      This requires TypeScript to analyze your entire project instead of just the file being linted.
+      As a result, these rules are slower than traditional lint rules but are much more powerful.
+
+      To enable typed linting, there are two small changes you need to make to your config file:
+
+      <Tabs groupId="eslint-config">
+      <TabItem value="Flat Config">
+
+      1. Add `TypeChecked` to the name of any preset configs you're using, namely `recommended`, `strict`, and `stylistic`.
+      2. Add `languageOptions.parserOptions` to tell our parser how to find the TSConfig for each source file.
+
+      ```js title="eslint.config.mjs"
+
+      export default defineConfig(
+        js.configs.recommended,
+        // Remove this line
+        tseslint.configs.recommended,
+        // Added lines start
+        tseslint.configs.recommendedTypeChecked,
+        {
+          languageOptions: {
+            parserOptions: {
+              projectService: true,
+            },
+          },
+        },
+        // Added lines end
+      );
+      ```
+
+      In more detail:
+
+      - `tseslint.configs.recommendedTypeChecked` is a [shared configuration](../users/Shared_Configurations.mdx). It contains recommended rules that additionally require type information.
+      - `parserOptions.projectService: true` indicates to ask TypeScript's type checking service for each source file's type information (see [Parser > Project Service](../packages/Parser.mdx#projectservice)).
+
+      </TabItem>
+      <TabItem value="Legacy Config">
+
+      1. Add `-type-checked` to the name of any preset configs you're using, namely `recommended`, `strict`, and `stylistic`.
+      2. Add `parserOptions` to tell our parser how to find the TSConfig for each source file.
+
+      ```js title=".eslintrc.cjs"
+      /* eslint-env node */
+      module.exports = {
+        extends: [
+          'eslint:recommended',
+          // Remove this line
+          'plugin:@typescript-eslint/recommended',
+          // Add this line
+          'plugin:@typescript-eslint/recommended-type-checked',
+        ],
+        plugins: ['@typescript-eslint'],
+        parser: '@typescript-eslint/parser',
+        // Added lines start
+        parserOptions: {
+          projectService: true,
+          tsconfigRootDir: __dirname,
+        },
+        // Added lines end
+        root: true,
+      };
+      ```
+
+      In more detail:
+
+      - `plugin:@typescript-eslint/recommended-type-checked` is a [shared configuration](../users/Shared_Configurations.mdx). It contains recommended rules that additionally require type information.
+      - `parserOptions.projectService: true` indicates to ask TypeScript's type checking service for each source file's type information (see [Parser > `projectService`](../packages/Parser.mdx#projectservice)).
+      - `parserOptions.tsconfigRootDir` tells our parser the absolute path of your project's root directory (see [Parser > `tsconfigRootDir`](../packages/Parser.mdx#tsconfigrootdir)).
+
+      </TabItem>
+      </Tabs>
+
+      :::caution
+      Your ESLint config file may start receiving a parsing error about type information.
+      See [our TSConfig inclusion FAQ](../../troubleshooting/typed-linting#i-get-errors-telling-me-eslint-was-configured-to-run--however-that-tsconfig-does-not--none-of-those-tsconfigs-include-this-file).
+      :::
+
+      With that done, run the same lint command you ran before.
+      You may see new rules reporting errors based on type information!
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      ## Shared Configurations
+
+      If you enabled the [`strict` shared config](../users/Shared_Configurations.mdx#strict) and/or [`stylistic` shared config](../users/Shared_Configurations.mdx#stylistic) in a previous step, be sure to replace them with [`strictTypeChecked`](../users/Shared_Configurations.mdx#strict-type-checked) and [`stylisticTypeChecked`](../users/Shared_Configurations.mdx#stylistic-type-checked) respectively to add their type-checked rules.
+
+      <Tabs groupId="eslint-config">
+      <TabItem value="Flat Config">
+
+      ```js title="eslint.config.mjs"
+      export default defineConfig(
+        js.configs.recommended,
+        // Removed lines start
+        tseslint.configs.strict,
+        tseslint.configs.stylistic,
+        // Removed lines end
+        // Added lines start
+        tseslint.configs.strictTypeChecked,
+        tseslint.configs.stylisticTypeChecked,
+        // Added lines end
+        // ...
+      );
+      ```
+
+      </TabItem>
+      <TabItem value="Legacy Config">
+
+      ```js title=".eslintrc.cjs"
+      /* eslint-env node */
+      module.exports = {
+        extends: [
+          'eslint:recommended',
+          // Removed lines start
+          'plugin:@typescript-eslint/strict',
+          'plugin:@typescript-eslint/stylistic',
+          // Removed lines end
+          // Added lines start
+          'plugin:@typescript-eslint/strict-type-checked',
+          'plugin:@typescript-eslint/stylistic-type-checked',
+          // Added lines end
+        ],
+        // ...
+      };
+      ```
+
+      </TabItem>
+      </Tabs>
+
+      You can read more about the rules provided by typescript-eslint in our [rules docs](/rules) and [shared configurations docs](../users/Shared_Configurations.mdx).

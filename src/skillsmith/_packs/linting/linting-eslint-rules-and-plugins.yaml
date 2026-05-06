@@ -1,0 +1,649 @@
+skill_type: domain
+skill_id: linting-eslint-rules-and-plugins
+canonical_name: ESLint Rules and Plugins
+category: tooling
+skill_class: domain
+domain_tags:
+  - eslint
+  - rules
+  - plugins
+  - configuration
+  - severity
+always_apply: false
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # ESLint Rules and Plugins
+
+  ## Overview
+
+  ESLint rules are configured under the `rules` key in flat config objects. Each rule entry takes a severity (`'off' | 'warn' | 'error'`) and optional rule-specific options. Plugins package custom rules and configurations under a namespace. This skill covers rule + plugin configuration.
+
+  Sourced from https://eslint.org/docs/latest/use/configure/rules and https://eslint.org/docs/latest/use/configure/plugins.
+
+  ## Eslint Rules
+
+  ::: tip
+  This page explains how to configure rules using the flat config format.
+  :::
+
+  Rules are the core building block of ESLint. A rule validates if your code meets a certain expectation, and what to do if it does not meet that expectation. Rules can also contain additional configuration options specific to that rule.
+
+  ESLint comes with a large number of [built-in rules](../../rules/) and you can add more rules through plugins. You can modify which rules your project uses with either configuration comments or configuration files.
+
+  ## Rule Severities
+
+  To change a rule's severity, set the rule ID equal to one of these values:
+
+  - `"off"` or `0` - turn the rule off.
+  - `"warn"` or `1` - turn the rule on as a warning (doesn't affect exit code).
+  - `"error"` or `2` - turn the rule on as an error (exit code is 1 when triggered).
+
+  Rules are typically set to `"error"` to enforce compliance with the rule during continuous integration testing, pre-commit checks, and pull request merging because doing so causes ESLint to exit with a non-zero exit code.
+
+  If you don't want to enforce compliance with a rule but would still like ESLint to report the rule's violations, set the severity to `"warn"`. This is typically used when introducing a new rule that will eventually be set to `"error"`, when a rule is flagging something other than a potential buildtime or runtime error (such as an unused variable), or when a rule cannot determine with certainty that a problem has been found (when a rule might have false positives and need manual review).
+
+  ### Use configuration comments
+
+  To configure rules inside of a file using configuration comments, use a comment in the following format:
+
+  ```js
+  /* eslint eqeqeq: "off", curly: "error" */
+  ```
+
+  In this example, [`eqeqeq`](../../rules/eqeqeq) is turned off and [`curly`](../../rules/curly) is turned on as an error. You can also use the numeric equivalent for the rule severity:
+
+  ```js
+  /* eslint eqeqeq: 0, curly: 2 */
+  ```
+
+  This example is the same as the last example, only it uses the numeric codes instead of the string values. The [`eqeqeq`](../../rules/eqeqeq) rule is off and the [`curly`](../../rules/curly) rule is set to be an error.
+
+  If a rule has additional options, you can specify them using array literal syntax, such as:
+
+  ```js
+  /* eslint quotes: ["error", "double"], curly: 2 */
+  ```
+
+  This comment specifies the `"double"` option for the [`quotes`](../../rules/quotes) rule. The first item in the array is always the rule severity (number or string).
+
+  #### Configuration Comment Descriptions
+
+  Configuration comments can include descriptions to explain why the comment is necessary. The description must occur after the configuration and is separated from the configuration by two or more consecutive `-` characters. For example:
+
+  ```js
+  /* eslint eqeqeq: "off", curly: "error" -- Here's a description about why this configuration is necessary. */
+  ```
+
+  ```js
+  /* eslint eqeqeq: "off", curly: "error"
+      --------
+      Here's a description about why this configuration is necessary. */
+  ```
+
+  ```js
+  /* eslint eqeqeq: "off", curly: "error"
+   * --------
+   * This will not work due to the line above starting with a '*' character.
+   */
+  ```
+
+  #### Report unused `eslint` inline config comments
+
+  To report unused `eslint` inline config comments (those that don't change anything from what was already configured), use the `reportUnusedInlineConfigs` setting. For example:
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		linterOptions: {
+  			reportUnusedInlineConfigs: "error",
+  		},
+  	},
+  ]);
+  ```
+
+  This setting defaults to `"off"`.
+
+  This setting is similar to the [`--report-unused-inline-configs`](../command-line-interface#--report-unused-inline-configs) CLI option.
+
+  ::: tip
+  To enforce best practices around configuration comments, take a look at [`eslint-plugin-eslint-comments`](https://github.com/eslint-community/eslint-plugin-eslint-comments) ([Docs](https://eslint-community.github.io/eslint-plugin-eslint-comments/)).
+  :::
+
+  ### Use Configuration Files
+
+  To configure rules inside of a [configuration file](./configuration-files#configuration-file), use the `rules` key along with an error level and any options you want to use. For example:
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		rules: {
+  			eqeqeq: "off",
+  			"no-unused-vars": "error",
+  			"prefer-const": ["error", { ignoreReadBeforeAssign: true }],
+  		},
+  	},
+  ]);
+  ```
+
+  When more than one configuration object specifies the same rule, the rule configuration is merged with the later object taking precedence over any previous objects. For example:
+
+  ```js
+
+  export default defineConfig([
+  	{
+  		rules: {
+  			semi: ["error", "never"],
+  		},
+  	},
+  	{
+  		rules: {
+  			semi: ["warn", "always"],
+  		},
+  	},
+  ]);
+  ```
+
+  Using this configuration, the final rule configuration for `semi` is `["warn", "always"]` because it appears last in the array. The array indicates that the configuration is for the severity and any options. You can change just the severity by defining only a string or number, as in this example:
+
+  ```js
+
+  export default defineConfig([
+  	{
+  		rules: {
+  			semi: ["error", "never"],
+  		},
+  	},
+  	{
+  		rules: {
+  			semi: "warn",
+  		},
+  	},
+  ]);
+  ```
+
+  Here, the second configuration object only overrides the severity, so the final configuration for `semi` is `["warn", "never"]`.
+
+  :::: important
+  Rules configured via configuration comments have the highest priority and are applied after all configuration files settings.
+  :::
+
+  ## Eslint Plugins
+
+  ::: tip
+  This page explains how to configure plugins using the flat config format.
+  :::
+
+  You can extend ESLint with plugins in a variety of different ways. Plugins can include:
+
+  - Custom rules to validate if your code meets a certain expectation, and what to do if it does not meet that expectation.
+  - Custom configurations. Please refer to the plugin's documentation for details on how to use these configurations.
+  - Custom processors to extract JavaScript code from other kinds of files or preprocess code before linting.
+
+  ## Configure Plugins
+
+  ESLint supports the use of third-party plugins. Plugins are simply objects that conform to a specific interface that ESLint recognizes.
+
+  To configure plugins inside of a [configuration file](./configuration-files#configuration-file), use the `plugins` key, which contains an object with properties representing plugin namespaces and values equal to the plugin object.
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		plugins: {
+  			example,
+  		},
+  		rules: {
+  			"example/rule1": "warn",
+  		},
+  	},
+  ]);
+  ```
+
+  ::: tip
+  When creating a namespace for a plugin, the convention is to use the npm package name without the `eslint-plugin-` prefix. In the preceding example, `eslint-plugin-example` is assigned a namespace of `example`.
+  :::
+
+  ### Configure a Local Plugin
+
+  Plugins don't need to be published to npm for use with ESLint. You can also load plugins directly from a file, as in this example:
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		plugins: {
+  			local,
+  		},
+  		rules: {
+  			"local/rule1": "warn",
+  		},
+  	},
+  ]);
+  ```
+
+  Here, the namespace `local` is used, but you can also use any name you'd like instead.
+
+  ### Configure a Virtual Plugin
+
+  Plugin definitions can be created virtually directly in your config. For example, suppose you have a rule contained in a file called `my-rule.js` that you'd like to enable in your config. You can define a virtual plugin to do so, as in this example:
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		plugins: {
+  			local: {
+  				rules: {
+  					"my-rule": myRule,
+  				},
+  			},
+  		},
+  		rules: {
+  			"local/my-rule": "warn",
+  		},
+  	},
+  ]);
+  ```
+
+  Here, the namespace `local` is used to define a virtual plugin. The rule `myRule` is then assigned a name of `my-rule` inside of the virtual plugin's `rules` object. (See [Create Plugins](../../extend/plugins) for the complete format of a plugin.) You can then reference the rule as `local/my-rule` to configure it.
+
+  ## Use Plugin Rules
+
+  You can use specific rules included in a plugin. To do this, specify the plugin
+  in a configuration object using the `plugins` key. The value for the `plugin` key
+  is an object where the name of the plugin is the property name and the value is the plugin object itself. Here's an example:
+
+  ```js
+  // eslint.config.js
+
+  export default defineConfig([
+  	{
+  		files: ["**/*.js"],
+  		plugins: {
+  			jsdoc: jsdoc,
+  		},
+  		rules: {
+  			"jsdoc/require-description": "error",
+  			"jsdoc/check-values": "error",
+  		},
+  	},
+  ]);
+  ```
+
+  In this configuration, the JSDoc plugin is defined to have the name `jsdoc`. The prefix `jsdoc/` in each rule name indicates that the rule is coming from the plugin with that name rather than from ESLint itself.
+
+  Because the name of the plugin and the plugin object are both `jsdoc`, you can also shorten the configuration to this:
+
+  ```js
+
+  export default defineConfig([
+  	{
+  		files: ["**/*.js"],
+  		plugins: {
+  			jsdoc,
+  		},
+  		rules: {
+  			"jsdoc/require-description": "error",
+  			"jsdoc/check-values": "error",
+  		},
+  	},
+  ]);
+  ```
+
+  While this is the most common convention, you don't need to use the same name that the plugin prescribes. You can specify any prefix that you'd like, such as:
+
+  ```js
+
+  export default defineConfig([
+  	{
+  		files: ["**/*.js"],
+  		plugins: {
+  			jsd: jsdoc,
+  		},
+  		rules: {
+  			"jsd/require-description": "error",
+  			"jsd/check-values": "error",
+  		},
+  	},
+  ]);
+  ```
+
+  This configuration object uses `jsd` as the prefix plugin instead of `jsdoc`.
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      ## Overview
+
+      ESLint rules are configured under the `rules` key in flat config objects. Each rule entry takes a severity (`'off' | 'warn' | 'error'`) and optional rule-specific options. Plugins package custom rules and configurations under a namespace. This skill covers rule + plugin configuration.
+
+      Sourced from https://eslint.org/docs/latest/use/configure/rules and https://eslint.org/docs/latest/use/configure/plugins.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      ## Eslint Rules
+
+      ::: tip
+      This page explains how to configure rules using the flat config format.
+      :::
+
+      Rules are the core building block of ESLint. A rule validates if your code meets a certain expectation, and what to do if it does not meet that expectation. Rules can also contain additional configuration options specific to that rule.
+
+      ESLint comes with a large number of [built-in rules](../../rules/) and you can add more rules through plugins. You can modify which rules your project uses with either configuration comments or configuration files.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      ## Rule Severities
+
+      To change a rule's severity, set the rule ID equal to one of these values:
+
+      - `"off"` or `0` - turn the rule off.
+      - `"warn"` or `1` - turn the rule on as a warning (doesn't affect exit code).
+      - `"error"` or `2` - turn the rule on as an error (exit code is 1 when triggered).
+
+      Rules are typically set to `"error"` to enforce compliance with the rule during continuous integration testing, pre-commit checks, and pull request merging because doing so causes ESLint to exit with a non-zero exit code.
+
+      If you don't want to enforce compliance with a rule but would still like ESLint to report the rule's violations, set the severity to `"warn"`. This is typically used when introducing a new rule that will eventually be set to `"error"`, when a rule is flagging something other than a potential buildtime or runtime error (such as an unused variable), or when a rule cannot determine with certainty that a problem has been found (when a rule might have false positives and need manual review).
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      ### Use configuration comments
+
+      To configure rules inside of a file using configuration comments, use a comment in the following format:
+
+      ```js
+      /* eslint eqeqeq: "off", curly: "error" */
+      ```
+
+      In this example, [`eqeqeq`](../../rules/eqeqeq) is turned off and [`curly`](../../rules/curly) is turned on as an error. You can also use the numeric equivalent for the rule severity:
+
+      ```js
+      /* eslint eqeqeq: 0, curly: 2 */
+      ```
+
+      This example is the same as the last example, only it uses the numeric codes instead of the string values. The [`eqeqeq`](../../rules/eqeqeq) rule is off and the [`curly`](../../rules/curly) rule is set to be an error.
+
+      If a rule has additional options, you can specify them using array literal syntax, such as:
+
+      ```js
+      /* eslint quotes: ["error", "double"], curly: 2 */
+      ```
+
+      This comment specifies the `"double"` option for the [`quotes`](../../rules/quotes) rule. The first item in the array is always the rule severity (number or string).
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      #### Configuration Comment Descriptions
+
+      Configuration comments can include descriptions to explain why the comment is necessary. The description must occur after the configuration and is separated from the configuration by two or more consecutive `-` characters. For example:
+
+      ```js
+      /* eslint eqeqeq: "off", curly: "error" -- Here's a description about why this configuration is necessary. */
+      ```
+
+      ```js
+      /* eslint eqeqeq: "off", curly: "error"
+          --------
+          Here's a description about why this configuration is necessary. */
+      ```
+
+      ```js
+      /* eslint eqeqeq: "off", curly: "error"
+       * --------
+       * This will not work due to the line above starting with a '*' character.
+       */
+      ```
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      #### Report unused `eslint` inline config comments
+
+      To report unused `eslint` inline config comments (those that don't change anything from what was already configured), use the `reportUnusedInlineConfigs` setting. For example:
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		linterOptions: {
+      			reportUnusedInlineConfigs: "error",
+      		},
+      	},
+      ]);
+      ```
+
+      This setting defaults to `"off"`.
+
+      This setting is similar to the [`--report-unused-inline-configs`](../command-line-interface#--report-unused-inline-configs) CLI option.
+
+      ::: tip
+      To enforce best practices around configuration comments, take a look at [`eslint-plugin-eslint-comments`](https://github.com/eslint-community/eslint-plugin-eslint-comments) ([Docs](https://eslint-community.github.io/eslint-plugin-eslint-comments/)).
+      :::
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      ### Use Configuration Files
+
+      To configure rules inside of a [configuration file](./configuration-files#configuration-file), use the `rules` key along with an error level and any options you want to use. For example:
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		rules: {
+      			eqeqeq: "off",
+      			"no-unused-vars": "error",
+      			"prefer-const": ["error", { ignoreReadBeforeAssign: true }],
+      		},
+      	},
+      ]);
+      ```
+
+      When more than one configuration object specifies the same rule, the rule configuration is merged with the later object taking precedence over any previous objects. For example:
+
+      ```js
+
+      export default defineConfig([
+      	{
+      		rules: {
+      			semi: ["error", "never"],
+      		},
+      	},
+      	{
+      		rules: {
+      			semi: ["warn", "always"],
+      		},
+      	},
+      ]);
+      ```
+
+      Using this configuration, the final rule configuration for `semi` is `["warn", "always"]` because it appears last in the array. The array indicates that the configuration is for the severity and any options. You can change just the severity by defining only a string or number, as in this example:
+
+      ```js
+
+      export default defineConfig([
+      	{
+      		rules: {
+      			semi: ["error", "never"],
+      		},
+      	},
+      	{
+      		rules: {
+      			semi: "warn",
+      		},
+      	},
+      ]);
+      ```
+
+      Here, the second configuration object only overrides the severity, so the final configuration for `semi` is `["warn", "never"]`.
+
+      :::: important
+      Rules configured via configuration comments have the highest priority and are applied after all configuration files settings.
+      :::
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      ## Eslint Plugins
+
+      ::: tip
+      This page explains how to configure plugins using the flat config format.
+      :::
+
+      You can extend ESLint with plugins in a variety of different ways. Plugins can include:
+
+      - Custom rules to validate if your code meets a certain expectation, and what to do if it does not meet that expectation.
+      - Custom configurations. Please refer to the plugin's documentation for details on how to use these configurations.
+      - Custom processors to extract JavaScript code from other kinds of files or preprocess code before linting.
+  - fragment_type: execution
+    sequence: 9
+    content: |
+      ## Configure Plugins
+
+      ESLint supports the use of third-party plugins. Plugins are simply objects that conform to a specific interface that ESLint recognizes.
+
+      To configure plugins inside of a [configuration file](./configuration-files#configuration-file), use the `plugins` key, which contains an object with properties representing plugin namespaces and values equal to the plugin object.
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		plugins: {
+      			example,
+      		},
+      		rules: {
+      			"example/rule1": "warn",
+      		},
+      	},
+      ]);
+      ```
+
+      ::: tip
+      When creating a namespace for a plugin, the convention is to use the npm package name without the `eslint-plugin-` prefix. In the preceding example, `eslint-plugin-example` is assigned a namespace of `example`.
+      :::
+  - fragment_type: execution
+    sequence: 10
+    content: |
+      ### Configure a Local Plugin
+
+      Plugins don't need to be published to npm for use with ESLint. You can also load plugins directly from a file, as in this example:
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		plugins: {
+      			local,
+      		},
+      		rules: {
+      			"local/rule1": "warn",
+      		},
+      	},
+      ]);
+      ```
+
+      Here, the namespace `local` is used, but you can also use any name you'd like instead.
+  - fragment_type: execution
+    sequence: 11
+    content: |
+      ### Configure a Virtual Plugin
+
+      Plugin definitions can be created virtually directly in your config. For example, suppose you have a rule contained in a file called `my-rule.js` that you'd like to enable in your config. You can define a virtual plugin to do so, as in this example:
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		plugins: {
+      			local: {
+      				rules: {
+      					"my-rule": myRule,
+      				},
+      			},
+      		},
+      		rules: {
+      			"local/my-rule": "warn",
+      		},
+      	},
+      ]);
+      ```
+
+      Here, the namespace `local` is used to define a virtual plugin. The rule `myRule` is then assigned a name of `my-rule` inside of the virtual plugin's `rules` object. (See [Create Plugins](../../extend/plugins) for the complete format of a plugin.) You can then reference the rule as `local/my-rule` to configure it.
+  - fragment_type: execution
+    sequence: 12
+    content: |
+      ## Use Plugin Rules
+
+      You can use specific rules included in a plugin. To do this, specify the plugin
+      in a configuration object using the `plugins` key. The value for the `plugin` key
+      is an object where the name of the plugin is the property name and the value is the plugin object itself. Here's an example:
+
+      ```js
+      // eslint.config.js
+
+      export default defineConfig([
+      	{
+      		files: ["**/*.js"],
+      		plugins: {
+      			jsdoc: jsdoc,
+      		},
+      		rules: {
+      			"jsdoc/require-description": "error",
+      			"jsdoc/check-values": "error",
+      		},
+      	},
+      ]);
+      ```
+
+      In this configuration, the JSDoc plugin is defined to have the name `jsdoc`. The prefix `jsdoc/` in each rule name indicates that the rule is coming from the plugin with that name rather than from ESLint itself.
+
+      Because the name of the plugin and the plugin object are both `jsdoc`, you can also shorten the configuration to this:
+
+      ```js
+
+      export default defineConfig([
+      	{
+      		files: ["**/*.js"],
+      		plugins: {
+      			jsdoc,
+      		},
+      		rules: {
+      			"jsdoc/require-description": "error",
+      			"jsdoc/check-values": "error",
+      		},
+      	},
+      ]);
+      ```
+
+      While this is the most common convention, you don't need to use the same name that the plugin prescribes. You can specify any prefix that you'd like, such as:
+
+      ```js
+
+      export default defineConfig([
+      	{
+      		files: ["**/*.js"],
+      		plugins: {
+      			jsd: jsdoc,
+      		},
+      		rules: {
+      			"jsd/require-description": "error",
+      			"jsd/check-values": "error",
+      		},
+      	},
+      ]);
+      ```
+
+      This configuration object uses `jsd` as the prefix plugin instead of `jsdoc`.
