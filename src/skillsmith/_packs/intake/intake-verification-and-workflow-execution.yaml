@@ -1,0 +1,165 @@
+skill_type: domain
+skill_id: intake-verification-and-workflow-execution
+canonical_name: Intake — Verification UX and Workflow Execution
+category: tooling
+skill_class: domain
+domain_tags:
+  - workflow-verification
+  - phase-gates
+  - handoff-confirmations
+  - routing-layer
+  - v1-scope
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: machine authoring contract for pending-qa pipeline
+raw_prose: |
+  # Intake — Verification UX and Workflow Execution
+
+  ## Overview
+
+  Once the router proposes a workflow, verification UX confirms the route was correct before the workflow starts. Workflow execution then walks phase gates mirroring the SDD pipeline.
+
+  Sourced from docs/skillsmith-architecture-spec_update.md §6.4–6.6.
+
+  ---
+
+  ### 6.4 Verification UX
+
+  When Qwen returns a routing decision, the intake workflow replays the signals back to the user in natural language and proposes the workflow:
+
+  > "It sounds like you want to scope a new project for your team — defining requirements and success criteria before getting into design details. I think you're looking for the **Project Spec** workflow. Want me to load that?"
+
+  Three response paths:
+
+  1. **Yes:** load the workflow, intake unloads, session continues.
+  2. **No, with correction:** user clarifies what's wrong. Common case: "actually I'm already past spec, I need to do the technical design now." The intake workflow updates the relevant signal (`current_state: in_progress`, or `intent: design`) and re-routes. Qwen sees the previous attempt as ruled-out.
+  3. **Show me options:** user wants to see the menu. Intake surfaces the top 3 alternates with brief descriptions.
+
+  The verification step is non-skippable in v1. Even when confidence is high, the user confirms before workflow loads. This costs one turn per session but prevents silent misroutes.
+
+  ---
+
+  ### 6.5 Workflow execution and gates
+
+  Once a workflow loads, the harness runs it. Each phase within the workflow has:
+
+  **Exit gate:** the conditions that must be met before this phase completes. These are codified in the workflow's instructions ("the spec is not complete until problem statement, success criteria, scope boundaries, and explicit non-goals are all populated").
+
+  **Scope check:** the conditions that determine whether the user's current activity still matches this phase's job. Scope checks run continuously during execution, not just at phase boundaries.
+
+  ```yaml
+  # Example phase in sdd-spec
+  phase: define_problem
+  exit_gate:
+    conditions:
+      - problem_statement_populated
+      - stakeholders_identified
+      - constraints_documented
+    validation: "All three fields must have at least one paragraph of substantive content. Empty or placeholder content does not satisfy."
+  scope_check:
+    in_scope_signals:
+      - user_describes_a_problem
+      - user_identifies_constraints
+      - user_lists_stakeholders
+    out_of_scope_signals:
+      - user_asks_about_implementation_details  # design phase
+      - user_asks_about_specific_technologies   # build phase
+      - user_describes_a_bug                    # different workflow entirely
+    on_out_of_scope: |
+      Surface to the user: "It sounds like you're moving into [detected scope].
+      The current phase is about defining the problem. Want to continue here,
+      or is it time to move on?"
+  ```
+
+  **On scope check failure:** the workflow doesn't unilaterally switch contexts. It surfaces to the user that the current activity is drifting and offers a path. The user decides — continue in current scope, advance to next phase, or exit to re-route.
+
+  **On exit gate satisfaction:** the workflow advances. If all phases are complete, the workflow exits and the harness either ends the session or loads the next workflow per the workflow's hand-off rules.
+
+  ---
+
+  ### 6.6 v1 scope for workflow execution
+
+  The full gate-and-scope-check architecture is v2. v1 ships with simpler behavior:
+
+  - Workflows have exit gates only (no scope checks).
+  - If the user drifts out of scope, they have to explicitly request a workflow switch (which routes through intake again).
+  - Hard scope per session — no automatic re-routing.
+
+  This is a deliberate simplification. The full design with scope checks and inline re-routing is correct, but it's enough complexity that getting it right in v1 trades against shipping anything. v1 ships with hard scope; v2 adds scope checks and graceful re-routing once the rest of the architecture is stable.
+
+  This limitation must be documented prominently for v1 users. The most likely complaint: "I started in scope mode and now I want to do design, why do I have to start over?" The answer in v1 is "explicitly switch workflows from the menu." That's acceptable for early users but won't scale.
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Once the router proposes a workflow, verification UX confirms the route was correct before the workflow starts. Workflow execution then walks phase gates mirroring the SDD pipeline.
+
+      Sourced from docs/skillsmith-architecture-spec_update.md §6.4–6.6.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      When Qwen returns a routing decision, the intake workflow replays the signals back to the user in natural language and proposes the workflow:
+
+      > "It sounds like you want to scope a new project for your team — defining requirements and success criteria before getting into design details. I think you're looking for the **Project Spec** workflow. Want me to load that?"
+
+      Three response paths:
+
+      1. **Yes:** load the workflow, intake unloads, session continues.
+      2. **No, with correction:** user clarifies what's wrong. Common case: "actually I'm already past spec, I need to do the technical design now." The intake workflow updates the relevant signal (`current_state: in_progress`, or `intent: design`) and re-routes. Qwen sees the previous attempt as ruled-out.
+      3. **Show me options:** user wants to see the menu. Intake surfaces the top 3 alternates with brief descriptions.
+
+      The verification step is non-skippable in v1. Even when confidence is high, the user confirms before workflow loads. This costs one turn per session but prevents silent misroutes.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      Once a workflow loads, the harness runs it. Each phase within the workflow has:
+
+      **Exit gate:** the conditions that must be met before this phase completes. These are codified in the workflow's instructions ("the spec is not complete until problem statement, success criteria, scope boundaries, and explicit non-goals are all populated").
+
+      **Scope check:** the conditions that determine whether the user's current activity still matches this phase's job. Scope checks run continuously during execution, not just at phase boundaries.
+
+      ```yaml
+      # Example phase in sdd-spec
+      phase: define_problem
+      exit_gate:
+        conditions:
+          - problem_statement_populated
+          - stakeholders_identified
+          - constraints_documented
+        validation: "All three fields must have at least one paragraph of substantive content. Empty or placeholder content does not satisfy."
+      scope_check:
+        in_scope_signals:
+          - user_describes_a_problem
+          - user_identifies_constraints
+          - user_lists_stakeholders
+        out_of_scope_signals:
+          - user_asks_about_implementation_details  # design phase
+          - user_asks_about_specific_technologies   # build phase
+          - user_describes_a_bug                    # different workflow entirely
+        on_out_of_scope: |
+          Surface to the user: "It sounds like you're moving into [detected scope].
+          The current phase is about defining the problem. Want to continue here,
+          or is it time to move on?"
+      ```
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      **On scope check failure:** the workflow doesn't unilaterally switch contexts. It surfaces to the user that the current activity is drifting and offers a path. The user decides — continue in current scope, advance to next phase, or exit to re-route.
+
+      **On exit gate satisfaction:** the workflow advances. If all phases are complete, the workflow exits and the harness either ends the session or loads the next workflow per the workflow's hand-off rules.
+  - fragment_type: rationale
+    sequence: 5
+    content: |
+      The full gate-and-scope-check architecture is v2. v1 ships with simpler behavior:
+
+      - Workflows have exit gates only (no scope checks).
+      - If the user drifts out of scope, they have to explicitly request a workflow switch (which routes through intake again).
+      - Hard scope per session — no automatic re-routing.
+
+      This is a deliberate simplification. The full design with scope checks and inline re-routing is correct, but it's enough complexity that getting it right in v1 trades against shipping anything. v1 ships with hard scope; v2 adds scope checks and graceful re-routing once the rest of the architecture is stable.
+  - fragment_type: rationale
+    sequence: 6
+    content: |
+      This limitation must be documented prominently for v1 users. The most likely complaint: "I started in scope mode and now I want to do design, why do I have to start over?" The answer in v1 is "explicitly switch workflows from the menu." That's acceptable for early users but won't scale.

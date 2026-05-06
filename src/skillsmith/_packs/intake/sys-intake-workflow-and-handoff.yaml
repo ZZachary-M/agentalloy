@@ -1,0 +1,84 @@
+skill_type: system
+skill_id: sys-intake-workflow-and-handoff
+canonical_name: Intake Workflow and Handoff
+category: tooling
+skill_class: system
+domain_tags: []
+always_apply: true
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring draft
+raw_prose: |
+  # Intake Workflow and Handoff
+
+  ## Overview
+
+  The intake workflow loads at harness boot and runs before any other workflow. Its job: gather structured signals (intent / artifact_type / scope / urgency) via a short interview, then hand off to the routed workflow.
+
+  Sourced from docs/skillsmith-architecture-spec_update.md §6.1–6.2.
+
+  ---
+
+  ### 6.1 What a workflow is
+
+  A workflow is a skillsmith artifact that defines:
+
+  - **Persona:** how the agent should behave during this workflow ("you are an interviewer gathering signals," "you are a spec author asking clarifying questions")
+  - **Phase structure:** the sequence of phases this workflow goes through (e.g. `intake` workflow has phases `gather → propose → verify`; `sdd-spec` has phases corresponding to spec sections)
+  - **Exit gates:** conditions that must be met before this workflow completes
+  - **Scope checks:** conditions that determine whether the user's current intent still matches this workflow's job
+  - **Tier scope:** which `PACK_TIERS` (for domain skills) and position markers (for workflow skills) this workflow's retrieval should pull from
+  - **Retrieval policy:** any phase-specific overrides to default retrieval behavior
+  - **Hand-off rules:** what happens when this workflow exits — which workflow loads next, or whether the session ends
+
+  Workflows are versioned skills in skillsmith. Updating a workflow goes through the same path as updating any other skill (skill updater, lint, version bump).
+
+  ### 6.2 The intake workflow (v2)
+
+  The intake workflow is the special workflow loaded at harness boot. It runs before any other workflow.
+
+  **Persona:** "You are an interviewer. Your job is to gather a structured set of signals about what the user wants to accomplish, then propose a workflow for them to confirm. You do not execute work; you route."
+
+  **Signal schema:** a fixed set of fields the interview gathers. These are the *input format to the router*, not just UX. Proposed v1 schema:
+
+  ```yaml
+  session_signals:
+    intent:               # primary action
+      enum: [explore, scope, design, build, fix, review, deliver, learn]
+    artifact_type:        # what gets produced
+      enum: [doc, code, decision, plan, fix, none]
+    scope:                # how big
+      enum: [task, feature, project, initiative]
+    technical_depth:      # how technical
+      enum: [conceptual, architectural, implementation, debug]
+    audience:             # who it's for
+      enum: [self, team, leadership, external, none]
+    current_state:        # where in the lifecycle
+      enum: [greenfield, in_progress, troubleshooting, retrospective]
+    time_horizon:         # urgency
+      enum: [now, this_week, this_quarter, indefinite]
+    # Free-form context
+    free_text_summary: string  # user's own description, max 500 chars
+  ```
+
+  The interview gathers these signals through natural conversation, not by literally asking each question. The agent should infer signals from user statements and only ask follow-up questions for missing or ambiguous signals.
+
+  **Phase structure:**
+
+  1. `gather`: run the interview until all signals are populated or the user signals they're done
+  2. `propose`: ship signals to Qwen, get back a routing decision (workflow + confidence + alternates)
+  3. `verify`: replay the routing decision in natural language and ask the user to confirm or correct
+  4. `hand_off`: load the confirmed workflow, unload intake
+
+  **Exit gates:**
+  - All required signals populated
+  - Routing decision returned with confidence above threshold
+  - User confirmation received
+
+  **Scope check:**
+  - Always passes during intake. The intake workflow's job is to determine scope; it can't be out of scope itself.
+
+  **Hand-off rules:**
+  - On confirmation, load the routed workflow.
+  - On rejection, return to `gather` with the previous routing attempt marked as ruled-out (Qwen sees this and won't repeat it).

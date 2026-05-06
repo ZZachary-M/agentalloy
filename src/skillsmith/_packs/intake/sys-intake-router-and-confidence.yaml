@@ -1,0 +1,69 @@
+skill_type: system
+skill_id: sys-intake-router-and-confidence
+canonical_name: Intake Router and Confidence Thresholds
+category: tooling
+skill_class: system
+domain_tags: ['routing', 'confidence', 'Qwen']
+always_apply: true
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Intake Router and Confidence Thresholds
+
+  ## Overview
+
+  The router takes the intake signals and emits a workflow_id + confidence score. Threshold-driven UX: above 0.6 → propose; 0.4–0.6 → top-3 alternates; below 0.4 → clarify further.
+
+  Sourced from docs/skillsmith-architecture-spec_update.md §6.3.
+
+  ### 6.3 Routing via Qwen
+
+  Qwen is the router. Inputs and outputs:
+
+  **Input:**
+  ```yaml
+  signals: {populated session_signals}
+  ruled_out_workflows: [list of workflows the user already rejected this session]
+  available_workflows: [
+    {workflow_id, description, scope_summary, signal_match_criteria}
+    for each workflow in skillsmith
+  ]
+  ```
+
+  **Output:**
+  ```yaml
+  primary_match:
+    workflow_id: sdd-spec
+    confidence: 0.87
+    reasoning: "intent=scope + artifact_type=doc + scope=project matches sdd-spec criteria"
+  alternates:
+    - workflow_id: sdd-design
+      confidence: 0.42
+      reasoning: "technical_depth=architectural is a partial match"
+    - workflow_id: explore
+      confidence: 0.31
+      reasoning: "could be earlier-stage exploration"
+  ```
+
+  **Confidence threshold:** if `primary_match.confidence` falls below a threshold (proposed v1: 0.6), the intake workflow surfaces the top 3 alternates as a menu rather than a single proposal. Below 0.4, it asks clarifying questions to narrow further before re-routing.
+
+  **Workflow descriptions** in skillsmith must be written in language that aligns with the signal schema, not in free prose. Each workflow has a `signal_match_criteria` block:
+
+  ```yaml
+  # Example workflow metadata in skillsmith
+  workflow_id: sdd-spec
+  description_for_routing: "Authoring a project specification document. Used when the user needs to define scope, requirements, and success criteria for a project before design or implementation."
+  signal_match_criteria:
+    intent: [scope, design]
+    artifact_type: [doc]
+    scope: [feature, project, initiative]
+    technical_depth: [conceptual, architectural]
+    current_state: [greenfield, in_progress]
+  strong_match_signals: [intent=scope, artifact_type=doc]
+  weak_match_signals: [audience=team, audience=leadership]
+  disqualifying_signals: [intent=fix, current_state=troubleshooting]
+  ```
+
+  This is a controlled vocabulary that mirrors the interview signal schema. Workflow authors write to this format; Qwen matches against it. Free-prose descriptions are kept for human readers but don't drive routing.
