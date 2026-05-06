@@ -107,7 +107,7 @@ TypeScript and Python lead because they're the two languages with the largest ac
 4. express           [ga]   — Node minimalist HTTP
 5. django            [ga]   — Django ORM, views
 6. shadcn-ui         [ga]   — design system patterns
-7. vue               [ga]   — Vue 3, Composition API
+7. vue               [v1]   — Vue 3, Composition API
 8. flask             [ga]   — Flask, blueprints
 9. svelte            [ga]   — Svelte/SvelteKit
 10. spring-boot      [ga]   — Spring Boot, Java enterprise

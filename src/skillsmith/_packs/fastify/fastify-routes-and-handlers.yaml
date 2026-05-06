@@ -1,0 +1,328 @@
+skill_type: domain
+skill_id: fastify-routes-and-handlers
+canonical_name: Fastify Routes and Handlers
+category: engineering
+skill_class: domain
+domain_tags:
+- fastify
+- routes
+- handlers
+- http-endpoints
+- route-options
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Fastify Routes and Handlers
+
+  ## Overview
+
+  Fastify routes are declared with `fastify.route(opts)` or shortcut methods (`fastify.get`, `fastify.post`, etc.). Handlers receive `(request, reply)` and can return a Promise, a value, or use `reply.send()`. Routes accept rich options: schemas for validation/serialization, hooks scoped to the route, constraints, and version-based routing. This skill covers route declaration end-to-end.
+
+  Sourced from https://fastify.dev/docs/latest/Reference/Routes/.
+
+  ---
+
+  # Routes
+
+
+  ## Routes[​](#routes "Direct link to Routes")
+
+  The route methods configure the endpoints of the application. Routes can be declared using the shorthand method or the full declaration.
+
+  * [Full declaration](#full-declaration)
+
+  * [Routes options](#routes-options)
+
+  * [Shorthand declaration](#shorthand-declaration)
+
+  * [Url building](#url-building)
+
+  * [Async Await](#async-await)
+
+  * [Promise resolution](#promise-resolution)
+
+  * [Route Prefixing](#route-prefixing)
+    * [Handling of / route inside prefixed plugins](#handling-of--route-inside-prefixed-plugins)
+
+  * [Custom Log Level](#custom-log-level)
+
+  * [Custom Log Serializer](#custom-log-serializer)
+
+  * [Config](#config)
+
+  * [Constraints](#constraints)
+
+    * [Version Constraints](#version-constraints)
+    * [Host Constraints](#host-constraints)
+
+  ### Full declaration[​](#full-declaration "Direct link to Full declaration")
+
+  ```
+
+  fastify.route(options)
+
+  ```
+
+  ### Routes options[​](#routes-options "Direct link to Routes options")
+
+  * `method`: currently it supports `GET`, `HEAD`, `TRACE`, `DELETE`, `OPTIONS`, `PATCH`, `PUT` and `POST`. To accept more methods, the [`addHttpMethod`](/docs/v5.8.x/Reference/Server/.md#addHttpMethod) must be used. It could also be an array of methods.
+
+  * `url`: the path of the URL to match this route (alias: `path`).
+
+  * `schema`: an object containing the schemas for the request and response. They need to be in [JSON Schema](https://json-schema.org/) format, check [here](/docs/v5.8.x/Reference/Validation-and-Serialization/.md) for more info.
+
+    * `body`: validates the body of the request if it is a POST, PUT, PATCH, TRACE, SEARCH, PROPFIND, PROPPATCH or LOCK method.
+    * `querystring` or `query`: validates the querystring. This can be a complete JSON Schema object, with the property `type` of `object` and `properties` object of parameters, or simply the values of what would be contained in the `properties` object as shown below.
+    * `params`: validates the params.
+    * `response`: filter and generate a schema for the response, setting a schema allows us to have 10-20% more throughput.
+
+  * `exposeHeadRoute`: creates a sibling `HEAD` route for any `GET` routes. Defaults to the value of [`exposeHeadRoutes`](/docs/v5.8.x/Reference/Server/.md#exposeHeadRoutes) instance option. If you want a custom `HEAD` handler without disabling this option, make sure to define it before the `GET` route.
+
+  * `attachValidation`: attach `validationError` to request, if there is a schema validation error, instead of sending the error to the error handler. The default [error format](https://ajv.js.org/api.html#error-objects) is the Ajv one.
+
+  * `onRequest(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onrequest) called as soon as a request is received, it could also be an array of functions.
+
+  * `preParsing(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#preparsing) called before parsing the request, it could also be an array of functions.
+
+  * `preValidation(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#prevalidation) called after the shared `preValidation` hooks, useful if you need to perform authentication at route level for example, it could also be an array of functions.
+
+  * `preHandler(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#prehandler) called just before the request handler, it could also be an array of functions.
+
+  * `preSerialization(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#preserialization) called just before the serialization, it could also be an array of functions.
+
+  * `onSend(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#route-hooks) called right before a response is sent, it could also be an array of functions.
+
+  * `onResponse(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onresponse) called when a response has been sent, so you will not be able to send more data to the client. It could also be an array of functions.
+
+  * `onTimeout(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#ontimeout) called when a request is timed out and the HTTP socket has been hung up.
+
+  * `onError(request, reply, error, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onerror) called when an Error is thrown or sent to the client by the route handler.
+
+  * `handler(request, reply)`: the function that will handle this request. The [Fastify server](/docs/v5.8.x/Reference/Server/.md) will be bound to `this` when the handler is called. Note: using an arrow function will break the binding of `this`.
+
+  * `errorHandler(error, request, reply)`: a custom error handler for the scope of the request. Overrides the default error global handler, and anything set by [`setErrorHandler`](/docs/v5.8.x/Reference/Server/.md#seterrorhandler), for requests to the route. To access the default handler, you can access `instance.errorHandler`. Note that this will point to fastify's default `errorHandler` only if a plugin hasn't overridden it already.
+
+  * `childLoggerFactory(logger, binding, opts, rawReq)`: a custom factory function that will be called to produce a child logger instance for every request. See [`childLoggerFactory`](/docs/v5.8.x/Reference/Server/.md#childloggerfactory) for more info. Overrides the default logger factory, and anything set by [`setChildLoggerFactory`](/docs/v5.8.x/Reference/Server/.md#setchildloggerfactory), for requests to the route. To access the default factory, you can access `instance.childLoggerFactory`. Note that this will point to Fastify's default `childLoggerFactory` only if a plugin hasn't overridden it already.
+
+  * `validatorCompiler({ schema, method, url, httpPart })`: function that builds schemas for request validations. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#schema-validator) documentation.
+
+  * `serializerCompiler({ { schema, method, url, httpStatus, contentType } })`: function that builds schemas for response serialization. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#schema-serializer) documentation.
+
+  * `schemaErrorFormatter(errors, dataVar)`: function that formats the errors from the validation compiler. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#error-handling) documentation. Overrides the global schema error formatter handler, and anything set by `setSchemaErrorFormatter`, for requests to the route.
+
+  * `bodyLimit`: prevents the default JSON body parser from parsing request bodies larger than this number of bytes. Must be an integer. You may also set this option globally when first creating the Fastify instance with `fastify(options)`. Defaults to `1048576` (1 MiB).
+
+  * `handlerTimeout`: maximum number of milliseconds for the route's full lifecycle. Overrides the server-level [`handlerTimeout`](/docs/v5.8.x/Reference/Server/.md#factory-handler-timeout). Must be a positive integer. When the timeout fires, `request.signal` is aborted and a 503 error is sent through the error handler (which can be customized per-route).
+
+  * `logLevel`: set log level for this route. See below.
+
+  * `logSerializers`: set serializers to log for this route.
+
+  * `config`: object used to store custom configuration.
+
+  * `version`: a [semver](https://semver.org/) compatible string that defined the version of the endpoint. [Example](#version-constraints).
+
+  * `constraints`: defines route restrictions based on request properties or values, enabling customized matching using [find-my-way](https://github.com/delvedor/find-my-way) constraints. Includes built-in `version` and `host` constraints, with support for custom constraint strategies.
+
+  * `prefixTrailingSlash`: string used to determine how to handle passing `/` as a route with a prefix.
+
+    * `both` (default): Will register both `/prefix` and `/prefix/`.
+    * `slash`: Will register only `/prefix/`.
+    * `no-slash`: Will register only `/prefix`.
+
+  Note: this option does not override `ignoreTrailingSlash` in [Server](/docs/v5.8.x/Reference/Server/.md) configuration.
+
+  * `request` is defined in [Request](/docs/v5.8.x/Reference/Request/.md).
+
+  * `reply` is defined in [Reply](/docs/v5.8.x/Reference/Reply/.md).
+
+  > ℹ️ Note: The documentation for `onRequest`, `preParsing`, `preValidation`, `preHandler`, `preSerialization`, `onSend`, and `onResponse` is detailed in [Hooks](/docs/v5.8.x/Reference/Hooks/.md). To send a response before the request is handled by the `handler`, see [Respond to a request from a hook](/docs/v5.8.x/Reference/Hooks/.md#respond-to-a-request-from-a-hook).
+
+  Example:
+
+  ```
+
+  fastify.route({
+
+    method: 'GET',
+
+    url: '/',
+
+    schema: {
+
+      querystring: {
+
+        type: 'object',
+
+        properties: {
+
+          name: { type: 'string' },
+
+          excitement: { type: 'integer' }
+
+        }
+
+      },
+
+      response: {
+
+        200: {
+
+          type: 'object',
+
+          properties: {
+
+            hello: { type: 's
+fragments:
+- fragment_type: setup
+  sequence: 1
+  content: |
+    Fastify routes are declared with `fastify.route(opts)` or shortcut methods (`fastify.get`, `fastify.post`, etc.). Handlers receive `(request, reply)` and can return a Promise, a value, or use `reply.send()`. Routes accept rich options: schemas for validation/serialization, hooks scoped to the route, constraints, and version-based routing. This skill covers route declaration end-to-end.
+
+    Sourced from https://fastify.dev/docs/latest/Reference/Routes/.
+- fragment_type: execution
+  sequence: 2
+  content: |
+    The route methods configure the endpoints of the application. Routes can be declared using the shorthand method or the full declaration.
+- fragment_type: verification
+  sequence: 3
+  content: |
+    * [Full declaration](#full-declaration)
+
+    * [Routes options](#routes-options)
+
+    * [Shorthand declaration](#shorthand-declaration)
+
+    * [Url building](#url-building)
+
+    * [Async Await](#async-await)
+
+    * [Promise resolution](#promise-resolution)
+
+    * [Route Prefixing](#route-prefixing)
+      * [Handling of / route inside prefixed plugins](#handling-of--route-inside-prefixed-plugins)
+
+    * [Custom Log Level](#custom-log-level)
+
+    * [Custom Log Serializer](#custom-log-serializer)
+
+    * [Config](#config)
+
+    * [Constraints](#constraints)
+
+      * [Version Constraints](#version-constraints)
+      * [Host Constraints](#host-constraints)
+- fragment_type: rationale
+  sequence: 4
+  content: |
+    * `method`: currently it supports `GET`, `HEAD`, `TRACE`, `DELETE`, `OPTIONS`, `PATCH`, `PUT` and `POST`. To accept more methods, the [`addHttpMethod`](/docs/v5.8.x/Reference/Server/.md#addHttpMethod) must be used. It could also be an array of methods.
+
+    * `url`: the path of the URL to match this route (alias: `path`).
+
+    * `schema`: an object containing the schemas for the request and response. They need to be in [JSON Schema](https://json-schema.org/) format, check [here](/docs/v5.8.x/Reference/Validation-and-Serialization/.md) for more info.
+
+      * `body`: validates the body of the request if it is a POST, PUT, PATCH, TRACE, SEARCH, PROPFIND, PROPPATCH or LOCK method.
+      * `querystring` or `query`: validates the querystring. This can be a complete JSON Schema object, with the property `type` of `object` and `properties` object of parameters, or simply the values of what would be contained in the `properties` object as shown below.
+      * `params`: validates the params.
+      * `response`: filter and generate a schema for the response, setting a schema allows us to have 10-20% more throughput.
+
+    * `exposeHeadRoute`: creates a sibling `HEAD` route for any `GET` routes. Defaults to the value of [`exposeHeadRoutes`](/docs/v5.8.x/Reference/Server/.md#exposeHeadRoutes) instance option. If you want a custom `HEAD` handler without disabling this option, make sure to define it before the `GET` route.
+
+    * `attachValidation`: attach `validationError` to request, if there is a schema validation error, instead of sending the error to the error handler. The default [error format](https://ajv.js.org/api.html#error-objects) is the Ajv one.
+
+    * `onRequest(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onrequest) called as soon as a request is received, it could also be an array of functions.
+
+    * `preParsing(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#preparsing) called before parsing the request, it could also be an array of functions.
+
+    * `preValidation(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#prevalidation) called after the shared `preValidation` hooks, useful if you need to perform authentication at route level for example, it could also be an array of functions.
+
+    * `preHandler(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#prehandler) called just before the request handler, it could also be an array of functions.
+
+    * `preSerialization(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#preserialization) called just before the serialization, it could also be an array of functions.
+
+    * `onSend(request, reply, payload, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#route-hooks) called right before a response is sent, it could also be an array of functions.
+
+    * `onResponse(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onresponse) called when a response has been sent, so you will not be able to send more data to the client. It could also be an array of functions.
+
+    * `onTimeout(request, reply, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#ontimeout) called when a request is timed out and the HTTP socket has been hung up.
+
+    * `onError(request, reply, error, done)`: a [function](/docs/v5.8.x/Reference/Hooks/.md#onerror) called when an Error is thrown or sent to the client by the route handler.
+
+    * `handler(request, reply)`: the function that will handle this request. The [Fastify server](/docs/v5.8.x/Reference/Server/.md) will be bound to `this` when the handler is called. Note: using an arrow function will break the binding of `this`.
+
+    * `errorHandler(error, request, reply)`: a custom error handler for the scope of the request. Overrides the default error global handler, and anything set by [`setErrorHandler`](/docs/v5.8.x/Reference/Server/.md#seterrorhandler), for requests to the route. To access the default handler, you can access `instance.errorHandler`. Note that this will point to fastify's default `errorHandler` only if a plugin hasn't overridden it already.
+
+    * `childLoggerFactory(logger, binding, opts, rawReq)`: a custom factory function that will be called to produce a child logger instance for every request. See [`childLoggerFactory`](/docs/v5.8.x/Reference/Server/.md#childloggerfactory) for more info. Overrides the default logger factory, and anything set by [`setChildLoggerFactory`](/docs/v5.8.x/Reference/Server/.md#setchildloggerfactory), for requests to the route. To access the default factory, you can access `instance.childLoggerFactory`. Note that this will point to Fastify's default `childLoggerFactory` only if a plugin hasn't overridden it already.
+
+    * `validatorCompiler({ schema, method, url, httpPart })`: function that builds schemas for request validations. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#schema-validator) documentation.
+
+    * `serializerCompiler({ { schema, method, url, httpStatus, contentType } })`: function that builds schemas for response serialization. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#schema-serializer) documentation.
+
+    * `schemaErrorFormatter(errors, dataVar)`: function that formats the errors from the validation compiler. See the [Validation and Serialization](/docs/v5.8.x/Reference/Validation-and-Serialization/.md#error-handling) documentation. Overrides the global schema error formatter handler, and anything set by `setSchemaErrorFormatter`, for requests to the route.
+
+    * `bodyLimit`: prevents the default JSON body parser from parsing request bodies larger than this number of bytes. Must be an integer. You may also set this option globally when first creating the Fastify instance with `fastify(options)`. Defaults to `1048576` (1 MiB).
+
+    * `handlerTimeout`: maximum number of milliseconds for the route's full lifecycle. Overrides the server-level [`handlerTimeout`](/docs/v5.8.x/Reference/Server/.md#factory-handler-timeout). Must be a positive integer. When the timeout fires, `request.signal` is aborted and a 503 error is sent through the error handler (which can be customized per-route).
+
+    * `logLevel`: set log level for this route. See below.
+
+    * `logSerializers`: set serializers to log for this route.
+
+    * `config`: object used to store custom configuration.
+
+    * `version`: a [semver](https://semver.org/) compatible string that defined the version of the endpoint. [Example](#version-constraints).
+
+    * `constraints`: defines route restrictions based on request properties or values, enabling customized matching using [find-my-way](https://github.com/delvedor/find-my-way) constraints. Includes built-in `version` and `host` constraints, with support for custom constraint strategies.
+
+    * `prefixTrailingSlash`: string used to determine how to handle passing `/` as a route with a prefix.
+
+      * `both` (default): Will register both `/prefix` and `/prefix/`.
+      * `slash`: Will register only `/prefix/`.
+      * `no-slash`: Will register only `/prefix`.
+
+    Note: this option does not override `ignoreTrailingSlash` in [Server](/docs/v5.8.x/Reference/Server/.md) configuration.
+
+    * `request` is defined in [Request](/docs/v5.8.x/Reference/Request/.md).
+
+    * `reply` is defined in [Reply](/docs/v5.8.x/Reference/Reply/.md).
+
+    > ℹ️ Note: The documentation for `onRequest`, `preParsing`, `preValidation`, `preHandler`, `preSerialization`, `onSend`, and `onResponse` is detailed in [Hooks](/docs/v5.8.x/Reference/Hooks/.md). To send a response before the request is handled by the `handler`, see [Respond to a request from a hook](/docs/v5.8.x/Reference/Hooks/.md#respond-to-a-request-from-a-hook).
+- fragment_type: example
+  sequence: 5
+  content: |-
+    ```
+
+    fastify.route({
+
+      method: 'GET',
+
+      url: '/',
+
+      schema: {
+
+        querystring: {
+
+          type: 'object',
+
+          properties: {
+
+            name: { type: 'string' },
+
+            excitement: { type: 'integer' }
+
+          }
+
+        },
+
+        response: {
+
+          200: {
+
+            type: 'object',
+
+            properties: {
+
+              hello: { type: 's

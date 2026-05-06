@@ -112,8 +112,24 @@ Fragment requirements:
 - Each fragment is a YAML mapping with exactly these keys:
   `fragment_type`, `sequence`, `content`. Use `fragment_type` — not `type`.
   The schema validator rejects `type` and any other alias.
-- Allowed `fragment_type` values: `setup`, `execution`, `verification`,
-  `example`, `guardrail`, `rationale`. No other values are valid.
+- Allowed `fragment_type` values are EXACTLY these six and no others:
+  `setup`, `execution`, `verification`, `example`, `guardrail`, `rationale`.
+  Do NOT emit synonyms or paraphrases. Common mistakes that the schema
+  validator rejects (with the correct mapping):
+    - `explanation` → use `rationale`
+    - `description` → use `rationale`
+    - `note` → use `rationale`
+    - `tip` → use `guardrail` (if cautionary) or `rationale` (if explanatory)
+    - `warning` → use `guardrail`
+    - `caveat` → use `guardrail`
+    - `code` → use `example`
+    - `snippet` → use `example`
+    - `steps` → use `execution`
+    - `procedure` → use `execution`
+    - `prerequisites` → use `setup`
+    - `installation` → use `setup`
+    - `tests` / `assertions` → use `verification`
+  When in doubt, choose the closest of the six. Do not invent a new value.
 - Include at least one `execution` fragment.
 - Number `sequence` starting at 1 with no gaps.
 - Each fragment's `content` must be at least 20 words (hard floor). Target

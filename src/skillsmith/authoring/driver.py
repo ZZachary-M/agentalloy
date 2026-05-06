@@ -318,9 +318,20 @@ def _build_user_prompt(source: Path, source_text: str) -> str:
 
 
 _FENCE_RE = re.compile(r"^\s*```(?:ya?ml)?\s*\n(.*?)\n```\s*$", re.DOTALL)
+_OPEN_FENCE_RE = re.compile(r"^\s*```(?:ya?ml)?\s*\n", re.IGNORECASE)
+_CLOSE_FENCE_RE = re.compile(r"\n```\s*$")
 
 
 def _strip_code_fence(text: str) -> str:
-    """Tolerate an LLM that wraps YAML in a ```yaml ... ``` fence."""
-    m = _FENCE_RE.match(text.strip())
-    return m.group(1) if m else text.strip()
+    """Tolerate an LLM that wraps YAML in a ```yaml ... ``` fence.
+
+    Strips opening and closing fences independently — some models emit only
+    one or the other, or trail content after the closing fence.
+    """
+    s = text.strip()
+    m = _FENCE_RE.match(s)
+    if m:
+        return m.group(1)
+    s = _OPEN_FENCE_RE.sub("", s, count=1)
+    s = _CLOSE_FENCE_RE.sub("", s)
+    return s.strip()

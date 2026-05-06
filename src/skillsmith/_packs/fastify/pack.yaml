@@ -1,0 +1,29 @@
+name: fastify
+version: 1.0.0
+tier: framework
+description: |
+  Fastify 5+ patterns — route declarations and handlers, plugin system with encapsulation model, request lifecycle hooks (onRequest → preHandler → preSerialization → onSend → onResponse), and JSON-Schema-based validation + serialization (Ajv + fast-json-stringify). Precision-favored framework tier; sourced from fastify.dev/llms-full.txt per R1 tier-1 procedure. Error-handling skill deferred (currently in skill-source/needs-human/) — covers core surface; error-handling is a planned future addition.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- core
+- engineering
+- typescript
+- nodejs
+skills:
+- skill_id: fastify-hooks-and-lifecycle
+  file: fastify-hooks-and-lifecycle.yaml
+  fragment_count: 10
+- skill_id: fastify-plugins-and-encapsulation
+  file: fastify-plugins-and-encapsulation.yaml
+  fragment_count: 10
+- skill_id: fastify-routes-and-handlers
+  file: fastify-routes-and-handlers.yaml
+  fragment_count: 5
+- skill_id: fastify-validation-and-serialization
+  file: fastify-validation-and-serialization.yaml
+  fragment_count: 10
