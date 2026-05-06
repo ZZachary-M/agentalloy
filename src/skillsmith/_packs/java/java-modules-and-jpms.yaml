@@ -1,0 +1,251 @@
+skill_type: domain
+skill_id: java-modules-and-jpms
+canonical_name: Java Modules with JPMS (module-info.java, exports, requires, services)
+category: tooling
+skill_class: domain
+domain_tags: [module-info-descriptor, exports-package, requires-transitive, services-uses-provides, jlink-runtime-image]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-06. Sources — Oracle Java SE 21 module-system overview https://docs.oracle.com/en/java/javase/21/module-system/overview-module-system.html (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic packaging_and_dependency_management); JEP 261: Module System https://openjdk.org/jeps/261 (verified 2026-05-06); java.base module-summary https://docs.oracle.com/en/java/javase/21/docs/api/java.base/module-summary.html (verified 2026-05-06); JEP 403: Strongly Encapsulate JDK Internals https://openjdk.org/jeps/403 (verified 2026-05-06); JEP 282 jlink and JEP 238 multi-release jars (verified 2026-05-06). Known gap from the curated registry: build tooling (Maven, Gradle) is entirely outside canonical Java docs; this skill is scoped to JPMS — the language- and runtime-level module system — and does NOT cover artifact coordination, which Maven/Gradle still own.
+
+raw_prose: |
+  # Java Modules with JPMS
+
+  The Java Platform Module System (JPMS) was introduced in Java 9 (September 2017, JEP 261) and is the language- and runtime-level mechanism for declaring named modules, their dependencies, and what packages they expose. Strong encapsulation of JDK internals became the default in Java 17 (JEP 403, September 2021) — reflective access into non-exported packages now fails by default unless explicitly opened. JPMS is for *runtime* and *language-level* visibility; it is not a build tool. Maven and Gradle still own artifact coordination, and that boundary is the single most common point of confusion (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic packaging_and_dependency_management; build tooling is a registered known_gap in the curated Java fixture and is explicitly out of scope here).
+
+  ## `module-info.java` — the module descriptor
+
+  A module is declared by a `module-info.java` file at the source root. The file compiles to `module-info.class` inside the resulting jar; a jar that contains it is a *modular jar*.
+
+  ```java
+  // src/main/java/module-info.java
+  module com.example.foo {
+      requires com.example.bar;
+      requires transitive java.sql;
+      requires static com.example.optional;
+
+      exports com.example.foo.api;
+      exports com.example.foo.internal to com.example.privileged;
+
+      opens com.example.foo.entity to org.hibernate.orm;
+
+      uses com.example.foo.spi.Plugin;
+      provides com.example.foo.spi.Plugin
+          with com.example.foo.impl.MyPlugin;
+  }
+  ```
+
+  Module names should be reverse-DNS, like package names: `com.example.foo`, not `foo`. The descriptor is the source of truth for everything the module system enforces at compile time and run time.
+
+  ## Directives
+
+  - **`requires com.other.bar;`** — depend on another module. The compiler and runtime reject access to `com.other.bar` types without this.
+  - **`requires transitive com.other.bar;`** — re-export the dependency to your consumers. Anyone who `requires com.example.foo` then implicitly reads `com.other.bar` too. Use when types from `com.other.bar` appear in your public API signatures.
+  - **`requires static com.other.bar;`** — compile-time-only dependency, optional at run time. Useful for annotations or pluggable integrations.
+  - **`exports com.example.foo.api;`** — package visible to *all* readers of the module. Non-exported packages are unreachable from outside the module.
+  - **`exports com.example.foo.internal to com.example.privileged;`** — *qualified* export, visible only to the listed friend modules. Prefer this over a broad `exports` when only specific consumers need access.
+  - **`opens com.example.foo.entity to org.hibernate.orm;`** — runtime *reflective* access allowed to the listed module. Frameworks like Spring and Hibernate reflect into private APIs and will fail without this.
+  - **`uses com.example.foo.spi.Plugin;`** — declares a service consumer; required for `ServiceLoader.load(Plugin.class)` to discover providers from other modules.
+  - **`provides com.example.foo.spi.Plugin with com.example.foo.impl.MyPlugin;`** — declares a service provider implementation discoverable via `ServiceLoader`.
+
+  ## Strong encapsulation and the `--add-opens` escape hatch
+
+  Non-exported packages are unreachable from outside the module — including via reflection — without an explicit `opens`. Since Java 17 (JEP 403, verified 2026-05-06), illegal reflective access into JDK internals is denied by default; the older "warning then deny" mode is gone. A pre-Java-9 framework that reflects into `private` fields of a class in a non-opened package will throw `InaccessibleObjectException` at run time.
+
+  The escape hatch is the `--add-opens` command-line flag, e.g. `--add-opens java.base/java.lang=ALL-UNNAMED`. This is intended for *transitional* use while libraries upgrade. Treat broad `--add-opens` in production as a smell: it punches a hole through the encapsulation the module system is enforcing for you. Prefer narrowing to a qualified `opens com.example.foo.entity to org.hibernate.orm;` in the descriptor.
+
+  ## Module path vs classpath; named, automatic, and unnamed modules
+
+  Three jar shapes coexist:
+
+  - **Modular jar** — has `module-info.class`. Loaded from the *module path* (`--module-path` / `-p`); becomes a *named module*.
+  - **Plain jar on the module path** — no `module-info.class`. Becomes an *automatic module*; its name comes from the `Automatic-Module-Name` manifest entry if present, otherwise is derived from the filename. Automatic modules `requires` everything else and `exports` all their packages — they are the migration bridge.
+  - **Plain jar on the classpath** (`-cp`) — joins the single *unnamed module*. Unnamed-module code can read every named module, but named modules cannot `requires` the unnamed module. Mixing module path and classpath is supported but the directionality matters.
+
+  Library authors publishing to consumers who may be modular should ship `Automatic-Module-Name` in the manifest as a temporary anchor and upgrade to a real `module-info.java` as soon as practical. Leaving `Automatic-Module-Name` as the permanent answer is an anti-pattern: consumers cannot tell whether the name is stable.
+
+  ## Service Loader pattern
+
+  JPMS integrates with `java.util.ServiceLoader`. The consumer module declares `uses com.example.foo.spi.Plugin;`; one or more provider modules declare `provides com.example.foo.spi.Plugin with com.example.foo.impl.MyPlugin;`. At run time:
+
+  ```java
+  ServiceLoader<Plugin> loader = ServiceLoader.load(Plugin.class);
+  for (Plugin p : loader) { p.run(); }
+  ```
+
+  No `META-INF/services` files are needed when the providers are declared in `module-info.java` — the module descriptor is the single source of truth. Mixed module/classpath deployments still honor `META-INF/services` files for backward compatibility.
+
+  ## Multi-release jars and `jlink`
+
+  - **Multi-release jars** (Java 9+, JEP 238) — a single jar can contain version-specific classes under `META-INF/versions/N/`. The runtime picks the most specific class for the current JVM. Useful for libraries that want to use newer APIs on newer JVMs without dropping older support.
+  - **`jlink`** (Java 9+, JEP 282) — builds a custom runtime image containing only the modules your application needs (typically your modules plus the transitive closure of `java.base`, `java.sql`, etc.). Produces dramatically smaller distributions than shipping a full JDK and is the canonical packaging story for self-contained Java apps.
+
+  Example `jlink` invocation:
+
+  ```bash
+  jlink \
+    --module-path "$JAVA_HOME/jmods:./mods" \
+    --add-modules com.example.foo \
+    --launcher foo=com.example.foo/com.example.foo.Main \
+    --output ./runtime
+  ```
+
+  Run `jlink` from the project root after building modular jars into `./mods`. The resulting `./runtime` directory is a self-contained Java runtime image containing only the modules `com.example.foo` transitively requires. Launch the app with `./runtime/bin/foo`. Because the image is generated from the module graph, missing or unused `requires` directives in `module-info.java` show up immediately as link-time errors — `jlink` is a useful CI gate for catching descriptor drift before deploy.
+
+  ## Anti-patterns
+
+  - **`requires` on transitive deps you do not directly use** — creates accidental coupling and makes upgrades painful. List only your direct compile-time dependencies; let `requires transitive` from upstream handle the rest.
+  - **Broad `opens com.example.foo;` instead of `opens ... to <framework>;`** — exposes reflective access to the entire world. Qualify the `opens` to the specific framework module that needs it.
+  - **`--add-opens java.base/java.lang=ALL-UNNAMED` in production** — a transitional flag treated as permanent. Track down the offending library and either move to a version that respects strong encapsulation or migrate off it.
+  - **Treating JPMS as a substitute for a build tool** — JPMS handles language-level visibility and runtime module resolution. It does *not* download dependencies, manage repositories, or coordinate artifact versions. Maven or Gradle still own that. The curated Java upstream fixture lists this as a registered known_gap (verified 2026-05-06).
+  - **Naming modules `foo` instead of `com.example.foo`** — short names collide. Use reverse-DNS like packages.
+  - **Permanent `Automatic-Module-Name` placeholders** — fine as a migration step, not as a destination. Ship a real `module-info.java` once your transitive deps are modular enough to allow it.
+  - **A Spring app reflecting into a non-opened package** — fails at run time with `InaccessibleObjectException`. Either add `opens com.example.foo.entity to org.springframework.core;` to the descriptor or restructure so the reflected types live in an opened package.
+
+  ## Verification
+
+  - [ ] `find . -name module-info.java` returns a descriptor at the source root of every module in the project.
+  - [ ] Each `module` declaration in `module-info.java` uses a reverse-DNS name (matches the regex `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`).
+  - [ ] `javac --module-path mods -d out $(find src -name '*.java')` compiles cleanly with no `--add-exports` or `--add-opens` flags required.
+  - [ ] `jdeps --check com.example.foo` reports no unused `requires` and no missing dependencies.
+  - [ ] No `--add-opens` or `--add-exports` flags appear in the production launch script; any present are documented with the upstream issue tracking their removal.
+  - [ ] Public API types only appear in packages listed under `exports` (no leakage from non-exported packages).
+  - [ ] If frameworks reflect into entity packages, those packages are listed under qualified `opens ... to <framework-module>;` rather than broad `opens`.
+  - [ ] Library jars without a `module-info.java` ship `Automatic-Module-Name` in `META-INF/MANIFEST.MF` as a transitional measure.
+  - [ ] If `jlink` is used, the `--add-modules` list matches the application's declared root modules and the resulting image launches without classpath fallbacks.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Java Modules with JPMS
+
+      The Java Platform Module System (JPMS) was introduced in Java 9 (September 2017, JEP 261) and is the language- and runtime-level mechanism for declaring named modules, their dependencies, and what packages they expose. Strong encapsulation of JDK internals became the default in Java 17 (JEP 403, September 2021) — reflective access into non-exported packages now fails by default unless explicitly opened. JPMS is for *runtime* and *language-level* visibility; it is not a build tool. Maven and Gradle still own artifact coordination, and that boundary is the single most common point of confusion (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic packaging_and_dependency_management; build tooling is a registered known_gap in the curated Java fixture and is explicitly out of scope here).
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## `module-info.java` — the module descriptor
+
+      A module is declared by a `module-info.java` file at the source root. The file compiles to `module-info.class` inside the resulting jar; a jar that contains it is a *modular jar*.
+
+      ```java
+      // src/main/java/module-info.java
+      module com.example.foo {
+          requires com.example.bar;
+          requires transitive java.sql;
+          requires static com.example.optional;
+
+          exports com.example.foo.api;
+          exports com.example.foo.internal to com.example.privileged;
+
+          opens com.example.foo.entity to org.hibernate.orm;
+
+          uses com.example.foo.spi.Plugin;
+          provides com.example.foo.spi.Plugin
+              with com.example.foo.impl.MyPlugin;
+      }
+      ```
+
+      Module names should be reverse-DNS, like package names: `com.example.foo`, not `foo`. The descriptor is the source of truth for everything the module system enforces at compile time and run time.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Directives
+
+      - **`requires com.other.bar;`** — depend on another module. The compiler and runtime reject access to `com.other.bar` types without this.
+      - **`requires transitive com.other.bar;`** — re-export the dependency to your consumers. Anyone who `requires com.example.foo` then implicitly reads `com.other.bar` too. Use when types from `com.other.bar` appear in your public API signatures.
+      - **`requires static com.other.bar;`** — compile-time-only dependency, optional at run time. Useful for annotations or pluggable integrations.
+      - **`exports com.example.foo.api;`** — package visible to *all* readers of the module. Non-exported packages are unreachable from outside the module.
+      - **`exports com.example.foo.internal to com.example.privileged;`** — *qualified* export, visible only to the listed friend modules. Prefer this over a broad `exports` when only specific consumers need access.
+      - **`opens com.example.foo.entity to org.hibernate.orm;`** — runtime *reflective* access allowed to the listed module. Frameworks like Spring and Hibernate reflect into private APIs and will fail without this.
+      - **`uses com.example.foo.spi.Plugin;`** — declares a service consumer; required for `ServiceLoader.load(Plugin.class)` to discover providers from other modules.
+      - **`provides com.example.foo.spi.Plugin with com.example.foo.impl.MyPlugin;`** — declares a service provider implementation discoverable via `ServiceLoader`.
+
+  - sequence: 4
+    fragment_type: rationale
+    content: |
+      ## Strong encapsulation and the `--add-opens` escape hatch
+
+      Non-exported packages are unreachable from outside the module — including via reflection — without an explicit `opens`. Since Java 17 (JEP 403, verified 2026-05-06), illegal reflective access into JDK internals is denied by default; the older "warning then deny" mode is gone. A pre-Java-9 framework that reflects into `private` fields of a class in a non-opened package will throw `InaccessibleObjectException` at run time.
+
+      The escape hatch is the `--add-opens` command-line flag, e.g. `--add-opens java.base/java.lang=ALL-UNNAMED`. This is intended for *transitional* use while libraries upgrade. Treat broad `--add-opens` in production as a smell: it punches a hole through the encapsulation the module system is enforcing for you. Prefer narrowing to a qualified `opens com.example.foo.entity to org.hibernate.orm;` in the descriptor.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Module path vs classpath; named, automatic, and unnamed modules
+
+      Three jar shapes coexist:
+
+      - **Modular jar** — has `module-info.class`. Loaded from the *module path* (`--module-path` / `-p`); becomes a *named module*.
+      - **Plain jar on the module path** — no `module-info.class`. Becomes an *automatic module*; its name comes from the `Automatic-Module-Name` manifest entry if present, otherwise is derived from the filename. Automatic modules `requires` everything else and `exports` all their packages — they are the migration bridge.
+      - **Plain jar on the classpath** (`-cp`) — joins the single *unnamed module*. Unnamed-module code can read every named module, but named modules cannot `requires` the unnamed module. Mixing module path and classpath is supported but the directionality matters.
+
+      Library authors publishing to consumers who may be modular should ship `Automatic-Module-Name` in the manifest as a temporary anchor and upgrade to a real `module-info.java` as soon as practical. Leaving `Automatic-Module-Name` as the permanent answer is an anti-pattern: consumers cannot tell whether the name is stable.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Service Loader pattern
+
+      JPMS integrates with `java.util.ServiceLoader`. The consumer module declares `uses com.example.foo.spi.Plugin;`; one or more provider modules declare `provides com.example.foo.spi.Plugin with com.example.foo.impl.MyPlugin;`. At run time:
+
+      ```java
+      ServiceLoader<Plugin> loader = ServiceLoader.load(Plugin.class);
+      for (Plugin p : loader) { p.run(); }
+      ```
+
+      No `META-INF/services` files are needed when the providers are declared in `module-info.java` — the module descriptor is the single source of truth. Mixed module/classpath deployments still honor `META-INF/services` files for backward compatibility.
+
+      ## Multi-release jars and `jlink`
+
+      - **Multi-release jars** (Java 9+, JEP 238) — a single jar can contain version-specific classes under `META-INF/versions/N/`. The runtime picks the most specific class for the current JVM. Useful for libraries that want to use newer APIs on newer JVMs without dropping older support.
+      - **`jlink`** (Java 9+, JEP 282) — builds a custom runtime image containing only the modules your application needs (typically your modules plus the transitive closure of `java.base`, `java.sql`, etc.). Produces dramatically smaller distributions than shipping a full JDK and is the canonical packaging story for self-contained Java apps.
+
+  - sequence: 7
+    fragment_type: execution
+    content: |
+      Example `jlink` invocation:
+
+      ```bash
+      jlink \
+        --module-path "$JAVA_HOME/jmods:./mods" \
+        --add-modules com.example.foo \
+        --launcher foo=com.example.foo/com.example.foo.Main \
+        --output ./runtime
+      ```
+
+      Run `jlink` from the project root after building modular jars into `./mods`. The resulting `./runtime` directory is a self-contained Java runtime image containing only the modules `com.example.foo` transitively requires. Launch the app with `./runtime/bin/foo`. Because the image is generated from the module graph, missing or unused `requires` directives in `module-info.java` show up immediately as link-time errors — `jlink` is a useful CI gate for catching descriptor drift before deploy.
+
+  - sequence: 8
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`requires` on transitive deps you do not directly use** — creates accidental coupling and makes upgrades painful. List only your direct compile-time dependencies; let `requires transitive` from upstream handle the rest.
+      - **Broad `opens com.example.foo;` instead of `opens ... to <framework>;`** — exposes reflective access to the entire world. Qualify the `opens` to the specific framework module that needs it.
+      - **`--add-opens java.base/java.lang=ALL-UNNAMED` in production** — a transitional flag treated as permanent. Track down the offending library and either move to a version that respects strong encapsulation or migrate off it.
+      - **Treating JPMS as a substitute for a build tool** — JPMS handles language-level visibility and runtime module resolution. It does *not* download dependencies, manage repositories, or coordinate artifact versions. Maven or Gradle still own that. The curated Java upstream fixture lists this as a registered known_gap (verified 2026-05-06).
+      - **Naming modules `foo` instead of `com.example.foo`** — short names collide. Use reverse-DNS like packages.
+      - **Permanent `Automatic-Module-Name` placeholders** — fine as a migration step, not as a destination. Ship a real `module-info.java` once your transitive deps are modular enough to allow it.
+      - **A Spring app reflecting into a non-opened package** — fails at run time with `InaccessibleObjectException`. Either add `opens com.example.foo.entity to org.springframework.core;` to the descriptor or restructure so the reflected types live in an opened package.
+
+  - sequence: 9
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `find . -name module-info.java` returns a descriptor at the source root of every module in the project.
+      - [ ] Each `module` declaration in `module-info.java` uses a reverse-DNS name (matches the regex `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`).
+      - [ ] `javac --module-path mods -d out $(find src -name '*.java')` compiles cleanly with no `--add-exports` or `--add-opens` flags required.
+      - [ ] `jdeps --check com.example.foo` reports no unused `requires` and no missing dependencies.
+      - [ ] No `--add-opens` or `--add-exports` flags appear in the production launch script; any present are documented with the upstream issue tracking their removal.
+      - [ ] Public API types only appear in packages listed under `exports` (no leakage from non-exported packages).
+      - [ ] If frameworks reflect into entity packages, those packages are listed under qualified `opens ... to <framework-module>;` rather than broad `opens`.
+      - [ ] Library jars without a `module-info.java` ship `Automatic-Module-Name` in `META-INF/MANIFEST.MF` as a transitional measure.
+      - [ ] If `jlink` is used, the `--add-modules` list matches the application's declared root modules and the resulting image launches without classpath fallbacks.

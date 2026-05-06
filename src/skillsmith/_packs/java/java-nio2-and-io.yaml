@@ -1,0 +1,406 @@
+skill_type: domain
+skill_id: java-nio2-and-io
+canonical_name: Java NIO.2 File I/O (Path, Files, Streams, Channels)
+category: engineering
+skill_class: domain
+domain_tags: [path-resolution, files-readstring-writestring, directorystream-walk, filechannel-bytebuffer, watchservice-events]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-06. Sources — java.nio.file package summary https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/package-summary.html (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic `io_and_filesystem`); java.nio.file.Path https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html (verified 2026-05-06); java.io package summary https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/package-summary.html (verified 2026-05-06). Skill scope: java.nio.file (NIO.2) on Java 21 LTS — `Path`, `Files`, directory streams, atomic move, `FileChannel`/`ByteBuffer`, `WatchService`, charsets, anti-patterns. Out of scope: networking (`java.net.http`), JSON/binary serialization (no stdlib canonical), build tooling.
+
+raw_prose: |
+  # Java NIO.2 File I/O
+
+  `java.nio.file` (NIO.2, introduced in Java 7 — verified 2026-05-06) is the modern filesystem API on the JVM. The legacy `java.io.File` class still compiles and still appears in old code, but new code on Java 21 LTS should reach for `Path` and `Files` exclusively. The rule is one sentence: build paths with `Path.of` (or `Paths.get`), prefer `Files` static methods for one-shot read/write, prefer `FileChannel` + `ByteBuffer` for sized or memory-mapped IO, and always close the lazy `Stream` returned by `Files.list`, `Files.walk`, and `Files.lines` with try-with-resources — those streams hold OS file handles. Most production filesystem bugs on the JVM come from `new File(...)` mixed with `Path` (type-incompatible, forces conversions), `Files.readAllBytes` on multi-gigabyte files (OOM), unclosed `Files.walk` streams (file-descriptor leaks under load), string concatenation of paths with `"/"` (breaks on Windows, sometimes breaks on resolution edge cases on POSIX), and reliance on the platform default charset (UTF-8 since Java 18 / JEP 400 — verified 2026-05-06 — but still: be explicit).
+
+  ## `Path` and `Paths` — modeling locations
+
+  A `Path` is an immutable, platform-aware filesystem location. Construct with `Path.of(...)` (preferred since Java 11 — verified 2026-05-06) or `Paths.get(...)` (Java 7 form, identical semantics):
+
+  ```java
+  import java.nio.file.Path;
+  import java.nio.file.Paths;
+
+  Path hosts   = Path.of("/etc/hosts");          // Java 11+
+  Path config  = Paths.get("config", "app.yaml"); // Java 7+, multi-segment
+  Path home    = Path.of(System.getProperty("user.home"));
+  ```
+
+  Compose paths with `resolve`, `relativize`, and `normalize` — never with string concatenation:
+
+  ```java
+  Path base    = Path.of("/var/data");
+  Path file    = base.resolve("orders/2026/jan.csv"); // /var/data/orders/2026/jan.csv
+  Path rel     = base.relativize(file);                // orders/2026/jan.csv
+  Path cleaned = Path.of("/var/data/../tmp/./out").normalize(); // /var/tmp/out
+  ```
+
+  `resolve` knows about platform separators, root paths, and absolute-versus-relative semantics. `Path` is also `Iterable<Path>` over its name elements, which is the right primitive for sandboxing logic ("does this `Path` escape my base directory?" → `base.relativize(target).startsWith("..")`).
+
+  ## `Files` utility — one-shot reads and writes
+
+  `java.nio.file.Files` is a static facade. For text:
+
+  ```java
+  import java.nio.file.Files;
+  import java.nio.file.Path;
+  import java.nio.charset.StandardCharsets;
+
+  String body = Files.readString(Path.of("data.txt"), StandardCharsets.UTF_8);
+  Files.writeString(Path.of("out.txt"), body, StandardCharsets.UTF_8);
+  ```
+
+  `Files.readString` and `Files.writeString` were added in Java 11 (verified 2026-05-06). For bytes use `Files.readAllBytes(path)` and `Files.write(path, bytes)`. Always pass an explicit `Charset` — `StandardCharsets.UTF_8` is the right default. JEP 400 (Java 18) made UTF-8 the platform default for `Charset.defaultCharset()`, but explicit beats implicit and travels across older runtimes.
+
+  Use `Files.readString` / `readAllBytes` only when the file fits in memory. For anything else, stream — `Files.lines(path, charset)` returns a lazy `Stream<String>` that you must consume inside try-with-resources because it owns an open file handle:
+
+  ```java
+  try (var lines = Files.lines(Path.of("access.log"), StandardCharsets.UTF_8)) {
+      long errors = lines.filter(l -> l.contains(" 500 ")).count();
+  } // file handle released here
+  ```
+
+  Forgetting the try-with-resources leaks a file descriptor per call. Under load this exhausts the per-process FD limit and surfaces as `IOException: Too many open files` from completely unrelated code.
+
+  ## Directory streams — `list` and `walk`
+
+  `Files.list(dir)` returns one level; `Files.walk(dir)` recurses. Both return `Stream<Path>` and **must** be closed:
+
+  ```java
+  import java.nio.file.Files;
+  import java.nio.file.Path;
+  import java.util.stream.Stream;
+
+  // One level
+  try (Stream<Path> entries = Files.list(Path.of("/var/data"))) {
+      entries.filter(Files::isRegularFile).forEach(System.out::println);
+  }
+
+  // Recursive walk with depth cap
+  try (Stream<Path> tree = Files.walk(Path.of("/var/data"), 4)) {
+      tree.filter(p -> p.toString().endsWith(".csv")).forEach(this::ingest);
+  }
+  ```
+
+  `Files.walk` is depth-first. Pass an explicit `maxDepth` — unbounded walks across symlinked directories are a denial-of-service risk on hostile inputs. The older `DirectoryStream<Path>` (returned by `Files.newDirectoryStream`) is also fine and is itself `AutoCloseable`; pick whichever fits the surrounding stream pipeline.
+
+  ## Existence and metadata
+
+  Three methods, three answers:
+
+  - `Files.exists(path)` — true if the file is verified to exist.
+  - `Files.notExists(path)` — true if the file is verified to NOT exist.
+  - Both can return `false` simultaneously when access is denied (the runtime cannot determine the answer). `!Files.exists(path)` is therefore not equivalent to `Files.notExists(path)`.
+
+  Reach for `Files.isReadable`, `Files.isWritable`, `Files.isRegularFile`, `Files.isDirectory` for capability-style checks. For metadata: `Files.size`, `Files.getLastModifiedTime`, `Files.getOwner`, `Files.getPosixFilePermissions` (POSIX filesystems only). For bulk attribute reads — listing a directory and rendering size, mtime, and owner per entry — prefer `Files.readAttributes(path, BasicFileAttributes.class)` over per-call accessors. Each individual `Files.size` / `Files.getLastModifiedTime` invocation is a separate `stat` syscall on the JVM filesystem provider; one `readAttributes` call collects them in a single syscall.
+
+  ## Atomic move (safe rename-with-replace)
+
+  When writing config files, lock files, or any file a peer process reads, write to a sibling temp path and `Files.move` atomically:
+
+  ```java
+  import java.nio.file.Files;
+  import java.nio.file.Path;
+  import java.nio.file.StandardCopyOption;
+
+  Path target = Path.of("/var/data/orders.json");
+  Path tmp    = target.resolveSibling("orders.json.tmp");
+
+  Files.writeString(tmp, payload, StandardCharsets.UTF_8);
+  Files.move(tmp, target,
+      StandardCopyOption.ATOMIC_MOVE,
+      StandardCopyOption.REPLACE_EXISTING);
+  ```
+
+  `ATOMIC_MOVE` is filesystem-supported only within the same filesystem (e.g. same mount on Linux). Across filesystems the call throws `AtomicMoveNotSupportedException` — fall back to `Files.copy` plus `Files.delete` and accept the non-atomic window, or write to a temp on the target filesystem.
+
+  ## `FileChannel` and `ByteBuffer` — the low-level surface
+
+  When `Files.readAllBytes` is too coarse — sized reads, memory-mapping, kernel-side copy — drop to `FileChannel`:
+
+  ```java
+  import java.nio.ByteBuffer;
+  import java.nio.channels.FileChannel;
+  import java.nio.file.Path;
+  import java.nio.file.StandardOpenOption;
+
+  try (FileChannel src = FileChannel.open(Path.of("input.bin"), StandardOpenOption.READ);
+       FileChannel dst = FileChannel.open(Path.of("output.bin"),
+           StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+      // Kernel-side copy — no userland buffer, no JVM heap pressure
+      src.transferTo(0, src.size(), dst);
+  }
+  ```
+
+  For random-access patterns, memory-map the file:
+
+  ```java
+  try (FileChannel ch = FileChannel.open(Path.of("data.bin"), StandardOpenOption.READ)) {
+      ByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+      // Read directly off the mapped region — OS handles paging
+  }
+  ```
+
+  Direct `ByteBuffer` (allocated via `ByteBuffer.allocateDirect`) lives off-heap and is the right shape for high-throughput IO; heap `ByteBuffer` (`ByteBuffer.allocate`) is fine for small or one-shot work. The general rule: use `Files` until profiling proves you need `FileChannel`.
+
+  ## `WatchService` — directory event notifications
+
+  `WatchService` watches a directory for `ENTRY_CREATE`, `ENTRY_DELETE`, and `ENTRY_MODIFY` events:
+
+  ```java
+  import java.nio.file.*;
+  import static java.nio.file.StandardWatchEventKinds.*;
+
+  try (WatchService watcher = FileSystems.getDefault().newWatchService()) {
+      Path dir = Path.of("/var/data/inbox");
+      dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
+
+      while (!Thread.currentThread().isInterrupted()) {
+          WatchKey key = watcher.take();
+          for (WatchEvent<?> ev : key.pollEvents()) {
+              Path child = dir.resolve((Path) ev.context());
+              handle(ev.kind(), child);
+          }
+          if (!key.reset()) break;
+      }
+  }
+  ```
+
+  Three sharp edges: (1) `WatchService` is **not** recursive — to watch a subtree you must walk it once with `Files.walk` and `register` every directory, then re-register on `ENTRY_CREATE` of new directories. (2) On macOS the default implementation polls (no native FSEvents wiring), so latency is in seconds, not milliseconds — fine for tooling, not for production-critical event paths. (3) Events can coalesce or arrive out of order; treat `WatchService` as a hint to re-scan, not a transactional event log.
+
+  ## Anti-patterns
+
+  - **`new File(...)` in new code.** `java.io.File` predates NIO.2 and has weaker semantics (no symlink awareness, lossy error reporting). Use `Path` and convert at boundaries with `file.toPath()` only when interoperating with legacy APIs.
+  - **`Files.readAllBytes` on a multi-gigabyte file.** OOM. Use `FileChannel` with a sized `ByteBuffer`, or `Files.lines` for text.
+  - **Not closing the stream from `Files.list` / `Files.walk` / `Files.lines`.** Leaks file descriptors. Always wrap in try-with-resources.
+  - **Path concatenation with `+ "/"`.** Breaks on Windows; can produce double-separators on POSIX. Use `Path.resolve`.
+  - **Relying on `Charset.defaultCharset()`.** Pass `StandardCharsets.UTF_8` explicitly — even though JEP 400 (Java 18) made UTF-8 the default, older runtimes and surprising locales still exist.
+  - **`Files.exists` followed by an action without expecting TOCTOU.** Between the check and the open, anything can happen. Prefer "attempt the operation, catch `NoSuchFileException`" over "check then act".
+  - **`WatchService` registered on one directory expecting subdirectory events.** It is not recursive — walk-and-register, then re-register on `ENTRY_CREATE` of directories.
+  - **Blocking IO inside `synchronized` blocks on Java 21 virtual threads.** Pinning. Use `java.util.concurrent.locks.ReentrantLock` or restructure to avoid `synchronized` around IO calls.
+
+  ## Verification
+
+  - [ ] No `new File(` in new code — `grep -rn 'new File(' src/` returns zero hits in non-legacy modules.
+  - [ ] No `Files.readAllBytes` on paths that can exceed a few hundred MB — `grep -rn 'readAllBytes' src/` audited; large-file paths use `FileChannel` or `Files.lines`.
+  - [ ] All `Files.list` / `Files.walk` / `Files.lines` call sites are inside try-with-resources — `grep -rnE 'Files\.(list|walk|lines)\(' src/` reviewed; SpotBugs `OS_OPEN_STREAM` clean.
+  - [ ] All `Files.readString` / `Files.writeString` calls pass an explicit `Charset` — `grep -rnE 'Files\.(readString|writeString)\(' src/` reviewed; no `Charset.defaultCharset()` usage (`grep -rn 'Charset.defaultCharset' src/` returns zero).
+  - [ ] Atomic publish paths use `Files.move(..., StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)` — `grep -rn 'ATOMIC_MOVE' src/` returns hits proportional to files written for cross-process consumption.
+  - [ ] Path composition uses `Path.resolve` / `Path.resolveSibling` — `grep -rnE '\"\\s*\\+\\s*\"/\"' src/` returns zero, no string-glued paths.
+  - [ ] `WatchService` consumers walk-and-register the subtree and re-register on `ENTRY_CREATE` of directories — code review confirms the recursive-watch loop exists.
+  - [ ] `FileChannel` / `ByteBuffer` use sites close the channel — try-with-resources in every `FileChannel.open` call site (`grep -rn 'FileChannel.open' src/`).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Java NIO.2 File I/O
+
+      `java.nio.file` (NIO.2, introduced in Java 7 — verified 2026-05-06) is the modern filesystem API on the JVM. The legacy `java.io.File` class still compiles and still appears in old code, but new code on Java 21 LTS should reach for `Path` and `Files` exclusively. The rule is one sentence: build paths with `Path.of` (or `Paths.get`), prefer `Files` static methods for one-shot read/write, prefer `FileChannel` + `ByteBuffer` for sized or memory-mapped IO, and always close the lazy `Stream` returned by `Files.list`, `Files.walk`, and `Files.lines` with try-with-resources — those streams hold OS file handles. Most production filesystem bugs on the JVM come from `new File(...)` mixed with `Path` (type-incompatible, forces conversions), `Files.readAllBytes` on multi-gigabyte files (OOM), unclosed `Files.walk` streams (file-descriptor leaks under load), string concatenation of paths with `"/"` (breaks on Windows, sometimes breaks on resolution edge cases on POSIX), and reliance on the platform default charset (UTF-8 since Java 18 / JEP 400 — verified 2026-05-06 — but still: be explicit).
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## `Path` and `Paths` — modeling locations
+
+      A `Path` is an immutable, platform-aware filesystem location. Construct with `Path.of(...)` (preferred since Java 11 — verified 2026-05-06) or `Paths.get(...)` (Java 7 form, identical semantics):
+
+      ```java
+      import java.nio.file.Path;
+      import java.nio.file.Paths;
+
+      Path hosts   = Path.of("/etc/hosts");          // Java 11+
+      Path config  = Paths.get("config", "app.yaml"); // Java 7+, multi-segment
+      Path home    = Path.of(System.getProperty("user.home"));
+      ```
+
+      Compose paths with `resolve`, `relativize`, and `normalize` — never with string concatenation:
+
+      ```java
+      Path base    = Path.of("/var/data");
+      Path file    = base.resolve("orders/2026/jan.csv"); // /var/data/orders/2026/jan.csv
+      Path rel     = base.relativize(file);                // orders/2026/jan.csv
+      Path cleaned = Path.of("/var/data/../tmp/./out").normalize(); // /var/tmp/out
+      ```
+
+      `resolve` knows about platform separators, root paths, and absolute-versus-relative semantics. `Path` is also `Iterable<Path>` over its name elements, which is the right primitive for sandboxing logic ("does this `Path` escape my base directory?" → `base.relativize(target).startsWith("..")`).
+
+  - sequence: 3
+    fragment_type: example
+    content: |
+      ## `Files` utility — one-shot reads and writes
+
+      `java.nio.file.Files` is a static facade. For text:
+
+      ```java
+      import java.nio.file.Files;
+      import java.nio.file.Path;
+      import java.nio.charset.StandardCharsets;
+
+      String body = Files.readString(Path.of("data.txt"), StandardCharsets.UTF_8);
+      Files.writeString(Path.of("out.txt"), body, StandardCharsets.UTF_8);
+      ```
+
+      `Files.readString` and `Files.writeString` were added in Java 11 (verified 2026-05-06). For bytes use `Files.readAllBytes(path)` and `Files.write(path, bytes)`. Always pass an explicit `Charset` — `StandardCharsets.UTF_8` is the right default. JEP 400 (Java 18) made UTF-8 the platform default for `Charset.defaultCharset()`, but explicit beats implicit and travels across older runtimes.
+
+      Use `Files.readString` / `readAllBytes` only when the file fits in memory. For anything else, stream — `Files.lines(path, charset)` returns a lazy `Stream<String>` that you must consume inside try-with-resources because it owns an open file handle:
+
+      ```java
+      try (var lines = Files.lines(Path.of("access.log"), StandardCharsets.UTF_8)) {
+          long errors = lines.filter(l -> l.contains(" 500 ")).count();
+      } // file handle released here
+      ```
+
+      Forgetting the try-with-resources leaks a file descriptor per call. Under load this exhausts the per-process FD limit and surfaces as `IOException: Too many open files` from completely unrelated code.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## Directory streams — `list` and `walk`
+
+      `Files.list(dir)` returns one level; `Files.walk(dir)` recurses. Both return `Stream<Path>` and **must** be closed:
+
+      ```java
+      import java.nio.file.Files;
+      import java.nio.file.Path;
+      import java.util.stream.Stream;
+
+      // One level
+      try (Stream<Path> entries = Files.list(Path.of("/var/data"))) {
+          entries.filter(Files::isRegularFile).forEach(System.out::println);
+      }
+
+      // Recursive walk with depth cap
+      try (Stream<Path> tree = Files.walk(Path.of("/var/data"), 4)) {
+          tree.filter(p -> p.toString().endsWith(".csv")).forEach(this::ingest);
+      }
+      ```
+
+      `Files.walk` is depth-first. Pass an explicit `maxDepth` — unbounded walks across symlinked directories are a denial-of-service risk on hostile inputs. The older `DirectoryStream<Path>` (returned by `Files.newDirectoryStream`) is also fine and is itself `AutoCloseable`; pick whichever fits the surrounding stream pipeline.
+
+  - sequence: 5
+    fragment_type: rationale
+    content: |
+      ## Existence and metadata
+
+      Three methods, three answers:
+
+      - `Files.exists(path)` — true if the file is verified to exist.
+      - `Files.notExists(path)` — true if the file is verified to NOT exist.
+      - Both can return `false` simultaneously when access is denied (the runtime cannot determine the answer). `!Files.exists(path)` is therefore not equivalent to `Files.notExists(path)`.
+
+      Reach for `Files.isReadable`, `Files.isWritable`, `Files.isRegularFile`, `Files.isDirectory` for capability-style checks. For metadata: `Files.size`, `Files.getLastModifiedTime`, `Files.getOwner`, `Files.getPosixFilePermissions` (POSIX filesystems only). For bulk attribute reads — listing a directory and rendering size, mtime, and owner per entry — prefer `Files.readAttributes(path, BasicFileAttributes.class)` over per-call accessors. Each individual `Files.size` / `Files.getLastModifiedTime` invocation is a separate `stat` syscall on the JVM filesystem provider; one `readAttributes` call collects them in a single syscall.
+
+  - sequence: 6
+    fragment_type: execution
+    content: |
+      ## Atomic move (safe rename-with-replace)
+
+      When writing config files, lock files, or any file a peer process reads, write to a sibling temp path and `Files.move` atomically:
+
+      ```java
+      import java.nio.file.Files;
+      import java.nio.file.Path;
+      import java.nio.file.StandardCopyOption;
+
+      Path target = Path.of("/var/data/orders.json");
+      Path tmp    = target.resolveSibling("orders.json.tmp");
+
+      Files.writeString(tmp, payload, StandardCharsets.UTF_8);
+      Files.move(tmp, target,
+          StandardCopyOption.ATOMIC_MOVE,
+          StandardCopyOption.REPLACE_EXISTING);
+      ```
+
+      `ATOMIC_MOVE` is filesystem-supported only within the same filesystem (e.g. same mount on Linux). Across filesystems the call throws `AtomicMoveNotSupportedException` — fall back to `Files.copy` plus `Files.delete` and accept the non-atomic window, or write to a temp on the target filesystem.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## `FileChannel` and `ByteBuffer` — the low-level surface
+
+      When `Files.readAllBytes` is too coarse — sized reads, memory-mapping, kernel-side copy — drop to `FileChannel`:
+
+      ```java
+      import java.nio.ByteBuffer;
+      import java.nio.channels.FileChannel;
+      import java.nio.file.Path;
+      import java.nio.file.StandardOpenOption;
+
+      try (FileChannel src = FileChannel.open(Path.of("input.bin"), StandardOpenOption.READ);
+           FileChannel dst = FileChannel.open(Path.of("output.bin"),
+               StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+          // Kernel-side copy — no userland buffer, no JVM heap pressure
+          src.transferTo(0, src.size(), dst);
+      }
+      ```
+
+      For random-access patterns, memory-map the file:
+
+      ```java
+      try (FileChannel ch = FileChannel.open(Path.of("data.bin"), StandardOpenOption.READ)) {
+          ByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+          // Read directly off the mapped region — OS handles paging
+      }
+      ```
+
+      Direct `ByteBuffer` (allocated via `ByteBuffer.allocateDirect`) lives off-heap and is the right shape for high-throughput IO; heap `ByteBuffer` (`ByteBuffer.allocate`) is fine for small or one-shot work. The general rule: use `Files` until profiling proves you need `FileChannel`.
+
+  - sequence: 8
+    fragment_type: example
+    content: |
+      ## `WatchService` — directory event notifications
+
+      `WatchService` watches a directory for `ENTRY_CREATE`, `ENTRY_DELETE`, and `ENTRY_MODIFY` events:
+
+      ```java
+      import java.nio.file.*;
+      import static java.nio.file.StandardWatchEventKinds.*;
+
+      try (WatchService watcher = FileSystems.getDefault().newWatchService()) {
+          Path dir = Path.of("/var/data/inbox");
+          dir.register(watcher, ENTRY_CREATE, ENTRY_MODIFY);
+
+          while (!Thread.currentThread().isInterrupted()) {
+              WatchKey key = watcher.take();
+              for (WatchEvent<?> ev : key.pollEvents()) {
+                  Path child = dir.resolve((Path) ev.context());
+                  handle(ev.kind(), child);
+              }
+              if (!key.reset()) break;
+          }
+      }
+      ```
+
+      Three sharp edges: (1) `WatchService` is **not** recursive — to watch a subtree you must walk it once with `Files.walk` and `register` every directory, then re-register on `ENTRY_CREATE` of new directories. (2) On macOS the default implementation polls (no native FSEvents wiring), so latency is in seconds, not milliseconds — fine for tooling, not for production-critical event paths. (3) Events can coalesce or arrive out of order; treat `WatchService` as a hint to re-scan, not a transactional event log.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`new File(...)` in new code.** `java.io.File` predates NIO.2 and has weaker semantics (no symlink awareness, lossy error reporting). Use `Path` and convert at boundaries with `file.toPath()` only when interoperating with legacy APIs.
+      - **`Files.readAllBytes` on a multi-gigabyte file.** OOM. Use `FileChannel` with a sized `ByteBuffer`, or `Files.lines` for text.
+      - **Not closing the stream from `Files.list` / `Files.walk` / `Files.lines`.** Leaks file descriptors. Always wrap in try-with-resources.
+      - **Path concatenation with `+ "/"`.** Breaks on Windows; can produce double-separators on POSIX. Use `Path.resolve`.
+      - **Relying on `Charset.defaultCharset()`.** Pass `StandardCharsets.UTF_8` explicitly — even though JEP 400 (Java 18) made UTF-8 the default, older runtimes and surprising locales still exist.
+      - **`Files.exists` followed by an action without expecting TOCTOU.** Between the check and the open, anything can happen. Prefer "attempt the operation, catch `NoSuchFileException`" over "check then act".
+      - **`WatchService` registered on one directory expecting subdirectory events.** It is not recursive — walk-and-register, then re-register on `ENTRY_CREATE` of directories.
+      - **Blocking IO inside `synchronized` blocks on Java 21 virtual threads.** Pinning. Use `java.util.concurrent.locks.ReentrantLock` or restructure to avoid `synchronized` around IO calls.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] No `new File(` in new code — `grep -rn 'new File(' src/` returns zero hits in non-legacy modules.
+      - [ ] No `Files.readAllBytes` on paths that can exceed a few hundred MB — `grep -rn 'readAllBytes' src/` audited; large-file paths use `FileChannel` or `Files.lines`.
+      - [ ] All `Files.list` / `Files.walk` / `Files.lines` call sites are inside try-with-resources — `grep -rnE 'Files\.(list|walk|lines)\(' src/` reviewed; SpotBugs `OS_OPEN_STREAM` clean.
+      - [ ] All `Files.readString` / `Files.writeString` calls pass an explicit `Charset` — `grep -rnE 'Files\.(readString|writeString)\(' src/` reviewed; no `Charset.defaultCharset()` usage (`grep -rn 'Charset.defaultCharset' src/` returns zero).
+      - [ ] Atomic publish paths use `Files.move(..., StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)` — `grep -rn 'ATOMIC_MOVE' src/` returns hits proportional to files written for cross-process consumption.
+      - [ ] Path composition uses `Path.resolve` / `Path.resolveSibling` — `grep -rnE '\"\\s*\\+\\s*\"/\"' src/` returns zero, no string-glued paths.
+      - [ ] `WatchService` consumers walk-and-register the subtree and re-register on `ENTRY_CREATE` of directories — code review confirms the recursive-watch loop exists.
+      - [ ] `FileChannel` / `ByteBuffer` use sites close the channel — try-with-resources in every `FileChannel.open` call site (`grep -rn 'FileChannel.open' src/`).

@@ -1,0 +1,432 @@
+skill_type: domain
+skill_id: java-exceptions-and-try-with-resources
+canonical_name: Java Exceptions and try-with-resources (Checked vs Unchecked, Suppressed Exceptions, AutoCloseable)
+category: engineering
+skill_class: domain
+domain_tags: [checked-exception-policy, try-with-resources-closing, suppressed-exceptions-stack, throwable-cause-chaining, multi-catch-disjunction]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-06. Sources — java.lang.Throwable API https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Throwable.html, java.lang.Exception API https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html, JLS SE 21 §14.20 (the try statement, including try-with-resources) https://docs.oracle.com/javase/specs/jls/se21/html/jls-14.html#jls-14.20 (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic `error_handling_and_exceptions`). Skill scope: Throwable hierarchy and the checked-vs-unchecked split, `try`/`catch`/`finally` with multi-catch (Java 7), `try-with-resources` and `AutoCloseable.close()` ordering, suppressed exceptions via `Throwable.getSuppressed()`, the Java 9+ effectively-final resource form, custom exception type design and cause chaining, and `InterruptedException` cooperative-cancellation policy; not logging frameworks, not Spring/Jakarta exception translation, not JUnit assertion exceptions.
+
+raw_prose: |
+  # Java Exceptions and try-with-resources
+
+  Java reports failures via `Throwable`. The runtime walks the call stack looking for a matching `catch` clause, runs `finally` blocks (and `AutoCloseable.close()` for try-with-resources) on the way out, and terminates the thread (or the JVM, for the main thread without a handler) if no handler is found. The rule fits in one paragraph: catch the most specific type you can act on, prefer `try-with-resources` over hand-written `finally { close(); }`, throw checked exceptions only when the caller can actually recover, prefer `RuntimeException` subclasses for programmer errors and contract violations, always preserve the original cause when re-throwing, and treat `InterruptedException` as cooperative cancellation rather than as an error. Most production Java exception bugs come from `catch (Exception)` swallowing real failures, manual `finally { close(); }` blocks where the close throws and replaces the original exception, throwing a wrapping exception without setting `cause`, and consuming `InterruptedException` without restoring the interrupt flag.
+
+  ## Throwable hierarchy
+
+  Every throwable derives from `java.lang.Throwable`. Two direct subclasses split the surface:
+
+  - `Error` — JVM-level conditions the application is not expected to recover from (`OutOfMemoryError`, `StackOverflowError`, `NoClassDefFoundError`). Do not catch `Error` in application code; the JVM is in an undefined state.
+  - `Exception` — application-level fallible work. Its subclass `RuntimeException` (and anything that extends it) is **unchecked**; everything else under `Exception` is **checked**.
+
+  Checked exceptions must be either declared in the method's `throws` clause or caught. Unchecked exceptions propagate freely without compile-time enforcement. The compiler enforces the distinction via JLS §11.
+
+  Common checked types: `IOException`, `SQLException`, `InterruptedException`, `ClassNotFoundException`. Common unchecked types: `NullPointerException`, `IllegalArgumentException`, `IllegalStateException`, `IndexOutOfBoundsException`, `ClassCastException`, `ArithmeticException`.
+
+  Pick the most specific type that names the failure. `throw new Exception("bad thing")` is almost never the right choice — callers cannot match on it without catching everything checked.
+
+  ## Checked vs unchecked policy
+
+  The historical guidance ("check things the caller can recover from") is correct in principle but produces bad ergonomics in modern Java. Lambdas, `Stream`, and `CompletableFuture` do not compose with checked exceptions — their functional-interface signatures (`Function`, `Supplier`, `Consumer`) declare `throws` of nothing, so a checked exception inside a lambda forces a wrapper or a `try`/`catch` per call site. The pragmatic policy:
+
+  - **Unchecked (`RuntimeException` subclass)** for programmer errors and contract violations: null where non-null was required, illegal state, illegal argument, missing configuration. Also for failures the caller almost certainly cannot recover from in a meaningful way (e.g. database unreachable inside a request handler — let it propagate to the framework's error boundary).
+  - **Checked (`Exception` subclass, not `RuntimeException`)** only when the caller has a realistic recovery path that is *not* "log and rethrow." File-not-found in a workflow that can fall back to a default. Network timeout in a step with a clearly defined retry policy at the call site.
+
+  When in doubt, prefer unchecked. A checked exception that every caller just declares `throws` on is forced ceremony with no recovery. Wrapping a checked exception in a `RuntimeException` at the boundary is a normal pattern; the reverse — converting a `RuntimeException` to checked — almost never is.
+
+  ## `try`/`catch`/`finally` and multi-catch
+
+  ```java
+  import java.io.IOException;
+  import java.sql.SQLException;
+
+  try {
+      var rows = repository.load(orderId);
+      return render(rows);
+  } catch (IOException | SQLException ex) {       // multi-catch: Java 7+
+      logger.warn("load failed for {}", orderId, ex);
+      throw new ServiceException("could not load order", ex);
+  } catch (RuntimeException ex) {
+      logger.error("unexpected failure for {}", orderId, ex);
+      throw;                                       // not legal — see note below
+  } finally {
+      // Always runs: success, handled exception, or unhandled exception.
+      // Caveats: System.exit and SIGKILL skip finally; an exception thrown
+      // inside finally REPLACES any in-flight exception from the body.
+  }
+  ```
+
+  Notes:
+
+  - Catch ordering matters: more specific types must precede more general ones. The compiler rejects an unreachable `catch (IOException)` placed after `catch (Exception)`.
+  - Multi-catch (`catch (A | B ex)`) requires the alternatives to be unrelated by inheritance. Inside the block `ex` is typed as the nearest common supertype.
+  - Java does not have a bare `throw;` rethrow form — write `throw ex;`. The original stack trace is preserved on the same `Throwable` instance regardless of how many times it is rethrown, so `throw ex;` is not the bug it is in C#.
+  - `finally` always runs except for `System.exit`, OS-level kills, and infinite loops/deadlock in the body. An exception from `finally` masks any exception from the body; `try-with-resources` exists in part to fix this.
+
+  ## `try-with-resources` and `AutoCloseable`
+
+  A resource that implements `java.lang.AutoCloseable` (or its older subtype `java.io.Closeable`) can be declared in a `try` header. The compiler generates `close()` calls in **reverse declaration order** on every exit path — normal completion, thrown exception, early return. Multiple resources can share one statement:
+
+  ```java
+  import java.io.BufferedReader;
+  import java.io.FileReader;
+  import java.sql.Connection;
+  import java.sql.PreparedStatement;
+  import java.sql.ResultSet;
+
+  try (Connection conn = dataSource.getConnection();
+       PreparedStatement stmt = conn.prepareStatement(sql);
+       ResultSet rs = stmt.executeQuery()) {
+      while (rs.next()) {
+          process(rs);
+      }
+  }
+  // close order at scope exit: rs, then stmt, then conn — reverse of declaration.
+  ```
+
+  Per JLS §14.20.3, the desugaring is roughly: a `try`/`finally` per resource, nested in declaration order, where the `finally` invokes `close()`. The compiler also tracks the primary exception so that the suppressed-exception machinery (next section) works without user code.
+
+  Java 9 added the **effectively-final resource** form: if a variable is already in scope and is `final` or effectively final, you can name it directly in the header without re-declaring:
+
+  ```java
+  var conn = dataSource.getConnection();          // already initialized
+  try (conn) {                                    // Java 9+
+      // ... use conn ...
+  }
+  ```
+
+  Use this only when a prior path needs the resource initialized (e.g. configuration before the `try`); for the common case, declare in the header.
+
+  ## Suppressed exceptions
+
+  When the body of a try-with-resources throws, and the implicit `close()` ALSO throws, the body's exception is the **primary** and the close's exception is attached to it as a **suppressed** exception. Retrieve them via `Throwable.getSuppressed()`:
+
+  ```java
+  try (var resource = new FlakyResource()) {     // close() throws IOException
+      resource.doWork();                          // also throws IOException
+  } catch (IOException primary) {
+      logger.error("work failed", primary);
+      for (Throwable suppressed : primary.getSuppressed()) {
+          logger.error("...also failed during close", suppressed);
+      }
+  }
+  ```
+
+  This is the structural advantage of try-with-resources over hand-written `finally { resource.close(); }`. In the manual form, an exception from `close()` REPLACES the body exception — the original failure is lost. The compiler's desugaring uses `Throwable.addSuppressed` to preserve both, and `getSuppressed()` returns them as an array (empty if none, never `null`).
+
+  Two resources, both close-failures: each suppressed exception lands on the primary exception in close order. With resources `a` then `b` declared, body throws `E0`, `b.close()` throws `E1`, `a.close()` throws `E2` — `E0` is primary; `E0.getSuppressed()` returns `[E1, E2]`.
+
+  ## Custom exception design and cause chaining
+
+  When the BCL does not have a type that names your failure, define a custom one. Keep it simple: extend `Exception` (checked) or `RuntimeException` (unchecked) per the policy above, and provide the conventional constructors so callers can chain causes.
+
+  ```java
+  public final class ConfigLoadException extends RuntimeException {
+      public ConfigLoadException(String message) {
+          super(message);
+      }
+      public ConfigLoadException(String message, Throwable cause) {
+          super(message, cause);
+      }
+      public ConfigLoadException(Throwable cause) {
+          super(cause);
+      }
+  }
+  ```
+
+  When re-throwing, always pass the original as the cause:
+
+  ```java
+  try {
+      return parser.parse(path);
+  } catch (IOException ex) {
+      throw new ConfigLoadException("could not read " + path, ex);   // cause set
+  }
+  ```
+
+  `Throwable.getCause()` returns the wrapped exception; tooling and logger format-strings walk the cause chain and print "Caused by: …" automatically. Throwing `new ConfigLoadException("could not read " + path)` without the cause loses the original `IOException` and its stack trace forever.
+
+  Do not define a new exception type per domain noun. If callers would treat `OrderNotFound` and `CustomerNotFound` identically, use one `EntityNotFoundException` with an `entityType` property, or just use `NoSuchElementException` from the BCL.
+
+  ## `InterruptedException` is cooperative cancellation
+
+  `InterruptedException` is the JVM's signal that another thread has called `Thread.interrupt()` on this one — typically because a thread pool is shutting down or a `Future` was cancelled. It is cooperative: the interrupted code chooses how to respond. Two correct responses, one wrong one:
+
+  ```java
+  // CORRECT — propagate
+  void doWork() throws InterruptedException {
+      Thread.sleep(1000);
+  }
+
+  // CORRECT — restore the flag and return cleanly
+  void doWork() {
+      try {
+          Thread.sleep(1000);
+      } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();    // restore the flag
+          return;
+      }
+  }
+
+  // WRONG — silently consume the interrupt
+  void doWork() {
+      try {
+          Thread.sleep(1000);
+      } catch (InterruptedException ignored) {
+          // flag NOT restored; caller's cancellation is lost
+      }
+  }
+  ```
+
+  The third form breaks every higher-level cancellation primitive built on the interrupt flag (`ExecutorService.shutdownNow`, `Future.cancel(true)`, structured concurrency). If you must catch and not propagate, restore the flag with `Thread.currentThread().interrupt()`.
+
+  ## Anti-patterns
+
+  - **`catch (Exception ex)` or `catch (Throwable ex)` at the top of a public method.** Swallows real bugs (NPE, index-out-of-bounds, OOM-via-`Error`-if-you-catch-`Throwable`) and leaves the caller with no signal. Catch what you can act on.
+  - **Empty `catch (...) {}` with a TODO.** Same as above plus invisible. If you genuinely need to ignore an exception, log it at DEBUG and write a comment naming the reason.
+  - **`throw new ServiceException("…")` without setting `cause`.** Throws away the original stack trace. Always pass the caught exception as the second `super(message, cause)` argument.
+  - **Checked exceptions on API surfaces the caller cannot recover from.** Forces every caller to add `throws` or wrap. Prefer a `RuntimeException` subclass.
+  - **Manual `finally { resource.close(); }` instead of try-with-resources.** A `close()` that throws replaces the body exception; suppressed-exception preservation is lost.
+  - **Consuming `InterruptedException` without restoring the flag.** Breaks cooperative cancellation in every caller.
+  - **`e.printStackTrace()` in production code.** Writes to `System.err`, bypasses logging configuration, and produces output with no severity, no context, and no aggregation. Use a logger.
+  - **Catching the broader of two types in a multi-catch then immediately checking `instanceof`.** Either split into two `catch` clauses or use a multi-catch where both alternatives are handled identically.
+
+  ## Verification
+
+  - [ ] `mvn -B compile` (or `./gradlew compileJava`) exits 0 with `-Werror` enabled in the compiler args; the build fails on any `unchecked` or `deprecation` warning related to exception handling.
+  - [ ] `grep -rn 'catch (Exception' src/main/java/` results are reviewed: each non-boundary catch is annotated with a justification comment or rethrows with the cause set.
+  - [ ] `grep -rn 'catch (Throwable' src/main/java/` returns no results outside framework-boundary classes (request filters, scheduled-task supervisors).
+  - [ ] `grep -rn 'printStackTrace' src/main/java/ src/test/java/` returns no results — replaced by logger calls.
+  - [ ] `grep -rnE 'finally\s*\{[^}]*\.close\(\)' src/main/java/` returns no results — replaced by try-with-resources.
+  - [ ] SpotBugs run reports zero `EXS_EXCEPTION_SOFTENING_HAS_CHECKED` (catching a checked exception and rethrowing as unchecked without preserving cause) and zero `DE_MIGHT_IGNORE` (silently swallowing exceptions).
+  - [ ] Every `catch (InterruptedException ex)` block either ends with `throw` of an exception that wraps `ex` as cause, or contains `Thread.currentThread().interrupt();` — verifiable by `grep -rnA 5 'catch (InterruptedException'`.
+  - [ ] Custom exception types declare a `(String message, Throwable cause)` constructor — verifiable by reflection unit test or `grep -rnA 3 'extends \(Runtime\)\?Exception'`.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Java Exceptions and try-with-resources
+
+      Java reports failures via `Throwable`. The runtime walks the call stack looking for a matching `catch` clause, runs `finally` blocks (and `AutoCloseable.close()` for try-with-resources) on the way out, and terminates the thread (or the JVM, for the main thread without a handler) if no handler is found. The rule fits in one paragraph: catch the most specific type you can act on, prefer `try-with-resources` over hand-written `finally { close(); }`, throw checked exceptions only when the caller can actually recover, prefer `RuntimeException` subclasses for programmer errors and contract violations, always preserve the original cause when re-throwing, and treat `InterruptedException` as cooperative cancellation rather than as an error. Most production Java exception bugs come from `catch (Exception)` swallowing real failures, manual `finally { close(); }` blocks where the close throws and replaces the original exception, throwing a wrapping exception without setting `cause`, and consuming `InterruptedException` without restoring the interrupt flag.
+
+  - sequence: 2
+    fragment_type: rationale
+    content: |
+      ## Throwable hierarchy
+
+      Every throwable derives from `java.lang.Throwable`. Two direct subclasses split the surface:
+
+      - `Error` — JVM-level conditions the application is not expected to recover from (`OutOfMemoryError`, `StackOverflowError`, `NoClassDefFoundError`). Do not catch `Error` in application code; the JVM is in an undefined state.
+      - `Exception` — application-level fallible work. Its subclass `RuntimeException` (and anything that extends it) is **unchecked**; everything else under `Exception` is **checked**.
+
+      Checked exceptions must be either declared in the method's `throws` clause or caught. Unchecked exceptions propagate freely without compile-time enforcement. The compiler enforces the distinction via JLS §11.
+
+      Common checked types: `IOException`, `SQLException`, `InterruptedException`, `ClassNotFoundException`. Common unchecked types: `NullPointerException`, `IllegalArgumentException`, `IllegalStateException`, `IndexOutOfBoundsException`, `ClassCastException`, `ArithmeticException`.
+
+      Pick the most specific type that names the failure. `throw new Exception("bad thing")` is almost never the right choice — callers cannot match on it without catching everything checked.
+
+  - sequence: 3
+    fragment_type: rationale
+    content: |
+      ## Checked vs unchecked policy
+
+      The historical guidance ("check things the caller can recover from") is correct in principle but produces bad ergonomics in modern Java. Lambdas, `Stream`, and `CompletableFuture` do not compose with checked exceptions — their functional-interface signatures (`Function`, `Supplier`, `Consumer`) declare `throws` of nothing, so a checked exception inside a lambda forces a wrapper or a `try`/`catch` per call site. The pragmatic policy:
+
+      - **Unchecked (`RuntimeException` subclass)** for programmer errors and contract violations: null where non-null was required, illegal state, illegal argument, missing configuration. Also for failures the caller almost certainly cannot recover from in a meaningful way (e.g. database unreachable inside a request handler — let it propagate to the framework's error boundary).
+      - **Checked (`Exception` subclass, not `RuntimeException`)** only when the caller has a realistic recovery path that is *not* "log and rethrow." File-not-found in a workflow that can fall back to a default. Network timeout in a step with a clearly defined retry policy at the call site.
+
+      When in doubt, prefer unchecked. A checked exception that every caller just declares `throws` on is forced ceremony with no recovery. Wrapping a checked exception in a `RuntimeException` at the boundary is a normal pattern; the reverse — converting a `RuntimeException` to checked — almost never is.
+
+  - sequence: 4
+    fragment_type: example
+    content: |
+      ## `try`/`catch`/`finally` and multi-catch
+
+      ```java
+      import java.io.IOException;
+      import java.sql.SQLException;
+
+      try {
+          var rows = repository.load(orderId);
+          return render(rows);
+      } catch (IOException | SQLException ex) {       // multi-catch: Java 7+
+          logger.warn("load failed for {}", orderId, ex);
+          throw new ServiceException("could not load order", ex);
+      } catch (RuntimeException ex) {
+          logger.error("unexpected failure for {}", orderId, ex);
+          throw;                                       // not legal — see note below
+      } finally {
+          // Always runs: success, handled exception, or unhandled exception.
+          // Caveats: System.exit and SIGKILL skip finally; an exception thrown
+          // inside finally REPLACES any in-flight exception from the body.
+      }
+      ```
+
+      Notes:
+
+      - Catch ordering matters: more specific types must precede more general ones. The compiler rejects an unreachable `catch (IOException)` placed after `catch (Exception)`.
+      - Multi-catch (`catch (A | B ex)`) requires the alternatives to be unrelated by inheritance. Inside the block `ex` is typed as the nearest common supertype.
+      - Java does not have a bare `throw;` rethrow form — write `throw ex;`. The original stack trace is preserved on the same `Throwable` instance regardless of how many times it is rethrown, so `throw ex;` is not the bug it is in C#.
+      - `finally` always runs except for `System.exit`, OS-level kills, and infinite loops/deadlock in the body. An exception from `finally` masks any exception from the body; `try-with-resources` exists in part to fix this.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## `try-with-resources` and `AutoCloseable`
+
+      A resource that implements `java.lang.AutoCloseable` (or its older subtype `java.io.Closeable`) can be declared in a `try` header. The compiler generates `close()` calls in **reverse declaration order** on every exit path — normal completion, thrown exception, early return. Multiple resources can share one statement:
+
+      ```java
+      import java.io.BufferedReader;
+      import java.io.FileReader;
+      import java.sql.Connection;
+      import java.sql.PreparedStatement;
+      import java.sql.ResultSet;
+
+      try (Connection conn = dataSource.getConnection();
+           PreparedStatement stmt = conn.prepareStatement(sql);
+           ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+              process(rs);
+          }
+      }
+      // close order at scope exit: rs, then stmt, then conn — reverse of declaration.
+      ```
+
+      Per JLS §14.20.3, the desugaring is roughly: a `try`/`finally` per resource, nested in declaration order, where the `finally` invokes `close()`. The compiler also tracks the primary exception so that the suppressed-exception machinery (next section) works without user code.
+
+      Java 9 added the **effectively-final resource** form: if a variable is already in scope and is `final` or effectively final, you can name it directly in the header without re-declaring:
+
+      ```java
+      var conn = dataSource.getConnection();          // already initialized
+      try (conn) {                                    // Java 9+
+          // ... use conn ...
+      }
+      ```
+
+      Use this only when a prior path needs the resource initialized (e.g. configuration before the `try`); for the common case, declare in the header.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Suppressed exceptions
+
+      When the body of a try-with-resources throws, and the implicit `close()` ALSO throws, the body's exception is the **primary** and the close's exception is attached to it as a **suppressed** exception. Retrieve them via `Throwable.getSuppressed()`:
+
+      ```java
+      try (var resource = new FlakyResource()) {     // close() throws IOException
+          resource.doWork();                          // also throws IOException
+      } catch (IOException primary) {
+          logger.error("work failed", primary);
+          for (Throwable suppressed : primary.getSuppressed()) {
+              logger.error("...also failed during close", suppressed);
+          }
+      }
+      ```
+
+      This is the structural advantage of try-with-resources over hand-written `finally { resource.close(); }`. In the manual form, an exception from `close()` REPLACES the body exception — the original failure is lost. The compiler's desugaring uses `Throwable.addSuppressed` to preserve both, and `getSuppressed()` returns them as an array (empty if none, never `null`).
+
+      Two resources, both close-failures: each suppressed exception lands on the primary exception in close order. With resources `a` then `b` declared, body throws `E0`, `b.close()` throws `E1`, `a.close()` throws `E2` — `E0` is primary; `E0.getSuppressed()` returns `[E1, E2]`.
+
+  - sequence: 7
+    fragment_type: example
+    content: |
+      ## Custom exception design and cause chaining
+
+      When the BCL does not have a type that names your failure, define a custom one. Keep it simple: extend `Exception` (checked) or `RuntimeException` (unchecked) per the policy above, and provide the conventional constructors so callers can chain causes.
+
+      ```java
+      public final class ConfigLoadException extends RuntimeException {
+          public ConfigLoadException(String message) {
+              super(message);
+          }
+          public ConfigLoadException(String message, Throwable cause) {
+              super(message, cause);
+          }
+          public ConfigLoadException(Throwable cause) {
+              super(cause);
+          }
+      }
+      ```
+
+      When re-throwing, always pass the original as the cause:
+
+      ```java
+      try {
+          return parser.parse(path);
+      } catch (IOException ex) {
+          throw new ConfigLoadException("could not read " + path, ex);   // cause set
+      }
+      ```
+
+      `Throwable.getCause()` returns the wrapped exception; tooling and logger format-strings walk the cause chain and print "Caused by: …" automatically. Throwing `new ConfigLoadException("could not read " + path)` without the cause loses the original `IOException` and its stack trace forever.
+
+      Do not define a new exception type per domain noun. If callers would treat `OrderNotFound` and `CustomerNotFound` identically, use one `EntityNotFoundException` with an `entityType` property, or just use `NoSuchElementException` from the BCL.
+
+  - sequence: 8
+    fragment_type: execution
+    content: |
+      ## `InterruptedException` is cooperative cancellation
+
+      `InterruptedException` is the JVM's signal that another thread has called `Thread.interrupt()` on this one — typically because a thread pool is shutting down or a `Future` was cancelled. It is cooperative: the interrupted code chooses how to respond. Two correct responses, one wrong one:
+
+      ```java
+      // CORRECT — propagate
+      void doWork() throws InterruptedException {
+          Thread.sleep(1000);
+      }
+
+      // CORRECT — restore the flag and return cleanly
+      void doWork() {
+          try {
+              Thread.sleep(1000);
+          } catch (InterruptedException ex) {
+              Thread.currentThread().interrupt();    // restore the flag
+              return;
+          }
+      }
+
+      // WRONG — silently consume the interrupt
+      void doWork() {
+          try {
+              Thread.sleep(1000);
+          } catch (InterruptedException ignored) {
+              // flag NOT restored; caller's cancellation is lost
+          }
+      }
+      ```
+
+      The third form breaks every higher-level cancellation primitive built on the interrupt flag (`ExecutorService.shutdownNow`, `Future.cancel(true)`, structured concurrency). If you must catch and not propagate, restore the flag with `Thread.currentThread().interrupt()`.
+
+  - sequence: 9
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **`catch (Exception ex)` or `catch (Throwable ex)` at the top of a public method.** Swallows real bugs (NPE, index-out-of-bounds, OOM-via-`Error`-if-you-catch-`Throwable`) and leaves the caller with no signal. Catch what you can act on.
+      - **Empty `catch (...) {}` with a TODO.** Same as above plus invisible. If you genuinely need to ignore an exception, log it at DEBUG and write a comment naming the reason.
+      - **`throw new ServiceException("…")` without setting `cause`.** Throws away the original stack trace. Always pass the caught exception as the second `super(message, cause)` argument.
+      - **Checked exceptions on API surfaces the caller cannot recover from.** Forces every caller to add `throws` or wrap. Prefer a `RuntimeException` subclass.
+      - **Manual `finally { resource.close(); }` instead of try-with-resources.** A `close()` that throws replaces the body exception; suppressed-exception preservation is lost.
+      - **Consuming `InterruptedException` without restoring the flag.** Breaks cooperative cancellation in every caller.
+      - **`e.printStackTrace()` in production code.** Writes to `System.err`, bypasses logging configuration, and produces output with no severity, no context, and no aggregation. Use a logger.
+      - **Catching the broader of two types in a multi-catch then immediately checking `instanceof`.** Either split into two `catch` clauses or use a multi-catch where both alternatives are handled identically.
+
+  - sequence: 10
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `mvn -B compile` (or `./gradlew compileJava`) exits 0 with `-Werror` enabled in the compiler args; the build fails on any `unchecked` or `deprecation` warning related to exception handling.
+      - [ ] `grep -rn 'catch (Exception' src/main/java/` results are reviewed: each non-boundary catch is annotated with a justification comment or rethrows with the cause set.
+      - [ ] `grep -rn 'catch (Throwable' src/main/java/` returns no results outside framework-boundary classes (request filters, scheduled-task supervisors).
+      - [ ] `grep -rn 'printStackTrace' src/main/java/ src/test/java/` returns no results — replaced by logger calls.
+      - [ ] `grep -rnE 'finally\s*\{[^}]*\.close\(\)' src/main/java/` returns no results — replaced by try-with-resources.
+      - [ ] SpotBugs run reports zero `EXS_EXCEPTION_SOFTENING_HAS_CHECKED` (catching a checked exception and rethrowing as unchecked without preserving cause) and zero `DE_MIGHT_IGNORE` (silently swallowing exceptions).
+      - [ ] Every `catch (InterruptedException ex)` block either ends with `throw` of an exception that wraps `ex` as cause, or contains `Thread.currentThread().interrupt();` — verifiable by `grep -rnA 5 'catch (InterruptedException'`.
+      - [ ] Custom exception types declare a `(String message, Throwable cause)` constructor — verifiable by reflection unit test or `grep -rnA 3 'extends \(Runtime\)\?Exception'`.

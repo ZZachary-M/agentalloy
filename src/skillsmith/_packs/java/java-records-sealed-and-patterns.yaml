@@ -1,0 +1,326 @@
+skill_type: domain
+skill_id: java-records-sealed-and-patterns
+canonical_name: Java Records, Sealed Types, and Pattern Matching for switch (JEP 441)
+category: engineering
+skill_class: domain
+domain_tags: [record-component, sealed-permits, switch-pattern-matching, deconstruction-patterns, algebraic-data-types]
+always_apply: false
+phase_scope: null
+category_scope: language
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-06. Sources — JLS §4 (types), Oracle "Sealed Classes and Interfaces" guide at docs.oracle.com/en/java/javase/21/language/sealed-classes-and-interfaces.html, and JEP 441 (Pattern Matching for switch, finalized in Java 21). Verified 2026-05-06 against fixtures/upstream/curated/java.yaml topics typing_and_generics (tier-3) and language_evolution_and_deprecation. Targets Java 21 LTS (September 2023). Skill scope: records (Java 16+), sealed classes/interfaces (Java 17+), pattern matching for switch (JEP 441), record deconstruction patterns, exhaustive switch over sealed hierarchies, generics with bounded wildcards, and the type-erasure footgun.
+
+raw_prose: |
+  # Java Records, Sealed Types, and Pattern Matching for switch (JEP 441)
+
+  Java 21 LTS (September 2023, verified 2026-05-06) ships three features that, together, give Java algebraic data types and structural branching: records (Java 16, March 2021), sealed classes and interfaces (Java 17, September 2021), and pattern matching for `switch` finalized as JEP 441 in Java 21. The rule is one sentence: model transparent immutable carriers as records, model closed type hierarchies as sealed interfaces with record subtypes, and branch over those hierarchies with exhaustive `switch` expressions using deconstruction patterns instead of `instanceof`-and-cast ladders. Do not reach for `default` to silence the compiler — exhaustiveness errors when a new permitted subtype is added are the feature, not the bug.
+
+  ## Records — transparent immutable carriers
+
+  A record declares a nominal tuple. The compiler generates a canonical constructor, private final fields, public accessors named after the components, and structural `equals`, `hashCode`, and `toString`:
+
+  ```java
+  public record Point(int x, int y) {}
+
+  Point p = new Point(3, 4);
+  int sum = p.x() + p.y();         // accessors: x() and y(), not getX()
+  Point q = new Point(3, 4);
+  assert p.equals(q);              // structural equality, generated
+  ```
+
+  Records are implicitly `final`, cannot extend a class (they implicitly extend `java.lang.Record`), but can implement interfaces. Components are final — there are no setters. To add validation, declare a compact constructor:
+
+  ```java
+  public record Range(int lo, int hi) {
+      public Range {                            // compact constructor
+          if (lo > hi) throw new IllegalArgumentException("lo > hi");
+      }
+  }
+  ```
+
+  Records are for transparent data carriers — DTOs, map keys, tuple-shaped return values — not for entities with identity. An entity whose equality is by primary key, not by field values, should be a regular class; records' generated `equals` will treat two distinct rows with the same fields as equal, which is wrong for entities.
+
+  ## Sealed classes and interfaces — closed hierarchies
+
+  A sealed type restricts who can extend or implement it. The `permits` clause lists every direct subtype:
+
+  ```java
+  public sealed interface Shape permits Circle, Rectangle, Triangle {}
+
+  public record Circle(double radius) implements Shape {}
+  public record Rectangle(double width, double height) implements Shape {}
+  public record Triangle(double base, double height) implements Shape {}
+  ```
+
+  Permitted subtypes must live in the same module as the sealed parent (or the same package if both are in the unnamed module), and each must declare itself `final`, `sealed`, or `non-sealed`. Records are implicitly `final`, so they satisfy the requirement automatically. `non-sealed` re-opens the hierarchy at one node — useful when one branch needs an extension point but the rest of the hierarchy stays closed.
+
+  Sealed interfaces plus record subtypes give you algebraic data types: a closed sum of products. The compiler knows the universe of `Shape` is exactly `Circle`, `Rectangle`, `Triangle`, and that knowledge powers exhaustive switch.
+
+  ## Pattern matching for switch (JEP 441)
+
+  JEP 441, finalized in Java 21 (verified 2026-05-06), extends `switch` statements and expressions to support type patterns, deconstruction patterns, guarded patterns, and exhaustiveness checking. With a sealed hierarchy of records, `switch` becomes the primary branching tool:
+
+  ```java
+  static double area(Shape s) {
+      return switch (s) {
+          case Circle c                     -> Math.PI * c.radius() * c.radius();
+          case Rectangle(double w, double h) -> w * h;
+          case Triangle(double b, double h)  -> 0.5 * b * h;
+      };
+  }
+  ```
+
+  Three forms are in play here. The `Circle c` arm is a **type pattern**: it matches when `s` is a `Circle` and binds the matched value to `c`, no cast required. The `Rectangle(double w, double h)` and `Triangle(double b, double h)` arms are **record deconstruction patterns**: they match the record type and destructure its components into named bindings. Deconstruction nests — `case Box(Point(int x, int y), int size)` is legal.
+
+  No `default` arm is needed. The compiler verifies that `Circle | Rectangle | Triangle` covers every permitted subtype of `Shape`. If a fourth permitted subtype is added later, every non-exhaustive `switch` in the codebase becomes a compile error — exactly the feedback an algebraic-data-type design is meant to provide. Adding `default` to silence that error throws away the safety the design was buying.
+
+  ## Guarded patterns and `null` handling
+
+  A `when` clause narrows a pattern with an arbitrary boolean predicate:
+
+  ```java
+  static String describe(Shape s) {
+      return switch (s) {
+          case Circle c when c.radius() > 10  -> "big circle";
+          case Circle c                       -> "small circle";
+          case Rectangle r when r.width() == r.height() -> "square";
+          case Rectangle r                    -> "rectangle";
+          case Triangle t                     -> "triangle";
+      };
+  }
+  ```
+
+  Order matters: the first matching arm wins, so place guarded patterns before their unguarded equivalents.
+
+  In Java 21, `null` may appear as its own pattern in a `switch`. Without a `case null`, switching on a null reference throws `NullPointerException` before any case is considered — even arms with reference-type patterns will not match null:
+
+  ```java
+  static String classify(Shape s) {
+      return switch (s) {
+          case null                 -> "absent";
+          case Circle c             -> "circle";
+          case Rectangle r          -> "rectangle";
+          case Triangle t           -> "triangle";
+      };
+  }
+  ```
+
+  The combined form `case null, default -> ...` is also legal and groups the null arm with the default. Treat `case null` as a forcing function: whenever you switch on a possibly-null reference, decide explicitly whether null is an error or a domain value.
+
+  ## Generics, bounded wildcards, and type erasure
+
+  Java generics are erased at compile time — at runtime there is no distinction between `List<String>` and `List<Integer>`, both are `List`. This shapes two rules:
+
+  ```java
+  import java.util.List;
+
+  // PECS — Producer Extends, Consumer Super
+  static double sum(List<? extends Number> producers) {       // produces Numbers
+      double total = 0;
+      for (Number n : producers) total += n.doubleValue();
+      return total;
+  }
+
+  static void fillWithZeroes(List<? super Integer> consumers) { // consumes Integers
+      consumers.add(0);
+  }
+  ```
+
+  `? extends T` is a producer wildcard — the list yields `T` or a subtype, but you cannot add to it (the compiler does not know which subtype). `? super T` is a consumer wildcard — you can add `T` or its subtypes, but reads come back as `Object`. Reach for a named type parameter `<T>` instead of a wildcard when the same `T` appears in multiple positions or when the caller needs to name the type.
+
+  Erasure also means `instanceof` cannot check parameterized types: `obj instanceof List<String>` is a compile error. Use `obj instanceof List<?>` and accept that you lose the element type, or design the API so the element type is carried in a `Class<T>` token.
+
+  ## Anti-patterns
+
+  - **Records with mutable fields.** Record components are implicitly final — you cannot make them mutable. Adding mutable state via static fields or arrays whose contents change defeats the value-semantics contract `equals` and `hashCode` rely on. If you need mutation, use a class.
+  - **Sealed hierarchies with permits-list scattered across packages without module discipline.** Permitted subtypes must share a module (or package, in the unnamed module). A sealed parent that lists permits in five packages with no named module compiles today and breaks the moment someone modularizes — keep the hierarchy in one package or one module.
+  - **`default` arm on an exhaustive switch over a sealed hierarchy.** The point of exhaustiveness is the compile error when a new permitted subtype is added. A `default` arm silences that error and lets the new subtype slip through with a wrong fallthrough behavior. If you genuinely have a fallback, pattern-match it explicitly.
+  - **Bounded wildcards where a type parameter would compose better.** `<T extends Comparable<? super T>> void sort(List<T> list)` reads better than nesting wildcards inside wildcards. If `T` appears in two places that must agree, name it.
+  - **`instanceof T` followed by an explicit cast.** Pattern matching for `instanceof` (Java 16+) makes `if (s instanceof Circle c)` introduce `c` as the narrowed type. The cast ladder is dead code.
+  - **Treating records as identity-equal entities.** A record's `equals` is structural. Two database rows with the same column values are not the same row. Use a class with PK-based `equals` for entities; use records for value-shaped data.
+  - **Adding a sixth permitted subtype without revisiting every switch.** When you add a new `Shape`, run the compiler — every non-exhaustive switch is a TODO. Do not paper over those errors with `default`; pattern-match the new subtype.
+
+  ## Verification
+
+  - [ ] `grep -rn '\bsealed\b' src/main/java` returns only intended sealed hierarchies; each `sealed` declaration has an explicit `permits` clause.
+  - [ ] Each permitted subtype declares itself `final`, `sealed`, or `non-sealed` (records are implicitly `final` and satisfy this).
+  - [ ] `mvn -q compile` (or `./gradlew compileJava`) succeeds with `--release 21` and no `unchecked` or `preview` warnings.
+  - [ ] `grep -rn 'default ->' src/main/java` returns zero hits in switches over sealed types, OR each `default` arm has a comment justifying why exhaustiveness is intentionally widened.
+  - [ ] Error Prone (or equivalent) `MissingDefault` / `UnnecessaryDefault` checks pass; SpotBugs reports no `RC_REF_COMPARISON` or `EQ_DOESNT_OVERRIDE_EQUALS` on records.
+  - [ ] `grep -rn 'instanceof [A-Z][A-Za-z0-9_]* [a-z]' src/main/java` is the only form of `instanceof` (pattern form); no bare `instanceof T` followed by an explicit `(T)` cast on the next line.
+  - [ ] Every `switch` over a possibly-null reference declares `case null` or `case null, default` — `grep -rn 'switch (' src/main/java` cross-checked against the relevant types.
+  - [ ] No record uses mutable component types where structural equality matters (e.g. `record Foo(int[] data)` is flagged for review — array equality is by reference).
+
+  ## Verified
+
+  - Records finalized in Java 16, March 2021 (JEP 395) — verified 2026-05-06.
+  - Sealed classes and interfaces finalized in Java 17, September 2021 (JEP 409) — verified 2026-05-06 against docs.oracle.com/en/java/javase/21/language/sealed-classes-and-interfaces.html.
+  - Pattern matching for switch finalized in Java 21, September 2023 (JEP 441) — verified 2026-05-06.
+  - Record patterns (deconstruction) finalized in Java 21 (JEP 440) — verified 2026-05-06.
+  - PECS rule and erasure semantics verified against JLS §4 and §5 (verified 2026-05-06 against fixtures/upstream/curated/java.yaml topic typing_and_generics).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Java Records, Sealed Types, and Pattern Matching for switch (JEP 441)
+
+      Java 21 LTS (September 2023, verified 2026-05-06) ships three features that, together, give Java algebraic data types and structural branching: records (Java 16, March 2021), sealed classes and interfaces (Java 17, September 2021), and pattern matching for `switch` finalized as JEP 441 in Java 21. The rule is one sentence: model transparent immutable carriers as records, model closed type hierarchies as sealed interfaces with record subtypes, and branch over those hierarchies with exhaustive `switch` expressions using deconstruction patterns instead of `instanceof`-and-cast ladders. Do not reach for `default` to silence the compiler — exhaustiveness errors when a new permitted subtype is added are the feature, not the bug.
+
+  - sequence: 2
+    fragment_type: example
+    content: |
+      ## Records — transparent immutable carriers
+
+      A record declares a nominal tuple. The compiler generates a canonical constructor, private final fields, public accessors named after the components, and structural `equals`, `hashCode`, and `toString`:
+
+      ```java
+      public record Point(int x, int y) {}
+
+      Point p = new Point(3, 4);
+      int sum = p.x() + p.y();         // accessors: x() and y(), not getX()
+      Point q = new Point(3, 4);
+      assert p.equals(q);              // structural equality, generated
+      ```
+
+      Records are implicitly `final`, cannot extend a class (they implicitly extend `java.lang.Record`), but can implement interfaces. Components are final — there are no setters. To add validation, declare a compact constructor:
+
+      ```java
+      public record Range(int lo, int hi) {
+          public Range {                            // compact constructor
+              if (lo > hi) throw new IllegalArgumentException("lo > hi");
+          }
+      }
+      ```
+
+      Records are for transparent data carriers — DTOs, map keys, tuple-shaped return values — not for entities with identity. An entity whose equality is by primary key, not by field values, should be a regular class; records' generated `equals` will treat two distinct rows with the same fields as equal, which is wrong for entities.
+
+  - sequence: 3
+    fragment_type: setup
+    content: |
+      ## Sealed classes and interfaces — closed hierarchies
+
+      A sealed type restricts who can extend or implement it. The `permits` clause lists every direct subtype:
+
+      ```java
+      public sealed interface Shape permits Circle, Rectangle, Triangle {}
+
+      public record Circle(double radius) implements Shape {}
+      public record Rectangle(double width, double height) implements Shape {}
+      public record Triangle(double base, double height) implements Shape {}
+      ```
+
+      Permitted subtypes must live in the same module as the sealed parent (or the same package if both are in the unnamed module), and each must declare itself `final`, `sealed`, or `non-sealed`. Records are implicitly `final`, so they satisfy the requirement automatically. `non-sealed` re-opens the hierarchy at one node — useful when one branch needs an extension point but the rest of the hierarchy stays closed.
+
+      Sealed interfaces plus record subtypes give you algebraic data types: a closed sum of products. The compiler knows the universe of `Shape` is exactly `Circle`, `Rectangle`, `Triangle`, and that knowledge powers exhaustive switch.
+
+  - sequence: 4
+    fragment_type: execution
+    content: |
+      ## Pattern matching for switch (JEP 441)
+
+      JEP 441, finalized in Java 21 (verified 2026-05-06), extends `switch` statements and expressions to support type patterns, deconstruction patterns, guarded patterns, and exhaustiveness checking. With a sealed hierarchy of records, `switch` becomes the primary branching tool:
+
+      ```java
+      static double area(Shape s) {
+          return switch (s) {
+              case Circle c                     -> Math.PI * c.radius() * c.radius();
+              case Rectangle(double w, double h) -> w * h;
+              case Triangle(double b, double h)  -> 0.5 * b * h;
+          };
+      }
+      ```
+
+      Three forms are in play here. The `Circle c` arm is a **type pattern**: it matches when `s` is a `Circle` and binds the matched value to `c`, no cast required. The `Rectangle(double w, double h)` and `Triangle(double b, double h)` arms are **record deconstruction patterns**: they match the record type and destructure its components into named bindings. Deconstruction nests — `case Box(Point(int x, int y), int size)` is legal.
+
+      No `default` arm is needed. The compiler verifies that `Circle | Rectangle | Triangle` covers every permitted subtype of `Shape`. If a fourth permitted subtype is added later, every non-exhaustive `switch` in the codebase becomes a compile error — exactly the feedback an algebraic-data-type design is meant to provide. Adding `default` to silence that error throws away the safety the design was buying.
+
+  - sequence: 5
+    fragment_type: example
+    content: |
+      ## Guarded patterns and `null` handling
+
+      A `when` clause narrows a pattern with an arbitrary boolean predicate:
+
+      ```java
+      static String describe(Shape s) {
+          return switch (s) {
+              case Circle c when c.radius() > 10  -> "big circle";
+              case Circle c                       -> "small circle";
+              case Rectangle r when r.width() == r.height() -> "square";
+              case Rectangle r                    -> "rectangle";
+              case Triangle t                     -> "triangle";
+          };
+      }
+      ```
+
+      Order matters: the first matching arm wins, so place guarded patterns before their unguarded equivalents.
+
+      In Java 21, `null` may appear as its own pattern in a `switch`. Without a `case null`, switching on a null reference throws `NullPointerException` before any case is considered — even arms with reference-type patterns will not match null:
+
+      ```java
+      static String classify(Shape s) {
+          return switch (s) {
+              case null                 -> "absent";
+              case Circle c             -> "circle";
+              case Rectangle r          -> "rectangle";
+              case Triangle t           -> "triangle";
+          };
+      }
+      ```
+
+      The combined form `case null, default -> ...` is also legal and groups the null arm with the default. Treat `case null` as a forcing function: whenever you switch on a possibly-null reference, decide explicitly whether null is an error or a domain value.
+
+  - sequence: 6
+    fragment_type: example
+    content: |
+      ## Generics, bounded wildcards, and type erasure
+
+      Java generics are erased at compile time — at runtime there is no distinction between `List<String>` and `List<Integer>`, both are `List`. This shapes two rules:
+
+      ```java
+      import java.util.List;
+
+      // PECS — Producer Extends, Consumer Super
+      static double sum(List<? extends Number> producers) {       // produces Numbers
+          double total = 0;
+          for (Number n : producers) total += n.doubleValue();
+          return total;
+      }
+
+      static void fillWithZeroes(List<? super Integer> consumers) { // consumes Integers
+          consumers.add(0);
+      }
+      ```
+
+      `? extends T` is a producer wildcard — the list yields `T` or a subtype, but you cannot add to it (the compiler does not know which subtype). `? super T` is a consumer wildcard — you can add `T` or its subtypes, but reads come back as `Object`. Reach for a named type parameter `<T>` instead of a wildcard when the same `T` appears in multiple positions or when the caller needs to name the type.
+
+      Erasure also means `instanceof` cannot check parameterized types: `obj instanceof List<String>` is a compile error. Use `obj instanceof List<?>` and accept that you lose the element type, or design the API so the element type is carried in a `Class<T>` token.
+
+  - sequence: 7
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Records with mutable fields.** Record components are implicitly final — you cannot make them mutable. Adding mutable state via static fields or arrays whose contents change defeats the value-semantics contract `equals` and `hashCode` rely on. If you need mutation, use a class.
+      - **Sealed hierarchies with permits-list scattered across packages without module discipline.** Permitted subtypes must share a module (or package, in the unnamed module). A sealed parent that lists permits in five packages with no named module compiles today and breaks the moment someone modularizes — keep the hierarchy in one package or one module.
+      - **`default` arm on an exhaustive switch over a sealed hierarchy.** The point of exhaustiveness is the compile error when a new permitted subtype is added. A `default` arm silences that error and lets the new subtype slip through with a wrong fallthrough behavior. If you genuinely have a fallback, pattern-match it explicitly.
+      - **Bounded wildcards where a type parameter would compose better.** `<T extends Comparable<? super T>> void sort(List<T> list)` reads better than nesting wildcards inside wildcards. If `T` appears in two places that must agree, name it.
+      - **`instanceof T` followed by an explicit cast.** Pattern matching for `instanceof` (Java 16+) makes `if (s instanceof Circle c)` introduce `c` as the narrowed type. The cast ladder is dead code.
+      - **Treating records as identity-equal entities.** A record's `equals` is structural. Two database rows with the same column values are not the same row. Use a class with PK-based `equals` for entities; use records for value-shaped data.
+      - **Adding a sixth permitted subtype without revisiting every switch.** When you add a new `Shape`, run the compiler — every non-exhaustive switch is a TODO. Do not paper over those errors with `default`; pattern-match the new subtype.
+
+  - sequence: 8
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] `grep -rn '\bsealed\b' src/main/java` returns only intended sealed hierarchies; each `sealed` declaration has an explicit `permits` clause.
+      - [ ] Each permitted subtype declares itself `final`, `sealed`, or `non-sealed` (records are implicitly `final` and satisfy this).
+      - [ ] `mvn -q compile` (or `./gradlew compileJava`) succeeds with `--release 21` and no `unchecked` or `preview` warnings.
+      - [ ] `grep -rn 'default ->' src/main/java` returns zero hits in switches over sealed types, OR each `default` arm has a comment justifying why exhaustiveness is intentionally widened.
+      - [ ] Error Prone (or equivalent) `MissingDefault` / `UnnecessaryDefault` checks pass; SpotBugs reports no `RC_REF_COMPARISON` or `EQ_DOESNT_OVERRIDE_EQUALS` on records.
+      - [ ] `grep -rn 'instanceof [A-Z][A-Za-z0-9_]* [a-z]' src/main/java` is the only form of `instanceof` (pattern form); no bare `instanceof T` followed by an explicit `(T)` cast on the next line.
+      - [ ] Every `switch` over a possibly-null reference declares `case null` or `case null, default` — `grep -rn 'switch (' src/main/java` cross-checked against the relevant types.
+      - [ ] No record uses mutable component types where structural equality matters (e.g. `record Foo(int[] data)` is flagged for review — array equality is by reference).
