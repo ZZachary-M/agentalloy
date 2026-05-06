@@ -1,0 +1,226 @@
+skill_type: domain
+skill_id: nestjs-pipes-guards-interceptors
+canonical_name: NestJS Pipes, Guards, and Interceptors
+category: engineering
+skill_class: domain
+domain_tags:
+  - nestjs
+  - pipes
+  - guards
+  - interceptors
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # NestJS Pipes, Guards, and Interceptors
+
+  ## Overview
+
+  NestJS exposes three middleware-like hooks bound to the request lifecycle: pipes (transform/validate input before the handler runs), guards (authorize access before the handler runs), and interceptors (wrap the handler with logic that runs before and after). Each can be applied at the method, controller, or global level. This skill covers all three.
+
+  Sourced from https://docs.nestjs.com/pipes, https://docs.nestjs.com/guards, and https://docs.nestjs.com/interceptors.
+
+  ### Pipes
+
+  A pipe is a class annotated with the `@Injectable()` decorator, which implements the `PipeTransform` interface.
+
+  <figure>
+    <img class="illustrative-image" src="/assets/Pipe_1.png" />
+  </figure>
+
+  Pipes have two typical use cases:
+
+  - **transformation**: transform input data to the desired form (e.g., from string to integer)
+  - **validation**: evaluate input data and if valid, simply pass it through unchanged; otherwise, throw an exception
+
+  In both cases, pipes operate on the `arguments` being processed by a <a href="controllers#route-parameters">controller route handler</a>. Nest interposes a pipe just before a method is invoked, and the pipe receives the arguments destined for the method and operates on them. Any transformation or validation operation takes place at that time, after which the route handler is invoked with any (potentially) transformed arguments.
+
+  Nest comes with a number of built-in pipes that you can use out-of-the-box. You can also build your own custom pipes. In this chapter, we'll introduce the built-in pipes and show how to bind them to route handlers. We'll then examine several custom-built pipes to show how you can build one from scratch.
+
+  > Pipes run inside the exceptions zone. This means that when a Pipe throws an exception it is handled by the exceptions layer (global exceptions filter and any [exceptions filters](/exception-filters) that are applied to the current context). Given the above, it should be clear that when an exception is thrown in a Pipe, no controller method is subsequently executed. This gives you a best-practice technique for validating data coming into the application from external sources at the system boundary.
+
+  #### Built-in pipes
+
+  Nest comes with several pipes available out-of-the-box:
+
+  - `ValidationPipe`
+  - `ParseIntPipe`
+  - `ParseFloatPipe`
+  - `ParseBoolPipe`
+  - `ParseArrayPipe`
+  - `ParseUUIDPipe`
+  - `ParseEnumPipe`
+  - `DefaultValuePipe`
+  - `ParseFilePipe`
+  - `ParseDatePipe`
+
+  They're exported from the `@nestjs/common` package.
+
+  Let's take a quick look at using `ParseIntPipe`. This is an example of the **transformation** use case, where the pipe ensures that a method handler parameter is converted to a JavaScript integer (or throws an exception if the conversion fails). Later in this chapter, we'll show a simple custom implementation for a `ParseIntPipe`. The example techniques below also apply to the other built-in transformation pipes (`ParseBoolPipe`, `ParseFloatPipe`, `ParseEnumPipe`, `ParseArrayPipe`, `ParseDatePipe`, and `ParseUUIDPipe`, which we'll refer to as the `Parse*` pipes in this chapter).
+
+  ### Guards
+
+  A guard is a class annotated with the `@Injectable()` decorator, which implements the `CanActivate` interface.
+
+  <figure><img class="illustrative-image" src="/assets/Guards_1.png" /></figure>
+
+  Guards have a **single responsibility**. They determine whether a given request will be handled by the route handler or not, depending on certain conditions (like permissions, roles, ACLs, etc.) present at run-time. This is often referred to as **authorization**. Authorization (and its cousin, **authentication**, with which it usually collaborates) has typically been handled by [middleware](/middleware) in traditional Express applications. Middleware is a fine choice for authentication, since things like token validation and attaching properties to the `request` object are not strongly connected with a particular route context (and its metadata).
+
+  But middleware, by its nature, is dumb. It doesn't know which handler will be executed after calling the `next()` function. On the other hand, **Guards** have access to the `ExecutionContext` instance, and thus know exactly what's going to be executed next. They're designed, much like exception filters, pipes, and interceptors, to let you interpose processing logic at exactly the right point in the request/response cycle, and to do so declaratively. This helps keep your code DRY and declarative.
+
+  > Guards are executed **after** all middleware, but **before** any interceptor or pipe.
+
+  #### Authorization guard
+
+  As mentioned, **authorization** is a great use case for Guards because specific routes should be available only when the caller (usually a specific authenticated user) has sufficient permissions. The `AuthGuard` that we'll build now assumes an authenticated user (and that, therefore, a token is attached to the request headers). It will extract and validate the token, and use the extracted information to determine whether the request can proceed or not.
+
+  ```typescript
+  @@filename(auth.guard)
+  import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+  import { Observable } from 'rxjs';
+
+  @Injectable()
+  export class AuthGuard implements CanActivate {
+    canActivate(
+      context: ExecutionContext,
+    ): boolean | Promise<boolean> | Observable<boolean> {
+      const request = context.switchToHttp().getRequest();
+      return validateRequest(request);
+    }
+  }
+  @@switch
+  import { Injectable } from '@nestjs/common';
+
+  @Injectable()
+  export class AuthGuard {
+    async canActivate(context) {
+      const request = context.switchToHttp().getRequest();
+      return validateRequest(request);
+    }
+  }
+  ```
+
+  > If you are looking for a real-world example on how to implement an authentication mechanism in your application, visit [this chapter](/security/authentication). Likewise, for more sophisticated authorization example, check [this page](/security/authorization).
+
+  The logic inside the `validateRequest()` function can be as simple or sophisticated as needed. The main point of this example is to show how guards fit into the request/response cycle.
+
+  Every guard must implement a `canActivate()` function. This function should return a boolean, indicating whether the current request is allowed or not. It can return the response either synchronously or asynchronously (via a `Promise` or `Observable`). Nest uses the return value to control the next action:
+
+  - if it returns `true`, the request will be processed.
+  - if it returns `false`, Nest will deny the request.
+
+  #### Execution context
+
+  The `canActivate()` function takes a single argument, the `ExecutionContext` instance. The `ExecutionContext` inherits from `ArgumentsHost`. We saw `ArgumentsHost` previously in the exception filters chapter. In the sample above, we are just using the same helper methods defined on `ArgumentsHost` that we used earlier, to get a reference to the `Request` object. You can refer back to the **Arguments host** section of the [exception filters](https://docs.nestjs.com/exception-filters#arguments-host) chapter for more on this topic.
+
+  By extending `ArgumentsHost`, `ExecutionContext` also adds several new helper methods that provide additional details about the current execution process. These details can be helpful in building more generic guards that can work across a broad set of controllers, methods, and execution contexts. Learn more about `ExecutionContext` [here](/fundamentals/execution-context).
+
+  ### Interceptors
+
+  An interceptor is a class annotated with the `@Injectable()` decorator and implements the `NestInterceptor` interface.
+
+  <figure><img class="illustrative-image" src="/assets/Interceptors_1.png" /></figure>
+
+  Interceptors have a set of useful capabilities which are inspired by the [Aspect Oriented Programming](https://en.wikipedia.org/wiki/Aspect-oriented_programming) (AOP) technique. They make it possible to:
+
+  - bind extra logic before / after method execution
+  - transform the result returned from a function
+  - transform the exception thrown from a function
+  - extend the basic function behavior
+  - completely override a function depending on specific conditions (e.g., for caching purposes)
+
+  #### Basics
+
+  Each interceptor implements the `intercept()` method, which takes two arguments. The first one is the `ExecutionContext` instance (exactly the same object as for [guards](/guards)). The `ExecutionContext` inherits from `ArgumentsHost`. We saw `ArgumentsHost` before in the exception filters chapter. There, we saw that it's a wrapper around arguments that have been passed to the original handler, and contains different arguments arrays based on the type of the application. You can refer back to the [exception filters](https://docs.nestjs.com/exception-filters#arguments-host) for more on this topic.
+
+  #### Execution context
+
+  By extending `ArgumentsHost`, `ExecutionContext` also adds several new helper methods that provide additional details about the current execution process. These details can be helpful in building more generic interceptors that can work across a broad set of controllers, methods, and execution contexts. Learn more about `ExecutionContext` [here](/fundamentals/execution-context).
+
+  #### Call handler
+
+  The second argument is a `CallHandler`. The `CallHandler` interface implements the `handle()` method, which you can use to invoke the route handler method at some point in your interceptor. If you don't call the `handle()` method in your implementation of the `intercept()` method, the route handler method won't be executed at all.
+
+  This approach means that the `intercept()` method effectively **wraps** the request/response stream. As a result, you may implement custom logic **both before and after** the execution of the final route handler. It's clear that you can write code in your `intercept()` method that executes **before** calling `handle()`, but how do you affect what happens afterward? Because the `handle()` method returns an `Observable`, we can use powerful [RxJS](https://github.com/ReactiveX/rxjs) operators to further manipulate the response. Using Aspect Oriented Programming terminology, the invocation of the route handler (i.e., calling `handle()`) is called a [Pointcut](https://en.wikipedia.org/wiki/Pointcut), indicating that it's the point at which our additional logic is inserted.
+
+  Consider, for example, an incoming `POST /cats` request. This request is destined for the `create()` handler defined inside the `CatsController`. If an interceptor which does not call the `handle()` method is called anywhere along the way, the `create()` method won't be executed. Once `handle()` is called (and its `Observable` has been returned), the `create()` handler will be triggered. And once the response stream is received via the `Observable`, additional operations can be performed on the stream, and a final result returned to the caller.
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      NestJS exposes three middleware-like hooks bound to the request lifecycle: pipes (transform/validate input before the handler runs), guards (authorize access before the handler runs), and interceptors (wrap the handler with logic that runs before and after). Each can be applied at the method, controller, or global level. This skill covers all three.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      A pipe is a class annotated with the `@Injectable()` decorator, which implements the `PipeTransform` interface.
+
+      Pipes have two typical use cases:
+
+      - **transformation**: transform input data to the desired form (e.g., from string to integer)
+      - **validation**: evaluate input data and if valid, simply pass it through unchanged; otherwise, throw an exception
+
+      In both cases, pipes operate on the `arguments` being processed by a <a href="controllers#route-parameters">controller route handler</a>. Nest interposes a pipe just before a method is invoked, and the pipe receives the arguments destined for the method and operates on them. Any transformation or validation operation takes place at that time, after which the route handler is invoked with any (potentially) transformed arguments.
+  - fragment_type: example
+    sequence: 3
+    content: |
+      Let's take a quick look at using `ParseIntPipe`. This is an example of the **transformation** use case, where the pipe ensures that a method handler parameter is converted to a JavaScript integer (or throws an exception if the conversion fails). Later in this chapter, we'll show a simple custom implementation for a `ParseIntPipe`. The example techniques below also apply to the other built-in transformation pipes (`ParseBoolPipe`, `ParseFloatPipe`, `ParseEnumPipe`, `ParseArrayPipe`, `ParseDatePipe`, and `ParseUUIDPipe`, which we'll refer to as the `Parse*` pipes in this chapter).
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      A guard is a class annotated with the `@Injectable()` decorator, which implements the `CanActivate` interface.
+
+      Guards have a **single responsibility**. They determine whether a given request will be handled by the route handler or not, depending on certain conditions (like permissions, roles, ACLs, etc.) present at run-time. This is often referred to as **authorization**. Authorization (and its cousin, **authentication**, with which it usually collaborates) has typically been handled by [middleware](/middleware) in traditional Express applications. Middleware is a fine choice for authentication, since things like token validation and attaching properties to the `request` object are not strongly connected with a particular route context (and its metadata).
+  - fragment_type: example
+    sequence: 5
+    content: |
+      ```typescript
+      @@filename(auth.guard)
+      import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+      import { Observable } from 'rxjs';
+
+      @Injectable()
+      export class AuthGuard implements CanActivate {
+        canActivate(
+          context: ExecutionContext,
+        ): boolean | Promise<boolean> | Observable<boolean> {
+          const request = context.switchToHttp().getRequest();
+          return validateRequest(request);
+        }
+      }
+      @@switch
+      import { Injectable } from '@nestjs/common';
+
+      @Injectable()
+      export class AuthGuard {
+        async canActivate(context) {
+          const request = context.switchToHttp().getRequest();
+          return validateRequest(request);
+        }
+      }
+      ```
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      An interceptor is a class annotated with the `@Injectable()` decorator and implements the `NestInterceptor` interface.
+
+      Interceptors have a set of useful capabilities which are inspired by the [Aspect Oriented Programming](https://en.wikipedia.org/wiki/Aspect-oriented_programming) (AOP) technique. They make it possible to:
+
+      - bind extra logic before / after method execution
+      - transform the result returned from a function
+      - transform the exception thrown from a function
+      - extend the basic function behavior
+      - completely override a function depending on specific conditions (e.g., for caching purposes)
+  - fragment_type: example
+    sequence: 7
+    content: |
+      Each interceptor implements the `intercept()` method, which takes two arguments. The first one is the `ExecutionContext` instance (exactly the same object as for [guards](/guards)). The `ExecutionContext` inherits from `ArgumentsHost`. We saw `ArgumentsHost` before in the exception filters chapter. There, we saw that it's a wrapper around arguments that have been passed to the original handler, and contains different arguments arrays based on the type of the application. You can refer back to the [exception filters](https://docs.nestjs.com/exception-filters#arguments-host) for more on this topic.
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      The second argument is a `CallHandler`. The `CallHandler` interface implements the `handle()` method, which you can use to invoke the route handler method at some point in your interceptor. If you don't call the `handle()` method in your implementation of the `intercept()` method, the route handler method won't be executed at all.
+
+      This approach means that the `intercept()` method effectively **wraps** the request/response stream. As a result, you may implement custom logic **both before and after** the execution of the final route handler. It's clear that you can write code in your `intercept()` method that executes **before** calling `handle()`, but how do you affect what happens afterward? Because the `handle()` method returns an `Observable`, we can use powerful [RxJS](https://github.com/ReactiveX/rxjs) operators to further manipulate the response. Using Aspect Oriented Programming terminology, the invocation of the route handler (i.e., calling `handle()`) is called a [Pointcut](https://en.wikipedia.org/wiki/Pointcut), indicating that it's the point at which our additional logic is inserted.
+
+      Consider, for example, an incoming `POST /cats` request. This request is destined for the `create()` handler defined inside the `CatsController`. If an interceptor which does not call the `handle()` method is called anywhere along the way, the `create()` method won't be executed. Once `handle()` is called (and its `Observable` has been returned), the `create()` handler will be triggered. And once the response stream is received via the `Observable`, additional operations can be performed on the stream, and a final result returned to the caller.

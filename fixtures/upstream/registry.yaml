@@ -105,10 +105,14 @@ vendors:
     packs: [fastify]
 
   nestjs:
-    tier: 1
-    llms_url: https://docs.nestjs.com/llms.txt
-    llms_full_url: https://docs.nestjs.com/llms-full.txt
+    tier: 3
     packs: [nestjs]
+    fallback_root: https://docs.nestjs.com/
+    notes: |
+      Re-probed 2026-05-06 — both /llms.txt and /llms-full.txt return the SPA
+      index HTML (catch-all routing), not real LLM text. Tier was incorrectly
+      marked 1; treat as tier-3. Fetch individual guide pages via
+      https://docs.nestjs.com/<topic> directly.
 
   temporal:
     tier: 1
