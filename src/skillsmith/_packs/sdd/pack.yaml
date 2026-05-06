@@ -1,0 +1,27 @@
+name: sdd
+version: 1.0.0
+tier: workflow
+description: |
+  Spec-Driven Development pipeline phase patterns — sdd-spec (scoping a fuzzy ask into a precise spec), sdd-design + sdd-plan (technical design and ordered task breakdown), sdd-verify (test/lint/typecheck/review gate before delivery), and sdd-deliver (PR composition, changelogs, rollouts). build-phase TDD covered in the engineering pack. Precision-favored workflow tier; sourced from agent-skills/ canonical methodology skills per R1 tier-3 internal procedure.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- core
+- engineering
+skills:
+- skill_id: sdd-deliver-and-ship
+  file: sdd-deliver-and-ship.yaml
+  fragment_count: 10
+- skill_id: sdd-design-and-planning
+  file: sdd-design-and-planning.yaml
+  fragment_count: 14
+- skill_id: sdd-spec-and-scoping
+  file: sdd-spec-and-scoping.yaml
+  fragment_count: 9
+- skill_id: sdd-verify-and-review
+  file: sdd-verify-and-review.yaml
+  fragment_count: 7
