@@ -28,3 +28,18 @@ skills:
 - skill_id: webhooks-documentation
   file: webhooks-documentation.yaml
   fragment_count: 8
+- skill_id: webhooks-customer-portal
+  file: webhooks-customer-portal.yaml
+  fragment_count: 10
+- skill_id: webhooks-fan-out-architectures
+  file: webhooks-fan-out-architectures.yaml
+  fragment_count: 11
+- skill_id: webhooks-observability
+  file: webhooks-observability.yaml
+  fragment_count: 10
+- skill_id: webhooks-replay-and-dlq
+  file: webhooks-replay-and-dlq.yaml
+  fragment_count: 10
+- skill_id: webhooks-versioning-and-evolution
+  file: webhooks-versioning-and-evolution.yaml
+  fragment_count: 13

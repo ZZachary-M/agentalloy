@@ -1,0 +1,377 @@
+skill_type: domain
+skill_id: webhooks-versioning-and-evolution
+canonical_name: Webhook API Versioning and Evolution
+category: design
+skill_class: domain
+domain_tags:
+- webhooks
+- versioning
+- api-evolution
+- breaking-changes
+- deprecation
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Webhook API Versioning and Evolution
+
+  ## Overview
+
+  Webhook payloads are public APIs — once consumers depend on a field, removing it breaks them. The discipline: additive changes are safe; renames and removals require versioning. Pin each customer's endpoint to a version; migrate explicitly, not silently.
+
+  ---
+
+  ## What's Backward-Compatible
+
+  Safe changes (don't break existing consumers):
+
+  - Adding a new field.
+  - Adding a new event type.
+  - Loosening validation (a field that was required becoming optional — for new events).
+  - Adding metadata.
+
+  Unsafe changes:
+
+  - Removing a field.
+  - Renaming a field.
+  - Changing a field's type (string → number).
+  - Tightening validation (optional becoming required).
+  - Removing an event type.
+  - Changing the meaning of a field.
+
+  The latter all require a new version.
+
+  ## Version Pinning Per Endpoint
+
+  ```
+  Endpoint settings:
+    URL: https://api.customer.com/webhooks
+    API version: 2024-10-01 ▾   [pin or use latest]
+  ```
+
+  When you ship a breaking change, existing endpoints stay on their pinned version; only new endpoints (or those that opt in) get the new format.
+
+  This is how Stripe, Twilio, etc. handle it. Customers control upgrade timing.
+
+  ## Version Header
+
+  ```
+  HTTP POST /webhook
+  X-API-Version: 2024-10-01
+  Content-Type: application/json
+
+  { "id": "evt_123", "type": "order.created", "data": { ... } }
+  ```
+
+  The version header tells the consumer which payload format to expect. Consumers can branch on it during migration.
+
+  ## Adding a Field
+
+  Fully additive — no version bump:
+
+  ```
+  v2024-04: { "id": "...", "amount": 100 }
+  v2024-04: { "id": "...", "amount": 100, "currency": "USD" }   // added
+  ```
+
+  Existing consumers ignore unknown fields. No-op for them.
+
+  ## Renaming a Field — The Breaking Path
+
+  To rename `customer_id` → `user_id`:
+
+  1. **Add the new field** (additive). Both fields present in payloads:
+     ```
+     { "customer_id": "abc", "user_id": "abc" }
+     ```
+  2. **Wait several months** for consumers to migrate.
+  3. **Bump version**: in v2025-04-01, drop the old field. Existing endpoints stay on the old version.
+  4. **Deprecate** old version in docs; provide migration guide.
+  5. **Sunset** old version after deprecation window (typically 12+ months).
+
+  ## Deprecation Headers
+
+  ```
+  HTTP POST /webhook
+  X-API-Version: 2024-10-01
+  X-Deprecated: true
+  X-Sunset: 2026-01-01
+  X-Documentation: https://docs.example.com/webhook-migration
+
+  ...
+  ```
+
+  Lets consumers detect they're on a deprecated version and plan migration.
+
+  ## Sunset Window
+
+  Common pattern:
+
+  - **6 months** of dual-format payloads (both old and new fields present).
+  - **12 months** deprecation period after the new version becomes default.
+  - **Sunset** the old version. Endpoints on it get an error notification + need to update.
+
+  Stripe gives even longer (years). Match your customer migration cadence.
+
+  ## Version Selection Logic
+
+  ```ts
+  async function selectVersion(endpoint: Endpoint): string {
+      if (endpoint.pinned_version) return endpoint.pinned_version;
+      if (endpoint.created_at < CUTOFF_DATE) return DEFAULT_LEGACY_VERSION;
+      return CURRENT_VERSION;
+  }
+  ```
+
+  New endpoints get current; pinned endpoints get their pin; legacy endpoints get the default at the time they registered. The default 'creeps forward' over time.
+
+  ## Schema Per Version
+
+  Maintain payload schemas per version:
+
+  ```
+  schemas/
+  ├── 2024-04-01/
+  │   ├── order.created.json
+  │   ├── order.updated.json
+  │   └── user.created.json
+  ├── 2024-10-01/
+  │   └── ...
+  └── 2025-04-01/
+      └── ...
+  ```
+
+  CI tests serialize fixture events against each version's schema. Catches breakage before deploy.
+
+  ## Migration UI
+
+  ```
+  Webhook settings
+    API version: 2024-04-01 (current: 2025-01-01)
+
+    ⚠ Migration available. Differences:
+      - 'customer_id' renamed to 'user_id'
+      - new field 'metadata.region'
+      - event 'subscription.expired' added
+
+    [ Test with new version ]   [ Switch to 2025-01-01 ]
+  ```
+
+  Self-serve migration. Customer can test against new version with synthetic events before flipping the switch.
+
+  ## Communication
+
+  - **Deprecation announcement**: email to all affected customers + status page entry.
+  - **Inline warnings**: header on every payload using deprecated version.
+  - **Reminder cadence**: 6 months before sunset, 3 months, 1 month, 1 week, 1 day.
+  - **Sunset notification**: confirm with customer before they're cut off.
+
+  ## Common Pitfalls
+
+  - **Silent breaking changes.** Renaming a field without version bump = chaos. Always version.
+  - **No version pinning.** Customers wake up to broken integrations after a deploy. Pin.
+  - **Sunset windows too short.** 6 months is barely enough; 12+ is professional.
+  - **No way to test new version.** Customers fear migration. Provide a 'send test event in v2 format' button.
+  - **Removing event types without notice.** Even adding new versions doesn't help if you delete event types altogether.
+
+  ## Verification
+
+  A well-versioned webhook system:
+
+  - Every payload includes a version header.
+  - Endpoint settings let customers pin to a version.
+  - Old versions stay supported for 12+ months after a new version ships.
+  - Deprecation warnings appear in headers + docs + emails.
+  - Migration UI shows diffs and allows test-driving the new version.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## What's Backward-Compatible
+
+    Safe changes (don't break existing consumers):
+
+    - Adding a new field.
+    - Adding a new event type.
+    - Loosening validation (a field that was required becoming optional — for new events).
+    - Adding metadata.
+
+    Unsafe changes:
+
+    - Removing a field.
+    - Renaming a field.
+    - Changing a field's type (string → number).
+    - Tightening validation (optional becoming required).
+    - Removing an event type.
+    - Changing the meaning of a field.
+
+    The latter all require a new version.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Version Pinning Per Endpoint
+
+    ```
+    Endpoint settings:
+      URL: https://api.customer.com/webhooks
+      API version: 2024-10-01 ▾   [pin or use latest]
+    ```
+
+    When you ship a breaking change, existing endpoints stay on their pinned version; only new endpoints (or those that opt in) get the new format.
+
+    This is how Stripe, Twilio, etc. handle it. Customers control upgrade timing.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Version Header
+
+    ```
+    HTTP POST /webhook
+    X-API-Version: 2024-10-01
+    Content-Type: application/json
+
+    { "id": "evt_123", "type": "order.created", "data": { ... } }
+    ```
+
+    The version header tells the consumer which payload format to expect. Consumers can branch on it during migration.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Adding a Field
+
+    Fully additive — no version bump:
+
+    ```
+    v2024-04: { "id": "...", "amount": 100 }
+    v2024-04: { "id": "...", "amount": 100, "currency": "USD" }   // added
+    ```
+
+    Existing consumers ignore unknown fields. No-op for them.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Renaming a Field — The Breaking Path
+
+    To rename `customer_id` → `user_id`:
+
+    1. **Add the new field** (additive). Both fields present in payloads:
+       ```
+       { "customer_id": "abc", "user_id": "abc" }
+       ```
+    2. **Wait several months** for consumers to migrate.
+    3. **Bump version**: in v2025-04-01, drop the old field. Existing endpoints stay on the old version.
+    4. **Deprecate** old version in docs; provide migration guide.
+    5. **Sunset** old version after deprecation window (typically 12+ months).
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Deprecation Headers
+
+    ```
+    HTTP POST /webhook
+    X-API-Version: 2024-10-01
+    X-Deprecated: true
+    X-Sunset: 2026-01-01
+    X-Documentation: https://docs.example.com/webhook-migration
+
+    ...
+    ```
+
+    Lets consumers detect they're on a deprecated version and plan migration.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Sunset Window
+
+    Common pattern:
+
+    - **6 months** of dual-format payloads (both old and new fields present).
+    - **12 months** deprecation period after the new version becomes default.
+    - **Sunset** the old version. Endpoints on it get an error notification + need to update.
+
+    Stripe gives even longer (years). Match your customer migration cadence.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Version Selection Logic
+
+    ```ts
+    async function selectVersion(endpoint: Endpoint): string {
+        if (endpoint.pinned_version) return endpoint.pinned_version;
+        if (endpoint.created_at < CUTOFF_DATE) return DEFAULT_LEGACY_VERSION;
+        return CURRENT_VERSION;
+    }
+    ```
+
+    New endpoints get current; pinned endpoints get their pin; legacy endpoints get the default at the time they registered. The default 'creeps forward' over time.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Schema Per Version
+
+    Maintain payload schemas per version:
+
+    ```
+    schemas/
+    ├── 2024-04-01/
+    │   ├── order.created.json
+    │   ├── order.updated.json
+    │   └── user.created.json
+    ├── 2024-10-01/
+    │   └── ...
+    └── 2025-04-01/
+        └── ...
+    ```
+
+    CI tests serialize fixture events against each version's schema. Catches breakage before deploy.
+- fragment_type: execution
+  sequence: 10
+  content: |-
+    ## Migration UI
+
+    ```
+    Webhook settings
+      API version: 2024-04-01 (current: 2025-01-01)
+
+      ⚠ Migration available. Differences:
+        - 'customer_id' renamed to 'user_id'
+        - new field 'metadata.region'
+        - event 'subscription.expired' added
+
+      [ Test with new version ]   [ Switch to 2025-01-01 ]
+    ```
+
+    Self-serve migration. Customer can test against new version with synthetic events before flipping the switch.
+- fragment_type: execution
+  sequence: 11
+  content: |-
+    ## Communication
+
+    - **Deprecation announcement**: email to all affected customers + status page entry.
+    - **Inline warnings**: header on every payload using deprecated version.
+    - **Reminder cadence**: 6 months before sunset, 3 months, 1 month, 1 week, 1 day.
+    - **Sunset notification**: confirm with customer before they're cut off.
+- fragment_type: guardrail
+  sequence: 12
+  content: |-
+    ## Common Pitfalls
+
+    - **Silent breaking changes.** Renaming a field without version bump = chaos. Always version.
+    - **No version pinning.** Customers wake up to broken integrations after a deploy. Pin.
+    - **Sunset windows too short.** 6 months is barely enough; 12+ is professional.
+    - **No way to test new version.** Customers fear migration. Provide a 'send test event in v2 format' button.
+    - **Removing event types without notice.** Even adding new versions doesn't help if you delete event types altogether.
+- fragment_type: verification
+  sequence: 13
+  content: |-
+    ## Verification
+
+    A well-versioned webhook system:
+
+    - Every payload includes a version header.
+    - Endpoint settings let customers pin to a version.
+    - Old versions stay supported for 12+ months after a new version ships.
+    - Deprecation warnings appear in headers + docs + emails.
+    - Migration UI shows diffs and allows test-driving the new version.

@@ -1,0 +1,357 @@
+skill_type: domain
+skill_id: webhooks-replay-and-dlq
+canonical_name: Webhooks — Replay and Dead-Letter Queues
+category: design
+skill_class: domain
+domain_tags:
+- webhooks
+- replay
+- dlq
+- dead-letter-queue
+- reliability
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Webhooks — Replay and Dead-Letter Queues
+
+  ## Overview
+
+  Webhooks fail. Networks blip, consumers go down, bugs cause exceptions. The reliability patterns: producers retry with exponential backoff, consumers persist before processing, dead-letter queues isolate poison messages, and replay endpoints let operators recover from outages.
+
+  ---
+
+  ## Producer-Side Retries
+
+  Producers should retry on 5xx and timeouts, not on 4xx (client error — won't change). A typical schedule:
+
+  - Immediate
+  - 5s
+  - 30s
+  - 2min
+  - 10min
+  - 1hr
+  - 4hr
+  - 24hr (final)
+
+  Total window: ~30 hours. After that, the delivery is given up.
+
+  Mark each delivery attempt with the response status; surface to the producer's dashboard. Customers can see their endpoint's recent failures.
+
+  ## Consumer-Side Persistence Before Processing
+
+  ```js
+  app.post('/webhook', async (req, res) => {
+      // Verify signature first
+      if (!verifySignature(req)) return res.status(401).end();
+
+      // Persist BEFORE processing
+      await db.webhooks.insert({
+          id: req.headers['x-webhook-id'],
+          type: req.body.type,
+          payload: req.body,
+          received_at: new Date(),
+          status: 'received',
+      });
+
+      res.status(200).end();  // ack the producer
+
+      // Process async (queue, background job, etc.)
+      await jobQueue.add('process-webhook', { id: req.headers['x-webhook-id'] });
+  });
+  ```
+
+  Two-step pattern: persist immediately + ack the producer; process async. Decouples ingestion from processing — producer doesn't retry while you're slow.
+
+  ## Dead-Letter Queue (DLQ)
+
+  Jobs that fail repeatedly land in a DLQ:
+
+  ```ts
+  // BullMQ
+  const queue = new Queue('webhooks', {
+      defaultJobOptions: {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 1000 },
+          removeOnFail: false,  // keep failed jobs
+      },
+  });
+
+  // After 5 attempts, job is in 'failed' state — query and inspect
+  const failedJobs = await queue.getFailed();
+  ```
+
+  Or move to a dedicated DLQ:
+
+  ```ts
+  worker.on('failed', async (job, err) => {
+      if (job.attemptsMade >= job.opts.attempts) {
+          await dlqQueue.add(job.name, job.data, { attempts: 1 });
+      }
+  });
+  ```
+
+  DLQs preserve the failed job for human triage. Without one, failed jobs disappear and the cause is unrecoverable.
+
+  ## DLQ Triage Workflow
+
+  A DLQ entry needs:
+  1. **Original payload** — to retry after fix.
+  2. **Error trace** — to diagnose.
+  3. **Attempt count + last attempt timestamp**.
+  4. **An ID for cross-referencing** logs and customer support.
+
+  Build a UI or CLI to:
+  - List DLQ contents.
+  - Replay a single message.
+  - Bulk-replay after a code fix.
+  - Discard with annotation (poison messages that won't ever succeed).
+
+  ## Replay Endpoint
+
+  Producers expose a replay API:
+
+  ```
+  POST /api/webhooks/replay
+  { "endpoint_id": "ep_123", "from": "2026-05-01T00:00:00Z", "to": "2026-05-01T01:00:00Z" }
+  ```
+
+  Re-sends every webhook for the endpoint in the time window. Useful when a consumer was down for an hour; rather than waiting for natural retries (slow + may have given up), trigger a bulk replay.
+
+  Consumer-side: idempotency via the message ID prevents double-processing on replay.
+
+  ## Idempotency on Replay
+
+  Every webhook has a unique ID:
+
+  ```ts
+  async function processWebhook(payload) {
+      const existing = await db.processed.findById(payload.id);
+      if (existing) return;  // already processed
+
+      await db.transaction(async tx => {
+          await processBusinessLogic(payload, tx);
+          await tx.processed.insert({ id: payload.id, processed_at: new Date() });
+      });
+  }
+  ```
+
+  The `processed` table is the dedup ledger. Replay is safe — duplicates short-circuit at the lookup.
+
+  ## Exponential Backoff with Jitter
+
+  ```ts
+  function nextRetryDelay(attempt: number): number {
+      const base = Math.min(60_000 * Math.pow(2, attempt), 4 * 60 * 60 * 1000);  // cap at 4h
+      const jitter = Math.random() * base * 0.1;  // ±10%
+      return base + jitter;
+  }
+  ```
+
+  Without jitter, all retries from a producer pile up at the same instant. Jitter spreads them out, preventing thundering herd against the consumer.
+
+  ## Producer Endpoint Health
+
+  Producers should track per-endpoint health and disable persistent failures:
+
+  - 95% failure rate over 1 hour → notify the customer.
+  - 100% failure rate over 24 hours → pause the endpoint, require manual reactivation.
+
+  Avoids hammering a permanently-broken endpoint.
+
+  ## Common Pitfalls
+
+  - **Processing in the webhook handler.** Slow processing → producer retries → duplicates. Always: persist + ack, process async.
+  - **No DLQ.** Failed jobs vanish; bugs are invisible. Always set `removeOnFail: false` or route to a DLQ.
+  - **Replay without idempotency.** Re-running a payment webhook charges twice. Always dedup by ID.
+  - **Retry storms after long outage.** Producer queues up 24h of webhooks; on consumer reconnect, hammer. Stagger replay; rate-limit per-endpoint.
+  - **Manual triage that doesn't scale.** A DLQ filling with 1000s of similar errors needs bulk-replay tools; can't do one at a time.
+
+  ## Verification
+
+  A reliable webhook system:
+
+  - Consumer ack <100ms after persist; processing happens async.
+  - DLQ has tooling to list, replay, and discard.
+  - Idempotency tested: re-sending the same webhook produces no double effects.
+  - Producer auto-disables persistently-failing endpoints with notification.
+  - Replay endpoint can re-send a time window after consumer outage.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Producer-Side Retries
+
+    Producers should retry on 5xx and timeouts, not on 4xx (client error — won't change). A typical schedule:
+
+    - Immediate
+    - 5s
+    - 30s
+    - 2min
+    - 10min
+    - 1hr
+    - 4hr
+    - 24hr (final)
+
+    Total window: ~30 hours. After that, the delivery is given up.
+
+    Mark each delivery attempt with the response status; surface to the producer's dashboard. Customers can see their endpoint's recent failures.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Consumer-Side Persistence Before Processing
+
+    ```js
+    app.post('/webhook', async (req, res) => {
+        // Verify signature first
+        if (!verifySignature(req)) return res.status(401).end();
+
+        // Persist BEFORE processing
+        await db.webhooks.insert({
+            id: req.headers['x-webhook-id'],
+            type: req.body.type,
+            payload: req.body,
+            received_at: new Date(),
+            status: 'received',
+        });
+
+        res.status(200).end();  // ack the producer
+
+        // Process async (queue, background job, etc.)
+        await jobQueue.add('process-webhook', { id: req.headers['x-webhook-id'] });
+    });
+    ```
+
+    Two-step pattern: persist immediately + ack the producer; process async. Decouples ingestion from processing — producer doesn't retry while you're slow.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Dead-Letter Queue (DLQ)
+
+    Jobs that fail repeatedly land in a DLQ:
+
+    ```ts
+    // BullMQ
+    const queue = new Queue('webhooks', {
+        defaultJobOptions: {
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 1000 },
+            removeOnFail: false,  // keep failed jobs
+        },
+    });
+
+    // After 5 attempts, job is in 'failed' state — query and inspect
+    const failedJobs = await queue.getFailed();
+    ```
+
+    Or move to a dedicated DLQ:
+
+    ```ts
+    worker.on('failed', async (job, err) => {
+        if (job.attemptsMade >= job.opts.attempts) {
+            await dlqQueue.add(job.name, job.data, { attempts: 1 });
+        }
+    });
+    ```
+
+    DLQs preserve the failed job for human triage. Without one, failed jobs disappear and the cause is unrecoverable.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## DLQ Triage Workflow
+
+    A DLQ entry needs:
+    1. **Original payload** — to retry after fix.
+    2. **Error trace** — to diagnose.
+    3. **Attempt count + last attempt timestamp**.
+    4. **An ID for cross-referencing** logs and customer support.
+
+    Build a UI or CLI to:
+    - List DLQ contents.
+    - Replay a single message.
+    - Bulk-replay after a code fix.
+    - Discard with annotation (poison messages that won't ever succeed).
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Replay Endpoint
+
+    Producers expose a replay API:
+
+    ```
+    POST /api/webhooks/replay
+    { "endpoint_id": "ep_123", "from": "2026-05-01T00:00:00Z", "to": "2026-05-01T01:00:00Z" }
+    ```
+
+    Re-sends every webhook for the endpoint in the time window. Useful when a consumer was down for an hour; rather than waiting for natural retries (slow + may have given up), trigger a bulk replay.
+
+    Consumer-side: idempotency via the message ID prevents double-processing on replay.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Idempotency on Replay
+
+    Every webhook has a unique ID:
+
+    ```ts
+    async function processWebhook(payload) {
+        const existing = await db.processed.findById(payload.id);
+        if (existing) return;  // already processed
+
+        await db.transaction(async tx => {
+            await processBusinessLogic(payload, tx);
+            await tx.processed.insert({ id: payload.id, processed_at: new Date() });
+        });
+    }
+    ```
+
+    The `processed` table is the dedup ledger. Replay is safe — duplicates short-circuit at the lookup.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Exponential Backoff with Jitter
+
+    ```ts
+    function nextRetryDelay(attempt: number): number {
+        const base = Math.min(60_000 * Math.pow(2, attempt), 4 * 60 * 60 * 1000);  // cap at 4h
+        const jitter = Math.random() * base * 0.1;  // ±10%
+        return base + jitter;
+    }
+    ```
+
+    Without jitter, all retries from a producer pile up at the same instant. Jitter spreads them out, preventing thundering herd against the consumer.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Producer Endpoint Health
+
+    Producers should track per-endpoint health and disable persistent failures:
+
+    - 95% failure rate over 1 hour → notify the customer.
+    - 100% failure rate over 24 hours → pause the endpoint, require manual reactivation.
+
+    Avoids hammering a permanently-broken endpoint.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **Processing in the webhook handler.** Slow processing → producer retries → duplicates. Always: persist + ack, process async.
+    - **No DLQ.** Failed jobs vanish; bugs are invisible. Always set `removeOnFail: false` or route to a DLQ.
+    - **Replay without idempotency.** Re-running a payment webhook charges twice. Always dedup by ID.
+    - **Retry storms after long outage.** Producer queues up 24h of webhooks; on consumer reconnect, hammer. Stagger replay; rate-limit per-endpoint.
+    - **Manual triage that doesn't scale.** A DLQ filling with 1000s of similar errors needs bulk-replay tools; can't do one at a time.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A reliable webhook system:
+
+    - Consumer ack <100ms after persist; processing happens async.
+    - DLQ has tooling to list, replay, and discard.
+    - Idempotency tested: re-sending the same webhook produces no double effects.
+    - Producer auto-disables persistently-failing endpoints with notification.
+    - Replay endpoint can re-send a time window after consumer outage.

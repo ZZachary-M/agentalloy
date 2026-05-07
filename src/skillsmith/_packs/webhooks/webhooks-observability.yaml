@@ -1,0 +1,357 @@
+skill_type: domain
+skill_id: webhooks-observability
+canonical_name: Webhook Observability
+category: design
+skill_class: domain
+domain_tags:
+- webhooks
+- observability
+- metrics
+- tracing
+- logging
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Webhook Observability
+
+  ## Overview
+
+  Webhook observability has two audiences: ops engineers who need to detect outages, and customers who need to see their endpoint health. The metrics: success rate, latency p99, error breakdown by status code. The traces: each delivery as a span across producer + consumer.
+
+  ---
+
+  ## Core Metrics
+
+  Per webhook endpoint:
+
+  - **Delivery attempts** — count of POST attempts.
+  - **Success rate** — 2xx / total. Alert when <95% over 5 minutes.
+  - **Latency** — round-trip time, p50/p95/p99. Distinguish 'consumer slow' from 'consumer offline'.
+  - **Status code distribution** — 2xx vs 4xx vs 5xx vs timeout. 5xx vs timeout suggests different failure modes.
+
+  ```ts
+  const counter = registry.counter({
+      name: 'webhook_delivery_total',
+      help: 'webhook delivery attempts',
+      labelNames: ['endpoint_id', 'event_type', 'status_class'],
+  });
+
+  counter.inc({ endpoint_id: ep.id, event_type: 'order.created', status_class: '2xx' });
+  ```
+
+  Cardinality bounds: endpoint_id is high-cardinality; aggregate at the customer level for org-wide dashboards.
+
+  ## Latency Histogram
+
+  ```ts
+  const histogram = registry.histogram({
+      name: 'webhook_delivery_duration_ms',
+      help: 'webhook delivery latency',
+      buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+  });
+
+  const start = Date.now();
+  const result = await deliverWebhook(payload);
+  histogram.observe(Date.now() - start);
+  ```
+
+  Buckets cover the realistic range (sub-100ms healthy → 30s timeout). Compute percentiles per bucket via Prometheus / Grafana.
+
+  ## Distributed Tracing
+
+  ```ts
+  const tracer = trace.getTracer('webhook-producer');
+
+  await tracer.startActiveSpan('deliver-webhook', async (span) => {
+      span.setAttributes({
+          endpoint_id: ep.id,
+          webhook_id: webhook.id,
+          attempt: attempt,
+      });
+
+      try {
+          const headers = {
+              traceparent: ...,  // W3C trace context
+              'x-webhook-id': webhook.id,
+          };
+          const response = await fetch(ep.url, { method: 'POST', headers, body: JSON.stringify(payload) });
+          span.setAttribute('http.status_code', response.status);
+      } catch (err) {
+          span.recordException(err);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+      } finally {
+          span.end();
+      }
+  });
+  ```
+
+  The consumer side reads `traceparent` from the headers and continues the trace. Now the deliver→receive→process flow is one trace.
+
+  ## Customer-Facing Delivery Logs
+
+  Customers want to see their endpoint's recent activity:
+
+  ```
+  2026-05-07 10:15:03 | order.created | wh_abc123 | 200 OK | 124ms
+  2026-05-07 10:15:01 | order.updated | wh_abc124 | 500 Internal Server Error | retry in 5s
+  2026-05-07 10:14:58 | user.created | wh_abc125 | timeout (10s) | retry in 30s
+  ```
+
+  Each row: timestamp, event type, webhook ID, response, retry status. Click a row → full request + response headers + body.
+
+  This is gold for debugging customer integrations. Build it as part of the producer's customer dashboard.
+
+  ## Structured Logs
+
+  ```ts
+  logger.info({
+      webhook_id: webhook.id,
+      endpoint_id: ep.id,
+      event_type: webhook.event,
+      attempt,
+      status_code: response.status,
+      duration_ms: Date.now() - start,
+      error: err?.message,
+  }, 'webhook delivery attempted');
+  ```
+
+  Structured (JSON) logs let you query in Datadog / CloudWatch / Loki:
+
+  ```
+  status_code:5xx AND endpoint_id:ep_123 | last 1h
+  ```
+
+  Without structure, this is grep-and-pray.
+
+  ## Alerting
+
+  Tier alerts:
+
+  - **Critical** (page on-call): producer's overall delivery success rate <95% for 5 min — likely producer infrastructure issue.
+  - **Warning** (Slack): individual endpoint success rate <95% for 30 min — likely customer-side issue, but worth knowing.
+  - **Info** (dashboard only): latency p99 increase by >50% week-over-week.
+
+  Don't alert on individual webhook failures; alert on rates.
+
+  ## Dashboard Layout
+
+  Top of dashboard: org-wide health (success rate, latency, queue depth).
+
+  Below: per-customer breakdown sorted by failure rate. Click into one for endpoint-level detail.
+
+  Below that: failure-mode breakdown — timeouts vs 5xx vs 4xx. Different patterns suggest different fixes.
+
+  ## Sentry Integration for Errors
+
+  ```ts
+  try {
+      await deliverWebhook(payload);
+  } catch (err) {
+      Sentry.captureException(err, {
+          tags: {
+              endpoint_id: ep.id,
+              event_type: webhook.event,
+          },
+          extra: { payload, attempt },
+      });
+  }
+  ```
+
+  Sentry groups identical errors. A spike in identical errors usually = an upstream change broke the consumer.
+
+  ## Common Pitfalls
+
+  - **High-cardinality metrics labels.** `webhook_id` as a label = millions of unique series; TSDB chokes. Aggregate at endpoint or customer level.
+  - **No customer-facing logs.** Support tickets become 'check your logs' (which the customer doesn't have). Self-serve delivery logs reduce support burden.
+  - **Alerting on individual failures.** Noise. Alert on rates and trends.
+  - **Logs without webhook_id.** Can't correlate user reports to deliveries. Always include the webhook ID for grep.
+
+  ## Verification
+
+  A working webhook observability:
+
+  - Delivery success/failure visible per-endpoint within seconds.
+  - Latency distributions tell you 'is the consumer slow' or 'is everyone slow'.
+  - Customers can self-serve their endpoint logs.
+  - On-call alerts fire on producer infrastructure issues, not noise.
+  - Distributed traces follow webhooks across producer + consumer.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Core Metrics
+
+    Per webhook endpoint:
+
+    - **Delivery attempts** — count of POST attempts.
+    - **Success rate** — 2xx / total. Alert when <95% over 5 minutes.
+    - **Latency** — round-trip time, p50/p95/p99. Distinguish 'consumer slow' from 'consumer offline'.
+    - **Status code distribution** — 2xx vs 4xx vs 5xx vs timeout. 5xx vs timeout suggests different failure modes.
+
+    ```ts
+    const counter = registry.counter({
+        name: 'webhook_delivery_total',
+        help: 'webhook delivery attempts',
+        labelNames: ['endpoint_id', 'event_type', 'status_class'],
+    });
+
+    counter.inc({ endpoint_id: ep.id, event_type: 'order.created', status_class: '2xx' });
+    ```
+
+    Cardinality bounds: endpoint_id is high-cardinality; aggregate at the customer level for org-wide dashboards.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Latency Histogram
+
+    ```ts
+    const histogram = registry.histogram({
+        name: 'webhook_delivery_duration_ms',
+        help: 'webhook delivery latency',
+        buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+    });
+
+    const start = Date.now();
+    const result = await deliverWebhook(payload);
+    histogram.observe(Date.now() - start);
+    ```
+
+    Buckets cover the realistic range (sub-100ms healthy → 30s timeout). Compute percentiles per bucket via Prometheus / Grafana.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Distributed Tracing
+
+    ```ts
+    const tracer = trace.getTracer('webhook-producer');
+
+    await tracer.startActiveSpan('deliver-webhook', async (span) => {
+        span.setAttributes({
+            endpoint_id: ep.id,
+            webhook_id: webhook.id,
+            attempt: attempt,
+        });
+
+        try {
+            const headers = {
+                traceparent: ...,  // W3C trace context
+                'x-webhook-id': webhook.id,
+            };
+            const response = await fetch(ep.url, { method: 'POST', headers, body: JSON.stringify(payload) });
+            span.setAttribute('http.status_code', response.status);
+        } catch (err) {
+            span.recordException(err);
+            span.setStatus({ code: SpanStatusCode.ERROR });
+        } finally {
+            span.end();
+        }
+    });
+    ```
+
+    The consumer side reads `traceparent` from the headers and continues the trace. Now the deliver→receive→process flow is one trace.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Customer-Facing Delivery Logs
+
+    Customers want to see their endpoint's recent activity:
+
+    ```
+    2026-05-07 10:15:03 | order.created | wh_abc123 | 200 OK | 124ms
+    2026-05-07 10:15:01 | order.updated | wh_abc124 | 500 Internal Server Error | retry in 5s
+    2026-05-07 10:14:58 | user.created | wh_abc125 | timeout (10s) | retry in 30s
+    ```
+
+    Each row: timestamp, event type, webhook ID, response, retry status. Click a row → full request + response headers + body.
+
+    This is gold for debugging customer integrations. Build it as part of the producer's customer dashboard.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Structured Logs
+
+    ```ts
+    logger.info({
+        webhook_id: webhook.id,
+        endpoint_id: ep.id,
+        event_type: webhook.event,
+        attempt,
+        status_code: response.status,
+        duration_ms: Date.now() - start,
+        error: err?.message,
+    }, 'webhook delivery attempted');
+    ```
+
+    Structured (JSON) logs let you query in Datadog / CloudWatch / Loki:
+
+    ```
+    status_code:5xx AND endpoint_id:ep_123 | last 1h
+    ```
+
+    Without structure, this is grep-and-pray.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Alerting
+
+    Tier alerts:
+
+    - **Critical** (page on-call): producer's overall delivery success rate <95% for 5 min — likely producer infrastructure issue.
+    - **Warning** (Slack): individual endpoint success rate <95% for 30 min — likely customer-side issue, but worth knowing.
+    - **Info** (dashboard only): latency p99 increase by >50% week-over-week.
+
+    Don't alert on individual webhook failures; alert on rates.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Dashboard Layout
+
+    Top of dashboard: org-wide health (success rate, latency, queue depth).
+
+    Below: per-customer breakdown sorted by failure rate. Click into one for endpoint-level detail.
+
+    Below that: failure-mode breakdown — timeouts vs 5xx vs 4xx. Different patterns suggest different fixes.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Sentry Integration for Errors
+
+    ```ts
+    try {
+        await deliverWebhook(payload);
+    } catch (err) {
+        Sentry.captureException(err, {
+            tags: {
+                endpoint_id: ep.id,
+                event_type: webhook.event,
+            },
+            extra: { payload, attempt },
+        });
+    }
+    ```
+
+    Sentry groups identical errors. A spike in identical errors usually = an upstream change broke the consumer.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **High-cardinality metrics labels.** `webhook_id` as a label = millions of unique series; TSDB chokes. Aggregate at endpoint or customer level.
+    - **No customer-facing logs.** Support tickets become 'check your logs' (which the customer doesn't have). Self-serve delivery logs reduce support burden.
+    - **Alerting on individual failures.** Noise. Alert on rates and trends.
+    - **Logs without webhook_id.** Can't correlate user reports to deliveries. Always include the webhook ID for grep.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working webhook observability:
+
+    - Delivery success/failure visible per-endpoint within seconds.
+    - Latency distributions tell you 'is the consumer slow' or 'is everyone slow'.
+    - Customers can self-serve their endpoint logs.
+    - On-call alerts fire on producer infrastructure issues, not noise.
+    - Distributed traces follow webhooks across producer + consumer.

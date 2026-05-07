@@ -1,0 +1,353 @@
+skill_type: domain
+skill_id: webhooks-fan-out-architectures
+canonical_name: Webhook Fan-Out Architectures
+category: design
+skill_class: domain
+domain_tags:
+- webhooks
+- fan-out
+- queues
+- scaling
+- kafka
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Webhook Fan-Out Architectures
+
+  ## Overview
+
+  At scale, webhooks aren't 'send HTTP from the API'; they're a message bus. Events are produced once, then fan out to N endpoints. The architecture: events → broker → per-endpoint queue → delivery workers. Backpressure, retries, and isolation belong in the bus.
+
+  ---
+
+  ## The Pattern
+
+  ```
+  Producer (your API)
+      ↓ produce 'order.created' event
+  Event broker (Kafka / SQS / NATS)
+      ↓ subscribers per webhook endpoint
+  Per-endpoint queue (one per customer endpoint)
+      ↓ workers per queue
+  HTTP delivery to endpoint
+  ```
+
+  Decoupling means a slow endpoint can't slow down the producer or other endpoints. Each endpoint has its own queue + workers; backpressure stays local.
+
+  ## Why Not Just Send From the API
+
+  ```
+  // Anti-pattern: synchronous fan-out in API
+  async function createOrder(order) {
+      await db.save(order);
+      for (const subscriber of subscribers.findFor('order.created')) {
+          await fetch(subscriber.url, ...);  // BLOCKS the API
+      }
+  }
+  ```
+
+  Problems:
+  - API latency includes every webhook's latency.
+  - One slow consumer blocks the whole loop.
+  - Failed webhooks crash or stall the API.
+  - No retry without complex rollback.
+
+  The fan-out architecture pulls all of this into a separate system.
+
+  ## Event Broker Choice
+
+  - **Kafka** — durable, ordered per partition, billions/day. Right at scale.
+  - **SQS** — managed, simple, exactly-once-ish via deduplication ID. Right for AWS-native.
+  - **NATS Streaming / JetStream** — fast, simpler than Kafka. Mid-scale.
+  - **BullMQ** — Redis-backed. Right when you're already using Redis.
+
+  For webhooks at any reasonable scale, Kafka or SQS. BullMQ works for thousands of events/day; not for millions.
+
+  ## Per-Endpoint Queue Pattern
+
+  Each subscribed endpoint has its own queue:
+
+  ```
+  order.created event published
+      ↓
+  For each subscriber (1000s):
+      publish to queue:webhook-deliver:ep-123
+      publish to queue:webhook-deliver:ep-456
+      publish to queue:webhook-deliver:ep-789
+  ```
+
+  A worker pool per queue. If endpoint ep-123 is slow, its queue backs up; ep-456 and ep-789 are unaffected.
+
+  In Kafka: partition by endpoint_id. In SQS: separate queues per endpoint. In Bull: separate queue names.
+
+  ## Worker Pool Per Endpoint
+
+  ```ts
+  // One worker per endpoint, configurable concurrency
+  function createWorker(endpointId: string, concurrency = 1) {
+      return new Worker(
+          `webhook-deliver-${endpointId}`,
+          async (job) => deliverWebhook(job.data),
+          { concurrency, limiter: { max: 10, duration: 1000 } },  // 10/sec rate limit
+      );
+  }
+  ```
+
+  Concurrency bounded per endpoint prevents one busy endpoint from saturating workers. Rate-limit too — many endpoints have 10-100 req/sec limits.
+
+  ## Backpressure and Endpoint Health
+
+  When an endpoint is failing:
+
+  ```ts
+  async function deliverWebhook(job) {
+      const ep = await getEndpoint(job.endpointId);
+      if (ep.health === 'unhealthy') {
+          // Endpoint marked unhealthy — fewer attempts, longer delays
+          if (job.attemptsMade > 2) throw new Error('endpoint unhealthy, deferring');
+      }
+      const result = await fetch(ep.url, ...);
+      if (!result.ok) {
+          ep.consecutiveFailures += 1;
+          if (ep.consecutiveFailures > 50) ep.health = 'unhealthy';
+          throw new Error(`status ${result.status}`);
+      }
+      ep.consecutiveFailures = 0;
+      ep.health = 'healthy';
+  }
+  ```
+
+  Health state is persisted; impacts retry behavior. Auto-pause endpoints failing 100% over hours.
+
+  ## Exactly-Once-ish Delivery
+
+  True exactly-once is impossible across HTTP. The pragmatic version:
+
+  1. **At-least-once from the broker** — message in queue until acked.
+  2. **Producer-side idempotency** — broker dedup by message ID.
+  3. **Consumer-side idempotency** — webhook ID prevents double-processing.
+
+  End-to-end: every webhook has a stable ID; both sides dedup. Duplicates are possible (rare); duplicate effects are not.
+
+  ## Multi-Region
+
+  For low latency to global customers, deploy producers + brokers + workers in multiple regions:
+
+  ```
+  US-East: producer + broker + workers
+  EU-West: producer + broker + workers
+  AP-Southeast: producer + broker + workers
+  ```
+
+  Events from US-East producer fan out to all regions' brokers (cross-region replication). Workers in the closest region to each endpoint deliver.
+
+  For Kafka: MirrorMaker 2 replicates topics across regions. For SQS: SNS fan-out into per-region SQS queues.
+
+  ## Cost Considerations
+
+  Fan-out at scale gets expensive:
+  - Each event published to N consumer queues.
+  - Each delivery is HTTP + logging + retry storage.
+  - Idempotency lookups touch the dedup table.
+
+  Optimization:
+  - Batch delivery where possible (one HTTP request, multiple events). Some webhooks support this.
+  - Lazy fan-out: don't publish to consumer queue until subscriber confirms.
+  - Compaction: collapse repeated 'updated' events into one.
+
+  ## Common Pitfalls
+
+  - **Single global queue.** One slow endpoint blocks everyone. Always split per-endpoint.
+  - **Synchronous fan-out in the producer.** API latency degrades; failures cascade. Always async.
+  - **No endpoint health tracking.** Every retry burns compute; persistent failures are silent. Track and pause.
+  - **Cross-region replication missing for some topics.** Subtle data loss in regional outages.
+  - **Same dedup window for all subscribers.** A 24h dedup table is huge across millions of endpoints. Tier by importance.
+
+  ## Verification
+
+  A working fan-out:
+
+  - Producer latency <100ms regardless of subscriber count.
+  - One slow endpoint doesn't slow others.
+  - DLQ + replay covers single-endpoint outages.
+  - Multi-region failover works (kill US region, deliveries continue from EU).
+  - Cost scales linearly with event volume, not super-linearly with endpoint count.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## The Pattern
+
+    ```
+    Producer (your API)
+        ↓ produce 'order.created' event
+    Event broker (Kafka / SQS / NATS)
+        ↓ subscribers per webhook endpoint
+    Per-endpoint queue (one per customer endpoint)
+        ↓ workers per queue
+    HTTP delivery to endpoint
+    ```
+
+    Decoupling means a slow endpoint can't slow down the producer or other endpoints. Each endpoint has its own queue + workers; backpressure stays local.
+- fragment_type: rationale
+  sequence: 2
+  content: |-
+    ## Why Not Just Send From the API
+
+    ```
+    // Anti-pattern: synchronous fan-out in API
+    async function createOrder(order) {
+        await db.save(order);
+        for (const subscriber of subscribers.findFor('order.created')) {
+            await fetch(subscriber.url, ...);  // BLOCKS the API
+        }
+    }
+    ```
+
+    Problems:
+    - API latency includes every webhook's latency.
+    - One slow consumer blocks the whole loop.
+    - Failed webhooks crash or stall the API.
+    - No retry without complex rollback.
+
+    The fan-out architecture pulls all of this into a separate system.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Event Broker Choice
+
+    - **Kafka** — durable, ordered per partition, billions/day. Right at scale.
+    - **SQS** — managed, simple, exactly-once-ish via deduplication ID. Right for AWS-native.
+    - **NATS Streaming / JetStream** — fast, simpler than Kafka. Mid-scale.
+    - **BullMQ** — Redis-backed. Right when you're already using Redis.
+
+    For webhooks at any reasonable scale, Kafka or SQS. BullMQ works for thousands of events/day; not for millions.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Per-Endpoint Queue Pattern
+
+    Each subscribed endpoint has its own queue:
+
+    ```
+    order.created event published
+        ↓
+    For each subscriber (1000s):
+        publish to queue:webhook-deliver:ep-123
+        publish to queue:webhook-deliver:ep-456
+        publish to queue:webhook-deliver:ep-789
+    ```
+
+    A worker pool per queue. If endpoint ep-123 is slow, its queue backs up; ep-456 and ep-789 are unaffected.
+
+    In Kafka: partition by endpoint_id. In SQS: separate queues per endpoint. In Bull: separate queue names.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Worker Pool Per Endpoint
+
+    ```ts
+    // One worker per endpoint, configurable concurrency
+    function createWorker(endpointId: string, concurrency = 1) {
+        return new Worker(
+            `webhook-deliver-${endpointId}`,
+            async (job) => deliverWebhook(job.data),
+            { concurrency, limiter: { max: 10, duration: 1000 } },  // 10/sec rate limit
+        );
+    }
+    ```
+
+    Concurrency bounded per endpoint prevents one busy endpoint from saturating workers. Rate-limit too — many endpoints have 10-100 req/sec limits.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Backpressure and Endpoint Health
+
+    When an endpoint is failing:
+
+    ```ts
+    async function deliverWebhook(job) {
+        const ep = await getEndpoint(job.endpointId);
+        if (ep.health === 'unhealthy') {
+            // Endpoint marked unhealthy — fewer attempts, longer delays
+            if (job.attemptsMade > 2) throw new Error('endpoint unhealthy, deferring');
+        }
+        const result = await fetch(ep.url, ...);
+        if (!result.ok) {
+            ep.consecutiveFailures += 1;
+            if (ep.consecutiveFailures > 50) ep.health = 'unhealthy';
+            throw new Error(`status ${result.status}`);
+        }
+        ep.consecutiveFailures = 0;
+        ep.health = 'healthy';
+    }
+    ```
+
+    Health state is persisted; impacts retry behavior. Auto-pause endpoints failing 100% over hours.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Exactly-Once-ish Delivery
+
+    True exactly-once is impossible across HTTP. The pragmatic version:
+
+    1. **At-least-once from the broker** — message in queue until acked.
+    2. **Producer-side idempotency** — broker dedup by message ID.
+    3. **Consumer-side idempotency** — webhook ID prevents double-processing.
+
+    End-to-end: every webhook has a stable ID; both sides dedup. Duplicates are possible (rare); duplicate effects are not.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Multi-Region
+
+    For low latency to global customers, deploy producers + brokers + workers in multiple regions:
+
+    ```
+    US-East: producer + broker + workers
+    EU-West: producer + broker + workers
+    AP-Southeast: producer + broker + workers
+    ```
+
+    Events from US-East producer fan out to all regions' brokers (cross-region replication). Workers in the closest region to each endpoint deliver.
+
+    For Kafka: MirrorMaker 2 replicates topics across regions. For SQS: SNS fan-out into per-region SQS queues.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Cost Considerations
+
+    Fan-out at scale gets expensive:
+    - Each event published to N consumer queues.
+    - Each delivery is HTTP + logging + retry storage.
+    - Idempotency lookups touch the dedup table.
+
+    Optimization:
+    - Batch delivery where possible (one HTTP request, multiple events). Some webhooks support this.
+    - Lazy fan-out: don't publish to consumer queue until subscriber confirms.
+    - Compaction: collapse repeated 'updated' events into one.
+- fragment_type: guardrail
+  sequence: 10
+  content: |-
+    ## Common Pitfalls
+
+    - **Single global queue.** One slow endpoint blocks everyone. Always split per-endpoint.
+    - **Synchronous fan-out in the producer.** API latency degrades; failures cascade. Always async.
+    - **No endpoint health tracking.** Every retry burns compute; persistent failures are silent. Track and pause.
+    - **Cross-region replication missing for some topics.** Subtle data loss in regional outages.
+    - **Same dedup window for all subscribers.** A 24h dedup table is huge across millions of endpoints. Tier by importance.
+- fragment_type: verification
+  sequence: 11
+  content: |-
+    ## Verification
+
+    A working fan-out:
+
+    - Producer latency <100ms regardless of subscriber count.
+    - One slow endpoint doesn't slow others.
+    - DLQ + replay covers single-endpoint outages.
+    - Multi-region failover works (kill US region, deliveries continue from EU).
+    - Cost scales linearly with event volume, not super-linearly with endpoint count.

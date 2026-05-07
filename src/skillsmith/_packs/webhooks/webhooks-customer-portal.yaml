@@ -1,0 +1,335 @@
+skill_type: domain
+skill_id: webhooks-customer-portal
+canonical_name: Webhook Customer Portal Patterns
+category: design
+skill_class: domain
+domain_tags:
+- webhooks
+- customer-portal
+- self-serve
+- developer-experience
+- ui-patterns
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Webhook Customer Portal Patterns
+
+  ## Overview
+
+  The webhook portal is where customers configure and debug their integrations. Done well, it eliminates 80% of webhook support tickets. The features: register/edit endpoints, see delivery logs, replay individual webhooks, test new endpoints before going live.
+
+  ---
+
+  ## Endpoint Registration
+
+  ```
+  [ Add Endpoint ]
+    URL: [_____________________]   (https only)
+    Description: [_______________]
+    Events: ☐ order.created
+            ☐ order.updated
+            ☐ user.signed_up
+            ☑ user.deleted
+    Filters (optional): ___________  (jq-style filter expression)
+    [ Save ]
+  ```
+
+  On save:
+  - Validate URL format.
+  - Test with a synthetic ping event (POST a test payload, expect 200).
+  - If ping fails, show the error inline; allow saving anyway with a warning.
+
+  ## Test Webhook Button
+
+  ```
+  [ Send Test Event ]
+    Type: order.created ▾
+    Payload: { ... auto-generated example ... }   (editable)
+    [ Send ]
+
+    Response: 200 OK | 124ms
+    ✓ Endpoint is healthy
+  ```
+
+  Lets the customer verify their endpoint accepts the payload before going live. A round-trip in <1 second tells them everything they need.
+
+  ## Delivery Logs
+
+  ```
+  Recent deliveries (last 7 days)
+  ┌─────────────────────┬──────────────────┬───────┬───────┐
+  │ Time                │ Event            │ Status│ Time  │
+  ├─────────────────────┼──────────────────┼───────┼───────┤
+  │ 2026-05-07 10:15:03 │ order.created    │ 200   │ 124ms │
+  │ 2026-05-07 10:15:01 │ order.updated    │ 500   │ 5034ms│ [↻ Replay]
+  │ 2026-05-07 10:14:58 │ user.created     │ TIMEOUT│ 30s  │ [↻ Replay]
+  └─────────────────────┴──────────────────┴───────┴───────┘
+  ```
+
+  Click a row → full detail:
+  - Request: headers (with signature), body.
+  - Response: status code, headers, body (truncated for large).
+  - Timing: connect, ttfb, total.
+  - Retry attempts: list each with timestamp + outcome.
+
+  ## Replay Button
+
+  Most-requested feature. Per-delivery replay:
+
+  ```
+  [Endpoint detail page]
+  Recent failed deliveries:
+    - 2026-05-07 10:15:01 (500 error) [↻ Replay]
+    - 2026-05-07 09:42:33 (timeout) [↻ Replay]
+
+  [ Bulk Replay All Failed ]   (last 24h)
+  ```
+
+  Replay re-sends the same payload. Critical for recovering from consumer outages without losing deliveries.
+
+  ## Secret Rotation
+
+  ```
+  [Endpoint settings]
+  Current signing secret: whsec_••••••••••••••••••••• [Show] [Copy] [Rotate]
+
+  Rotation history:
+    - whsec_AbC123 (current, since 2026-04-01)
+    - whsec_XyZ789 (deprecated 2026-04-01)
+  ```
+
+  When rotating, new signing secret takes effect immediately for new deliveries. Optionally support a 'grace period' where both secrets are accepted for a window — gives customers time to update consumer-side without missing webhooks.
+
+  ## Subscription Management
+
+  ```
+  [Endpoint] events:
+    ☑ order.created
+    ☑ order.updated
+    ☐ order.cancelled
+    ☑ user.created
+    ☐ user.deleted
+  ```
+
+  Show only events the customer's account has access to. Group by namespace for usability.
+
+  For complex products, allow filter expressions:
+
+  ```
+  Filter: order.amount_cents > 10000
+  ```
+
+  Reduces webhook volume — customer's endpoint only fires for high-value events.
+
+  ## Webhook Health Indicator
+
+  ```
+  [Endpoint list]
+    https://api.customer.com/webhooks    [✓ Healthy]    success: 99.2% | latency: p95 234ms
+    https://api.staging.com/webhooks     [⚠ Degraded]   success: 87% over last hour
+    https://broken.example.com/webhooks  [✗ Disabled]   100% failure 24h, paused
+  ```
+
+  Colored health badges per endpoint. Drilling in shows the failure pattern (timeouts vs 5xx vs 4xx).
+
+  ## Onboarding Checklist
+
+  When a customer enables their first endpoint:
+
+  ```
+  Webhooks setup
+    ✓ Add an endpoint URL
+    ✓ Verify with a test event
+    ☐ Implement signature verification (link to docs)
+    ☐ Implement idempotency (link to docs)
+    ☐ Subscribe to relevant events
+  ```
+
+  Each step has a 'how to' link. Completion drives down support tickets.
+
+  ## Common Pitfalls
+
+  - **No test/replay buttons.** Customers debug via support tickets. Both buttons are easy to build and high ROI.
+  - **Hidden delivery logs.** Customers can't self-debug; support handles every issue. Log UI is the highest-ROI feature.
+  - **Silent secret rotation breaking integrations.** Always notify before rotating; offer a grace period.
+  - **Showing only success/failure (no detail).** Customers want headers, body, timing — give them all of it.
+  - **Confusing 'event types' with 'event versions'.** Some products evolve event payloads; the UI should let customers pin to a version.
+
+  ## Verification
+
+  A working customer portal:
+
+  - Customer can add + verify a new endpoint in under 5 minutes.
+  - Failed deliveries can be replayed with one click.
+  - Delivery logs are searchable by time, event type, status.
+  - Secret rotation has a grace period to avoid breaking integrations.
+  - Endpoint health is visible at-a-glance from the endpoint list.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Endpoint Registration
+
+    ```
+    [ Add Endpoint ]
+      URL: [_____________________]   (https only)
+      Description: [_______________]
+      Events: ☐ order.created
+              ☐ order.updated
+              ☐ user.signed_up
+              ☑ user.deleted
+      Filters (optional): ___________  (jq-style filter expression)
+      [ Save ]
+    ```
+
+    On save:
+    - Validate URL format.
+    - Test with a synthetic ping event (POST a test payload, expect 200).
+    - If ping fails, show the error inline; allow saving anyway with a warning.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Test Webhook Button
+
+    ```
+    [ Send Test Event ]
+      Type: order.created ▾
+      Payload: { ... auto-generated example ... }   (editable)
+      [ Send ]
+
+      Response: 200 OK | 124ms
+      ✓ Endpoint is healthy
+    ```
+
+    Lets the customer verify their endpoint accepts the payload before going live. A round-trip in <1 second tells them everything they need.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Delivery Logs
+
+    ```
+    Recent deliveries (last 7 days)
+    ┌─────────────────────┬──────────────────┬───────┬───────┐
+    │ Time                │ Event            │ Status│ Time  │
+    ├─────────────────────┼──────────────────┼───────┼───────┤
+    │ 2026-05-07 10:15:03 │ order.created    │ 200   │ 124ms │
+    │ 2026-05-07 10:15:01 │ order.updated    │ 500   │ 5034ms│ [↻ Replay]
+    │ 2026-05-07 10:14:58 │ user.created     │ TIMEOUT│ 30s  │ [↻ Replay]
+    └─────────────────────┴──────────────────┴───────┴───────┘
+    ```
+
+    Click a row → full detail:
+    - Request: headers (with signature), body.
+    - Response: status code, headers, body (truncated for large).
+    - Timing: connect, ttfb, total.
+    - Retry attempts: list each with timestamp + outcome.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Replay Button
+
+    Most-requested feature. Per-delivery replay:
+
+    ```
+    [Endpoint detail page]
+    Recent failed deliveries:
+      - 2026-05-07 10:15:01 (500 error) [↻ Replay]
+      - 2026-05-07 09:42:33 (timeout) [↻ Replay]
+
+    [ Bulk Replay All Failed ]   (last 24h)
+    ```
+
+    Replay re-sends the same payload. Critical for recovering from consumer outages without losing deliveries.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Secret Rotation
+
+    ```
+    [Endpoint settings]
+    Current signing secret: whsec_••••••••••••••••••••• [Show] [Copy] [Rotate]
+
+    Rotation history:
+      - whsec_AbC123 (current, since 2026-04-01)
+      - whsec_XyZ789 (deprecated 2026-04-01)
+    ```
+
+    When rotating, new signing secret takes effect immediately for new deliveries. Optionally support a 'grace period' where both secrets are accepted for a window — gives customers time to update consumer-side without missing webhooks.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Subscription Management
+
+    ```
+    [Endpoint] events:
+      ☑ order.created
+      ☑ order.updated
+      ☐ order.cancelled
+      ☑ user.created
+      ☐ user.deleted
+    ```
+
+    Show only events the customer's account has access to. Group by namespace for usability.
+
+    For complex products, allow filter expressions:
+
+    ```
+    Filter: order.amount_cents > 10000
+    ```
+
+    Reduces webhook volume — customer's endpoint only fires for high-value events.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Webhook Health Indicator
+
+    ```
+    [Endpoint list]
+      https://api.customer.com/webhooks    [✓ Healthy]    success: 99.2% | latency: p95 234ms
+      https://api.staging.com/webhooks     [⚠ Degraded]   success: 87% over last hour
+      https://broken.example.com/webhooks  [✗ Disabled]   100% failure 24h, paused
+    ```
+
+    Colored health badges per endpoint. Drilling in shows the failure pattern (timeouts vs 5xx vs 4xx).
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Onboarding Checklist
+
+    When a customer enables their first endpoint:
+
+    ```
+    Webhooks setup
+      ✓ Add an endpoint URL
+      ✓ Verify with a test event
+      ☐ Implement signature verification (link to docs)
+      ☐ Implement idempotency (link to docs)
+      ☐ Subscribe to relevant events
+    ```
+
+    Each step has a 'how to' link. Completion drives down support tickets.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **No test/replay buttons.** Customers debug via support tickets. Both buttons are easy to build and high ROI.
+    - **Hidden delivery logs.** Customers can't self-debug; support handles every issue. Log UI is the highest-ROI feature.
+    - **Silent secret rotation breaking integrations.** Always notify before rotating; offer a grace period.
+    - **Showing only success/failure (no detail).** Customers want headers, body, timing — give them all of it.
+    - **Confusing 'event types' with 'event versions'.** Some products evolve event payloads; the UI should let customers pin to a version.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working customer portal:
+
+    - Customer can add + verify a new endpoint in under 5 minutes.
+    - Failed deliveries can be replayed with one click.
+    - Delivery logs are searchable by time, event type, status.
+    - Secret rotation has a grace period to avoid breaking integrations.
+    - Endpoint health is visible at-a-glance from the endpoint list.
