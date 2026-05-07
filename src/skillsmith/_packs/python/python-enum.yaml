@@ -1,0 +1,307 @@
+skill_type: domain
+skill_id: python-enum
+canonical_name: Python Enum and Flag
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- enum
+- intenum
+- strenum
+- flag
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Python Enum and Flag
+
+  ## Overview
+
+  Python's `enum` module provides type-safe named constants. The variants — Enum, IntEnum, StrEnum, Flag, IntFlag — cover most needs. Members are singleton instances with stable identity.
+
+  ---
+
+  ## Basic Enum
+
+  ```python
+  from enum import Enum
+
+  class Color(Enum):
+      RED = 1
+      GREEN = 2
+      BLUE = 3
+
+  c = Color.RED
+  print(c)        # Color.RED
+  print(c.value)  # 1
+  print(c.name)   # 'RED'
+  ```
+
+  Members are singletons: `Color.RED is Color.RED` always. Iteration: `for c in Color: ...` yields each member in definition order. Lookup by value: `Color(1)` returns `Color.RED`.
+
+  ## auto() — Don't Repeat Yourself
+
+  When values don't matter, use `auto()`:
+
+  ```python
+  from enum import Enum, auto
+
+  class Status(Enum):
+      PENDING = auto()
+      ACTIVE = auto()
+      ARCHIVED = auto()
+  ```
+
+  `auto()` assigns successive integers starting at 1 by default. Override `_generate_next_value_` to control numbering.
+
+  ## IntEnum and StrEnum
+
+  IntEnum members ARE ints — usable in `==` comparisons and JSON serialization without `.value`:
+
+  ```python
+  from enum import IntEnum
+
+  class HttpStatus(IntEnum):
+      OK = 200
+      NOT_FOUND = 404
+
+  assert HttpStatus.OK == 200       # True
+  assert HttpStatus.OK + 0 == 200   # works as int
+  ```
+
+  Python 3.11+ ships `StrEnum` for the same trick with strings. Use these when the underlying primitive needs to round-trip through serialization.
+
+  ## Flag and IntFlag — Bitwise Combinations
+
+  For values that combine via bitwise OR:
+
+  ```python
+  from enum import Flag, auto
+
+  class Permission(Flag):
+      READ = auto()    # 1
+      WRITE = auto()   # 2
+      EXEC = auto()    # 4
+
+  p = Permission.READ | Permission.WRITE  # READ|WRITE
+  assert Permission.READ in p             # True
+  ```
+
+  `IntFlag` is the int-typed version. Useful for permission masks, feature flags, hardware register bits.
+
+  ## Aliases
+
+  Two names with the same value become aliases — only the first is canonical:
+
+  ```python
+  class Status(Enum):
+      DONE = 1
+      COMPLETE = 1   # alias for DONE
+
+  assert Status.COMPLETE is Status.DONE  # True
+  list(Status)  # [Status.DONE]  — alias not in iteration
+  ```
+
+  `Status.__members__` includes both; iteration shows only canonical members.
+
+  ## Custom Methods and Properties
+
+  Enums are classes — add methods and properties:
+
+  ```python
+  class HttpStatus(IntEnum):
+      OK = 200
+      CREATED = 201
+      BAD_REQUEST = 400
+      SERVER_ERROR = 500
+
+      @property
+      def is_success(self) -> bool:
+          return 200 <= self.value < 300
+
+      def message(self) -> str:
+          return f"HTTP {self.value} {self.name}"
+
+  assert HttpStatus.OK.is_success
+  ```
+
+  ## Functional API
+
+  Generate enums dynamically:
+
+  ```python
+  Color = Enum('Color', ['RED', 'GREEN', 'BLUE'])
+  # equivalent to declaring the class
+  ```
+
+  Useful when reading members from config or database. Less common than the class form.
+
+  ## Common Pitfalls
+
+  - **Comparing Enum to its value.** `Color.RED == 1` is False unless using IntEnum. Convert with `Color.RED.value` or use IntEnum.
+  - **Mutating Enum members.** Members are singletons; mutating attributes on them affects every reference. Don't.
+  - **Subclassing Enum after defining members.** Once a class has members, you can't subclass it to add more. Either define all members upfront or use Flag composition.
+  - **Using `Enum.value` as a dict key inconsistently.** Either always use the member or always use the value — mixing causes lookup misses.
+
+  ## Verification
+
+  A working enum:
+
+  - Members are singletons (`Color.RED is Color.RED`).
+  - `Color(1)` returns `Color.RED` (lookup by value).
+  - `Color['RED']` returns `Color.RED` (lookup by name).
+  - Iteration yields canonical members in definition order, skipping aliases.
+  - `Color.__members__` includes all names including aliases as a dict.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Basic Enum
+
+    ```python
+    from enum import Enum
+
+    class Color(Enum):
+        RED = 1
+        GREEN = 2
+        BLUE = 3
+
+    c = Color.RED
+    print(c)        # Color.RED
+    print(c.value)  # 1
+    print(c.name)   # 'RED'
+    ```
+
+    Members are singletons: `Color.RED is Color.RED` always. Iteration: `for c in Color: ...` yields each member in definition order. Lookup by value: `Color(1)` returns `Color.RED`.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## auto() — Don't Repeat Yourself
+
+    When values don't matter, use `auto()`:
+
+    ```python
+    from enum import Enum, auto
+
+    class Status(Enum):
+        PENDING = auto()
+        ACTIVE = auto()
+        ARCHIVED = auto()
+    ```
+
+    `auto()` assigns successive integers starting at 1 by default. Override `_generate_next_value_` to control numbering.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## IntEnum and StrEnum
+
+    IntEnum members ARE ints — usable in `==` comparisons and JSON serialization without `.value`:
+
+    ```python
+    from enum import IntEnum
+
+    class HttpStatus(IntEnum):
+        OK = 200
+        NOT_FOUND = 404
+
+    assert HttpStatus.OK == 200       # True
+    assert HttpStatus.OK + 0 == 200   # works as int
+    ```
+
+    Python 3.11+ ships `StrEnum` for the same trick with strings. Use these when the underlying primitive needs to round-trip through serialization.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Flag and IntFlag — Bitwise Combinations
+
+    For values that combine via bitwise OR:
+
+    ```python
+    from enum import Flag, auto
+
+    class Permission(Flag):
+        READ = auto()    # 1
+        WRITE = auto()   # 2
+        EXEC = auto()    # 4
+
+    p = Permission.READ | Permission.WRITE  # READ|WRITE
+    assert Permission.READ in p             # True
+    ```
+
+    `IntFlag` is the int-typed version. Useful for permission masks, feature flags, hardware register bits.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Aliases
+
+    Two names with the same value become aliases — only the first is canonical:
+
+    ```python
+    class Status(Enum):
+        DONE = 1
+        COMPLETE = 1   # alias for DONE
+
+    assert Status.COMPLETE is Status.DONE  # True
+    list(Status)  # [Status.DONE]  — alias not in iteration
+    ```
+
+    `Status.__members__` includes both; iteration shows only canonical members.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Custom Methods and Properties
+
+    Enums are classes — add methods and properties:
+
+    ```python
+    class HttpStatus(IntEnum):
+        OK = 200
+        CREATED = 201
+        BAD_REQUEST = 400
+        SERVER_ERROR = 500
+
+        @property
+        def is_success(self) -> bool:
+            return 200 <= self.value < 300
+
+        def message(self) -> str:
+            return f"HTTP {self.value} {self.name}"
+
+    assert HttpStatus.OK.is_success
+    ```
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Functional API
+
+    Generate enums dynamically:
+
+    ```python
+    Color = Enum('Color', ['RED', 'GREEN', 'BLUE'])
+    # equivalent to declaring the class
+    ```
+
+    Useful when reading members from config or database. Less common than the class form.
+- fragment_type: guardrail
+  sequence: 8
+  content: |-
+    ## Common Pitfalls
+
+    - **Comparing Enum to its value.** `Color.RED == 1` is False unless using IntEnum. Convert with `Color.RED.value` or use IntEnum.
+    - **Mutating Enum members.** Members are singletons; mutating attributes on them affects every reference. Don't.
+    - **Subclassing Enum after defining members.** Once a class has members, you can't subclass it to add more. Either define all members upfront or use Flag composition.
+    - **Using `Enum.value` as a dict key inconsistently.** Either always use the member or always use the value — mixing causes lookup misses.
+- fragment_type: verification
+  sequence: 9
+  content: |-
+    ## Verification
+
+    A working enum:
+
+    - Members are singletons (`Color.RED is Color.RED`).
+    - `Color(1)` returns `Color.RED` (lookup by value).
+    - `Color['RED']` returns `Color.RED` (lookup by name).
+    - Iteration yields canonical members in definition order, skipping aliases.
+    - `Color.__members__` includes all names including aliases as a dict.

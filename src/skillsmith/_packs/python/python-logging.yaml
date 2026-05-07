@@ -1,0 +1,384 @@
+skill_type: domain
+skill_id: python-logging
+canonical_name: Python logging — Loggers, Handlers, Formatters
+category: engineering
+skill_class: domain
+domain_tags:
+  - logging
+  - python
+  - structured logging
+  - dictConfig
+  - handlers
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Python logging — Loggers, Handlers, Formatters
+
+  ## Overview
+
+  Python's logging module is a hierarchical tree of loggers, each with handlers that route records to outputs. dictConfig is the canonical way to set it up declaratively. Most apps need: a root config, structured JSON formatting, and async-safe handlers. This skill covers logging end-to-end.
+
+  Sourced from docs.python.org/3/library/logging.html.
+
+  ---
+
+  # `!logging` --- Logging facility for Python
+
+
+     :synopsis: Flexible event logging system for applications.
+
+  **Source code:** `Lib/logging/__init__.py`
+
+  This page contains the API reference information. For tutorial
+  information and discussion of more advanced topics, see
+
+  * `Basic Tutorial <logging-basic-tutorial>`
+  * `Advanced Tutorial <logging-advanced-tutorial>`
+  * `Logging Cookbook <logging-cookbook>`
+
+  --------------
+
+  This module defines functions and classes which implement a flexible event
+  logging system for applications and libraries.
+
+  The key benefit of having the logging API provided by a standard library module
+  is that all Python modules can participate in logging, so your application log
+  can include your own messages integrated with messages from third-party
+  modules.
+
+  Here's a simple example of idiomatic usage: ::
+
+     # myapp.py
+     import logging
+     import mylib
+     logger = logging.getLogger(__name__)
+
+     def main():
+         logging.basicConfig(filename='myapp.log', level=logging.INFO)
+         logger.info('Started')
+         mylib.do_something()
+         logger.info('Finished')
+
+     if __name__ == '__main__':
+         main()
+
+  ::
+
+     # mylib.py
+     import logging
+     logger = logging.getLogger(__name__)
+
+     def do_something():
+         logger.info('Doing something')
+
+  If you run *myapp.py*, you should see this in *myapp.log*:
+
+  .. code-block:: none
+
+     INFO:__main__:Started
+     INFO:mylib:Doing something
+     INFO:__main__:Finished
+
+  The key feature of this idiomatic usage is that the majority of code is simply
+  creating a module level logger with ``getLogger(__name__)``, and using that
+  logger to do any needed logging. This is concise, while allowing downstream
+  code fine-grained control if needed. Logged messages to the module-level logger
+  get forwarded to handlers of loggers in higher-level modules, all the way up to
+  the highest-level logger known as the root logger; this approach is known as
+  hierarchical logging.
+
+  For logging to be useful, it needs to be configured: setting the levels and
+  destinations for each logger, potentially changing how specific modules log,
+  often based on command-line arguments or application configuration. In most
+  cases, like the one above, only the root logger needs to be so configured, since
+  all the lower level loggers at module level eventually forward their messages to
+  its handlers.  `~logging.basicConfig` provides a quick way to configure
+  the root logger that handles many use cases.
+
+  The module provides a lot of functionality and flexibility.  If you are
+  unfamiliar with logging, the best way to get to grips with it is to view the
+  tutorials (**see the links above and on the right**).
+
+  The basic classes defined by the module, together with their attributes and
+  methods, are listed in the sections below.
+
+  * Loggers expose the interface that application code directly uses.
+  * Handlers send the log records (created by loggers) to the appropriate
+    destination.
+  * Filters provide a finer grained facility for determining which log records
+    to output.
+  * Formatters specify the layout of log records in the final output.
+
+
+  .. _logger:
+
+  ## Logger Objects
+
+
+  Loggers have the following attributes and methods.  Note that Loggers should
+  *NEVER* be instantiated directly, but always through the module-level function
+  ``logging.getLogger(name)``.  Multiple calls to `getLogger` with the same
+  name will always return a reference to the same Logger object.
+
+  The ``name`` is potentially a period-separated hierarchical value, like
+  ``foo.bar.baz`` (though it could also be just plain ``foo``, for example).
+  Loggers that are further down in the hierarchical list are children of loggers
+  higher up in the list.  For example, given a logger with a name of ``foo``,
+  loggers with names of ``foo.bar``, ``foo.bar.baz``, and ``foo.bam`` are all
+  descendants of ``foo``.  In addition, all loggers are descendants of the root
+  logger. The logger name hierarchy is analogous to the Python package hierarchy,
+  and identical to it if you organise your loggers on a per-module basis using
+  the recommended construction ``logging.getLogger(__name__)``.  That's because
+  in a module, ``__name__`` is the module's name in the Python package namespace.
+
+
+
+     
+     This is the logger's name, and is the value that was passed to `getLogger`
+     to obtain the logger.
+
+     
+     
+     The threshold of this logger, as set by the `setLevel` method.
+
+              which has checks for the level passed to it.
+
+     
+     The parent logger of this logger. It may change based on later instantiation
+     of loggers which are higher up in the namespace hierarchy.
+
+     
+     If this attribute evaluates to true, events logged to this logger will be
+     passed to the handlers of higher level (ancestor) loggers, in addition to
+     any handlers attached to this logger. Messages are passed directly to the
+     ancestor loggers' handlers - neither the level nor filters of the ancestor
+     loggers in question are considered.
+
+     If this evaluates to false, logging messages are not passed to the handlers
+     of ancestor loggers.
+
+     Spelling it out with an example: If the propagate attribute of the logger named
+     ``A.B.C`` evaluates to true, any event logged to ``A.B.C`` via a method call such as
+     ``logging.getLogger('A.B.C').error(...)`` will [subject to passing that logger's
+     level and filter settings] be passed in turn to any handlers attached to loggers
+     named ``A.B``, ``A`` and the root logger, after first being passed to any handlers
+     attached to ``A.B.C``. If any logger in the chain ``A.B.C``, ``A.B``, ``A`` has its
+     ``propagate`` attribute set to false, then that is the last logger whose handlers
+     are offered the event to handle, and propagation stops at that point.
+
+     The constructor sets this attribute to ``True``.
+
+              ancestors, it may emit the same record multiple times. In general, you
+       should not need to attach a handler to more than one logger - if you just
+       attach it to the appropriate logger which is highest in the logger
+       hierarchy, then it will see all events logged by all descendant loggers,
+       provided that their propagate setting is left set to ``True``. A common
+       scenario is to attach handlers only to the root logger, and to let
+       propagation take care of the rest.
+
+     
+     The list of handlers directly attached to this logger instance.
+
+              the `addHandler` and `removeHandler` methods, which use locks to ensure
+       thread-safe operation.
+
+     
+     This attribute disables handling of any events. It is set to ``False`` in the
+     initializer, and only changed by logging configuration code.
+
+     
+     Sets the threshold for this logger to *level*. Logging messages which are less
+     severe than *level* will be ignored; logging messages which have severity *level*
+     or higher will be emitted by whichever handler or handlers service this logger,
+     unless a handler's level has been set to a higher severity level than *level*.
+
+     When a logger is created, the level is set to `NOTSET` (which causes
+     all messages to be processed when the logger is the root logger, or delegation
+     to the parent when the logger is a non-root logger). Note that the root logger
+     is created with level `WARNING`.
+
+     The term 'delegation to the parent' means that if a logger has a level of
+     NOTSET, its chain of ancestor loggers is traversed until either an ancestor with
+     a level other than NOTSET is found, or the root is reached.
+
+     If an ancestor is found with a level other than NOTSET, then that ancestor's
+     level is treated as the effective level of the logger where the ancestor search
+     began, and is used to determine how a logging event is handled.
+
+     If the root is reached, and it has a level of NOTSET, then all messages will be
+     processed. Otherwise, the root's level will be used as the effective level.
+
+     See `levels` for a list of levels.
+
+              The *level* parameter now accepts a string representation of the
+       level such as 'INFO' as an alternative to the integer constants
+       such as `INFO`. Note, however, that levels are internally stored
+       as integers, and methods such as e.g. `getEffectiveLevel` and
+       `isEnabledFor` will return/expect to be passed integers.
+
+
+     
+     Indicates if a message of severity *level* would be processed by this logger.
+     This method checks first the module-level level set by
+     ``logging.disable(level)`` and then the logger's effective level as determined
+     by `getEffectiveLevel`.
+
+
+     
+     Indicates the effective level for this logger. If a value other than
+     `NOTSET` has been set using `setLevel`, it is returned. Otherwise,
+     the hierarchy is traversed towards the root until a value other than
+     `NOTSET` is found, and that value is returned. The value returned is
+     an i
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Python's logging module is a hierarchical tree of loggers, each with handlers that route records to outputs. dictConfig is the canonical way to set it up declaratively. Most apps need: a root config, structured JSON formatting, and async-safe handlers. This skill covers logging end-to-end.
+
+      Sourced from docs.python.org/3/library/logging.html.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      Here's a simple example of idiomatic usage:
+
+      ```python
+      # myapp.py
+      import logging
+      import mylib
+      logger = logging.getLogger(__name__)
+
+      def main():
+          logging.basicConfig(filename='myapp.log', level=logging.INFO)
+          logger.info('Started')
+          mylib.do_something()
+          logger.info('Finished')
+
+      if __name__ == '__main__':
+          main()
+      ```
+
+      ```python
+      # mylib.py
+      import logging
+      logger = logging.getLogger(__name__)
+
+      def do_something():
+          logger.info('Doing something')
+      ```
+  - fragment_type: verification
+    sequence: 3
+    content: |
+      If you run *myapp.py*, you should see this in *myapp.log*:
+
+      ```plaintext
+      INFO:__main__:Started
+      INFO:mylib:Doing something
+      INFO:__main__:Finished
+      ```
+
+      The key feature of this idiomatic usage is that the majority of code is simply creating a module level logger with ``getLogger(__name__)``, and using that logger to do any needed logging. This is concise, while allowing downstream code fine-grained control if needed. Logged messages to the module-level logger get forwarded to handlers of loggers in higher-level modules, all the way up to the highest-level logger known as the root logger; this approach is known as hierarchical logging.
+
+      For logging to be useful, it needs to be configured: setting the levels and destinations for each logger, potentially changing how specific modules log, often based on command-line arguments or application configuration. In most cases, like the one above, only the root logger needs to be so configured, since all the lower level loggers at module level eventually forward their messages to its handlers.  `~logging.basicConfig` provides a quick way to configure the root logger that handles many use cases.
+
+      The module provides a lot of functionality and flexibility.  If you are unfamiliar with logging, the best way to get to grips with it is to view the tutorials (**see the links above and on the right**).
+  - fragment_type: example
+    sequence: 4
+    content: |
+      ```python
+      # myapp.py
+      import logging
+      import mylib
+      logger = logging.getLogger(__name__)
+
+      def main():
+          logging.basicConfig(filename='myapp.log', level=logging.INFO)
+          logger.info('Started')
+          mylib.do_something()
+          logger.info('Finished')
+
+      if __name__ == '__main__':
+          main()
+      ```
+
+      ```python
+      # mylib.py
+      import logging
+      logger = logging.getLogger(__name__)
+
+      def do_something():
+          logger.info('Doing something')
+      ```
+  - fragment_type: rationale
+    sequence: 5
+    content: |
+      The basic classes defined by the module, together with their attributes and methods, are listed in the sections below.
+
+      * Loggers expose the interface that application code directly uses.
+      * Handlers send the log records (created by loggers) to the appropriate destination.
+      * Filters provide a finer grained facility for determining which log records to output.
+      * Formatters specify the layout of log records in the final output.
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      Loggers have the following attributes and methods.  Note that Loggers should *NEVER* be instantiated directly, but always through the module-level function ``logging.getLogger(name)``.  Multiple calls to `getLogger` with the same name will always return a reference to the same Logger object.
+
+      The ``name`` is potentially a period-separated hierarchical value, like ``foo.bar.baz`` (though it could also be just plain ``foo``, for example). Loggers that are further down in the hierarchical list are children of loggers higher up in the list.  For example, given a logger with a name of ``foo``, loggers with names of ``foo.bar``, ``foo.bar.baz``, and ``foo.bam`` are all descendants of ``foo``.  In addition, all loggers are descendants of the root logger. The logger name hierarchy is analogous to the Python package hierarchy, and identical to it if you organise your loggers on a per-module basis using the recommended construction ``logging.getLogger(__name__)``.  That's because in a module, ``__name__`` is the module's name in the Python package namespace.
+  - fragment_type: rationale
+    sequence: 7
+    content: |
+      This is the logger's name, and is the value that was passed to `getLogger` to obtain the logger.
+
+      The threshold of this logger, as set by the `setLevel` method.
+
+      The parent logger of this logger. It may change based on later instantiation of loggers which are higher up in the namespace hierarchy.
+
+      If this attribute evaluates to true, events logged to this logger will be passed to the handlers of higher level (ancestor) loggers, in addition to any handlers attached to this logger. Messages are passed directly to the ancestor loggers' handlers - neither the level nor filters of the ancestor loggers in question are considered.
+
+      If this evaluates to false, logging messages are not passed to the handlers of ancestor loggers.
+  - fragment_type: rationale
+    sequence: 8
+    content: |
+      Spelling it out with an example: If the propagate attribute of the logger named ``A.B.C`` evaluates to true, any event logged to ``A.B.C`` via a method call such as ``logging.getLogger('A.B.C').error(...)`` will [subject to passing that logger's level and filter settings] be passed in turn to any handlers attached to loggers named ``A.B``, ``A`` and the root logger, after first being passed to any handlers attached to ``A.B.C``. If any logger in the chain ``A.B.C``, ``A.B``, ``A`` has its ``propagate`` attribute set to false, then that is the last logger whose handlers are offered the event to handle, and propagation stops at that point.
+
+      The constructor sets this attribute to ``True``.
+  - fragment_type: rationale
+    sequence: 9
+    content: |
+      ancestors, it may emit the same record multiple times. In general, you should not need to attach a handler to more than one logger - if you just attach it to the appropriate logger which is highest in the logger hierarchy, then it will see all events logged by all descendant loggers, provided that their propagate setting is left set to ``True``. A common scenario is to attach handlers only to the root logger, and to let propagation take care of the rest.
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      The list of handlers directly attached to this logger instance.
+
+      the `addHandler` and `removeHandler` methods, which use locks to ensure thread-safe operation.
+  - fragment_type: rationale
+    sequence: 11
+    content: |
+      This attribute disables handling of any events. It is set to ``False`` in the initializer, and only changed by logging configuration code.
+
+      Sets the threshold for this logger to *level*. Logging messages which are less severe than *level* will be ignored; logging messages which have severity *level* or higher will be emitted by whichever handler or handlers service this logger, unless a handler's level has been set to a higher severity level than *level*.
+
+      When a logger is created, the level is set to `NOTSET` (which causes all messages to be processed when the logger is the root logger, or delegation to the parent when the logger is a non-root logger). Note that the root logger is created with level `WARNING`.
+
+      The term 'delegation to the parent' means that if a logger has a level of NOTSET, its chain of ancestor loggers is traversed until either an ancestor with a level other than NOTSET is found, or the root is reached.
+
+      If an ancestor is found with a level other than NOTSET, then that ancestor's level is treated as the effective level of the logger where the ancestor search began, and is used to determine how a logging event is handled.
+
+      If the root is reached, and it has a level of NOTSET, then all messages will be processed. Otherwise, the root's level will be used as the effective level.
+  - fragment_type: rationale
+    sequence: 12
+    content: |
+      See `levels` for a list of levels.
+
+      The *level* parameter now accepts a string representation of the level such as 'INFO' as an alternative to the integer constants such as `INFO`. Note, however, that levels are internally stored as integers, and methods such as e.g. `getEffectiveLevel` and `isEnabledFor` will return/expect to be passed integers.
+  - fragment_type: rationale
+    sequence: 13
+    content: |
+      Indicates if a message of severity *level* would be processed by this logger. This method checks first the module-level level set by ``logging.disable(level)`` and then the logger's effective level as determined by `getEffectiveLevel`.
+
+      Indicates the effective level for this logger. If a value other than `NOTSET` has been set using `setLevel`, it is returned. Otherwise, the hierarchy is traversed towards the root until a value other than `NOTSET` is found, and that value is returned. The value returned is an i

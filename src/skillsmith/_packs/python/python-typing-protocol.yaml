@@ -1,0 +1,285 @@
+skill_type: domain
+skill_id: python-typing-protocol
+canonical_name: Python typing — Protocols and Structural Typing
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- typing
+- protocol
+- structural-typing
+- duck-typing
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Python typing — Protocols and Structural Typing
+
+  ## Overview
+
+  Python's `typing.Protocol` provides structural (duck-typed) interfaces. A class satisfies a Protocol simply by having the right methods/attributes — no explicit inheritance needed. `runtime_checkable` makes Protocols usable with isinstance.
+
+  ---
+
+  ## Why Protocols vs ABCs
+
+  Abstract Base Classes (`abc.ABC`) require explicit inheritance — `class MyImpl(SomeABC)`. That works for first-party code but breaks when checking third-party objects you can't modify. Protocols are structural: any object with the right shape satisfies them, regardless of inheritance.
+
+  ```python
+  from typing import Protocol
+
+  class SupportsClose(Protocol):
+      def close(self) -> None: ...
+
+  def shutdown(resource: SupportsClose) -> None:
+      resource.close()
+
+  # Any class with .close() works — no inheritance needed
+  shutdown(open("file.txt"))
+  shutdown(some_socket)
+  shutdown(some_db_connection)
+  ```
+
+  The protocol is a static-typing assertion. The runtime doesn't enforce it unless you opt in.
+
+  ## Defining a Protocol
+
+  ```python
+  from typing import Protocol
+
+  class Drawable(Protocol):
+      def draw(self) -> None: ...
+      def bounds(self) -> tuple[int, int, int, int]: ...
+  ```
+
+  Method bodies use `...` (Ellipsis) since Protocol methods are signature-only. Attributes work too:
+
+  ```python
+  class HasName(Protocol):
+      name: str
+  ```
+
+  Type checkers (mypy, pyright) verify that any value passed where `HasName` is expected has a `.name: str`.
+
+  ## runtime_checkable
+
+  By default, isinstance(x, MyProtocol) raises TypeError. Decorate with `@runtime_checkable` to allow it:
+
+  ```python
+  from typing import Protocol, runtime_checkable
+
+  @runtime_checkable
+  class Closable(Protocol):
+      def close(self) -> None: ...
+
+  if isinstance(thing, Closable):
+      thing.close()
+  ```
+
+  The runtime check only verifies method names exist, not signatures. So `isinstance(x, Closable)` returns True for anything with a `.close` callable, even if the signature is wrong. Use sparingly.
+
+  ## Generic Protocols
+
+  Protocols can be generic over types:
+
+  ```python
+  from typing import Protocol, TypeVar
+
+  T = TypeVar('T')
+
+  class Container(Protocol[T]):
+      def add(self, item: T) -> None: ...
+      def get(self, index: int) -> T: ...
+
+  def process(c: Container[int]) -> None:
+      c.add(42)
+  ```
+
+  ## Protocol with Default Implementations
+
+  Methods with bodies (not `...`) become default implementations that classes can inherit by explicit subclassing:
+
+  ```python
+  class Greetable(Protocol):
+      def greet(self) -> str:
+          return f"Hello, {self.name}"
+
+      name: str
+
+  class Person(Greetable):  # explicit inheritance gets the default
+      def __init__(self, name: str):
+          self.name = name
+  ```
+
+  Without explicit inheritance, the default isn't used — only the protocol shape matters.
+
+  ## Common Pitfalls
+
+  - **Forgetting `...` in method bodies.** A method with no body is a `pass` — the Protocol still works, but type checkers may emit unexpected behavior. Use `...` to be explicit.
+  - **Adding Protocol to existing classes.** A class that inherits from Protocol becomes a Protocol itself. Don't sprinkle Protocol on regular classes.
+  - **Trusting `isinstance` to check signatures.** It only checks method names. A class with a wrong-arity `close()` still passes the check.
+  - **Variance issues.** Protocols are invariant by default. For covariant/contravariant generics, use `TypeVar('T', covariant=True)`.
+
+  ## When Protocols Win
+
+  - Working with third-party libraries you can't modify.
+  - Defining minimal interfaces ("just needs a `.read()` method").
+  - Public APIs where you want to accept any compatible duck-typed value.
+  - Replacing `Any` with something more precise.
+
+  ## When ABCs Win
+
+  - You need shared base-class behavior (mixins, default implementations).
+  - The hierarchy is closed and you control all implementations.
+  - You need `__init_subclass__` or other inheritance hooks.
+
+  ## Verification
+
+  A working Protocol setup:
+
+  - Type checker (mypy/pyright) catches missing methods on values passed where the Protocol is expected.
+  - Runtime accepts any structurally-compatible object.
+  - isinstance() works only when `@runtime_checkable` is set.
+  - Generic Protocols correctly propagate type parameters through method signatures.
+fragments:
+- fragment_type: rationale
+  sequence: 1
+  content: |-
+    ## Why Protocols vs ABCs
+
+    Abstract Base Classes (`abc.ABC`) require explicit inheritance — `class MyImpl(SomeABC)`. That works for first-party code but breaks when checking third-party objects you can't modify. Protocols are structural: any object with the right shape satisfies them, regardless of inheritance.
+
+    ```python
+    from typing import Protocol
+
+    class SupportsClose(Protocol):
+        def close(self) -> None: ...
+
+    def shutdown(resource: SupportsClose) -> None:
+        resource.close()
+
+    # Any class with .close() works — no inheritance needed
+    shutdown(open("file.txt"))
+    shutdown(some_socket)
+    shutdown(some_db_connection)
+    ```
+
+    The protocol is a static-typing assertion. The runtime doesn't enforce it unless you opt in.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Defining a Protocol
+
+    ```python
+    from typing import Protocol
+
+    class Drawable(Protocol):
+        def draw(self) -> None: ...
+        def bounds(self) -> tuple[int, int, int, int]: ...
+    ```
+
+    Method bodies use `...` (Ellipsis) since Protocol methods are signature-only. Attributes work too:
+
+    ```python
+    class HasName(Protocol):
+        name: str
+    ```
+
+    Type checkers (mypy, pyright) verify that any value passed where `HasName` is expected has a `.name: str`.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## runtime_checkable
+
+    By default, isinstance(x, MyProtocol) raises TypeError. Decorate with `@runtime_checkable` to allow it:
+
+    ```python
+    from typing import Protocol, runtime_checkable
+
+    @runtime_checkable
+    class Closable(Protocol):
+        def close(self) -> None: ...
+
+    if isinstance(thing, Closable):
+        thing.close()
+    ```
+
+    The runtime check only verifies method names exist, not signatures. So `isinstance(x, Closable)` returns True for anything with a `.close` callable, even if the signature is wrong. Use sparingly.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Generic Protocols
+
+    Protocols can be generic over types:
+
+    ```python
+    from typing import Protocol, TypeVar
+
+    T = TypeVar('T')
+
+    class Container(Protocol[T]):
+        def add(self, item: T) -> None: ...
+        def get(self, index: int) -> T: ...
+
+    def process(c: Container[int]) -> None:
+        c.add(42)
+    ```
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Protocol with Default Implementations
+
+    Methods with bodies (not `...`) become default implementations that classes can inherit by explicit subclassing:
+
+    ```python
+    class Greetable(Protocol):
+        def greet(self) -> str:
+            return f"Hello, {self.name}"
+
+        name: str
+
+    class Person(Greetable):  # explicit inheritance gets the default
+        def __init__(self, name: str):
+            self.name = name
+    ```
+
+    Without explicit inheritance, the default isn't used — only the protocol shape matters.
+- fragment_type: guardrail
+  sequence: 6
+  content: |-
+    ## Common Pitfalls
+
+    - **Forgetting `...` in method bodies.** A method with no body is a `pass` — the Protocol still works, but type checkers may emit unexpected behavior. Use `...` to be explicit.
+    - **Adding Protocol to existing classes.** A class that inherits from Protocol becomes a Protocol itself. Don't sprinkle Protocol on regular classes.
+    - **Trusting `isinstance` to check signatures.** It only checks method names. A class with a wrong-arity `close()` still passes the check.
+    - **Variance issues.** Protocols are invariant by default. For covariant/contravariant generics, use `TypeVar('T', covariant=True)`.
+- fragment_type: rationale
+  sequence: 7
+  content: |-
+    ## When Protocols Win
+
+    - Working with third-party libraries you can't modify.
+    - Defining minimal interfaces ("just needs a `.read()` method").
+    - Public APIs where you want to accept any compatible duck-typed value.
+    - Replacing `Any` with something more precise.
+- fragment_type: rationale
+  sequence: 8
+  content: |-
+    ## When ABCs Win
+
+    - You need shared base-class behavior (mixins, default implementations).
+    - The hierarchy is closed and you control all implementations.
+    - You need `__init_subclass__` or other inheritance hooks.
+- fragment_type: verification
+  sequence: 9
+  content: |-
+    ## Verification
+
+    A working Protocol setup:
+
+    - Type checker (mypy/pyright) catches missing methods on values passed where the Protocol is expected.
+    - Runtime accepts any structurally-compatible object.
+    - isinstance() works only when `@runtime_checkable` is set.
+    - Generic Protocols correctly propagate type parameters through method signatures.

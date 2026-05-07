@@ -1,0 +1,571 @@
+skill_type: domain
+skill_id: python-asyncio-tasks
+canonical_name: Python asyncio — Tasks, TaskGroup, Cancellation
+category: engineering
+skill_class: domain
+domain_tags:
+  - asyncio
+  - tasks
+  - cancellation
+  - structured concurrency
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: machine authoring contract for pending-qa pipeline
+raw_prose: |
+  # Python asyncio — Tasks, TaskGroup, Cancellation
+
+  ## Overview
+
+  asyncio is Python's standard async I/O library. The mental model: coroutines are paused functions; the event loop schedules them; tasks wrap coroutines for parallel execution. TaskGroup provides structured concurrency with deterministic cancellation. This skill covers tasks + cancellation.
+
+  Sourced from docs.python.org/3/library/asyncio-task.html.
+
+  ====================
+  # Coroutines and tasks
+
+
+  This section outlines high-level asyncio APIs to work with coroutines
+  and Tasks.
+
+     :depth: 1
+     :local:
+
+
+  .. _coroutine:
+
+  # Coroutines
+
+
+  **Source code:** `Lib/asyncio/coroutines.py`
+
+  ----------------------------------------------------
+
+  `Coroutines <coroutine>` declared with the async/await syntax is the
+  preferred way of writing asyncio applications.  For example, the following
+  snippet of code prints "hello", waits 1 second,
+  and then prints "world"::
+
+      >>> import asyncio
+
+      >>> async def main():
+      ...     print('hello')
+      ...     await asyncio.sleep(1)
+      ...     print('world')
+
+      >>> asyncio.run(main())
+      hello
+      world
+
+  Note that simply calling a coroutine will not schedule it to
+  be executed::
+
+      >>> main()
+      <coroutine object main at 0x1053bb7c8>
+
+  To actually run a coroutine, asyncio provides the following mechanisms:
+
+  * The `asyncio.run` function to run the top-level
+    entry point "main()" function (see the above example.)
+
+  * Awaiting on a coroutine.  The following snippet of code will
+    print "hello" after waiting for 1 second, and then print "world"
+    after waiting for *another* 2 seconds::
+
+        import asyncio
+        import time
+
+        async def say_after(delay, what):
+            await asyncio.sleep(delay)
+            print(what)
+
+        async def main():
+            print(f"started at {time.strftime('%X')}")
+
+            await say_after(1, 'hello')
+            await say_after(2, 'world')
+
+            print(f"finished at {time.strftime('%X')}")
+
+        asyncio.run(main())
+
+    Expected output::
+
+        started at 17:13:52
+        hello
+        world
+        finished at 17:13:55
+
+  * The `asyncio.create_task` function to run coroutines
+    concurrently as asyncio `Tasks <Task>`.
+
+    Let's modify the above example and run two ``say_after`` coroutines
+    *concurrently*::
+
+        async def main():
+            task1 = asyncio.create_task(
+                say_after(1, 'hello'))
+
+            task2 = asyncio.create_task(
+                say_after(2, 'world'))
+
+            print(f"started at {time.strftime('%X')}")
+
+            # Wait until both tasks are completed (should take
+            # around 2 seconds.)
+            await task1
+            await task2
+
+            print(f"finished at {time.strftime('%X')}")
+
+    Note that expected output now shows that the snippet runs
+    1 second faster than before::
+
+        started at 17:14:32
+        hello
+        world
+        finished at 17:14:34
+
+  * The `asyncio.TaskGroup` class provides a more modern
+    alternative to `create_task`.
+    Using this API, the last example becomes::
+
+        async def main():
+            async with asyncio.TaskGroup() as tg:
+                task1 = tg.create_task(
+                    say_after(1, 'hello'))
+
+                task2 = tg.create_task(
+                    say_after(2, 'world'))
+
+                print(f"started at {time.strftime('%X')}")
+
+            # The await is implicit when the context manager exits.
+
+            print(f"finished at {time.strftime('%X')}")
+
+        The timing and output should be the same as for the previous version.
+
+         `asyncio.TaskGroup`.
+
+
+  .. _asyncio-awaitables:
+
+  # Awaitables
+
+
+  We say that an object is an **awaitable** object if it can be used
+  in an `await` expression.  Many asyncio APIs are designed to
+  accept awaitables.
+
+  There are three main types of *awaitable* objects:
+  **coroutines**, **Tasks**, and **Futures**.
+
+
+
+  Python coroutines are *awaitables* and therefore can be awaited from
+  other coroutines::
+
+      import asyncio
+
+      async def nested():
+          return 42
+
+      async def main():
+          # Nothing happens if we just call "nested()".
+          # A coroutine object is created but not awaited,
+          # so it *won't run at all*.
+          nested()  # will raise a "RuntimeWarning".
+
+          # Let's do it differently now and await it:
+          print(await nested())  # will print "42".
+
+      asyncio.run(main())
+
+
+     In this documentation the term "coroutine" can be used for
+     two closely related concepts:
+
+     * a *coroutine function*: an `async def` function;
+
+     * a *coroutine object*: an object returned by calling a
+       *coroutine function*.
+
+
+
+  *Tasks* are used to schedule coroutines *concurrently*.
+
+  When a coroutine is wrapped into a *Task* with functions like
+  `asyncio.create_task` the coroutine is automatically
+  scheduled to run soon::
+
+      import asyncio
+
+      async def nested():
+          return 42
+
+      async def main():
+          # Schedule nested() to run soon concurrently
+          # with "main()".
+          task = asyncio.create_task(nested())
+
+          # "task" can now be used to cancel "nested()", or
+          # can simply be awaited to wait until it is complete:
+          await task
+
+      asyncio.run(main())
+
+
+
+  A `Future` is a special **low-level** awaitable object that
+  represents an **eventual result** of an asynchronous operation.
+
+  When a Future object is *awaited* it means that the coroutine will
+  wait until the Future is resolved in some other place.
+
+  Future objects in asyncio are needed to allow callback-based code
+  to be used with async/await.
+
+  Normally **there is no need** to create Future objects at the
+  application level code.
+
+  Future objects, sometimes exposed by libraries and some asyncio
+  APIs, can be awaited::
+
+      async def main():
+          await function_that_returns_a_future_object()
+
+          # this is also valid:
+          await asyncio.gather(
+              function_that_returns_a_future_object(),
+              some_python_coroutine()
+          )
+
+  A good example of a low-level function that returns a Future object
+  is `loop.run_in_executor`.
+
+
+  # Creating tasks
+
+
+  **Source code:** `Lib/asyncio/tasks.py`
+
+  -----------------------------------------------
+
+
+     Wrap the *coro* `coroutine <coroutine>` into a `Task`
+     and schedule its execution.  Return the Task object.
+
+     The full function signature is largely the same as that of the
+     `Task` constructor (or factory) - all of the keyword arguments to
+     this function are passed through to that interface.
+
+     An optional keyword-only *context* argument allows specifying a
+     custom `contextvars.Context` for the *coro* to run in.
+     The current context copy is created when no *context* is provided.
+
+     An optional keyword-only *eager_start* argument allows specifying
+     if the task should execute eagerly during the call to create_task,
+     or be scheduled later. If *eager_start* is not passed the mode set
+     by `loop.set_task_factory` will be used.
+
+     The task is executed in the loop returned by `get_running_loop`,
+     `RuntimeError` is raised if there is no running loop in
+     current thread.
+
+     
+        `asyncio.TaskGroup.create_task` is a new alternative
+        leveraging structural concurrency; it allows for waiting
+        for a group of related tasks with strong safety guarantees.
+
+     
+        Save a reference to the result of this function, to avoid
+        a task disappearing mid-execution. The event loop only keeps
+        weak references to tasks. A task that isn't referenced elsewhere
+        may get garbage collected at any time, even before it's done.
+        For reliable "fire-and-forget" background tasks, gather them in
+        a collection::
+
+            background_tasks = set()
+
+            for i in range(10):
+                task = asyncio.create_task(some_coro(param=i))
+
+                # Add task to the set. This creates a strong reference.
+                background_tasks.add(task)
+
+                # To prevent keeping references to finished tasks forever,
+                # make each task remove its own reference from the set after
+                # completion:
+                task.add_done_callback(background_tasks.discard)
+
+     
+           Added the *name* parameter.
+
+           Added the *context* parameter.
+
+           Added the *eager_start* parameter by passing on all *kwargs*.
+
+
+  # Task cancellation
+
+
+  Tasks can easily and safely be cancelled.
+  When a task is cancelled, `asyncio.CancelledError` will be raised
+  in the task at the next opportunity.
+
+  It is recommended that coroutines use ``try/finally`` blocks to robustly
+  perform clean-up logic. In case `asyncio.CancelledError`
+  is explicitly caught, it should generally be propagated when
+  clean-up is complete. `asyncio.CancelledError` directly subclasses
+  `BaseException` so most code will not need to be aware of it.
+
+  The asyncio components that enable structured concurrency, like
+  `asyncio.TaskGroup` and `asyncio.timeout`,
+  are implemented using cancellation internally and might misbehave if
+  a coroutine swallows `asyncio.CancelledError`. Similarly, user code
+  should not generally call `uncancel <asyncio.Task.uncancel>`.
+  However, in cases when suppressing `asyncio.CancelledError` is
+  truly desired, it is necessary to also call ``uncancel()`` to completely
+  remove the cancellation state.
+
+  .. _taskgroups:
+
+  # Task groups
+
+
+  Task groups combine a task creation API with a convenient
+  and reliable way to wait for all tasks in the group to finish.
+
+
+     An `asynchronous context manager <async-context-managers>`
+     holding a group of tasks.
+     Tasks can be added to the group using
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      asyncio is Python's standard async I/O library. The mental model: coroutines are paused functions; the event loop schedules them; tasks wrap coroutines for parallel execution. TaskGroup provides structured concurrency with deterministic cancellation. This skill covers tasks + cancellation.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      `Coroutines <coroutine>` declared with the async/await syntax is the preferred way of writing asyncio applications. For example, the following snippet of code prints "hello", waits 1 second, and then prints "world":
+
+      ```python
+      >>> import asyncio
+
+      >>> async def main():
+      ...     print('hello')
+      ...     await asyncio.sleep(1)
+      ...     print('world')
+
+      >>> asyncio.run(main())
+      hello
+      world
+      ```
+
+      Note that simply calling a coroutine will not schedule it to be executed:
+
+      ```python
+      >>> main()
+      <coroutine object main at 0x1053bb7c8>
+      ```
+
+      To actually run a coroutine, asyncio provides the following mechanisms:
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      * The `asyncio.run` function to run the top-level entry point "main()" function (see the above example.)
+      * Awaiting on a coroutine. The following snippet of code will print "hello" after waiting for 1 second, and then print "world" after waiting for another 2 seconds:
+
+        ```python
+        import asyncio
+        import time
+
+        async def say_after(delay, what):
+            await asyncio.sleep(delay)
+            print(what)
+
+        async def main():
+            print(f"started at {time.strftime('%X')}")
+
+            await say_after(1, 'hello')
+            await say_after(2, 'world')
+
+            print(f"finished at {time.strftime('%X')}")
+        ```
+
+        Expected output:
+
+        ```
+        started at 17:13:52
+        hello
+        world
+        finished at 17:13:55
+        ```
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      * The `asyncio.create_task` function to run coroutines concurrently as asyncio `Tasks <Task>`. Let's modify the above example and run two ``say_after`` coroutines concurrently:
+
+        ```python
+        async def main():
+            task1 = asyncio.create_task(
+                say_after(1, 'hello'))
+
+            task2 = asyncio.create_task(
+                say_after(2, 'world'))
+
+            print(f"started at {time.strftime('%X')}")
+
+            # Wait until both tasks are completed (should take around 2 seconds.)
+            await task1
+            await task2
+
+            print(f"finished at {time.strftime('%X')}")
+        ```
+
+        Note that expected output now shows that the snippet runs 1 second faster than before:
+
+        ```
+        started at 17:14:32
+        hello
+        world
+        finished at 17:14:34
+        ```
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      * The `asyncio.TaskGroup` class provides a more modern alternative to `create_task`. Using this API, the last example becomes:
+
+        ```python
+        async def main():
+            async with asyncio.TaskGroup() as tg:
+                task1 = tg.create_task(
+                    say_after(1, 'hello'))
+
+                task2 = tg.create_task(
+                    say_after(2, 'world'))
+
+                print(f"started at {time.strftime('%X')}")
+
+            # The await is implicit when the context manager exits.
+
+            print(f"finished at {time.strftime('%X')}")
+        ```
+
+        The timing and output should be the same as for the previous version.
+  - fragment_type: rationale
+    sequence: 6
+    content: |
+      We say that an object is an **awaitable** object if it can be used in an `await` expression. Many asyncio APIs are designed to accept awaitables.
+
+      There are three main types of *awaitable* objects: **coroutines**, **Tasks**, and **Futures**.
+  - fragment_type: rationale
+    sequence: 7
+    content: |
+      Python coroutines are *awaitables* and therefore can be awaited from other coroutines:
+
+      ```python
+      import asyncio
+
+      async def nested():
+          return 42
+
+      async def main():
+          # Nothing happens if we just call "nested()".
+          # A coroutine object is created but not awaited,
+          # so it *won't run at all*.
+          nested()  # will raise a "RuntimeWarning".
+
+          # Let's do it differently now and await it:
+          print(await nested())  # will print "42".
+      ```
+
+      In this documentation the term "coroutine" can be used for two closely related concepts:
+
+      * a *coroutine function*: an `async def` function;
+
+      * a *coroutine object*: an object returned by calling a *coroutine function*.
+  - fragment_type: rationale
+    sequence: 8
+    content: |
+      *Tasks* are used to schedule coroutines *concurrently*. When a coroutine is wrapped into a *Task* with functions like `asyncio.create_task` the coroutine is automatically scheduled to run soon:
+
+      ```python
+      import asyncio
+
+      async def nested():
+          return 42
+
+      async def main():
+          # Schedule nested() to run soon concurrently with "main()".
+          task = asyncio.create_task(nested())
+
+          # "task" can now be used to cancel "nested()", or
+          # can simply be awaited to wait until it is complete:
+          await task
+      ```
+
+      A `Future` is a special **low-level** awaitable object that represents an **eventual result** of an asynchronous operation. When a Future object is *awaited* it means that the coroutine will wait until the Future is resolved in some other place.
+
+      Future objects in asyncio are needed to allow callback-based code to be used with async/await. Normally **there is no need** to create Future objects at the application level code.
+  - fragment_type: execution
+    sequence: 9
+    content: |
+      Wrap the *coro* `coroutine <coroutine>` into a `Task` and schedule its execution. Return the Task object.
+
+      The full function signature is largely the same as that of the `Task` constructor (or factory) - all of the keyword arguments to this function are passed through to that interface.
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      An optional keyword-only *context* argument allows specifying a custom `contextvars.Context` for the *coro* to run in. The current context copy is created when no *context* is provided.
+
+      An optional keyword-only *eager_start* argument allows specifying if the task should execute eagerly during the call to create_task, or be scheduled later. If *eager_start* is not passed the mode set by `loop.set_task_factory` will be used.
+
+      The task is executed in the loop returned by `get_running_loop`, `RuntimeError` is raised if there is no running loop in current thread.
+  - fragment_type: rationale
+    sequence: 11
+    content: |
+      `asyncio.TaskGroup.create_task` is a new alternative leveraging structural concurrency; it allows for waiting for a group of related tasks with strong safety guarantees.
+
+      Save a reference to the result of this function, to avoid a task disappearing mid-execution. The event loop only keeps weak references to tasks. A task that isn't referenced elsewhere may get garbage collected at any time, even before it's done. For reliable "fire-and-forget" background tasks, gather them in a collection:
+
+      ```python
+      background_tasks = set()
+
+      for i in range(10):
+          task = asyncio.create_task(some_coro(param=i))
+
+          # Add task to the set. This creates a strong reference.
+          background_tasks.add(task)
+
+          # To prevent keeping references to finished tasks forever,
+          # make each task remove its own reference from the set after
+          # completion:
+          task.add_done_callback(background_tasks.discard)
+      ```
+
+      Added the *name* parameter.
+
+      Added the *context* parameter.
+
+      Added the *eager_start* parameter by passing on all *kwargs*.
+  - fragment_type: rationale
+    sequence: 12
+    content: |
+      Tasks can easily and safely be cancelled. When a task is cancelled, `asyncio.CancelledError` will be raised in the task at the next opportunity.
+
+      It is recommended that coroutines use ``try/finally`` blocks to robustly perform clean-up logic. In case `asyncio.CancelledError` is explicitly caught, it should generally be propagated when clean-up is complete. `asyncio.CancelledError` directly subclasses `BaseException` so most code will not need to be aware of it.
+
+      The asyncio components that enable structured concurrency, like `asyncio.TaskGroup` and `asyncio.timeout`,
+      are implemented using cancellation internally and might misbehave if a coroutine swallows `asyncio.CancelledError`. Similarly, user code should not generally call `uncancel <asyncio.Task.uncancel>`.
+      However, in cases when suppressing `asyncio.CancelledError` is truly desired, it is necessary to also call ``uncancel()`` to completely remove the cancellation state.
+  - fragment_type: rationale
+    sequence: 13
+    content: |
+      Task groups combine a task creation API with a convenient and reliable way to wait for all tasks in the group to finish.
+
+      An `asynchronous context manager <async-context-managers>`
+      holding a group of tasks. Tasks can be added to the group using

@@ -8,20 +8,55 @@ embedding_dim: 1024
 license: MIT
 homepage: https://github.com/nrmeyers/skillsmith
 always_install: false
-depends_on: [core, engineering]
+depends_on:
+- core
+- engineering
 skills:
-  - skill_id: python-typing-and-generics
-    file: python-typing-and-generics.yaml
-    fragment_count: 10
-  - skill_id: python-async-and-asyncio
-    file: python-async-and-asyncio.yaml
-    fragment_count: 10
-  - skill_id: python-error-handling
-    file: python-error-handling.yaml
-    fragment_count: 10
-  - skill_id: python-packaging-and-pyproject
-    file: python-packaging-and-pyproject.yaml
-    fragment_count: 11
-  - skill_id: python-context-managers-and-with
-    file: python-context-managers-and-with.yaml
-    fragment_count: 10
+- skill_id: python-typing-and-generics
+  file: python-typing-and-generics.yaml
+  fragment_count: 10
+- skill_id: python-async-and-asyncio
+  file: python-async-and-asyncio.yaml
+  fragment_count: 10
+- skill_id: python-error-handling
+  file: python-error-handling.yaml
+  fragment_count: 10
+- skill_id: python-packaging-and-pyproject
+  file: python-packaging-and-pyproject.yaml
+  fragment_count: 11
+- skill_id: python-context-managers-and-with
+  file: python-context-managers-and-with.yaml
+  fragment_count: 10
+- skill_id: python-async-patterns
+  file: python-async-patterns.yaml
+  fragment_count: 8
+- skill_id: python-asyncio-streams
+  file: python-asyncio-streams.yaml
+  fragment_count: 8
+- skill_id: python-asyncio-tasks
+  file: python-asyncio-tasks.yaml
+  fragment_count: 13
+- skill_id: python-dataclasses
+  file: python-dataclasses.yaml
+  fragment_count: 10
+- skill_id: python-enum
+  file: python-enum.yaml
+  fragment_count: 9
+- skill_id: python-logging
+  file: python-logging.yaml
+  fragment_count: 13
+- skill_id: python-multiprocessing
+  file: python-multiprocessing.yaml
+  fragment_count: 16
+- skill_id: python-packaging-pyproject
+  file: python-packaging-pyproject.yaml
+  fragment_count: 9
+- skill_id: python-pattern-matching
+  file: python-pattern-matching.yaml
+  fragment_count: 11
+- skill_id: python-typing-protocol
+  file: python-typing-protocol.yaml
+  fragment_count: 9
+- skill_id: python-uv-package-management
+  file: python-uv-package-management.yaml
+  fragment_count: 7

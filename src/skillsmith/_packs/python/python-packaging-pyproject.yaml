@@ -1,0 +1,333 @@
+skill_type: domain
+skill_id: python-packaging-pyproject
+canonical_name: Python Packaging — pyproject.toml
+category: engineering
+skill_class: domain
+domain_tags:
+- python
+- packaging
+- pyproject
+- pep-621
+- build-system
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Python Packaging — pyproject.toml
+
+  ## Overview
+
+  pyproject.toml is the standard Python project metadata file (PEP 621). It declares the build backend, project metadata, dependencies, and tool configuration. Replaces setup.py for most use cases.
+
+  ---
+
+  ## File Structure
+
+  A minimal pyproject.toml:
+
+  ```toml
+  [build-system]
+  requires = ["hatchling"]
+  build-backend = "hatchling.build"
+
+  [project]
+  name = "my-package"
+  version = "0.1.0"
+  description = "A short description"
+  authors = [{ name = "Alice", email = "alice@example.com" }]
+  license = { text = "MIT" }
+  requires-python = ">=3.10"
+  dependencies = ["requests>=2.31"]
+
+  [project.optional-dependencies]
+  dev = ["pytest>=8", "ruff"]
+
+  [project.scripts]
+  my-cli = "my_package.cli:main"
+  ```
+
+  Three top-level tables matter most: `[build-system]` (how to build), `[project]` (what it is), and `[tool.*]` (per-tool config).
+
+  ## [build-system]
+
+  Declares the build backend — the tool that produces wheels and sdists. Common choices:
+
+  - `hatchling` — modern, fast, minimal config. Default for new projects.
+  - `setuptools` — legacy default; still widely used. Verbose config.
+  - `poetry-core` — Poetry projects.
+  - `flit-core` — pure-Python packages, minimal config.
+  - `pdm-backend` — PDM projects.
+  - `maturin` — Rust extensions.
+
+  ```toml
+  [build-system]
+  requires = ["hatchling>=1.18"]
+  build-backend = "hatchling.build"
+  ```
+
+  `requires` lists what's needed to RUN the build backend. Keep this tight — it's installed in an isolated environment for the build.
+
+  ## [project] — Required Metadata
+
+  The PEP 621 standard fields:
+
+  - `name` — PyPI distribution name (kebab-case allowed; underscore in import path).
+  - `version` — semantic version. Can be dynamic via `dynamic = ["version"]` and read from a file or VCS.
+  - `description` — one-line summary.
+  - `authors` / `maintainers` — list of dicts with `name` and `email`.
+  - `license` — `{ text = "MIT" }` or `{ file = "LICENSE" }`. PEP 639 simplifies this in newer specs.
+  - `readme` — `"README.md"` or `{ file = "README.md", content-type = "text/markdown" }`.
+  - `requires-python` — version range like `">=3.10"`.
+  - `dependencies` — list of PEP 508 requirement strings.
+  - `classifiers` — PyPI classifiers (programming language, license, status).
+  - `keywords` — list of search keywords for PyPI.
+  - `urls` — dict of label → URL (homepage, repository, docs, issues).
+
+  ## Optional Dependencies
+
+  ```toml
+  [project.optional-dependencies]
+  dev = ["pytest>=8", "ruff", "mypy"]
+  docs = ["mkdocs>=1.5", "mkdocs-material"]
+  all = ["my-package[dev,docs]"]
+  ```
+
+  Install with `pip install my-package[dev]` or `uv pip install -e ".[dev]"`. The `all` group composes other groups.
+
+  PEP 735 added `[dependency-groups]` as a more explicit alternative for dev-only dependencies that don't belong as installable extras.
+
+  ## Entry Points and Scripts
+
+  Console scripts (CLI commands installed in the env's bin/):
+
+  ```toml
+  [project.scripts]
+  my-cli = "my_package.cli:main"
+  my-other = "my_package.other:run"
+  ```
+
+  GUI scripts get `[project.gui-scripts]`. Plugin entry points use `[project.entry-points."group.name"]`:
+
+  ```toml
+  [project.entry-points."pytest11"]
+  my-plugin = "my_package.pytest_plugin"
+  ```
+
+  ## [tool.*] Sections
+
+  Tools read their own subsection. Common ones:
+
+  ```toml
+  [tool.ruff]
+  line-length = 100
+
+  [tool.pytest.ini_options]
+  testpaths = ["tests"]
+  addopts = "-v"
+
+  [tool.mypy]
+  strict = true
+
+  [tool.uv]
+  dev-dependencies = ["pytest", "ruff"]
+  ```
+
+  Each tool defines its own schema; pyproject.toml just hosts them.
+
+  ## Dynamic Fields
+
+  Some fields can be computed by the build backend rather than declared statically:
+
+  ```toml
+  [project]
+  name = "my-package"
+  dynamic = ["version", "readme"]
+
+  [tool.hatch.version]
+  path = "src/my_package/__init__.py"
+  ```
+
+  Common for `version` (read from `__init__.py` or VCS) and `readme` (computed from multiple files).
+
+  ## Common Pitfalls
+
+  - **Mismatched build-backend and tool.* config.** Setting `[tool.hatch]` while using `setuptools.build_meta` does nothing.
+  - **Including `pyproject.toml` and `setup.py` together.** During migration, the toml takes precedence but setup.py may still be invoked. Pick one.
+  - **Running `python setup.py develop`.** Deprecated. Use `pip install -e .` or `uv pip install -e .`.
+  - **Forgetting `requires-python`.** Without it, pip won't refuse to install on incompatible versions and your users get cryptic errors at import time.
+
+  ## Verification
+
+  A correctly-configured pyproject.toml:
+
+  - `pip install .` (or `uv pip install .`) succeeds in a fresh venv.
+  - `python -m build` produces a wheel and sdist with the right metadata.
+  - `pip show my-package` shows the metadata you declared.
+  - Console scripts appear in `<venv>/bin/` and run correctly.
+  - `pip install .[dev]` installs the optional dependency group.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## File Structure
+
+    A minimal pyproject.toml:
+
+    ```toml
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+
+    [project]
+    name = "my-package"
+    version = "0.1.0"
+    description = "A short description"
+    authors = [{ name = "Alice", email = "alice@example.com" }]
+    license = { text = "MIT" }
+    requires-python = ">=3.10"
+    dependencies = ["requests>=2.31"]
+
+    [project.optional-dependencies]
+    dev = ["pytest>=8", "ruff"]
+
+    [project.scripts]
+    my-cli = "my_package.cli:main"
+    ```
+
+    Three top-level tables matter most: `[build-system]` (how to build), `[project]` (what it is), and `[tool.*]` (per-tool config).
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## [build-system]
+
+    Declares the build backend — the tool that produces wheels and sdists. Common choices:
+
+    - `hatchling` — modern, fast, minimal config. Default for new projects.
+    - `setuptools` — legacy default; still widely used. Verbose config.
+    - `poetry-core` — Poetry projects.
+    - `flit-core` — pure-Python packages, minimal config.
+    - `pdm-backend` — PDM projects.
+    - `maturin` — Rust extensions.
+
+    ```toml
+    [build-system]
+    requires = ["hatchling>=1.18"]
+    build-backend = "hatchling.build"
+    ```
+
+    `requires` lists what's needed to RUN the build backend. Keep this tight — it's installed in an isolated environment for the build.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## [project] — Required Metadata
+
+    The PEP 621 standard fields:
+
+    - `name` — PyPI distribution name (kebab-case allowed; underscore in import path).
+    - `version` — semantic version. Can be dynamic via `dynamic = ["version"]` and read from a file or VCS.
+    - `description` — one-line summary.
+    - `authors` / `maintainers` — list of dicts with `name` and `email`.
+    - `license` — `{ text = "MIT" }` or `{ file = "LICENSE" }`. PEP 639 simplifies this in newer specs.
+    - `readme` — `"README.md"` or `{ file = "README.md", content-type = "text/markdown" }`.
+    - `requires-python` — version range like `">=3.10"`.
+    - `dependencies` — list of PEP 508 requirement strings.
+    - `classifiers` — PyPI classifiers (programming language, license, status).
+    - `keywords` — list of search keywords for PyPI.
+    - `urls` — dict of label → URL (homepage, repository, docs, issues).
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Optional Dependencies
+
+    ```toml
+    [project.optional-dependencies]
+    dev = ["pytest>=8", "ruff", "mypy"]
+    docs = ["mkdocs>=1.5", "mkdocs-material"]
+    all = ["my-package[dev,docs]"]
+    ```
+
+    Install with `pip install my-package[dev]` or `uv pip install -e ".[dev]"`. The `all` group composes other groups.
+
+    PEP 735 added `[dependency-groups]` as a more explicit alternative for dev-only dependencies that don't belong as installable extras.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Entry Points and Scripts
+
+    Console scripts (CLI commands installed in the env's bin/):
+
+    ```toml
+    [project.scripts]
+    my-cli = "my_package.cli:main"
+    my-other = "my_package.other:run"
+    ```
+
+    GUI scripts get `[project.gui-scripts]`. Plugin entry points use `[project.entry-points."group.name"]`:
+
+    ```toml
+    [project.entry-points."pytest11"]
+    my-plugin = "my_package.pytest_plugin"
+    ```
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## [tool.*] Sections
+
+    Tools read their own subsection. Common ones:
+
+    ```toml
+    [tool.ruff]
+    line-length = 100
+
+    [tool.pytest.ini_options]
+    testpaths = ["tests"]
+    addopts = "-v"
+
+    [tool.mypy]
+    strict = true
+
+    [tool.uv]
+    dev-dependencies = ["pytest", "ruff"]
+    ```
+
+    Each tool defines its own schema; pyproject.toml just hosts them.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Dynamic Fields
+
+    Some fields can be computed by the build backend rather than declared statically:
+
+    ```toml
+    [project]
+    name = "my-package"
+    dynamic = ["version", "readme"]
+
+    [tool.hatch.version]
+    path = "src/my_package/__init__.py"
+    ```
+
+    Common for `version` (read from `__init__.py` or VCS) and `readme` (computed from multiple files).
+- fragment_type: guardrail
+  sequence: 8
+  content: |-
+    ## Common Pitfalls
+
+    - **Mismatched build-backend and tool.* config.** Setting `[tool.hatch]` while using `setuptools.build_meta` does nothing.
+    - **Including `pyproject.toml` and `setup.py` together.** During migration, the toml takes precedence but setup.py may still be invoked. Pick one.
+    - **Running `python setup.py develop`.** Deprecated. Use `pip install -e .` or `uv pip install -e .`.
+    - **Forgetting `requires-python`.** Without it, pip won't refuse to install on incompatible versions and your users get cryptic errors at import time.
+- fragment_type: verification
+  sequence: 9
+  content: |-
+    ## Verification
+
+    A correctly-configured pyproject.toml:
+
+    - `pip install .` (or `uv pip install .`) succeeds in a fresh venv.
+    - `python -m build` produces a wheel and sdist with the right metadata.
+    - `pip show my-package` shows the metadata you declared.
+    - Console scripts appear in `<venv>/bin/` and run correctly.
+    - `pip install .[dev]` installs the optional dependency group.

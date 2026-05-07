@@ -1,0 +1,386 @@
+skill_type: domain
+skill_id: python-multiprocessing
+canonical_name: Python multiprocessing
+category: engineering
+skill_class: domain
+domain_tags:
+  - multiprocessing
+  - parallelism
+  - concurrency
+  - GIL
+  - Process
+author: navistone
+change_summary: initial authoring draft
+raw_prose: |
+  # Python multiprocessing
+
+  ## Overview
+
+  multiprocessing sidesteps the GIL by spawning subprocesses, each with its own Python interpreter. Process for one-off, Pool for parallel map, Queue/Pipe for IPC. The start method (fork on Linux, spawn on Mac/Windows) affects pickling and fork-safety. This skill covers the API + the trade-offs.
+
+  Sourced from docs.python.org/3/library/multiprocessing.html.
+
+  ---
+
+  # `!multiprocessing` --- Process-based parallelism
+
+
+     :synopsis: Process-based parallelism.
+
+  **Source code:** `Lib/multiprocessing/`
+
+  --------------
+
+  ## Introduction
+
+  `!multiprocessing` is a package that supports spawning processes using an API similar to the `threading` module. The `!multiprocessing` package offers both local and remote concurrency, effectively side-stepping the `Global Interpreter Lock <global interpreter lock>` by using subprocesses instead of threads. Due to this, the `!multiprocessing` module allows the programmer to fully leverage multiple processors on a given machine. It runs on both POSIX and Windows.
+
+  The `!multiprocessing` module also introduces the `~multiprocessing.pool.Pool` object which offers a convenient means of parallelizing the execution of a function across multiple input values, distributing the input data across processes (data parallelism). The following example demonstrates the common practice of defining such functions in a module so that child processes can successfully import that module. This basic example of data parallelism using `~multiprocessing.pool.Pool`, ::
+
+     from multiprocessing import Pool
+
+     def f(x):
+         return x*x
+
+     if __name__ == '__main__':
+         with Pool(5) as p:
+             print(p.map(f, [1, 2, 3]))
+
+  will print to standard output ::
+
+     [1, 4, 9]
+
+  The `!multiprocessing` module also introduces APIs which do not have analogs in the `threading` module, like the ability to `terminate <Process.terminate>`, `interrupt <Process.interrupt>` or `kill <Process.kill>` a running process.
+
+     `concurrent.futures.ProcessPoolExecutor` offers a higher level interface to push tasks to a background process without blocking execution of the calling process. Compared to using the `~multiprocessing.pool.Pool` interface directly, the `concurrent.futures` API more readily allows the submission of work to the underlying process pool to be separated from waiting for the results.
+
+  The `Process` class
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  In `!multiprocessing`, processes are spawned by creating a `Process` object and then calling its `~Process.start` method. `Process` follows the API of `threading.Thread`. A trivial example of a multiprocess program is ::
+
+     from multiprocessing import Process
+
+     def f(name):
+         print('hello', name)
+
+     if __name__ == '__main__':
+         p = Process(target=f, args=('bob',))
+         p.start()
+         p.join()
+
+  To show the individual process IDs involved, here is an expanded example::
+
+      from multiprocessing import Process
+      import os
+
+      def info(title):
+          print(title)
+          print('module name:', __name__)
+          print('parent process:', os.getppid())
+          print('process id:', os.getpid())
+
+      def f(name):
+          info('function f')
+          print('hello', name)
+
+      if __name__ == '__main__':
+          info('main line')
+          p = Process(target=f, args=('bob',))
+          p.start()
+          p.join()
+
+  For an explanation of why the ``if __name__ == '__main__'`` part is necessary, see `multiprocessing-programming`.
+
+  The arguments to `Process` usually need to be unpickleable from within the child process. If you tried typing the above example directly into a REPL it could lead to an `AttributeError` in the child process trying to locate the *f* function in the ``__main__`` module.
+
+  .. _multiprocessing-start-methods:
+
+  Contexts and start methods
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  Depending on the platform, `!multiprocessing` supports three ways to start a process. These *start methods* are
+
+    .. _multiprocessing-start-method-spawn:
+
+    *spawn*
+      The parent process starts a fresh Python interpreter process. The child process will only inherit those resources necessary to run the process object's `~Process.run` method. In particular, unnecessary file descriptors and handles from the parent process will not be inherited. Starting a process using this method is rather slow compared to using *fork* or *forkserver*.
+
+      Available on POSIX and Windows platforms. The default on Windows and macOS.
+
+    .. _multiprocessing-start-method-fork:
+
+    *fork*
+      The parent process uses `os.fork` to fork the Python interpreter. The child process, when it begins, is effectively identical to the parent process. All resources of the parent are inherited by the child process. Note that safely forking a multithreaded process is problematic.
+
+      Available on POSIX systems.
+
+             This is no longer the default start method on any platform.
+         Code that requires *fork* must explicitly specify that via
+         `get_context` or `set_start_method`.
+
+             If Python is able to detect that your process has multiple threads, the
+         `os.fork` function that this start method calls internally will
+         raise a `DeprecationWarning`. Use a different start method.
+         See the `os.fork` documentation for further explanation.
+
+    .. _multiprocessing-start-method-forkserver:
+
+    *forkserver*
+      When the program starts and selects the *forkserver* start method, a server process is spawned. From then on, whenever a new process is needed, the parent process connects to the server and requests that it fork a new process. The fork server process is single threaded unless system libraries or preloaded imports spawn threads as a side-effect so it is generally safe for it to use `os.fork`.
+      No unnecessary resources are inherited.
+
+      Available on POSIX platforms which support passing file descriptors over Unix pipes such as Linux. The default on those.
+
+             This became the default start method on POSIX platforms.
+
+     *spawn* added on all POSIX platforms, and *forkserver* added for
+     some POSIX platforms.
+     Child processes no longer inherit all of the parents inheritable
+     handles on Windows.
+
+
+     On macOS, the *spawn* start method is now the default. The *fork* start
+     method should be considered unsafe as it can lead to crashes of the
+     subprocess as macOS system libraries may start threads. See `33725`.
+
+
+     On POSIX platforms the default start method was changed from *fork* to
+     *forkserver* to retain the performance but avoid common multithreaded
+     process incompatibilities. See `84559`.
+
+
+  On POSIX using the *spawn* or *forkserver* start methods will also start a *resource tracker* process which tracks the unlinked named system resources (such as named semaphores or `~multiprocessing.shared_memory.SharedMemory` objects) created by processes of the program. When all processes have exited the resource tracker unlinks any remaining tracked object. Usually there should be none, but if a process was killed by a signal there may be some "leaked" resources. (Neither leaked semaphores nor shared memory segments will be automatically unlinked until the next reboot. This is problematic for both objects because the system allows only a limited number of named semaphores, and shared memory segments occupy some space in the main memory.)
+
+  To select a start method you use the `set_start_method` in the ``if __name__ == '__main__'`` clause of the main module. For example::
+
+          import multiprocessing as mp
+
+          def foo(q):
+              q.put('hello')
+
+          if __name__ == '__main__':
+              mp.set_start_method('spawn')
+              q = mp.Queue()
+              p = mp.Process(target=foo, args=(q,))
+              p.start()
+              print(q.get())
+              p.join()
+
+  `set_start_method` should not be used more than once in the program.
+
+  Alternatively, you can use `get_context` to obtain a context object. Context objects have the same API as the multiprocessing module, and allow one to use multiple start methods in the same program. ::
+
+          import multiprocessing as mp
+
+          def foo(q):
+              q.put('hello')
+
+          if __name__ == '__main__':
+              ctx = mp.get_context('spawn')
+              q = ctx.Queue()
+              p = ctx.Process(target=foo, args=(q,))
+              p.start()
+              print(q.get())
+              p.join()
+
+  Note that objects related to one context may not be compatible with processes for a different context. In particular, locks created using the *fork* context cannot be passed to processes started using the *spawn* or *forkserver* start methods.
+
+  Libraries using `!multiprocessing` or `~concurrent.futures.ProcessPoolExecutor` should be designed to allow their users to provide their own multiprocessing context. Using a specific context of your own within a library can lead to incompatibilities with the rest of the library user's application. Always document if your library requires a specific start method.
+
+     The ``'spawn'`` and ``'forkserver'`` start methods generally cannot be used with "frozen" executables (i.e., binaries produced by packages like **PyInstaller** and **cx_Freeze**) on POSIX systems. The ``'fork'`` start method may work if code does not use threads.
+
+  Exchanging objects between processes
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      multiprocessing sidesteps the GIL by spawning subprocesses, each with its own Python interpreter. Process for one-off, Pool for parallel map, Queue/Pipe for IPC. The start method (fork on Linux, spawn on Mac/Windows) affects pickling and fork-safety. This skill covers the API + the trade-offs.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      `!multiprocessing` is a package that supports spawning processes using an API similar to the `threading` module. The `!multiprocessing` package offers both local and remote concurrency, effectively side-stepping the `Global Interpreter Lock <global interpreter lock>` by using subprocesses instead of threads. Due to this, the `!multiprocessing` module allows the programmer to fully leverage multiple processors on a given machine. It runs on both POSIX and Windows.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      The `!multiprocessing` module also introduces the `~multiprocessing.pool.Pool` object which offers a convenient means of parallelizing the execution of a function across multiple input values, distributing the input data across processes (data parallelism). The following example demonstrates the common practice of defining such functions in a module so that child processes can successfully import that module. This basic example of data parallelism using `~multiprocessing.pool.Pool`, ::
+
+         from multiprocessing import Pool
+
+         def f(x):
+             return x*x
+
+         if __name__ == '__main__':
+             with Pool(5) as p:
+                 print(p.map(f, [1, 2, 3]))
+
+      will print to standard output ::
+
+         [1, 4, 9]
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      The `!multiprocessing` module also introduces APIs which do not have analogs in the `threading` module, like the ability to `terminate <Process.terminate>`, `interrupt <Process.interrupt>` or `kill <Process.kill>` a running process.
+
+         `concurrent.futures.ProcessPoolExecutor` offers a higher level interface to push tasks to a background process without blocking execution of the calling process. Compared to using the `~multiprocessing.pool.Pool` interface directly, the `concurrent.futures` API more readily allows the submission of work to the underlying process pool to be separated from waiting for the results.
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      The `Process` class
+
+      In `!multiprocessing`, processes are spawned by creating a `Process` object and then calling its `~Process.start` method. `Process` follows the API of `threading.Thread`. A trivial example of a multiprocess program is ::
+
+         from multiprocessing import Process
+
+         def f(name):
+             print('hello', name)
+
+         if __name__ == '__main__':
+             p = Process(target=f, args=('bob',))
+             p.start()
+             p.join()
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      To show the individual process IDs involved, here is an expanded example::
+
+          from multiprocessing import Process
+          import os
+
+          def info(title):
+              print(title)
+              print('module name:', __name__)
+              print('parent process:', os.getppid())
+              print('process id:', os.getpid())
+
+          def f(name):
+              info('function f')
+              print('hello', name)
+
+          if __name__ == '__main__':
+              info('main line')
+              p = Process(target=f, args=('bob',))
+              p.start()
+              p.join()
+
+      For an explanation of why the ``if __name__ == '__main__'`` part is necessary, see `multiprocessing-programming`.
+
+      The arguments to `Process` usually need to be unpickleable from within the child process. If you tried typing the above example directly into a REPL it could lead to an `AttributeError` in the child process trying to locate the *f* function in the ``__main__`` module.
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      Contexts and start methods
+
+      Depending on the platform, `!multiprocessing` supports three ways to start a process. These *start methods* are
+
+        .. _multiprocessing-start-method-spawn:
+
+        *spawn*
+          The parent process starts a fresh Python interpreter process. The child process will only inherit those resources necessary to run the process object's `~Process.run` method. In particular, unnecessary file descriptors and handles from the parent process will not be inherited. Starting a process using this method is rather slow compared to using *fork* or *forkserver*.
+
+          Available on POSIX and Windows platforms. The default on Windows and macOS.
+  - fragment_type: execution
+    sequence: 8
+    content: |
+        .. _multiprocessing-start-method-fork:
+
+        *fork*
+          The parent process uses `os.fork` to fork the Python interpreter. The child process, when it begins, is effectively identical to the parent process. All resources of the parent are inherited by the child process. Note that safely forking a multithreaded process is problematic.
+
+          Available on POSIX systems.
+
+                 This is no longer the default start method on any platform.
+             Code that requires *fork* must explicitly specify that via
+             `get_context` or `set_start_method`.
+
+                 If Python is able to detect that your process has multiple threads, the
+             `os.fork` function that this start method calls internally will
+             raise a `DeprecationWarning`. Use a different start method.
+             See the `os.fork` documentation for further explanation.
+  - fragment_type: execution
+    sequence: 9
+    content: |
+        .. _multiprocessing-start-method-forkserver:
+
+        *forkserver*
+          When the program starts and selects the *forkserver* start method, a server process is spawned. From then on, whenever a new process is needed, the parent process connects to the server and requests that it fork a new process. The fork server process is single threaded unless system libraries or preloaded imports spawn threads as a side-effect so it is generally safe for it to use `os.fork`.
+          No unnecessary resources are inherited.
+
+          Available on POSIX platforms which support passing file descriptors over Unix pipes such as Linux. The default on those.
+
+                 This became the default start method on POSIX platforms.
+  - fragment_type: execution
+    sequence: 10
+    content: |
+             *spawn* added on all POSIX platforms, and *forkserver* added for
+             some POSIX platforms.
+             Child processes no longer inherit all of the parents inheritable
+             handles on Windows.
+  - fragment_type: execution
+    sequence: 11
+    content: |
+             On macOS, the *spawn* start method is now the default. The *fork* start
+             method should be considered unsafe as it can lead to crashes of the
+             subprocess as macOS system libraries may start threads. See `33725`.
+  - fragment_type: execution
+    sequence: 12
+    content: |
+             On POSIX platforms the default start method was changed from *fork* to
+             *forkserver* to retain the performance but avoid common multithreaded
+             process incompatibilities. See `84559`.
+  - fragment_type: execution
+    sequence: 13
+    content: |
+      On POSIX using the *spawn* or *forkserver* start methods will also start a *resource tracker* process which tracks the unlinked named system resources (such as named semaphores or `~multiprocessing.shared_memory.SharedMemory` objects) created by processes of the program. When all processes have exited the resource tracker unlinks any remaining tracked object. Usually there should be none, but if a process was killed by a signal there may be some "leaked" resources. (Neither leaked semaphores nor shared memory segments will be automatically unlinked until the next reboot. This is problematic for both objects because the system allows only a limited number of named semaphores, and shared memory segments occupy some space in the main memory.)
+  - fragment_type: execution
+    sequence: 14
+    content: |
+      To select a start method you use the `set_start_method` in the ``if __name__ == '__main__'`` clause of the main module. For example::
+
+              import multiprocessing as mp
+
+              def foo(q):
+                  q.put('hello')
+
+              if __name__ == '__main__':
+                  mp.set_start_method('spawn')
+                  q = mp.Queue()
+                  p = mp.Process(target=foo, args=(q,))
+                  p.start()
+                  print(q.get())
+                  p.join()
+
+      `set_start_method` should not be used more than once in the program.
+
+      Alternatively, you can use `get_context` to obtain a context object. Context objects have the same API as the multiprocessing module, and allow one to use multiple start methods in the same program. ::
+
+              import multiprocessing as mp
+
+              def foo(q):
+                  q.put('hello')
+
+              if __name__ == '__main__':
+                  ctx = mp.get_context('spawn')
+                  q = ctx.Queue()
+                  p = ctx.Process(target=foo, args=(q,))
+                  p.start()
+                  print(q.get())
+                  p.join()
+
+      Note that objects related to one context may not be compatible with processes for a different context. In particular, locks created using the *fork* context cannot be passed to processes started using the *spawn* or *forkserver* start methods.
+  - fragment_type: execution
+    sequence: 15
+    content: |
+      Libraries using `!multiprocessing` or `~concurrent.futures.ProcessPoolExecutor` should be designed to allow their users to provide their own multiprocessing context. Using a specific context of your own within a library can lead to incompatibilities with the rest of the library user's application. Always document if your library requires a specific start method.
+
+         The ``'spawn'`` and ``'forkserver'`` start methods generally cannot be used with "frozen" executables (i.e., binaries produced by packages like **PyInstaller** and **cx_Freeze**) on POSIX systems. The ``'fork'`` start method may work if code does not use threads.
+  - fragment_type: execution
+    sequence: 16
+    content: |
+      Exchanging objects between processes
+
+      Libraries using `!multiprocessing` or `~concurrent.futures.ProcessPoolExecutor` should be designed to allow their users to provide their own multiprocessing context. Using a specific context of your own within a library can lead to incompatibilities with the rest of the library user's application. Always document if your library requires a specific start method.
+
+         The ``'spawn'`` and ``'forkserver'`` start methods generally cannot be used with "frozen" executables (i.e., binaries produced by packages like **PyInstaller** and **cx_Freeze**) on POSIX systems. The ``'fork'`` start method may work if code does not use threads.

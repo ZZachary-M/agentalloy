@@ -1,0 +1,350 @@
+skill_type: domain
+skill_id: python-pattern-matching
+canonical_name: Python Structural Pattern Matching (match/case)
+category: engineering
+skill_class: domain
+domain_tags:
+  - pattern-matching
+  - python-3.10
+  - match-statement
+  - case-statement
+  - structural-patterns
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Python Structural Pattern Matching (match/case)
+
+  ## Overview
+
+  Python's match statement (PEP 634) destructures values by pattern. Unlike a switch, patterns can extract substructure: `case Point(x=0, y=y)` matches and binds. This skill covers the pattern syntax and idiomatic use.
+
+  Sourced from PEP 636 (Pattern Matching tutorial).
+
+  ---
+
+  PEP: 636
+  Title: Structural Pattern Matching: Tutorial
+  Author: Daniel F Moisset <dfmoisset@gmail.com>
+  Sponsor: Guido van Rossum <guido@python.org>
+  BDFL-Delegate:
+  Discussions-To: python-dev@python.org
+  Status: Final
+  Type: Informational
+  Created: 12-Sep-2020
+  Python-Version: 3.10
+  Post-History: 22-Oct-2020, 08-Feb-2021
+  Resolution: https://mail.python.org/archives/list/python-committers@python.org/message/SQC2FTLFV5A7DV7RCEAR2I2IKJKGK7W3
+
+
+  # Abstract
+
+
+  This PEP is a tutorial for the pattern matching introduced by `634`.
+
+  `622` proposed syntax for pattern matching, which received detailed discussion
+  both from the community and the Steering Council. A frequent concern was
+  about how easy it would be to explain (and learn) this feature. This PEP
+  addresses that concern providing the kind of document which developers could use
+  to learn about pattern matching in Python.
+
+  This is considered supporting material for `634` (the technical specification
+  for pattern matching) and `635` (the motivation and rationale for having pattern
+  matching and design considerations).
+
+  For readers who are looking more for a quick review than for a tutorial,
+  see `Appendix A <PEP 636 Appendix A_>`_.
+
+  # Tutorial
+
+
+  As an example to motivate this tutorial, you will be writing a text adventure. That is
+  a form of interactive fiction where the user enters text commands to interact with a
+  fictional world and receives text descriptions of what happens. Commands will be
+  simplified forms of natural language like ``get sword``, ``attack dragon``, ``go north``,
+  ``enter shop`` or ``buy cheese``.
+
+  ## Matching sequences
+
+
+  Your main loop will need to get input from the user and split it into words, let's say
+  a list of strings like this::
+
+     command = input("What are you doing next? ")
+     # analyze the result of command.split()
+
+  The next step is to interpret the words. Most of our commands will have two words: an
+  action and an object. So you may be tempted to do the following::
+
+     [action, obj] = command.split()
+     ... # interpret action, obj
+
+  The problem with that line of code is that it's missing something: what if the user
+  types more or fewer than 2 words? To prevent this problem you can either check the length
+  of the list of words, or capture the ``ValueError`` that the statement above would raise.
+
+  You can use a matching statement instead::
+
+     match command.split():
+         case [action, obj]:
+             ... # interpret action, obj
+
+  The match statement evaluates the **"subject"** (the value after the ``match``
+  keyword), and checks it against the **pattern** (the code next to ``case``). A pattern
+  is able to do two different things:
+
+  * Verify that the subject has certain structure. In your case, the ``[action, obj]``
+    pattern matches any sequence of exactly two elements. This is called **matching**
+  * It will bind some names in the pattern to component elements of your subject. In
+    this case, if the list has two elements, it will bind ``action = subject[0]`` and
+    ``obj = subject[1]``.
+
+  If there's a match, the statements inside the case block will be executed with the
+  bound variables. If there's no match, nothing happens and the statement after
+  ``match`` is executed next.
+
+  Note that, in a similar way to unpacking assignments, you can use either parenthesis,
+  brackets, or just comma separation as synonyms. So you could write ``case action, obj``
+  or ``case (action, obj)`` with the same meaning. All forms will match any sequence (for
+  example lists or tuples).
+
+  ## Matching multiple patterns
+
+
+  Even if most commands have the action/object form, you might want to have user commands
+  of different lengths. For example, you might want to add single verbs with no object like
+  ``look`` or ``quit``. A match statement can (and is likely to) have more than one
+  ``case``::
+
+     match command.split():
+         case [action]:
+             ... # interpret single-verb action
+         case [action, obj]:
+             ... # interpret action, obj
+
+  The match statement will check patterns from top to bottom. If the pattern doesn't
+  match the subject, the next pattern will be tried. However, once the *first*
+  matching pattern is found, the body of that case is executed, and all further
+  cases are ignored. This is similar to the way that an ``if/elif/elif/...``
+  statement works.
+
+  ## Matching specific values
+
+
+  Your code still needs to look at the specific actions and conditionally execute
+  different logic depending on the specific action (e.g., ``quit``, ``attack``, or ``buy``).
+  You could do that using a chain of ``if/elif/elif/...``, or using a dictionary of
+  functions, but here we'll leverage pattern matching to solve that task. Instead of a
+  variable, you can use literal values in patterns (like ``"quit"``, ``42``, or ``None``).
+  This allows you to write::
+
+     match command.split():
+         case ["quit"]:
+             print("Goodbye!")
+             quit_game()
+         case ["look"]:
+             current_room.describe()
+         case ["get", obj]:
+             character.get(obj, current_room)
+         case ["go", direction]:
+             current_room = current_room.neighbor(direction)
+         # The rest of your commands go here
+
+  A pattern like ``["get", obj]`` will match only 2-element sequences that have a first
+  element equal to ``"get"``. It will also bind ``obj = subject[1]``.
+
+  As you can see in the ``go`` case, we also can use different variable names in
+  different patterns.
+
+  Literal values are compared with the ``==`` operator except for the constants ``True``,
+  ``False`` and ``None`` which are compared with the ``is`` operator.
+
+  ## Matching multiple values
+
+
+  A player may be able to drop multiple items by using a series of commands
+  ``drop key``, ``drop sword``, ``drop cheese``. This interface might be cumbersome, and
+  you might like to allow dropping multiple items in a single command, like
+  ``drop key sword cheese``. In this case you don't know beforehand how many words will
+  be in the command, but you can use extended unpacking in patterns in the same way that
+  they are allowed in assignments::
+
+     match command.split():
+         case ["drop", *objects]:
+             for obj in objects:
+                 character.drop(obj, current_room)
+         # The rest of your commands go here
+
+  This will match any sequences having "drop" as its first elements. All remaining
+  elements will be captured in a ``list`` object which will be bound to the ``objects``
+  variable.
+
+  This syntax has similar restrictions as sequence unpacking: you can not have more than one
+  starred name in a pattern.
+
+  ## Adding a wildcard
+
+
+  You may want to print an error message saying that the command wasn't recognized when
+  all the patterns fail. You could use the feature we just learned and write
+  ``case [*ignored_words]`` as your last pattern. There's however a much simpler way::
+
+     match command.split():
+         case ["quit"]: ... # Code omitted for brevity
+         case ["go", direction]: ...
+         case ["drop", *objects]: ...
+         ... # Other cases
+         case _:
+             print(f"Sorry, I couldn't understand {command!r}")
+
+  This special pattern which is written ``_`` (and called wildcard) always
+  matches but it doesn't bind any variables.
+
+  Note that this will match any object, not just sequences. As such, it only makes
+  sense to have it by itself as the last pattern (to prevent errors, Python will stop
+  you from using it before).
+
+  ## Composing patterns
+
+
+  This is a good moment to step back from the examples and understand how the patterns
+  that you have been using are built. Patterns can be nested within each other, and we
+  have been doing that implicitly in the examples above.
+
+  There are some "simple" patterns ("simple" here meaning that they do not contain other
+  patterns) that we've seen:
+
+  * **Capture patterns** (stand-alone names like ``direction``, ``action``, ``objects``). We
+    never discussed these separately, but used them as part of other patterns.
+  * **Literal patterns** (string literals, number literals, ``True``, ``False``, and
+    ``None``)
+  * The **wildcard pattern** ``_``
+
+  Until now, the only non-simple pattern we have experimented with is the sequence pattern.
+  Each element in a sequence pattern can in fact be
+  any other pattern. This means that you could write a pattern like
+  ``["first", (left, right), _, *rest]``. This will match subjects which are a sequence of at
+  least three elements, where the first one is equal to ``"first"`` and the second one is
+  in turn a sequence of two elements. It will also bind ``left=subject[1][0]``,
+  ``right=subject[1][1]``, and ``rest = subject[3:]``
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Python's match statement (PEP 634) destructures values by pattern. Unlike a switch, patterns can extract substructure: `case Point(x=0, y=y)` matches and binds. This skill covers the pattern syntax and idiomatic use.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      As an example to motivate this tutorial, you will be writing a text adventure. That is a form of interactive fiction where the user enters text commands to interact with a fictional world and receives text descriptions of what happens. Commands will be simplified forms of natural language like ``get sword``, ``attack dragon``, ``go north``, ``enter shop`` or ``buy cheese``.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      Your main loop will need to get input from the user and split it into words, let's say a list of strings like this::
+         command = input("What are you doing next? ")
+         # analyze the result of command.split()
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      The next step is to interpret the words. Most of our commands will have two words: an action and an object. So you may be tempted to do the following::
+         [action, obj] = command.split()
+         ... # interpret action, obj
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      You can use a matching statement instead::
+         match command.split():
+             case [action, obj]:
+                 ... # interpret action, obj
+
+      The match statement evaluates the **"subject"** (the value after the ``match`` keyword), and checks it against the **pattern** (the code next to ``case``). A pattern is able to do two different things:
+      * Verify that the subject has certain structure. In your case, the ``[action, obj]`` pattern matches any sequence of exactly two elements. This is called **matching**
+      * It will bind some names in the pattern to component elements of your subject. In this case, if the list has two elements, it will bind ``action = subject[0]`` and ``obj = subject[1]``.
+
+      If there's a match, the statements inside the case block will be executed with the bound variables. If there's no match, nothing happens and the statement after ``match`` is executed next.
+
+      Note that, in a similar way to unpacking assignments, you can use either parenthesis,
+      brackets, or just comma separation as synonyms. So you could write ``case action, obj``
+      or ``case (action, obj)`` with the same meaning. All forms will match any sequence (for
+      example lists or tuples).
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      Even if most commands have the action/object form, you might want to have user commands of different lengths. For example, you might want to add single verbs with no object like ``look`` or ``quit``. A match statement can (and is likely to) have more than one ``case``::
+         match command.split():
+             case [action]:
+                 ... # interpret single-verb action
+             case [action, obj]:
+                 ... # interpret action, obj
+
+      The match statement will check patterns from top to bottom. If the pattern doesn't
+      match the subject, the next pattern will be tried. However, once the *first*
+      matching pattern is found, the body of that case is executed, and all further
+      cases are ignored. This is similar to the way that an ``if/elif/elif/...``
+      statement works.
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      Your code still needs to look at the specific actions and conditionally execute different logic depending on the specific action (e.g., ``quit``, ``attack``, or ``buy``). You could do that using a chain of ``if/elif/elif/...``, or using a dictionary of functions, but here we'll leverage pattern matching to solve that task. Instead of a variable, you can use literal values in patterns (like ``"quit"``, ``42``, or ``None``). This allows you to write::
+         match command.split():
+             case ["quit"]:
+                 print("Goodbye!")
+                 quit_game()
+             case ["look"]:
+                 current_room.describe()
+             case ["get", obj]:
+                 character.get(obj, current_room)
+             case ["go", direction]:
+                 current_room = current_room.neighbor(direction)
+             # The rest of your commands go here
+
+      A pattern like ``["get", obj]`` will match only 2-element sequences that have a first element equal to ``"get"``. It will also bind ``obj = subject[1]``.
+
+      As you can see in the ``go`` case, we also can use different variable names in
+      different patterns.
+
+      Literal values are compared with the ``==`` operator except for the constants ``True``,
+      ``False`` and ``None`` which are compared with the ``is`` operator.
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      A player may be able to drop multiple items by using a series of commands ``drop key``, ``drop sword``, ``drop cheese``. This interface might be cumbersome, and you might like to allow dropping multiple items in a single command, like ``drop key sword cheese``. In this case you don't know beforehand how many words will be in the command, but you can use extended unpacking in patterns in the same way that they are allowed in assignments::
+         match command.split():
+             case ["drop", *objects]:
+                 for obj in objects:
+                     character.drop(obj, current_room)
+             # The rest of your commands go here
+
+      This will match any sequences having "drop" as its first elements. All remaining
+      elements will be captured in a ``list`` object which will be bound to the ``objects``
+      variable.
+
+      This syntax has similar restrictions as sequence unpacking: you can not have more than one
+      starred name in a pattern.
+  - fragment_type: execution
+    sequence: 9
+    content: |
+      You may want to print an error message saying that the command wasn't recognized when all the patterns fail. You could use the feature we just learned and write ``case [*ignored_words]`` as your last pattern. There's however a much simpler way::
+         match command.split():
+             case ["quit"]: ... # Code omitted for brevity
+             case ["go", direction]: ...
+             case ["drop", *objects]: ...
+             ... # Other cases
+             case _:
+                 print(f"Sorry, I couldn't understand {command!r}")
+
+      This special pattern which is written ``_`` (and called wildcard) always matches but it doesn't bind any variables.
+
+      Note that this will match any object, not just sequences. As such, it only makes sense to have it by itself as the last pattern (to prevent errors, Python will stop you from using it before).
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      Patterns can be nested within each other, and we have been doing that implicitly in the examples above. There are some "simple" patterns ("simple" here meaning that they do not contain other patterns) that we've seen:
+      * **Capture patterns** (stand-alone names like ``direction``, ``action``, ``objects``). We never discussed these separately, but used them as part of other patterns.
+      * **Literal patterns** (string literals, number literals, ``True``, ``False``, and ``None``)
+      * The **wildcard pattern** ``_``
+  - fragment_type: rationale
+    sequence: 11
+    content: |
+      Until now, the only non-simple pattern we have experimented with is the sequence pattern. Each element in a sequence pattern can in fact be any other pattern. This means that you could write a pattern like ``["first", (left, right), _, *rest]``. This will match subjects which are a sequence of at least three elements, where the first one is equal to ``"first"`` and the second one is in turn a sequence of two elements. It will also bind ``left=subject[1][0]``, ``right=subject[1][1]``, and ``rest = subject[3:]``
