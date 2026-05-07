@@ -1,0 +1,385 @@
+skill_type: domain
+skill_id: vue-testing
+canonical_name: Vue 3 Testing — Vitest and vue-test-utils
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- vitest
+- vue-test-utils
+- component-testing
+- testing-library
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Vue 3 Testing — Vitest and vue-test-utils
+
+  ## Overview
+
+  Vue 3 testing has two main libraries: vue-test-utils (official, low-level) and @testing-library/vue (user-centric, high-level). Both run on Vitest (the default Vue test runner). Pick based on whether you want to test implementation details (utils) or user behavior (testing-library).
+
+  ---
+
+  ## Vitest Setup
+
+  ```ts
+  // vite.config.ts
+  /// <reference types="vitest" />
+  import { defineConfig } from 'vite';
+  import vue from '@vitejs/plugin-vue';
+
+  export default defineConfig({
+      plugins: [vue()],
+      test: {
+          environment: 'jsdom',
+          globals: true,
+      },
+  });
+  ```
+
+  `environment: 'jsdom'` simulates a browser. `globals: true` lets you use `describe`/`it`/`expect` without imports.
+
+  ## Mounting a Component with vue-test-utils
+
+  ```ts
+  import { mount } from '@vue/test-utils';
+  import Counter from './Counter.vue';
+
+  test('increments on click', async () => {
+      const wrapper = mount(Counter, {
+          props: { initial: 5 },
+      });
+
+      expect(wrapper.text()).toContain('Count: 5');
+
+      await wrapper.find('button').trigger('click');
+
+      expect(wrapper.text()).toContain('Count: 6');
+  });
+  ```
+
+  `mount` renders the component with full child rendering. `shallowMount` stubs child components — useful for unit-style tests.
+
+  ## Querying
+
+  ```ts
+  wrapper.find('button')                // single CSS selector
+  wrapper.findAll('li')                  // all matching
+  wrapper.find('[data-test="submit"]')   // data-test attribute (recommended)
+  wrapper.findComponent(MyButton)        // component reference
+  wrapper.findComponent({ name: 'MyButton' })
+  ```
+
+  Prefer `data-test` attributes over CSS classes — classes change with styling, data-test is for tests.
+
+  ## Triggering Events
+
+  ```ts
+  await wrapper.find('input').setValue('alice');
+  await wrapper.find('input').trigger('input');
+  await wrapper.find('button').trigger('click');
+  await wrapper.find('form').trigger('submit.prevent');
+  ```
+
+  `await` is required — Vue's reactivity is async.
+
+  ## Asserting Emitted Events
+
+  ```ts
+  await wrapper.find('button').trigger('click');
+
+  expect(wrapper.emitted()).toHaveProperty('clicked');
+  expect(wrapper.emitted('clicked')).toHaveLength(1);
+  expect(wrapper.emitted('clicked')[0]).toEqual([{ id: 1 }]);  // first call's args
+  ```
+
+  `emitted()` returns all emitted events; `emitted(name)` returns array of calls; each call is an array of args.
+
+  ## Stubbing Child Components
+
+  ```ts
+  const wrapper = mount(Parent, {
+      global: {
+          stubs: {
+              ChildComponent: true,           // empty stub
+              ExpensiveChart: { template: '<div class="stubbed-chart" />' },
+          },
+      },
+  });
+  ```
+
+  Stubbing isolates the component under test from heavy children. Use for unit tests; full mount for integration tests.
+
+  ## Plugins (Pinia, Router) in Tests
+
+  ```ts
+  import { createTestingPinia } from '@pinia/testing';
+  import { createRouter, createMemoryHistory } from 'vue-router';
+
+  const wrapper = mount(MyComponent, {
+      global: {
+          plugins: [
+              createTestingPinia({ stubActions: false }),
+              createRouter({ history: createMemoryHistory(), routes: [...] }),
+          ],
+      },
+  });
+  ```
+
+  `createTestingPinia` is a test-friendly Pinia that lets you initialize state and stub actions. `createMemoryHistory` is the in-memory router for tests.
+
+  ## Testing Library Vue Alternative
+
+  ```ts
+  import { render, screen, fireEvent } from '@testing-library/vue';
+  import Counter from './Counter.vue';
+
+  test('increments on click', async () => {
+      render(Counter, { props: { initial: 5 } });
+
+      expect(screen.getByText(/Count: 5/)).toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('button', { name: /increment/i }));
+      expect(screen.getByText(/Count: 6/)).toBeInTheDocument();
+  });
+  ```
+
+  Testing Library queries by role/label/text — what users see. Encourages accessibility (proper ARIA labels) because tests query through them.
+
+  ## Composables Testing
+
+  Composables (functions returning ref/computed) test cleanly without mounting:
+
+  ```ts
+  import { useCounter } from './useCounter';
+
+  test('increment increases count', () => {
+      const { count, increment } = useCounter(5);
+      expect(count.value).toBe(5);
+      increment();
+      expect(count.value).toBe(6);
+  });
+  ```
+
+  No mounting overhead. Logic-heavy code should live in composables for this reason.
+
+  ## Snapshot Testing
+
+  ```ts
+  expect(wrapper.html()).toMatchSnapshot();
+  ```
+
+  Vitest captures the HTML; subsequent runs compare. Use sparingly — snapshots that change frequently lose value. Better for UI components that should be stable.
+
+  ## Common Pitfalls
+
+  - **Forgetting `await` on triggers.** Vue updates are async; `wrapper.text()` after a non-awaited trigger sees the old state.
+  - **Selecting by class names.** Class refactors break tests. Use `data-test` attributes.
+  - **Mounting everything.** Slow. Use shallowMount for unit tests; mount for integration.
+  - **Not stubbing third-party components.** A test for your form mounts the chart library; slow + flaky. Stub.
+  - **Testing implementation, not behavior.** Asserting on `wrapper.vm.internalState` couples tests to internals. Test what users see.
+
+  ## Verification
+
+  A healthy Vue test suite:
+
+  - Tests run in seconds (Vitest + jsdom + most components shallow-mounted).
+  - `data-test` attributes used for selection.
+  - Event assertions cover both args and call counts.
+  - Plugins (Pinia, Router) instantiated per test for isolation.
+  - Composables tested directly without mounting components.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Vitest Setup
+
+    ```ts
+    // vite.config.ts
+    /// <reference types="vitest" />
+    import { defineConfig } from 'vite';
+    import vue from '@vitejs/plugin-vue';
+
+    export default defineConfig({
+        plugins: [vue()],
+        test: {
+            environment: 'jsdom',
+            globals: true,
+        },
+    });
+    ```
+
+    `environment: 'jsdom'` simulates a browser. `globals: true` lets you use `describe`/`it`/`expect` without imports.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Mounting a Component with vue-test-utils
+
+    ```ts
+    import { mount } from '@vue/test-utils';
+    import Counter from './Counter.vue';
+
+    test('increments on click', async () => {
+        const wrapper = mount(Counter, {
+            props: { initial: 5 },
+        });
+
+        expect(wrapper.text()).toContain('Count: 5');
+
+        await wrapper.find('button').trigger('click');
+
+        expect(wrapper.text()).toContain('Count: 6');
+    });
+    ```
+
+    `mount` renders the component with full child rendering. `shallowMount` stubs child components — useful for unit-style tests.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Querying
+
+    ```ts
+    wrapper.find('button')                // single CSS selector
+    wrapper.findAll('li')                  // all matching
+    wrapper.find('[data-test="submit"]')   // data-test attribute (recommended)
+    wrapper.findComponent(MyButton)        // component reference
+    wrapper.findComponent({ name: 'MyButton' })
+    ```
+
+    Prefer `data-test` attributes over CSS classes — classes change with styling, data-test is for tests.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Triggering Events
+
+    ```ts
+    await wrapper.find('input').setValue('alice');
+    await wrapper.find('input').trigger('input');
+    await wrapper.find('button').trigger('click');
+    await wrapper.find('form').trigger('submit.prevent');
+    ```
+
+    `await` is required — Vue's reactivity is async.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Asserting Emitted Events
+
+    ```ts
+    await wrapper.find('button').trigger('click');
+
+    expect(wrapper.emitted()).toHaveProperty('clicked');
+    expect(wrapper.emitted('clicked')).toHaveLength(1);
+    expect(wrapper.emitted('clicked')[0]).toEqual([{ id: 1 }]);  // first call's args
+    ```
+
+    `emitted()` returns all emitted events; `emitted(name)` returns array of calls; each call is an array of args.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Stubbing Child Components
+
+    ```ts
+    const wrapper = mount(Parent, {
+        global: {
+            stubs: {
+                ChildComponent: true,           // empty stub
+                ExpensiveChart: { template: '<div class="stubbed-chart" />' },
+            },
+        },
+    });
+    ```
+
+    Stubbing isolates the component under test from heavy children. Use for unit tests; full mount for integration tests.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Plugins (Pinia, Router) in Tests
+
+    ```ts
+    import { createTestingPinia } from '@pinia/testing';
+    import { createRouter, createMemoryHistory } from 'vue-router';
+
+    const wrapper = mount(MyComponent, {
+        global: {
+            plugins: [
+                createTestingPinia({ stubActions: false }),
+                createRouter({ history: createMemoryHistory(), routes: [...] }),
+            ],
+        },
+    });
+    ```
+
+    `createTestingPinia` is a test-friendly Pinia that lets you initialize state and stub actions. `createMemoryHistory` is the in-memory router for tests.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Testing Library Vue Alternative
+
+    ```ts
+    import { render, screen, fireEvent } from '@testing-library/vue';
+    import Counter from './Counter.vue';
+
+    test('increments on click', async () => {
+        render(Counter, { props: { initial: 5 } });
+
+        expect(screen.getByText(/Count: 5/)).toBeInTheDocument();
+        await fireEvent.click(screen.getByRole('button', { name: /increment/i }));
+        expect(screen.getByText(/Count: 6/)).toBeInTheDocument();
+    });
+    ```
+
+    Testing Library queries by role/label/text — what users see. Encourages accessibility (proper ARIA labels) because tests query through them.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Composables Testing
+
+    Composables (functions returning ref/computed) test cleanly without mounting:
+
+    ```ts
+    import { useCounter } from './useCounter';
+
+    test('increment increases count', () => {
+        const { count, increment } = useCounter(5);
+        expect(count.value).toBe(5);
+        increment();
+        expect(count.value).toBe(6);
+    });
+    ```
+
+    No mounting overhead. Logic-heavy code should live in composables for this reason.
+- fragment_type: execution
+  sequence: 10
+  content: |-
+    ## Snapshot Testing
+
+    ```ts
+    expect(wrapper.html()).toMatchSnapshot();
+    ```
+
+    Vitest captures the HTML; subsequent runs compare. Use sparingly — snapshots that change frequently lose value. Better for UI components that should be stable.
+- fragment_type: guardrail
+  sequence: 11
+  content: |-
+    ## Common Pitfalls
+
+    - **Forgetting `await` on triggers.** Vue updates are async; `wrapper.text()` after a non-awaited trigger sees the old state.
+    - **Selecting by class names.** Class refactors break tests. Use `data-test` attributes.
+    - **Mounting everything.** Slow. Use shallowMount for unit tests; mount for integration.
+    - **Not stubbing third-party components.** A test for your form mounts the chart library; slow + flaky. Stub.
+    - **Testing implementation, not behavior.** Asserting on `wrapper.vm.internalState` couples tests to internals. Test what users see.
+- fragment_type: verification
+  sequence: 12
+  content: |-
+    ## Verification
+
+    A healthy Vue test suite:
+
+    - Tests run in seconds (Vitest + jsdom + most components shallow-mounted).
+    - `data-test` attributes used for selection.
+    - Event assertions cover both args and call counts.
+    - Plugins (Pinia, Router) instantiated per test for isolation.
+    - Composables tested directly without mounting components.

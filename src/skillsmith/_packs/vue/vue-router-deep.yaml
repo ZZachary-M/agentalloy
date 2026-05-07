@@ -1,0 +1,415 @@
+skill_type: domain
+skill_id: vue-router-deep
+canonical_name: Vue Router — Routing Deep Dive
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- vue-router
+- routing
+- navigation-guards
+- lazy-loading
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Vue Router — Routing Deep Dive
+
+  ## Overview
+
+  Vue Router is the official routing library. The mental model: a route is a path → component mapping; navigation is reactive; guards intercept before transitions. Pair with lazy imports for code splitting.
+
+  ---
+
+  ## Basic Setup
+
+  ```ts
+  // src/router.ts
+  import { createRouter, createWebHistory } from 'vue-router';
+
+  const routes = [
+      { path: '/', component: Home },
+      { path: '/users/:id', component: UserDetail },
+      { path: '/orders/:id?', component: OrderDetail },  // optional param
+      { path: '/:pathMatch(.*)*', component: NotFound }, // 404
+  ];
+
+  export const router = createRouter({
+      history: createWebHistory(),
+      routes,
+  });
+
+  // In main.ts
+  app.use(router);
+  ```
+
+  `createWebHistory` for clean URLs (requires server config); `createWebHashHistory` for `#/path` URLs (works on static hosts).
+
+  ## Dynamic Route Parameters
+
+  ```vue
+  <script setup>
+  import { useRoute } from 'vue-router';
+  const route = useRoute();
+  const userId = computed(() => route.params.id);
+  </script>
+  ```
+
+  Access params via `route.params.<name>`. Type with `:id(\d+)` for numeric-only constraints.
+
+  ## Programmatic Navigation
+
+  ```ts
+  import { useRouter } from 'vue-router';
+  const router = useRouter();
+
+  router.push('/users/123');
+  router.push({ name: 'user-detail', params: { id: 123 } });
+  router.replace('/login');  // no history entry
+  router.back();
+  ```
+
+  Named routes (`name: 'user-detail'`) decouple URLs from references — refactoring URLs doesn't break links.
+
+  ## Nested Routes
+
+  ```ts
+  {
+      path: '/orders/:id',
+      component: OrderLayout,
+      children: [
+          { path: '', component: OrderOverview },
+          { path: 'items', component: OrderItems },
+          { path: 'shipping', component: OrderShipping },
+      ],
+  }
+  ```
+
+  `OrderLayout` renders a `<router-view>` that hosts the matched child. URLs `/orders/123`, `/orders/123/items`, `/orders/123/shipping` share the layout.
+
+  ## Lazy Loading with Dynamic Imports
+
+  ```ts
+  const routes = [
+      { path: '/', component: () => import('./Home.vue') },
+      { path: '/admin', component: () => import('./AdminPanel.vue') },
+  ];
+  ```
+
+  Each route's component becomes a separate chunk. The chunk only loads when the user navigates to that route. Critical for shipping less JS upfront.
+
+  For named chunks:
+
+  ```ts
+  () => import(/* webpackChunkName: "admin" */ './AdminPanel.vue')
+  ```
+
+  ## Navigation Guards
+
+  ```ts
+  router.beforeEach(async (to, from) => {
+      const userStore = useUserStore();
+      if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+          return { name: 'login', query: { redirect: to.fullPath } };
+      }
+  });
+  ```
+
+  Guards return:
+  - `false` — cancel navigation.
+  - A route location — redirect.
+  - Nothing or `true` — proceed.
+
+  ## Route Meta Fields
+
+  ```ts
+  {
+      path: '/admin',
+      component: AdminPanel,
+      meta: { requiresAuth: true, role: 'admin' },
+  }
+  ```
+
+  `meta` is custom data attached to a route. Inspect in guards (`to.meta.requiresAuth`) or templates (`route.meta.title`).
+
+  ## Per-Route Guards
+
+  ```ts
+  {
+      path: '/admin',
+      component: AdminPanel,
+      beforeEnter: (to, from) => {
+          const user = useUserStore();
+          if (!user.isAdmin) return { name: 'forbidden' };
+      },
+  }
+  ```
+
+  `beforeEnter` runs only for this route. Use when guard logic is route-specific.
+
+  ## Scroll Behavior
+
+  ```ts
+  const router = createRouter({
+      history: createWebHistory(),
+      routes,
+      scrollBehavior(to, from, savedPosition) {
+          if (savedPosition) return savedPosition;  // back/forward restore
+          if (to.hash) return { el: to.hash };       // anchor scroll
+          return { top: 0 };                          // top of page on new nav
+      },
+  });
+  ```
+
+  Default is no scroll restoration; this gives a sensible default.
+
+  ## Named Views
+
+  ```ts
+  {
+      path: '/dashboard',
+      components: {
+          default: Dashboard,
+          sidebar: Sidebar,
+          header: TopHeader,
+      },
+  }
+  ```
+
+  Template:
+
+  ```vue
+  <router-view name="header" />
+  <router-view name="sidebar" />
+  <router-view />
+  ```
+
+  Useful for layouts where multiple regions render different components per route.
+
+  ## Common Pitfalls
+
+  - **Direct router import in stores.** Causes circular issues. Use `useRouter()` inside actions, not at module scope.
+  - **Synchronous data fetching in setup.** Component renders before data; flicker. Use `Suspense` or `beforeRouteEnter` to fetch.
+  - **Loading the whole app in one chunk.** Defeats lazy loading. Verify with `npm run build` — admin routes should be separate chunks.
+  - **Confusing `params` with `query`.** `/users/:id` puts id in params; `/users?id=123` puts it in query. Pick the right one for the URL shape you want.
+  - **Auth guards that block navigation but don't redirect.** Users see a stuck page. Always provide a redirect.
+
+  ## Verification
+
+  A working router:
+
+  - Lazy routes are separate chunks in the build output.
+  - Auth guards redirect to login with a return URL.
+  - Back/forward restores scroll position.
+  - Named routes work — refactoring URLs doesn't break in-app links.
+  - 404 catch-all renders a NotFound component, not a blank page.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Basic Setup
+
+    ```ts
+    // src/router.ts
+    import { createRouter, createWebHistory } from 'vue-router';
+
+    const routes = [
+        { path: '/', component: Home },
+        { path: '/users/:id', component: UserDetail },
+        { path: '/orders/:id?', component: OrderDetail },  // optional param
+        { path: '/:pathMatch(.*)*', component: NotFound }, // 404
+    ];
+
+    export const router = createRouter({
+        history: createWebHistory(),
+        routes,
+    });
+
+    // In main.ts
+    app.use(router);
+    ```
+
+    `createWebHistory` for clean URLs (requires server config); `createWebHashHistory` for `#/path` URLs (works on static hosts).
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Dynamic Route Parameters
+
+    ```vue
+    <script setup>
+    import { useRoute } from 'vue-router';
+    const route = useRoute();
+    const userId = computed(() => route.params.id);
+    </script>
+    ```
+
+    Access params via `route.params.<name>`. Type with `:id(\d+)` for numeric-only constraints.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Programmatic Navigation
+
+    ```ts
+    import { useRouter } from 'vue-router';
+    const router = useRouter();
+
+    router.push('/users/123');
+    router.push({ name: 'user-detail', params: { id: 123 } });
+    router.replace('/login');  // no history entry
+    router.back();
+    ```
+
+    Named routes (`name: 'user-detail'`) decouple URLs from references — refactoring URLs doesn't break links.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Nested Routes
+
+    ```ts
+    {
+        path: '/orders/:id',
+        component: OrderLayout,
+        children: [
+            { path: '', component: OrderOverview },
+            { path: 'items', component: OrderItems },
+            { path: 'shipping', component: OrderShipping },
+        ],
+    }
+    ```
+
+    `OrderLayout` renders a `<router-view>` that hosts the matched child. URLs `/orders/123`, `/orders/123/items`, `/orders/123/shipping` share the layout.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Lazy Loading with Dynamic Imports
+
+    ```ts
+    const routes = [
+        { path: '/', component: () => import('./Home.vue') },
+        { path: '/admin', component: () => import('./AdminPanel.vue') },
+    ];
+    ```
+
+    Each route's component becomes a separate chunk. The chunk only loads when the user navigates to that route. Critical for shipping less JS upfront.
+
+    For named chunks:
+
+    ```ts
+    () => import(/* webpackChunkName: "admin" */ './AdminPanel.vue')
+    ```
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Navigation Guards
+
+    ```ts
+    router.beforeEach(async (to, from) => {
+        const userStore = useUserStore();
+        if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+            return { name: 'login', query: { redirect: to.fullPath } };
+        }
+    });
+    ```
+
+    Guards return:
+    - `false` — cancel navigation.
+    - A route location — redirect.
+    - Nothing or `true` — proceed.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Route Meta Fields
+
+    ```ts
+    {
+        path: '/admin',
+        component: AdminPanel,
+        meta: { requiresAuth: true, role: 'admin' },
+    }
+    ```
+
+    `meta` is custom data attached to a route. Inspect in guards (`to.meta.requiresAuth`) or templates (`route.meta.title`).
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Per-Route Guards
+
+    ```ts
+    {
+        path: '/admin',
+        component: AdminPanel,
+        beforeEnter: (to, from) => {
+            const user = useUserStore();
+            if (!user.isAdmin) return { name: 'forbidden' };
+        },
+    }
+    ```
+
+    `beforeEnter` runs only for this route. Use when guard logic is route-specific.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Scroll Behavior
+
+    ```ts
+    const router = createRouter({
+        history: createWebHistory(),
+        routes,
+        scrollBehavior(to, from, savedPosition) {
+            if (savedPosition) return savedPosition;  // back/forward restore
+            if (to.hash) return { el: to.hash };       // anchor scroll
+            return { top: 0 };                          // top of page on new nav
+        },
+    });
+    ```
+
+    Default is no scroll restoration; this gives a sensible default.
+- fragment_type: execution
+  sequence: 10
+  content: |-
+    ## Named Views
+
+    ```ts
+    {
+        path: '/dashboard',
+        components: {
+            default: Dashboard,
+            sidebar: Sidebar,
+            header: TopHeader,
+        },
+    }
+    ```
+
+    Template:
+
+    ```vue
+    <router-view name="header" />
+    <router-view name="sidebar" />
+    <router-view />
+    ```
+
+    Useful for layouts where multiple regions render different components per route.
+- fragment_type: guardrail
+  sequence: 11
+  content: |-
+    ## Common Pitfalls
+
+    - **Direct router import in stores.** Causes circular issues. Use `useRouter()` inside actions, not at module scope.
+    - **Synchronous data fetching in setup.** Component renders before data; flicker. Use `Suspense` or `beforeRouteEnter` to fetch.
+    - **Loading the whole app in one chunk.** Defeats lazy loading. Verify with `npm run build` — admin routes should be separate chunks.
+    - **Confusing `params` with `query`.** `/users/:id` puts id in params; `/users?id=123` puts it in query. Pick the right one for the URL shape you want.
+    - **Auth guards that block navigation but don't redirect.** Users see a stuck page. Always provide a redirect.
+- fragment_type: verification
+  sequence: 12
+  content: |-
+    ## Verification
+
+    A working router:
+
+    - Lazy routes are separate chunks in the build output.
+    - Auth guards redirect to login with a return URL.
+    - Back/forward restores scroll position.
+    - Named routes work — refactoring URLs doesn't break in-app links.
+    - 404 catch-all renders a NotFound component, not a blank page.

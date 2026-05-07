@@ -29,3 +29,18 @@ skills:
 - skill_id: vue-template-directives
   file: vue-template-directives.yaml
   fragment_count: 12
+- skill_id: vue-custom-directives
+  file: vue-custom-directives.yaml
+  fragment_count: 11
+- skill_id: vue-pinia-state-management
+  file: vue-pinia-state-management.yaml
+  fragment_count: 12
+- skill_id: vue-plugins
+  file: vue-plugins.yaml
+  fragment_count: 8
+- skill_id: vue-router-deep
+  file: vue-router-deep.yaml
+  fragment_count: 12
+- skill_id: vue-testing
+  file: vue-testing.yaml
+  fragment_count: 12

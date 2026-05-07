@@ -1,0 +1,409 @@
+skill_type: domain
+skill_id: vue-pinia-state-management
+canonical_name: Vue + Pinia State Management
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- pinia
+- state-management
+- stores
+- composition-api
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Vue + Pinia State Management
+
+  ## Overview
+
+  Pinia is the official Vue 3 state library, replacing Vuex. Stores are plain functions; type inference is automatic; the API mirrors Composition API patterns. Use for state shared across components or persisted across routes.
+
+  ---
+
+  ## Defining a Store — Setup Syntax
+
+  ```ts
+  // stores/user.ts
+  import { defineStore } from 'pinia';
+  import { ref, computed } from 'vue';
+
+  export const useUserStore = defineStore('user', () => {
+      const name = ref('');
+      const email = ref('');
+      const isLoggedIn = computed(() => name.value !== '');
+
+      async function login(credentials) {
+          const user = await api.login(credentials);
+          name.value = user.name;
+          email.value = user.email;
+      }
+
+      function logout() {
+          name.value = '';
+          email.value = '';
+      }
+
+      return { name, email, isLoggedIn, login, logout };
+  });
+  ```
+
+  The setup syntax mirrors Composition API. `ref()` becomes state; `computed()` becomes getters; functions become actions. Cleaner than the Options syntax for most use cases.
+
+  ## Defining a Store — Options Syntax
+
+  ```ts
+  export const useUserStore = defineStore('user', {
+      state: () => ({ name: '', email: '' }),
+      getters: {
+          isLoggedIn: (state) => state.name !== '',
+      },
+      actions: {
+          async login(credentials) {
+              const user = await api.login(credentials);
+              this.name = user.name;
+              this.email = user.email;
+          },
+      },
+  });
+  ```
+
+  More structured but verbose. Setup syntax is the default for new Vue 3 projects.
+
+  ## Using a Store in Components
+
+  ```vue
+  <script setup>
+  import { useUserStore } from '@/stores/user';
+
+  const user = useUserStore();
+  // user.name, user.isLoggedIn, user.login(...) etc.
+  </script>
+
+  <template>
+      <div v-if="user.isLoggedIn">Hello, {{ user.name }}</div>
+      <button @click="user.logout">Logout</button>
+  </template>
+  ```
+
+  The store is reactive — changes trigger re-renders.
+
+  ## $patch and $reset
+
+  ```ts
+  // Mutate multiple state fields atomically
+  user.$patch({ name: 'Alice', email: 'alice@example.com' });
+
+  // Or function form for complex updates:
+  user.$patch((state) => {
+      state.preferences.notifications.push('email');
+  });
+
+  // Reset to initial state
+  user.$reset();
+  ```
+
+  `$reset` only works with the Options syntax (which knows the initial state). For setup syntax, manually reset refs.
+
+  ## $subscribe — Listening to State Changes
+
+  ```ts
+  user.$subscribe((mutation, state) => {
+      localStorage.setItem('user', JSON.stringify(state));
+  });
+  ```
+
+  Fires on any state change. Used for persistence, logging, sync to other systems.
+
+  ## Plugins — Persistence
+
+  ```ts
+  import { createPinia } from 'pinia';
+  import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
+
+  const pinia = createPinia();
+  pinia.use(piniaPluginPersistedstate);
+
+  // In store:
+  export const useUserStore = defineStore('user', { ... }, { persist: true });
+  ```
+
+  State automatically syncs to localStorage; reloads restore it. Configure which fields persist:
+
+  ```ts
+  { persist: { paths: ['name', 'email'] } }  // skip transient fields
+  ```
+
+  ## Composing Stores
+
+  ```ts
+  import { useUserStore } from './user';
+
+  export const useOrdersStore = defineStore('orders', () => {
+      const userStore = useUserStore();
+      const orders = ref([]);
+
+      async function fetchMyOrders() {
+          if (!userStore.isLoggedIn) throw new Error('not logged in');
+          orders.value = await api.orders.byUser(userStore.email);
+      }
+
+      return { orders, fetchMyOrders };
+  });
+  ```
+
+  Stores can use other stores. Pinia handles the dependency graph; no circular-import gotchas (unlike some Vuex patterns).
+
+  ## Devtools Integration
+
+  Pinia integrates with Vue DevTools — inspect state, time-travel, trigger actions. Set `pinia.use(devtools)` (auto in dev mode). Critical for debugging.
+
+  ## SSR Considerations
+
+  For server-side rendering (Nuxt, Vite SSR), each request needs its own Pinia instance to avoid cross-request state leakage:
+
+  ```ts
+  // Nuxt handles this automatically via auto-imports
+  // Manual SSR:
+  const pinia = createPinia();
+  app.use(pinia);
+  // Use store on server, hydrate on client.
+  ```
+
+  Never share a Pinia instance across requests on the server.
+
+  ## Migration from Vuex
+
+  Pinia is the official successor. Mappings:
+
+  - Vuex `store.state.user.name` → Pinia `userStore.name`.
+  - Vuex `store.commit('SET_NAME', name)` → Pinia `userStore.name = name`.
+  - Vuex `store.dispatch('login', creds)` → Pinia `userStore.login(creds)`.
+  - Vuex modules → separate Pinia stores.
+
+  No more mutation/action distinction. No more deeply-nested module structure.
+
+  ## Common Pitfalls
+
+  - **Destructuring losing reactivity.** `const { name } = userStore` breaks reactivity. Use `storeToRefs(userStore)` or access via the store object.
+  - **Side effects in getters.** Getters should be pure. Side effects belong in actions.
+  - **Storing transient UI state in a global store.** Component state should stay local (ref) unless multiple components need it.
+  - **Persistence without filtering.** Storing full state to localStorage on every change is slow and leaks tokens. Use `paths` to filter.
+  - **Forgetting SSR Pinia instance.** Cross-request state leak in production = real users seeing other users' data.
+
+  ## Verification
+
+  A working Pinia setup:
+
+  - Stores reactive across components without prop-drilling.
+  - Vue DevTools shows store state and recent mutations.
+  - $patch / $reset behave predictably for batched updates.
+  - Persistence (if configured) round-trips through localStorage cleanly.
+  - SSR doesn't leak state across requests.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Defining a Store — Setup Syntax
+
+    ```ts
+    // stores/user.ts
+    import { defineStore } from 'pinia';
+    import { ref, computed } from 'vue';
+
+    export const useUserStore = defineStore('user', () => {
+        const name = ref('');
+        const email = ref('');
+        const isLoggedIn = computed(() => name.value !== '');
+
+        async function login(credentials) {
+            const user = await api.login(credentials);
+            name.value = user.name;
+            email.value = user.email;
+        }
+
+        function logout() {
+            name.value = '';
+            email.value = '';
+        }
+
+        return { name, email, isLoggedIn, login, logout };
+    });
+    ```
+
+    The setup syntax mirrors Composition API. `ref()` becomes state; `computed()` becomes getters; functions become actions. Cleaner than the Options syntax for most use cases.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Defining a Store — Options Syntax
+
+    ```ts
+    export const useUserStore = defineStore('user', {
+        state: () => ({ name: '', email: '' }),
+        getters: {
+            isLoggedIn: (state) => state.name !== '',
+        },
+        actions: {
+            async login(credentials) {
+                const user = await api.login(credentials);
+                this.name = user.name;
+                this.email = user.email;
+            },
+        },
+    });
+    ```
+
+    More structured but verbose. Setup syntax is the default for new Vue 3 projects.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Using a Store in Components
+
+    ```vue
+    <script setup>
+    import { useUserStore } from '@/stores/user';
+
+    const user = useUserStore();
+    // user.name, user.isLoggedIn, user.login(...) etc.
+    </script>
+
+    <template>
+        <div v-if="user.isLoggedIn">Hello, {{ user.name }}</div>
+        <button @click="user.logout">Logout</button>
+    </template>
+    ```
+
+    The store is reactive — changes trigger re-renders.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## $patch and $reset
+
+    ```ts
+    // Mutate multiple state fields atomically
+    user.$patch({ name: 'Alice', email: 'alice@example.com' });
+
+    // Or function form for complex updates:
+    user.$patch((state) => {
+        state.preferences.notifications.push('email');
+    });
+
+    // Reset to initial state
+    user.$reset();
+    ```
+
+    `$reset` only works with the Options syntax (which knows the initial state). For setup syntax, manually reset refs.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## $subscribe — Listening to State Changes
+
+    ```ts
+    user.$subscribe((mutation, state) => {
+        localStorage.setItem('user', JSON.stringify(state));
+    });
+    ```
+
+    Fires on any state change. Used for persistence, logging, sync to other systems.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Plugins — Persistence
+
+    ```ts
+    import { createPinia } from 'pinia';
+    import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
+
+    const pinia = createPinia();
+    pinia.use(piniaPluginPersistedstate);
+
+    // In store:
+    export const useUserStore = defineStore('user', { ... }, { persist: true });
+    ```
+
+    State automatically syncs to localStorage; reloads restore it. Configure which fields persist:
+
+    ```ts
+    { persist: { paths: ['name', 'email'] } }  // skip transient fields
+    ```
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Composing Stores
+
+    ```ts
+    import { useUserStore } from './user';
+
+    export const useOrdersStore = defineStore('orders', () => {
+        const userStore = useUserStore();
+        const orders = ref([]);
+
+        async function fetchMyOrders() {
+            if (!userStore.isLoggedIn) throw new Error('not logged in');
+            orders.value = await api.orders.byUser(userStore.email);
+        }
+
+        return { orders, fetchMyOrders };
+    });
+    ```
+
+    Stores can use other stores. Pinia handles the dependency graph; no circular-import gotchas (unlike some Vuex patterns).
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Devtools Integration
+
+    Pinia integrates with Vue DevTools — inspect state, time-travel, trigger actions. Set `pinia.use(devtools)` (auto in dev mode). Critical for debugging.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## SSR Considerations
+
+    For server-side rendering (Nuxt, Vite SSR), each request needs its own Pinia instance to avoid cross-request state leakage:
+
+    ```ts
+    // Nuxt handles this automatically via auto-imports
+    // Manual SSR:
+    const pinia = createPinia();
+    app.use(pinia);
+    // Use store on server, hydrate on client.
+    ```
+
+    Never share a Pinia instance across requests on the server.
+- fragment_type: execution
+  sequence: 10
+  content: |-
+    ## Migration from Vuex
+
+    Pinia is the official successor. Mappings:
+
+    - Vuex `store.state.user.name` → Pinia `userStore.name`.
+    - Vuex `store.commit('SET_NAME', name)` → Pinia `userStore.name = name`.
+    - Vuex `store.dispatch('login', creds)` → Pinia `userStore.login(creds)`.
+    - Vuex modules → separate Pinia stores.
+
+    No more mutation/action distinction. No more deeply-nested module structure.
+- fragment_type: guardrail
+  sequence: 11
+  content: |-
+    ## Common Pitfalls
+
+    - **Destructuring losing reactivity.** `const { name } = userStore` breaks reactivity. Use `storeToRefs(userStore)` or access via the store object.
+    - **Side effects in getters.** Getters should be pure. Side effects belong in actions.
+    - **Storing transient UI state in a global store.** Component state should stay local (ref) unless multiple components need it.
+    - **Persistence without filtering.** Storing full state to localStorage on every change is slow and leaks tokens. Use `paths` to filter.
+    - **Forgetting SSR Pinia instance.** Cross-request state leak in production = real users seeing other users' data.
+- fragment_type: verification
+  sequence: 12
+  content: |-
+    ## Verification
+
+    A working Pinia setup:
+
+    - Stores reactive across components without prop-drilling.
+    - Vue DevTools shows store state and recent mutations.
+    - $patch / $reset behave predictably for batched updates.
+    - Persistence (if configured) round-trips through localStorage cleanly.
+    - SSR doesn't leak state across requests.

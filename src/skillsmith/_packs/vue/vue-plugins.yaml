@@ -1,0 +1,477 @@
+skill_type: domain
+skill_id: vue-plugins
+canonical_name: Vue Plugins
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- plugins
+- app-install
+- global-functionality
+- third-party-integration
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Vue Plugins
+
+  ## Overview
+
+  Plugins are how you extend a Vue app with global functionality — internationalization, analytics, form validation, devtools. The pattern: a `install(app, options)` function that registers components, directives, provide/inject values, or global properties.
+
+  ---
+
+  ## Plugin Shape
+
+  ```ts
+  // my-plugin.ts
+  import type { App } from 'vue';
+
+  export interface MyPluginOptions {
+      apiUrl: string;
+      debug?: boolean;
+  }
+
+  export function createMyPlugin(options: MyPluginOptions) {
+      return {
+          install(app: App) {
+              // register globals here
+              app.provide('myApiUrl', options.apiUrl);
+              app.config.globalProperties.$debug = options.debug ?? false;
+          },
+      };
+  }
+  ```
+
+  Use:
+
+  ```ts
+  // main.ts
+  import { createApp } from 'vue';
+  import App from './App.vue';
+  import { createMyPlugin } from './my-plugin';
+
+  const app = createApp(App);
+  app.use(createMyPlugin({ apiUrl: 'https://api.example.com', debug: true }));
+  app.mount('#app');
+  ```
+
+  ## Three Things Plugins Register
+
+  **1. Global components**:
+
+  ```ts
+  install(app) {
+      app.component('IconButton', IconButton);
+      app.component('Modal', Modal);
+  }
+  ```
+
+  Now `<IconButton>` and `<Modal>` work in any template without import. Useful for component libraries.
+
+  **2. Global directives**:
+
+  ```ts
+  install(app) {
+      app.directive('focus', vFocus);
+      app.directive('click-outside', vClickOutside);
+  }
+  ```
+
+  **3. Global properties / app-level inject**:
+
+  ```ts
+  install(app) {
+      // Inject pattern (preferred)
+      app.provide('analytics', analyticsClient);
+
+      // Global properties (legacy, but works)
+      app.config.globalProperties.$analytics = analyticsClient;
+  }
+  ```
+
+  Components access via `inject('analytics')` (Composition API) or `this.$analytics` (Options API).
+
+  ## Plugin Examples
+
+  **vue-i18n**:
+
+  ```ts
+  import { createI18n } from 'vue-i18n';
+
+  const i18n = createI18n({
+      legacy: false,
+      locale: 'en',
+      messages: { en: {...}, fr: {...} },
+  });
+
+  app.use(i18n);
+
+  // In components:
+  const { t } = useI18n();
+  {{ t('hello') }}
+  ```
+
+  **vee-validate**:
+
+  ```ts
+  import { configure } from 'vee-validate';
+  configure({ generateMessage: ... });
+
+  // Components import directly, no app.use needed for vee-validate
+  ```
+
+  **Pinia** (also a plugin):
+
+  ```ts
+  import { createPinia } from 'pinia';
+  const pinia = createPinia();
+  app.use(pinia);
+  ```
+
+  ## Authoring an Analytics Plugin
+
+  ```ts
+  // analytics-plugin.ts
+  import type { App } from 'vue';
+
+  export interface AnalyticsOptions {
+      apiKey: string;
+      enabled?: boolean;
+  }
+
+  export const ANALYTICS_KEY = Symbol('analytics');
+
+  export interface AnalyticsClient {
+      track(event: string, props?: Record<string, any>): void;
+      identify(userId: string, traits?: Record<string, any>): void;
+  }
+
+  export function createAnalytics(options: AnalyticsOptions): AnalyticsClient {
+      return {
+          track(event, props) {
+              if (!options.enabled) return;
+              console.log(`[analytics] ${event}`, props);
+              fetch('/api/track', {
+                  method: 'POST',
+                  body: JSON.stringify({ event, props, key: options.apiKey }),
+              });
+          },
+          identify(userId, traits) { /* ... */ },
+      };
+  }
+
+  export function analyticsPlugin(options: AnalyticsOptions) {
+      return {
+          install(app: App) {
+              const client = createAnalytics(options);
+              app.provide(ANALYTICS_KEY, client);
+          },
+      };
+  }
+  ```
+
+  In components:
+
+  ```vue
+  <script setup>
+  import { inject } from 'vue';
+  import { ANALYTICS_KEY } from '@/plugins/analytics';
+
+  const analytics = inject(ANALYTICS_KEY);
+  analytics?.track('button_clicked', { id: 'submit' });
+  </script>
+  ```
+
+  The Symbol key avoids string-key collisions across plugins.
+
+  ## TypeScript Augmentation
+
+  For plugins that add global properties (legacy):
+
+  ```ts
+  declare module 'vue' {
+      interface ComponentCustomProperties {
+          $analytics: AnalyticsClient;
+      }
+  }
+  ```
+
+  Now `this.$analytics` is typed in Options API components.
+
+  For inject keys, type via the InjectionKey:
+
+  ```ts
+  import type { InjectionKey } from 'vue';
+  export const ANALYTICS_KEY: InjectionKey<AnalyticsClient> = Symbol();
+  ```
+
+  `inject(ANALYTICS_KEY)` is now typed correctly.
+
+  ## Order of Plugin Registration
+
+  Plugins install in registration order; later plugins can read state set by earlier ones:
+
+  ```ts
+  app.use(pinia);           // 1. Pinia
+  app.use(router);          // 2. Router (might read auth from Pinia)
+  app.use(analyticsPlugin); // 3. Analytics (might subscribe to router events)
+  app.use(i18n);            // 4. i18n
+  ```
+
+  Document any required ordering in plugin READMEs.
+
+  ## Common Pitfalls
+
+  - **Side effects at module scope.** Plugin import loading should be cheap; do work in `install`. Otherwise dev server reloads slow.
+  - **Forgetting to handle SSR.** Don't access `window`, `document` at install time on the server. Guard with `typeof window !== 'undefined'`.
+  - **Returning state from `install`.** It's not used; consumers can't access it. Use provide/inject.
+  - **Side effects on plugin construction.** A plugin that opens a websocket on construct (not install) connects before app.use is called.
+  - **Tight coupling between plugins.** Plugin A reads provide from Plugin B implicitly. Document the dependency or restructure.
+
+  ## Verification
+
+  A working plugin:
+
+  - Plugin install is idempotent (calling twice doesn't break).
+  - Provided values are accessible via inject in components.
+  - TypeScript types flow correctly through inject keys or globalProperties.
+  - SSR-safe (no document/window access at install time).
+  - Plugin removal (in tests) restores app to a clean state.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Plugin Shape
+
+    ```ts
+    // my-plugin.ts
+    import type { App } from 'vue';
+
+    export interface MyPluginOptions {
+        apiUrl: string;
+        debug?: boolean;
+    }
+
+    export function createMyPlugin(options: MyPluginOptions) {
+        return {
+            install(app: App) {
+                // register globals here
+                app.provide('myApiUrl', options.apiUrl);
+                app.config.globalProperties.$debug = options.debug ?? false;
+            },
+        };
+    }
+    ```
+
+    Use:
+
+    ```ts
+    // main.ts
+    import { createApp } from 'vue';
+    import App from './App.vue';
+    import { createMyPlugin } from './my-plugin';
+
+    const app = createApp(App);
+    app.use(createMyPlugin({ apiUrl: 'https://api.example.com', debug: true }));
+    app.mount('#app');
+    ```
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Three Things Plugins Register
+
+    **1. Global components**:
+
+    ```ts
+    install(app) {
+        app.component('IconButton', IconButton);
+        app.component('Modal', Modal);
+    }
+    ```
+
+    Now `<IconButton>` and `<Modal>` work in any template without import. Useful for component libraries.
+
+    **2. Global directives**:
+
+    ```ts
+    install(app) {
+        app.directive('focus', vFocus);
+        app.directive('click-outside', vClickOutside);
+    }
+    ```
+
+    **3. Global properties / app-level inject**:
+
+    ```ts
+    install(app) {
+        // Inject pattern (preferred)
+        app.provide('analytics', analyticsClient);
+
+        // Global properties (legacy, but works)
+        app.config.globalProperties.$analytics = analyticsClient;
+    }
+    ```
+
+    Components access via `inject('analytics')` (Composition API) or `this.$analytics` (Options API).
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Plugin Examples
+
+    **vue-i18n**:
+
+    ```ts
+    import { createI18n } from 'vue-i18n';
+
+    const i18n = createI18n({
+        legacy: false,
+        locale: 'en',
+        messages: { en: {...}, fr: {...} },
+    });
+
+    app.use(i18n);
+
+    // In components:
+    const { t } = useI18n();
+    {{ t('hello') }}
+    ```
+
+    **vee-validate**:
+
+    ```ts
+    import { configure } from 'vee-validate';
+    configure({ generateMessage: ... });
+
+    // Components import directly, no app.use needed for vee-validate
+    ```
+
+    **Pinia** (also a plugin):
+
+    ```ts
+    import { createPinia } from 'pinia';
+    const pinia = createPinia();
+    app.use(pinia);
+    ```
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Authoring an Analytics Plugin
+
+    ```ts
+    // analytics-plugin.ts
+    import type { App } from 'vue';
+
+    export interface AnalyticsOptions {
+        apiKey: string;
+        enabled?: boolean;
+    }
+
+    export const ANALYTICS_KEY = Symbol('analytics');
+
+    export interface AnalyticsClient {
+        track(event: string, props?: Record<string, any>): void;
+        identify(userId: string, traits?: Record<string, any>): void;
+    }
+
+    export function createAnalytics(options: AnalyticsOptions): AnalyticsClient {
+        return {
+            track(event, props) {
+                if (!options.enabled) return;
+                console.log(`[analytics] ${event}`, props);
+                fetch('/api/track', {
+                    method: 'POST',
+                    body: JSON.stringify({ event, props, key: options.apiKey }),
+                });
+            },
+            identify(userId, traits) { /* ... */ },
+        };
+    }
+
+    export function analyticsPlugin(options: AnalyticsOptions) {
+        return {
+            install(app: App) {
+                const client = createAnalytics(options);
+                app.provide(ANALYTICS_KEY, client);
+            },
+        };
+    }
+    ```
+
+    In components:
+
+    ```vue
+    <script setup>
+    import { inject } from 'vue';
+    import { ANALYTICS_KEY } from '@/plugins/analytics';
+
+    const analytics = inject(ANALYTICS_KEY);
+    analytics?.track('button_clicked', { id: 'submit' });
+    </script>
+    ```
+
+    The Symbol key avoids string-key collisions across plugins.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## TypeScript Augmentation
+
+    For plugins that add global properties (legacy):
+
+    ```ts
+    declare module 'vue' {
+        interface ComponentCustomProperties {
+            $analytics: AnalyticsClient;
+        }
+    }
+    ```
+
+    Now `this.$analytics` is typed in Options API components.
+
+    For inject keys, type via the InjectionKey:
+
+    ```ts
+    import type { InjectionKey } from 'vue';
+    export const ANALYTICS_KEY: InjectionKey<AnalyticsClient> = Symbol();
+    ```
+
+    `inject(ANALYTICS_KEY)` is now typed correctly.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Order of Plugin Registration
+
+    Plugins install in registration order; later plugins can read state set by earlier ones:
+
+    ```ts
+    app.use(pinia);           // 1. Pinia
+    app.use(router);          // 2. Router (might read auth from Pinia)
+    app.use(analyticsPlugin); // 3. Analytics (might subscribe to router events)
+    app.use(i18n);            // 4. i18n
+    ```
+
+    Document any required ordering in plugin READMEs.
+- fragment_type: guardrail
+  sequence: 7
+  content: |-
+    ## Common Pitfalls
+
+    - **Side effects at module scope.** Plugin import loading should be cheap; do work in `install`. Otherwise dev server reloads slow.
+    - **Forgetting to handle SSR.** Don't access `window`, `document` at install time on the server. Guard with `typeof window !== 'undefined'`.
+    - **Returning state from `install`.** It's not used; consumers can't access it. Use provide/inject.
+    - **Side effects on plugin construction.** A plugin that opens a websocket on construct (not install) connects before app.use is called.
+    - **Tight coupling between plugins.** Plugin A reads provide from Plugin B implicitly. Document the dependency or restructure.
+- fragment_type: verification
+  sequence: 8
+  content: |-
+    ## Verification
+
+    A working plugin:
+
+    - Plugin install is idempotent (calling twice doesn't break).
+    - Provided values are accessible via inject in components.
+    - TypeScript types flow correctly through inject keys or globalProperties.
+    - SSR-safe (no document/window access at install time).
+    - Plugin removal (in tests) restores app to a clean state.

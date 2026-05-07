@@ -1,0 +1,407 @@
+skill_type: domain
+skill_id: vue-custom-directives
+canonical_name: Vue Custom Directives
+category: engineering
+skill_class: domain
+domain_tags:
+- vue
+- custom-directives
+- v-directive
+- lifecycle-hooks
+- low-level-dom
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Vue Custom Directives
+
+  ## Overview
+
+  Custom directives are reusable DOM behaviors attached via `v-name`. Less common than components but useful for: auto-focus, click-outside detection, scroll-into-view, lazy image loading. The mental model: directives operate at the DOM-element level, not the component level.
+
+  ---
+
+  ## When to Use a Directive
+
+  - **DOM behavior on any element** — focus, scroll, intersection observer.
+  - **Cross-cutting** — same behavior across many components without wrapping.
+  - **Imperative DOM access** — animations, third-party DOM libraries.
+
+  NOT a directive:
+  - Anything that needs its own template or state — use a component.
+  - Behavior tied to specific component lifecycle — handle in the component.
+
+  ## Directive Lifecycle Hooks
+
+  ```js
+  const myDirective = {
+      created(el, binding, vnode, prevVnode) { /* before bound */ },
+      beforeMount(el, binding, vnode, prevVnode) { /* before insert */ },
+      mounted(el, binding, vnode, prevVnode) { /* DOM ready */ },
+      beforeUpdate(el, binding, vnode, prevVnode) { /* before update */ },
+      updated(el, binding, vnode, prevVnode) { /* after update */ },
+      beforeUnmount(el, binding, vnode, prevVnode) { /* before remove */ },
+      unmounted(el, binding, vnode, prevVnode) { /* removed */ },
+  };
+  ```
+
+  Most directives only need `mounted` and `unmounted`. `el` is the DOM node; `binding.value` is the value passed.
+
+  ## v-focus — Auto-Focus Inputs
+
+  ```js
+  const vFocus = {
+      mounted(el) {
+          el.focus();
+      },
+  };
+
+  // Use:
+  <input v-focus />
+  ```
+
+  The `v` prefix in `vFocus` exposes it as `v-focus` in templates. Local registration:
+
+  ```vue
+  <script setup>
+  const vFocus = { mounted: (el) => el.focus() };
+  </script>
+  <template>
+      <input v-focus />
+  </template>
+  ```
+
+  ## v-click-outside — Detect Outside Clicks
+
+  ```js
+  const vClickOutside = {
+      mounted(el, binding) {
+          el._clickOutside = (event) => {
+              if (!el.contains(event.target)) {
+                  binding.value(event);
+              }
+          };
+          document.addEventListener('click', el._clickOutside);
+      },
+      unmounted(el) {
+          document.removeEventListener('click', el._clickOutside);
+      },
+  };
+
+  // Use:
+  <div v-click-outside="closeModal">...</div>
+  ```
+
+  The handler stored on `el._clickOutside` survives across the directive's lifecycle so unmounted can clean it up. Without storing, the listener would leak.
+
+  ## v-intersect — Lazy Loading via IntersectionObserver
+
+  ```js
+  const vIntersect = {
+      mounted(el, binding) {
+          el._observer = new IntersectionObserver((entries) => {
+              entries.forEach((entry) => {
+                  if (entry.isIntersecting) {
+                      binding.value(entry);
+                  }
+              });
+          }, { threshold: 0.1 });
+          el._observer.observe(el);
+      },
+      unmounted(el) {
+          el._observer.disconnect();
+      },
+  };
+
+  <img :src="src" v-intersect="loadHighRes" />
+  ```
+
+  Used for image lazy load, infinite scroll, analytics 'element seen'.
+
+  ## Modifiers
+
+  ```vue
+  <input v-focus.prevent />
+  ```
+
+  ```js
+  const vFocus = {
+      mounted(el, binding) {
+          if (binding.modifiers.prevent) {
+              // alt behavior
+          } else {
+              el.focus();
+          }
+      },
+  };
+  ```
+
+  Modifiers customize directive behavior without separate directives.
+
+  ## Arguments
+
+  ```vue
+  <div v-tooltip:bottom="message" />
+  ```
+
+  ```js
+  const vTooltip = {
+      mounted(el, binding) {
+          const placement = binding.arg;  // 'bottom'
+          const text = binding.value;     // message
+          // setup tooltip with placement and text
+      },
+  };
+  ```
+
+  The arg appears after the colon. Common for directive variants: `v-tooltip:top`, `v-tooltip:bottom`.
+
+  ## Global Registration
+
+  ```ts
+  // main.ts
+  import { createApp } from 'vue';
+
+  const app = createApp(App);
+  app.directive('focus', vFocus);
+  app.directive('click-outside', vClickOutside);
+  ```
+
+  Now `v-focus` works in any component without import. Use sparingly — global directives become invisible dependencies.
+
+  ## Directives vs Components
+
+  ```vue
+  <!-- Component approach -->
+  <Tooltip placement="bottom" message="Help text">
+      <button>Hover me</button>
+  </Tooltip>
+
+  <!-- Directive approach -->
+  <button v-tooltip:bottom="'Help text'">Hover me</button>
+  ```
+
+  Both work. Component is more discoverable; directive is more terse and avoids wrapper elements.
+
+  Default to components. Reach for directives when the wrapper would be inconvenient (e.g., styling that breaks if the element is wrapped).
+
+  ## Common Pitfalls
+
+  - **Side effects without cleanup.** Event listeners, observers, timers — all need teardown in `unmounted`. Otherwise memory leaks.
+  - **Using directives where components fit.** Directives can't have templates or compose. If you need that, use a component.
+  - **Forgetting reactive updates.** The `value` in binding is whatever was passed. If it changes, you need an `updated` hook to react.
+  - **Storing state on `el._foo`.** Conventional but ugly. Document the convention or use a WeakMap.
+
+  ## Verification
+
+  A working custom directive:
+
+  - Behavior fires at mount; cleans up at unmount.
+  - No memory leaks (verified via DevTools or repeated mount/unmount).
+  - Cleanly composes with v-bind, v-on on the same element.
+  - Reusable across the app without modification.
+fragments:
+- fragment_type: rationale
+  sequence: 1
+  content: |-
+    ## When to Use a Directive
+
+    - **DOM behavior on any element** — focus, scroll, intersection observer.
+    - **Cross-cutting** — same behavior across many components without wrapping.
+    - **Imperative DOM access** — animations, third-party DOM libraries.
+
+    NOT a directive:
+    - Anything that needs its own template or state — use a component.
+    - Behavior tied to specific component lifecycle — handle in the component.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Directive Lifecycle Hooks
+
+    ```js
+    const myDirective = {
+        created(el, binding, vnode, prevVnode) { /* before bound */ },
+        beforeMount(el, binding, vnode, prevVnode) { /* before insert */ },
+        mounted(el, binding, vnode, prevVnode) { /* DOM ready */ },
+        beforeUpdate(el, binding, vnode, prevVnode) { /* before update */ },
+        updated(el, binding, vnode, prevVnode) { /* after update */ },
+        beforeUnmount(el, binding, vnode, prevVnode) { /* before remove */ },
+        unmounted(el, binding, vnode, prevVnode) { /* removed */ },
+    };
+    ```
+
+    Most directives only need `mounted` and `unmounted`. `el` is the DOM node; `binding.value` is the value passed.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## v-focus — Auto-Focus Inputs
+
+    ```js
+    const vFocus = {
+        mounted(el) {
+            el.focus();
+        },
+    };
+
+    // Use:
+    <input v-focus />
+    ```
+
+    The `v` prefix in `vFocus` exposes it as `v-focus` in templates. Local registration:
+
+    ```vue
+    <script setup>
+    const vFocus = { mounted: (el) => el.focus() };
+    </script>
+    <template>
+        <input v-focus />
+    </template>
+    ```
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## v-click-outside — Detect Outside Clicks
+
+    ```js
+    const vClickOutside = {
+        mounted(el, binding) {
+            el._clickOutside = (event) => {
+                if (!el.contains(event.target)) {
+                    binding.value(event);
+                }
+            };
+            document.addEventListener('click', el._clickOutside);
+        },
+        unmounted(el) {
+            document.removeEventListener('click', el._clickOutside);
+        },
+    };
+
+    // Use:
+    <div v-click-outside="closeModal">...</div>
+    ```
+
+    The handler stored on `el._clickOutside` survives across the directive's lifecycle so unmounted can clean it up. Without storing, the listener would leak.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## v-intersect — Lazy Loading via IntersectionObserver
+
+    ```js
+    const vIntersect = {
+        mounted(el, binding) {
+            el._observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        binding.value(entry);
+                    }
+                });
+            }, { threshold: 0.1 });
+            el._observer.observe(el);
+        },
+        unmounted(el) {
+            el._observer.disconnect();
+        },
+    };
+
+    <img :src="src" v-intersect="loadHighRes" />
+    ```
+
+    Used for image lazy load, infinite scroll, analytics 'element seen'.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Modifiers
+
+    ```vue
+    <input v-focus.prevent />
+    ```
+
+    ```js
+    const vFocus = {
+        mounted(el, binding) {
+            if (binding.modifiers.prevent) {
+                // alt behavior
+            } else {
+                el.focus();
+            }
+        },
+    };
+    ```
+
+    Modifiers customize directive behavior without separate directives.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Arguments
+
+    ```vue
+    <div v-tooltip:bottom="message" />
+    ```
+
+    ```js
+    const vTooltip = {
+        mounted(el, binding) {
+            const placement = binding.arg;  // 'bottom'
+            const text = binding.value;     // message
+            // setup tooltip with placement and text
+        },
+    };
+    ```
+
+    The arg appears after the colon. Common for directive variants: `v-tooltip:top`, `v-tooltip:bottom`.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Global Registration
+
+    ```ts
+    // main.ts
+    import { createApp } from 'vue';
+
+    const app = createApp(App);
+    app.directive('focus', vFocus);
+    app.directive('click-outside', vClickOutside);
+    ```
+
+    Now `v-focus` works in any component without import. Use sparingly — global directives become invisible dependencies.
+- fragment_type: rationale
+  sequence: 9
+  content: |-
+    ## Directives vs Components
+
+    ```vue
+    <!-- Component approach -->
+    <Tooltip placement="bottom" message="Help text">
+        <button>Hover me</button>
+    </Tooltip>
+
+    <!-- Directive approach -->
+    <button v-tooltip:bottom="'Help text'">Hover me</button>
+    ```
+
+    Both work. Component is more discoverable; directive is more terse and avoids wrapper elements.
+
+    Default to components. Reach for directives when the wrapper would be inconvenient (e.g., styling that breaks if the element is wrapped).
+- fragment_type: guardrail
+  sequence: 10
+  content: |-
+    ## Common Pitfalls
+
+    - **Side effects without cleanup.** Event listeners, observers, timers — all need teardown in `unmounted`. Otherwise memory leaks.
+    - **Using directives where components fit.** Directives can't have templates or compose. If you need that, use a component.
+    - **Forgetting reactive updates.** The `value` in binding is whatever was passed. If it changes, you need an `updated` hook to react.
+    - **Storing state on `el._foo`.** Conventional but ugly. Document the convention or use a WeakMap.
+- fragment_type: verification
+  sequence: 11
+  content: |-
+    ## Verification
+
+    A working custom directive:
+
+    - Behavior fires at mount; cleans up at unmount.
+    - No memory leaks (verified via DevTools or repeated mount/unmount).
+    - Cleanly composes with v-bind, v-on on the same element.
+    - Reusable across the app without modification.
