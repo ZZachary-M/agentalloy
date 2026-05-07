@@ -1,0 +1,336 @@
+skill_type: domain
+skill_id: nestjs-microservices
+canonical_name: NestJS Microservices
+category: engineering
+skill_class: domain
+domain_tags:
+- nestjs
+- microservices
+- transports
+- tcp
+- redis
+- kafka
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # NestJS Microservices
+
+  ## Overview
+
+  NestJS supports microservices via the same DI/decorator model as HTTP. The transport (TCP, Redis, Kafka, gRPC, etc.) is pluggable; your code stays the same. Two messaging styles: request-response (await a result) and events (fire-and-forget).
+
+  ---
+
+  ## Setup
+
+  ```ts
+  // main.ts
+  import { NestFactory } from '@nestjs/core';
+  import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+
+  async function bootstrap() {
+      const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+          AppModule,
+          { transport: Transport.TCP, options: { host: '0.0.0.0', port: 3001 } }
+      );
+      await app.listen();
+  }
+  bootstrap();
+  ```
+
+  The microservice instance handles incoming patterns. The same controller decorators work; just replace `@Controller` + `@Get/@Post` with `@MessagePattern` for RPC or `@EventPattern` for events.
+
+  ## Request-Response with @MessagePattern
+
+  ```ts
+  @Controller()
+  export class OrdersController {
+      @MessagePattern('order.create')
+      async createOrder(data: CreateOrderDto): Promise<Order> {
+          return this.ordersService.create(data);
+      }
+  }
+  ```
+
+  The pattern `'order.create'` is the routing key. Clients send a request to that pattern and await a response.
+
+  ## Events with @EventPattern
+
+  ```ts
+  @Controller()
+  export class InventoryController {
+      @EventPattern('order.completed')
+      async onOrderCompleted(data: OrderEvent): Promise<void> {
+          await this.inventoryService.decrement(data.items);
+      }
+  }
+  ```
+
+  Events don't return values. Multiple listeners can handle the same event independently. Use for fire-and-forget cross-service notifications.
+
+  ## Calling Other Services — ClientProxy
+
+  ```ts
+  @Module({
+      imports: [
+          ClientsModule.register([
+              {
+                  name: 'ORDERS_SERVICE',
+                  transport: Transport.TCP,
+                  options: { host: 'orders-svc', port: 3001 },
+              },
+          ]),
+      ],
+  })
+  export class AppModule {}
+
+  // In a service:
+  @Injectable()
+  export class CheckoutService {
+      constructor(@Inject('ORDERS_SERVICE') private orders: ClientProxy) {}
+
+      async checkout(req: CheckoutRequest) {
+          const order = await firstValueFrom(this.orders.send('order.create', req));
+          this.orders.emit('order.completed', { orderId: order.id });
+          return order;
+      }
+  }
+  ```
+
+  `send` for request-response (returns Observable, often consumed via `firstValueFrom` for a Promise). `emit` for events (no response).
+
+  ## Transport Options
+
+  - **TCP** — simplest. In-process / same-network. Limited features.
+  - **Redis** — pub/sub via Redis. Good for events; works for request-response with limitations.
+  - **NATS** — high-throughput messaging. Good for both patterns.
+  - **RabbitMQ** — durable queues, complex routing.
+  - **Kafka** — high-throughput event streaming. Use for event-sourcing patterns.
+  - **gRPC** — typed RPC over HTTP/2. Polyglot service support.
+
+  Choose by use case: events at scale → Kafka; request-response with retries → NATS or RabbitMQ; simple in-cluster → TCP or Redis.
+
+  ## Hybrid HTTP + Microservice
+
+  A common pattern: HTTP for external APIs, microservice for internal:
+
+  ```ts
+  async function bootstrap() {
+      const app = await NestFactory.create(AppModule);  // HTTP
+      app.connectMicroservice<MicroserviceOptions>({
+          transport: Transport.TCP,
+          options: { host: '0.0.0.0', port: 3001 },
+      });
+      await app.startAllMicroservices();
+      await app.listen(3000);
+  }
+  ```
+
+  Same controllers can serve both: `@Get('/orders')` for HTTP, `@MessagePattern('orders.list')` for microservice. Run both on one process.
+
+  ## Authentication and Guards
+
+  Microservice endpoints don't go through HTTP middleware. Apply guards explicitly:
+
+  ```ts
+  @MessagePattern('order.create')
+  @UseGuards(MicroserviceAuthGuard)
+  createOrder(data: CreateOrderDto) { ... }
+  ```
+
+  The guard reads context-specific auth (typically from message metadata, not HTTP headers).
+
+  ## Error Handling
+
+  Errors thrown in handlers serialize back to the client:
+
+  ```ts
+  throw new RpcException('order not found');
+  ```
+
+  `RpcException` is the microservice equivalent of `HttpException`. Client receives the error and rejects the Observable.
+
+  ## Common Pitfalls
+
+  - **Sharing transport for events and request-response.** Some transports (Redis pub/sub) drop messages with no listeners. Use durable queues (RabbitMQ, Kafka) for important events.
+  - **Forgetting `firstValueFrom`.** `client.send(...)` returns Observable, not Promise. Without conversion, async/await silently misbehaves.
+  - **Long-running handlers without timeouts.** A slow handler holds the connection. Set timeouts on the client.
+  - **Coupling services via shared types only.** When a service changes a DTO, every consumer must update. Use a versioned schema or contract-test.
+
+  ## Verification
+
+  A working microservices setup:
+
+  - Request-response patterns return within expected latency.
+  - Events propagate to all listeners (durable transport).
+  - Failures (handler error, transport disconnect) surface to clients with clear error type.
+  - Hybrid app serves both HTTP and microservice patterns from the same controllers when needed.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Setup
+
+    ```ts
+    // main.ts
+    import { NestFactory } from '@nestjs/core';
+    import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+
+    async function bootstrap() {
+        const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+            AppModule,
+            { transport: Transport.TCP, options: { host: '0.0.0.0', port: 3001 } }
+        );
+        await app.listen();
+    }
+    bootstrap();
+    ```
+
+    The microservice instance handles incoming patterns. The same controller decorators work; just replace `@Controller` + `@Get/@Post` with `@MessagePattern` for RPC or `@EventPattern` for events.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Request-Response with @MessagePattern
+
+    ```ts
+    @Controller()
+    export class OrdersController {
+        @MessagePattern('order.create')
+        async createOrder(data: CreateOrderDto): Promise<Order> {
+            return this.ordersService.create(data);
+        }
+    }
+    ```
+
+    The pattern `'order.create'` is the routing key. Clients send a request to that pattern and await a response.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Events with @EventPattern
+
+    ```ts
+    @Controller()
+    export class InventoryController {
+        @EventPattern('order.completed')
+        async onOrderCompleted(data: OrderEvent): Promise<void> {
+            await this.inventoryService.decrement(data.items);
+        }
+    }
+    ```
+
+    Events don't return values. Multiple listeners can handle the same event independently. Use for fire-and-forget cross-service notifications.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Calling Other Services — ClientProxy
+
+    ```ts
+    @Module({
+        imports: [
+            ClientsModule.register([
+                {
+                    name: 'ORDERS_SERVICE',
+                    transport: Transport.TCP,
+                    options: { host: 'orders-svc', port: 3001 },
+                },
+            ]),
+        ],
+    })
+    export class AppModule {}
+
+    // In a service:
+    @Injectable()
+    export class CheckoutService {
+        constructor(@Inject('ORDERS_SERVICE') private orders: ClientProxy) {}
+
+        async checkout(req: CheckoutRequest) {
+            const order = await firstValueFrom(this.orders.send('order.create', req));
+            this.orders.emit('order.completed', { orderId: order.id });
+            return order;
+        }
+    }
+    ```
+
+    `send` for request-response (returns Observable, often consumed via `firstValueFrom` for a Promise). `emit` for events (no response).
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Transport Options
+
+    - **TCP** — simplest. In-process / same-network. Limited features.
+    - **Redis** — pub/sub via Redis. Good for events; works for request-response with limitations.
+    - **NATS** — high-throughput messaging. Good for both patterns.
+    - **RabbitMQ** — durable queues, complex routing.
+    - **Kafka** — high-throughput event streaming. Use for event-sourcing patterns.
+    - **gRPC** — typed RPC over HTTP/2. Polyglot service support.
+
+    Choose by use case: events at scale → Kafka; request-response with retries → NATS or RabbitMQ; simple in-cluster → TCP or Redis.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Hybrid HTTP + Microservice
+
+    A common pattern: HTTP for external APIs, microservice for internal:
+
+    ```ts
+    async function bootstrap() {
+        const app = await NestFactory.create(AppModule);  // HTTP
+        app.connectMicroservice<MicroserviceOptions>({
+            transport: Transport.TCP,
+            options: { host: '0.0.0.0', port: 3001 },
+        });
+        await app.startAllMicroservices();
+        await app.listen(3000);
+    }
+    ```
+
+    Same controllers can serve both: `@Get('/orders')` for HTTP, `@MessagePattern('orders.list')` for microservice. Run both on one process.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Authentication and Guards
+
+    Microservice endpoints don't go through HTTP middleware. Apply guards explicitly:
+
+    ```ts
+    @MessagePattern('order.create')
+    @UseGuards(MicroserviceAuthGuard)
+    createOrder(data: CreateOrderDto) { ... }
+    ```
+
+    The guard reads context-specific auth (typically from message metadata, not HTTP headers).
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Error Handling
+
+    Errors thrown in handlers serialize back to the client:
+
+    ```ts
+    throw new RpcException('order not found');
+    ```
+
+    `RpcException` is the microservice equivalent of `HttpException`. Client receives the error and rejects the Observable.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **Sharing transport for events and request-response.** Some transports (Redis pub/sub) drop messages with no listeners. Use durable queues (RabbitMQ, Kafka) for important events.
+    - **Forgetting `firstValueFrom`.** `client.send(...)` returns Observable, not Promise. Without conversion, async/await silently misbehaves.
+    - **Long-running handlers without timeouts.** A slow handler holds the connection. Set timeouts on the client.
+    - **Coupling services via shared types only.** When a service changes a DTO, every consumer must update. Use a versioned schema or contract-test.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working microservices setup:
+
+    - Request-response patterns return within expected latency.
+    - Events propagate to all listeners (durable transport).
+    - Failures (handler error, transport disconnect) surface to clients with clear error type.
+    - Hybrid app serves both HTTP and microservice patterns from the same controllers when needed.

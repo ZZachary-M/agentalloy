@@ -1,0 +1,460 @@
+skill_type: domain
+skill_id: nestjs-graphql
+canonical_name: NestJS + GraphQL
+category: engineering
+skill_class: domain
+domain_tags:
+- nestjs
+- graphql
+- apollo
+- code-first
+- schema-first
+- subscriptions
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # NestJS + GraphQL
+
+  ## Overview
+
+  NestJS supports two GraphQL approaches: code-first (TypeScript classes generate the schema) and schema-first (write SDL, types are generated). Code-first is the recommended modern approach — keeps types and resolvers colocated.
+
+  ---
+
+  ## Setup — Code-First
+
+  ```bash
+  npm install @nestjs/graphql @nestjs/apollo @apollo/server graphql
+  ```
+
+  ```ts
+  // app.module.ts
+  import { GraphQLModule } from '@nestjs/graphql';
+  import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+
+  @Module({
+      imports: [
+          GraphQLModule.forRoot<ApolloDriverConfig>({
+              driver: ApolloDriver,
+              autoSchemaFile: 'schema.gql',
+              sortSchema: true,
+          }),
+      ],
+  })
+  export class AppModule {}
+  ```
+
+  `autoSchemaFile` writes the generated SDL to disk for inspection.
+
+  ## ObjectType and Resolver
+
+  ```ts
+  @ObjectType()
+  class User {
+      @Field(() => ID)
+      id: string;
+
+      @Field()
+      name: string;
+
+      @Field()
+      email: string;
+
+      @Field(() => [Order])
+      orders?: Order[];
+  }
+
+  @Resolver(() => User)
+  export class UserResolver {
+      constructor(private users: UserService, private orders: OrderService) {}
+
+      @Query(() => [User])
+      async users(): Promise<User[]> {
+          return this.users.findAll();
+      }
+
+      @Query(() => User, { nullable: true })
+      async user(@Args('id') id: string): Promise<User | null> {
+          return this.users.findById(id);
+      }
+
+      @ResolveField(() => [Order])
+      async orders(@Parent() user: User): Promise<Order[]> {
+          return this.orders.findByUser(user.id);
+      }
+  }
+  ```
+
+  `@ObjectType()` declares a GraphQL type. `@Field` exposes properties. `@Query` / `@Mutation` are resolvers. `@ResolveField` resolves nested fields lazily.
+
+  ## Mutations
+
+  ```ts
+  @InputType()
+  class CreateUserInput {
+      @Field()
+      @IsEmail()
+      email: string;
+
+      @Field()
+      @MinLength(2)
+      name: string;
+  }
+
+  @Resolver(() => User)
+  export class UserResolver {
+      @Mutation(() => User)
+      async createUser(@Args('input') input: CreateUserInput): Promise<User> {
+          return this.users.create(input);
+      }
+  }
+  ```
+
+  `@InputType` for inputs (different from `@ObjectType` outputs). class-validator decorators (`@IsEmail`, `@MinLength`) work directly in NestJS.
+
+  ## DataLoader for N+1
+
+  A query like `users { orders { product } }` triggers N+1 queries: one for users, one per user for orders, one per order for product.
+
+  ```ts
+  import * as DataLoader from 'dataloader';
+
+  @Injectable({ scope: Scope.REQUEST })
+  export class OrdersLoader {
+      private loader = new DataLoader<string, Order[]>(async (userIds) => {
+          const orders = await this.orderRepo.findByUserIds(userIds as string[]);
+          return userIds.map(id => orders.filter(o => o.userId === id));
+      });
+
+      load(userId: string) { return this.loader.load(userId); }
+  }
+
+  @Resolver(() => User)
+  export class UserResolver {
+      constructor(private ordersLoader: OrdersLoader) {}
+
+      @ResolveField(() => [Order])
+      async orders(@Parent() user: User) {
+          return this.ordersLoader.load(user.id);
+      }
+  }
+  ```
+
+  DataLoader batches calls within a single request. Calls during one query phase are batched into a single load call.
+
+  ## Subscriptions
+
+  ```ts
+  import { PubSub } from 'graphql-subscriptions';
+  const pubSub = new PubSub();
+
+  @Resolver(() => Order)
+  export class OrderResolver {
+      @Mutation(() => Order)
+      async createOrder(@Args('input') input: CreateOrderInput): Promise<Order> {
+          const order = await this.orderService.create(input);
+          pubSub.publish('orderCreated', { orderCreated: order });
+          return order;
+      }
+
+      @Subscription(() => Order)
+      orderCreated() {
+          return pubSub.asyncIterator('orderCreated');
+      }
+  }
+  ```
+
+  For multi-instance apps, use Redis-based PubSub (`graphql-redis-subscriptions`) instead of in-memory.
+
+  ## Auth Guards
+
+  GraphQL guards work like HTTP guards but receive the GraphQL context:
+
+  ```ts
+  @Injectable()
+  export class GqlAuthGuard implements CanActivate {
+      canActivate(context: ExecutionContext) {
+          const ctx = GqlExecutionContext.create(context);
+          const req = ctx.getContext().req;
+          return req.user != null;
+      }
+  }
+
+  @UseGuards(GqlAuthGuard)
+  @Query(() => User)
+  me(@Context() ctx) { return ctx.req.user; }
+  ```
+
+  `GqlExecutionContext` adapts the standard ExecutionContext for GraphQL.
+
+  ## Federation
+
+  For cross-service GraphQL:
+
+  ```ts
+  @ObjectType()
+  @Directive('@key(fields: "id")')
+  class User {
+      @Field(() => ID)
+      id: string;
+  }
+  ```
+
+  Apollo Federation lets one service expose part of the User type, another extend it with additional fields. Apollo Gateway composes the subgraphs.
+
+  Use when GraphQL is the org-wide API layer; otherwise stick with a single GraphQL service.
+
+  ## Code-First vs Schema-First
+
+  - **Code-first**: TypeScript classes are the source of truth. Schema generated. Pros: no two-way sync, types match resolvers. Cons: schema customization sometimes awkward.
+  - **Schema-first**: SDL is the source of truth. Types generated. Pros: schema designers can iterate without TypeScript. Cons: drift risk between schema and resolvers.
+
+  Default to code-first. Use schema-first only when the schema is co-owned with non-TS teams.
+
+  ## Common Pitfalls
+
+  - **N+1 without DataLoader.** Schema looks fine; production blows up under load. Add DataLoader for every cross-table relationship.
+  - **Resolvers that return DB entities directly.** Schema includes internal fields by accident. Map to ObjectType explicitly.
+  - **No depth limit.** A query like `user { friends { friends { friends { ... } } } }` recurses. Use depth-limit middleware.
+  - **Subscriptions on a single instance with multiple replicas.** Subscribers on instance B miss publishes on instance A. Use Redis PubSub.
+
+  ## Verification
+
+  A working NestJS + GraphQL:
+
+  - Schema generates from TypeScript types.
+  - N+1 queries eliminated by DataLoader.
+  - Auth guards enforce on Query/Mutation as expected.
+  - Subscriptions deliver across all replicas.
+  - Schema introspection disabled in production (security).
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Setup — Code-First
+
+    ```bash
+    npm install @nestjs/graphql @nestjs/apollo @apollo/server graphql
+    ```
+
+    ```ts
+    // app.module.ts
+    import { GraphQLModule } from '@nestjs/graphql';
+    import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+
+    @Module({
+        imports: [
+            GraphQLModule.forRoot<ApolloDriverConfig>({
+                driver: ApolloDriver,
+                autoSchemaFile: 'schema.gql',
+                sortSchema: true,
+            }),
+        ],
+    })
+    export class AppModule {}
+    ```
+
+    `autoSchemaFile` writes the generated SDL to disk for inspection.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## ObjectType and Resolver
+
+    ```ts
+    @ObjectType()
+    class User {
+        @Field(() => ID)
+        id: string;
+
+        @Field()
+        name: string;
+
+        @Field()
+        email: string;
+
+        @Field(() => [Order])
+        orders?: Order[];
+    }
+
+    @Resolver(() => User)
+    export class UserResolver {
+        constructor(private users: UserService, private orders: OrderService) {}
+
+        @Query(() => [User])
+        async users(): Promise<User[]> {
+            return this.users.findAll();
+        }
+
+        @Query(() => User, { nullable: true })
+        async user(@Args('id') id: string): Promise<User | null> {
+            return this.users.findById(id);
+        }
+
+        @ResolveField(() => [Order])
+        async orders(@Parent() user: User): Promise<Order[]> {
+            return this.orders.findByUser(user.id);
+        }
+    }
+    ```
+
+    `@ObjectType()` declares a GraphQL type. `@Field` exposes properties. `@Query` / `@Mutation` are resolvers. `@ResolveField` resolves nested fields lazily.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Mutations
+
+    ```ts
+    @InputType()
+    class CreateUserInput {
+        @Field()
+        @IsEmail()
+        email: string;
+
+        @Field()
+        @MinLength(2)
+        name: string;
+    }
+
+    @Resolver(() => User)
+    export class UserResolver {
+        @Mutation(() => User)
+        async createUser(@Args('input') input: CreateUserInput): Promise<User> {
+            return this.users.create(input);
+        }
+    }
+    ```
+
+    `@InputType` for inputs (different from `@ObjectType` outputs). class-validator decorators (`@IsEmail`, `@MinLength`) work directly in NestJS.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## DataLoader for N+1
+
+    A query like `users { orders { product } }` triggers N+1 queries: one for users, one per user for orders, one per order for product.
+
+    ```ts
+    import * as DataLoader from 'dataloader';
+
+    @Injectable({ scope: Scope.REQUEST })
+    export class OrdersLoader {
+        private loader = new DataLoader<string, Order[]>(async (userIds) => {
+            const orders = await this.orderRepo.findByUserIds(userIds as string[]);
+            return userIds.map(id => orders.filter(o => o.userId === id));
+        });
+
+        load(userId: string) { return this.loader.load(userId); }
+    }
+
+    @Resolver(() => User)
+    export class UserResolver {
+        constructor(private ordersLoader: OrdersLoader) {}
+
+        @ResolveField(() => [Order])
+        async orders(@Parent() user: User) {
+            return this.ordersLoader.load(user.id);
+        }
+    }
+    ```
+
+    DataLoader batches calls within a single request. Calls during one query phase are batched into a single load call.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Subscriptions
+
+    ```ts
+    import { PubSub } from 'graphql-subscriptions';
+    const pubSub = new PubSub();
+
+    @Resolver(() => Order)
+    export class OrderResolver {
+        @Mutation(() => Order)
+        async createOrder(@Args('input') input: CreateOrderInput): Promise<Order> {
+            const order = await this.orderService.create(input);
+            pubSub.publish('orderCreated', { orderCreated: order });
+            return order;
+        }
+
+        @Subscription(() => Order)
+        orderCreated() {
+            return pubSub.asyncIterator('orderCreated');
+        }
+    }
+    ```
+
+    For multi-instance apps, use Redis-based PubSub (`graphql-redis-subscriptions`) instead of in-memory.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Auth Guards
+
+    GraphQL guards work like HTTP guards but receive the GraphQL context:
+
+    ```ts
+    @Injectable()
+    export class GqlAuthGuard implements CanActivate {
+        canActivate(context: ExecutionContext) {
+            const ctx = GqlExecutionContext.create(context);
+            const req = ctx.getContext().req;
+            return req.user != null;
+        }
+    }
+
+    @UseGuards(GqlAuthGuard)
+    @Query(() => User)
+    me(@Context() ctx) { return ctx.req.user; }
+    ```
+
+    `GqlExecutionContext` adapts the standard ExecutionContext for GraphQL.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Federation
+
+    For cross-service GraphQL:
+
+    ```ts
+    @ObjectType()
+    @Directive('@key(fields: "id")')
+    class User {
+        @Field(() => ID)
+        id: string;
+    }
+    ```
+
+    Apollo Federation lets one service expose part of the User type, another extend it with additional fields. Apollo Gateway composes the subgraphs.
+
+    Use when GraphQL is the org-wide API layer; otherwise stick with a single GraphQL service.
+- fragment_type: rationale
+  sequence: 8
+  content: |-
+    ## Code-First vs Schema-First
+
+    - **Code-first**: TypeScript classes are the source of truth. Schema generated. Pros: no two-way sync, types match resolvers. Cons: schema customization sometimes awkward.
+    - **Schema-first**: SDL is the source of truth. Types generated. Pros: schema designers can iterate without TypeScript. Cons: drift risk between schema and resolvers.
+
+    Default to code-first. Use schema-first only when the schema is co-owned with non-TS teams.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **N+1 without DataLoader.** Schema looks fine; production blows up under load. Add DataLoader for every cross-table relationship.
+    - **Resolvers that return DB entities directly.** Schema includes internal fields by accident. Map to ObjectType explicitly.
+    - **No depth limit.** A query like `user { friends { friends { friends { ... } } } }` recurses. Use depth-limit middleware.
+    - **Subscriptions on a single instance with multiple replicas.** Subscribers on instance B miss publishes on instance A. Use Redis PubSub.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working NestJS + GraphQL:
+
+    - Schema generates from TypeScript types.
+    - N+1 queries eliminated by DataLoader.
+    - Auth guards enforce on Query/Mutation as expected.
+    - Subscriptions deliver across all replicas.
+    - Schema introspection disabled in production (security).

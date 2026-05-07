@@ -1,0 +1,444 @@
+skill_type: domain
+skill_id: nestjs-queues-bull
+canonical_name: NestJS Job Queues with BullMQ
+category: engineering
+skill_class: domain
+domain_tags:
+- nestjs
+- bullmq
+- queues
+- workers
+- redis
+- background-jobs
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # NestJS Job Queues with BullMQ
+
+  ## Overview
+
+  BullMQ is the modern Redis-backed job queue for Node. NestJS wraps it via @nestjs/bullmq. Pattern: producer adds jobs to a queue; workers pick them up. Survives restarts, supports retries with backoff, and handles failure modes that in-process tasks can't.
+
+  ---
+
+  ## Setup
+
+  ```bash
+  npm install @nestjs/bullmq bullmq ioredis
+  ```
+
+  ```ts
+  // app.module.ts
+  import { BullModule } from '@nestjs/bullmq';
+
+  @Module({
+      imports: [
+          BullModule.forRoot({
+              connection: { host: 'redis', port: 6379 },
+          }),
+          BullModule.registerQueue({ name: 'email' }),
+          BullModule.registerQueue({ name: 'reports' }),
+      ],
+  })
+  export class AppModule {}
+  ```
+
+  Each queue has a name; multiple queues coexist on one Redis.
+
+  ## Adding Jobs (Producer)
+
+  ```ts
+  @Injectable()
+  export class EmailService {
+      constructor(@InjectQueue('email') private emailQueue: Queue) {}
+
+      async sendWelcome(userId: string) {
+          await this.emailQueue.add('welcome', { userId }, {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 1000 },
+          });
+      }
+
+      async scheduleNewsletter(when: Date) {
+          await this.emailQueue.add('newsletter', { ... }, {
+              delay: when.getTime() - Date.now(),
+          });
+      }
+
+      async addRecurring() {
+          await this.emailQueue.add('daily-report', { ... }, {
+              repeat: { pattern: '0 9 * * *' },  // 9am daily, cron
+          });
+      }
+  }
+  ```
+
+  `add(name, data, options)`:
+  - `attempts` — retry count.
+  - `backoff` — exponential or fixed delay between retries.
+  - `delay` — schedule for the future.
+  - `repeat` — cron-like or every-N-ms.
+
+  ## Workers (Processor)
+
+  ```ts
+  @Processor('email')
+  export class EmailProcessor extends WorkerHost {
+      async process(job: Job): Promise<any> {
+          switch (job.name) {
+              case 'welcome':
+                  return this.sendWelcome(job.data.userId);
+              case 'newsletter':
+                  return this.sendNewsletter(job.data);
+              case 'daily-report':
+                  return this.runDailyReport();
+          }
+      }
+
+      async sendWelcome(userId: string) {
+          // ...
+      }
+  }
+  ```
+
+  The processor runs in the same Nest app or a separate worker process. For prod, run workers separately so deploys/restarts don't lose in-flight jobs.
+
+  ## Job Lifecycle Hooks
+
+  ```ts
+  @Processor('email')
+  export class EmailProcessor extends WorkerHost {
+      async process(job: Job) { /* ... */ }
+
+      @OnWorkerEvent('completed')
+      onCompleted(job: Job) {
+          console.log(`${job.id} completed`);
+      }
+
+      @OnWorkerEvent('failed')
+      onFailed(job: Job, err: Error) {
+          console.error(`${job.id} failed`, err);
+      }
+  }
+  ```
+
+  Use for logging, metrics, dead-letter routing.
+
+  ## Concurrency
+
+  ```ts
+  BullModule.registerQueue({
+      name: 'email',
+      defaultJobOptions: {
+          removeOnComplete: 1000,  // keep last 1k completed
+          removeOnFail: 5000,
+      },
+  });
+
+  // In processor:
+  @Processor('email', { concurrency: 5 })
+  export class EmailProcessor extends WorkerHost {
+      // ...
+  }
+  ```
+
+  `concurrency` sets how many jobs the worker processes in parallel. Tune based on resource: I/O-heavy → higher; CPU-heavy → match cores.
+
+  ## Rate Limiting
+
+  ```ts
+  BullModule.registerQueue({
+      name: 'email',
+      limiter: {
+          max: 100,
+          duration: 60_000,  // 100 jobs per minute
+      },
+  });
+  ```
+
+  Useful when the downstream API has rate limits (third-party email service, payment provider).
+
+  ## Job Progress
+
+  ```ts
+  async process(job: Job) {
+      for (let i = 0; i < items.length; i++) {
+          await processItem(items[i]);
+          await job.updateProgress((i / items.length) * 100);
+      }
+  }
+  ```
+
+  Progress visible in the BullMQ UI / monitoring tools.
+
+  ## Why Not Just BackgroundTasks?
+
+  NestJS in-process scheduling has limits:
+  - No retries on crash.
+  - No durability — restarts lose queued work.
+  - Same memory pressure as the request handler.
+  - No cross-instance coordination.
+
+  BullMQ solves all four. Use BackgroundTasks for trivial fire-and-forget; use BullMQ for anything you'd be unhappy losing.
+
+  ## Bull Board for Monitoring
+
+  ```bash
+  npm install @bull-board/api @bull-board/express
+  ```
+
+  ```ts
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath('/admin/queues');
+
+  createBullBoard({
+      queues: [new BullMQAdapter(emailQueue)],
+      serverAdapter,
+  });
+
+  app.use('/admin/queues', serverAdapter.getRouter());
+  ```
+
+  Web UI at `/admin/queues` shows job state, can retry failed, drain queue. Lock down with auth in production.
+
+  ## Common Pitfalls
+
+  - **Worker in same process as web server.** A heavy job pegs CPU and slows requests. Run workers separately in prod.
+  - **No `removeOnComplete`/`removeOnFail`.** Job records accumulate in Redis until OOM. Set retention.
+  - **No retries on flaky external services.** First-class BullMQ feature; use `attempts` + `backoff`.
+  - **Not handling job failure.** Failed jobs sit in 'failed' set forever. Set up `removeOnFail` or DLQ alerting.
+  - **Concurrency too high for I/O.** Workers oversubscribe; downstream services rate-limit. Start at 5-10, tune.
+
+  ## Verification
+
+  A working BullMQ setup:
+
+  - Producer adds jobs without blocking the request.
+  - Workers consume with appropriate concurrency.
+  - Retries with exponential backoff handle transient failures.
+  - Bull Board shows healthy queue depth, no growing backlog.
+  - Failed jobs alert with cause; not silently dropped.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Setup
+
+    ```bash
+    npm install @nestjs/bullmq bullmq ioredis
+    ```
+
+    ```ts
+    // app.module.ts
+    import { BullModule } from '@nestjs/bullmq';
+
+    @Module({
+        imports: [
+            BullModule.forRoot({
+                connection: { host: 'redis', port: 6379 },
+            }),
+            BullModule.registerQueue({ name: 'email' }),
+            BullModule.registerQueue({ name: 'reports' }),
+        ],
+    })
+    export class AppModule {}
+    ```
+
+    Each queue has a name; multiple queues coexist on one Redis.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Adding Jobs (Producer)
+
+    ```ts
+    @Injectable()
+    export class EmailService {
+        constructor(@InjectQueue('email') private emailQueue: Queue) {}
+
+        async sendWelcome(userId: string) {
+            await this.emailQueue.add('welcome', { userId }, {
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 1000 },
+            });
+        }
+
+        async scheduleNewsletter(when: Date) {
+            await this.emailQueue.add('newsletter', { ... }, {
+                delay: when.getTime() - Date.now(),
+            });
+        }
+
+        async addRecurring() {
+            await this.emailQueue.add('daily-report', { ... }, {
+                repeat: { pattern: '0 9 * * *' },  // 9am daily, cron
+            });
+        }
+    }
+    ```
+
+    `add(name, data, options)`:
+    - `attempts` — retry count.
+    - `backoff` — exponential or fixed delay between retries.
+    - `delay` — schedule for the future.
+    - `repeat` — cron-like or every-N-ms.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Workers (Processor)
+
+    ```ts
+    @Processor('email')
+    export class EmailProcessor extends WorkerHost {
+        async process(job: Job): Promise<any> {
+            switch (job.name) {
+                case 'welcome':
+                    return this.sendWelcome(job.data.userId);
+                case 'newsletter':
+                    return this.sendNewsletter(job.data);
+                case 'daily-report':
+                    return this.runDailyReport();
+            }
+        }
+
+        async sendWelcome(userId: string) {
+            // ...
+        }
+    }
+    ```
+
+    The processor runs in the same Nest app or a separate worker process. For prod, run workers separately so deploys/restarts don't lose in-flight jobs.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Job Lifecycle Hooks
+
+    ```ts
+    @Processor('email')
+    export class EmailProcessor extends WorkerHost {
+        async process(job: Job) { /* ... */ }
+
+        @OnWorkerEvent('completed')
+        onCompleted(job: Job) {
+            console.log(`${job.id} completed`);
+        }
+
+        @OnWorkerEvent('failed')
+        onFailed(job: Job, err: Error) {
+            console.error(`${job.id} failed`, err);
+        }
+    }
+    ```
+
+    Use for logging, metrics, dead-letter routing.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Concurrency
+
+    ```ts
+    BullModule.registerQueue({
+        name: 'email',
+        defaultJobOptions: {
+            removeOnComplete: 1000,  // keep last 1k completed
+            removeOnFail: 5000,
+        },
+    });
+
+    // In processor:
+    @Processor('email', { concurrency: 5 })
+    export class EmailProcessor extends WorkerHost {
+        // ...
+    }
+    ```
+
+    `concurrency` sets how many jobs the worker processes in parallel. Tune based on resource: I/O-heavy → higher; CPU-heavy → match cores.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Rate Limiting
+
+    ```ts
+    BullModule.registerQueue({
+        name: 'email',
+        limiter: {
+            max: 100,
+            duration: 60_000,  // 100 jobs per minute
+        },
+    });
+    ```
+
+    Useful when the downstream API has rate limits (third-party email service, payment provider).
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Job Progress
+
+    ```ts
+    async process(job: Job) {
+        for (let i = 0; i < items.length; i++) {
+            await processItem(items[i]);
+            await job.updateProgress((i / items.length) * 100);
+        }
+    }
+    ```
+
+    Progress visible in the BullMQ UI / monitoring tools.
+- fragment_type: rationale
+  sequence: 8
+  content: |-
+    ## Why Not Just BackgroundTasks?
+
+    NestJS in-process scheduling has limits:
+    - No retries on crash.
+    - No durability — restarts lose queued work.
+    - Same memory pressure as the request handler.
+    - No cross-instance coordination.
+
+    BullMQ solves all four. Use BackgroundTasks for trivial fire-and-forget; use BullMQ for anything you'd be unhappy losing.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Bull Board for Monitoring
+
+    ```bash
+    npm install @bull-board/api @bull-board/express
+    ```
+
+    ```ts
+    const serverAdapter = new ExpressAdapter();
+    serverAdapter.setBasePath('/admin/queues');
+
+    createBullBoard({
+        queues: [new BullMQAdapter(emailQueue)],
+        serverAdapter,
+    });
+
+    app.use('/admin/queues', serverAdapter.getRouter());
+    ```
+
+    Web UI at `/admin/queues` shows job state, can retry failed, drain queue. Lock down with auth in production.
+- fragment_type: guardrail
+  sequence: 10
+  content: |-
+    ## Common Pitfalls
+
+    - **Worker in same process as web server.** A heavy job pegs CPU and slows requests. Run workers separately in prod.
+    - **No `removeOnComplete`/`removeOnFail`.** Job records accumulate in Redis until OOM. Set retention.
+    - **No retries on flaky external services.** First-class BullMQ feature; use `attempts` + `backoff`.
+    - **Not handling job failure.** Failed jobs sit in 'failed' set forever. Set up `removeOnFail` or DLQ alerting.
+    - **Concurrency too high for I/O.** Workers oversubscribe; downstream services rate-limit. Start at 5-10, tune.
+- fragment_type: verification
+  sequence: 11
+  content: |-
+    ## Verification
+
+    A working BullMQ setup:
+
+    - Producer adds jobs without blocking the request.
+    - Workers consume with appropriate concurrency.
+    - Retries with exponential backoff handle transient failures.
+    - Bull Board shows healthy queue depth, no growing backlog.
+    - Failed jobs alert with cause; not silently dropped.

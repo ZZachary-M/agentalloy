@@ -1,0 +1,397 @@
+skill_type: domain
+skill_id: nestjs-websockets
+canonical_name: NestJS WebSockets
+category: engineering
+skill_class: domain
+domain_tags:
+- nestjs
+- websockets
+- socket-io
+- real-time
+- gateways
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # NestJS WebSockets
+
+  ## Overview
+
+  NestJS WebSocket support uses the same DI / decorator model as HTTP. Gateways replace controllers; @SubscribeMessage replaces @Get. Default adapter is socket.io (richer features); native ws is also supported. Scale beyond one instance via Redis adapter.
+
+  ---
+
+  ## Setup
+
+  ```bash
+  npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
+  ```
+
+  ```ts
+  @WebSocketGateway({
+      cors: { origin: '*' },
+      namespace: '/chat',
+  })
+  export class ChatGateway {
+      @WebSocketServer() server: Server;
+
+      @SubscribeMessage('message')
+      handleMessage(@MessageBody() data: { room: string; text: string }, @ConnectedSocket() client: Socket) {
+          this.server.to(data.room).emit('message', {
+              text: data.text,
+              from: client.id,
+              at: new Date(),
+          });
+      }
+  }
+  ```
+
+  `@WebSocketGateway` is like `@Controller`. `@SubscribeMessage` listens for an event from clients. `@WebSocketServer()` injects the io server for broadcasting.
+
+  ## Lifecycle Hooks
+
+  ```ts
+  @WebSocketGateway()
+  export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+      handleConnection(client: Socket) {
+          console.log(`Connected: ${client.id}`);
+      }
+
+      handleDisconnect(client: Socket) {
+          console.log(`Disconnected: ${client.id}`);
+      }
+  }
+  ```
+
+  Use for tracking presence, joining default rooms, validating auth on connect.
+
+  ## Rooms
+
+  ```ts
+  @SubscribeMessage('joinRoom')
+  async joinRoom(@MessageBody() room: string, @ConnectedSocket() client: Socket) {
+      await client.join(room);
+      client.emit('joined', { room });
+  }
+
+  @SubscribeMessage('leaveRoom')
+  async leaveRoom(@MessageBody() room: string, @ConnectedSocket() client: Socket) {
+      await client.leave(room);
+  }
+
+  // Broadcast to room:
+  this.server.to('room-1').emit('event', data);
+  ```
+
+  Rooms scope broadcasts. A user might join `user:123` (their personal room) plus `team:abc` (team-wide events).
+
+  ## Namespaces
+
+  ```ts
+  @WebSocketGateway({ namespace: '/chat' })
+  export class ChatGateway { ... }
+
+  @WebSocketGateway({ namespace: '/notifications' })
+  export class NotificationsGateway { ... }
+  ```
+
+  Namespaces are top-level connection paths. Clients connect to one namespace; events scoped to that namespace.
+
+  ## Authentication
+
+  ```ts
+  @WebSocketGateway()
+  export class ChatGateway implements OnGatewayConnection {
+      constructor(private auth: AuthService) {}
+
+      async handleConnection(client: Socket) {
+          const token = client.handshake.auth.token;
+          try {
+              const user = await this.auth.verifyToken(token);
+              client.data.user = user;
+          } catch {
+              client.disconnect();
+          }
+      }
+
+      @SubscribeMessage('message')
+      handleMessage(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+          const user = client.data.user;  // attached at connection
+          // use user.id
+      }
+  }
+  ```
+
+  Auth runs on connect; rejected connections are immediately disconnected. Subsequent messages trust `client.data.user`.
+
+  ## Scaling — Redis Adapter
+
+  For multi-instance apps:
+
+  ```bash
+  npm install @socket.io/redis-adapter ioredis
+  ```
+
+  ```ts
+  import { IoAdapter } from '@nestjs/platform-socket.io';
+  import { createAdapter } from '@socket.io/redis-adapter';
+
+  class RedisIoAdapter extends IoAdapter {
+      createIOServer(port: number, options?: ServerOptions) {
+          const server = super.createIOServer(port, options);
+          const pubClient = createClient({ url: 'redis://...' });
+          const subClient = pubClient.duplicate();
+          server.adapter(createAdapter(pubClient, subClient));
+          return server;
+      }
+  }
+
+  const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new RedisIoAdapter(app));
+  ```
+
+  Without this, a `server.to('room').emit(...)` only reaches sockets connected to the same instance. With it, broadcasts route via Redis to all instances.
+
+  ## Validation Pipes
+
+  ```ts
+  @SubscribeMessage('message')
+  @UsePipes(new ValidationPipe())
+  handleMessage(@MessageBody() data: SendMessageDto) {
+      // validated by class-validator decorators on SendMessageDto
+  }
+  ```
+
+  Same pipes as HTTP. Validation errors are emitted to the client as exceptions.
+
+  ## Native WebSocket Adapter
+
+  For lower overhead and broader client compatibility:
+
+  ```bash
+  npm install @nestjs/platform-ws ws
+  ```
+
+  ```ts
+  const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new WsAdapter(app));
+  ```
+
+  Trade-off: no rooms, no namespaces, no auto-reconnect — these are socket.io features. Native ws is simpler and more compatible (browser WebSocket API works directly).
+
+  ## Common Pitfalls
+
+  - **No auth on connect.** Anyone can connect and emit. Always verify on `handleConnection`.
+  - **Not using rooms.** Broadcasting to all clients = privacy leak. Always scope with rooms.
+  - **Multi-instance without Redis adapter.** Half your users miss broadcasts. Use the adapter.
+  - **Storing connection state in memory.** Reload loses it. Persist user → socketId mappings in Redis if needed.
+  - **Sending too much data per event.** WebSockets aren't HTTP — large messages saturate the connection. Paginate or compress.
+
+  ## Verification
+
+  A working WebSocket gateway:
+
+  - Connections require authentication; unauthenticated clients disconnect immediately.
+  - Room-scoped broadcasts deliver only to intended recipients.
+  - Multi-instance broadcasts work across replicas (Redis adapter).
+  - Reconnects work cleanly (socket.io auto-reconnect).
+  - Validation pipes catch malformed messages without crashing the gateway.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Setup
+
+    ```bash
+    npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
+    ```
+
+    ```ts
+    @WebSocketGateway({
+        cors: { origin: '*' },
+        namespace: '/chat',
+    })
+    export class ChatGateway {
+        @WebSocketServer() server: Server;
+
+        @SubscribeMessage('message')
+        handleMessage(@MessageBody() data: { room: string; text: string }, @ConnectedSocket() client: Socket) {
+            this.server.to(data.room).emit('message', {
+                text: data.text,
+                from: client.id,
+                at: new Date(),
+            });
+        }
+    }
+    ```
+
+    `@WebSocketGateway` is like `@Controller`. `@SubscribeMessage` listens for an event from clients. `@WebSocketServer()` injects the io server for broadcasting.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Lifecycle Hooks
+
+    ```ts
+    @WebSocketGateway()
+    export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+        handleConnection(client: Socket) {
+            console.log(`Connected: ${client.id}`);
+        }
+
+        handleDisconnect(client: Socket) {
+            console.log(`Disconnected: ${client.id}`);
+        }
+    }
+    ```
+
+    Use for tracking presence, joining default rooms, validating auth on connect.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Rooms
+
+    ```ts
+    @SubscribeMessage('joinRoom')
+    async joinRoom(@MessageBody() room: string, @ConnectedSocket() client: Socket) {
+        await client.join(room);
+        client.emit('joined', { room });
+    }
+
+    @SubscribeMessage('leaveRoom')
+    async leaveRoom(@MessageBody() room: string, @ConnectedSocket() client: Socket) {
+        await client.leave(room);
+    }
+
+    // Broadcast to room:
+    this.server.to('room-1').emit('event', data);
+    ```
+
+    Rooms scope broadcasts. A user might join `user:123` (their personal room) plus `team:abc` (team-wide events).
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Namespaces
+
+    ```ts
+    @WebSocketGateway({ namespace: '/chat' })
+    export class ChatGateway { ... }
+
+    @WebSocketGateway({ namespace: '/notifications' })
+    export class NotificationsGateway { ... }
+    ```
+
+    Namespaces are top-level connection paths. Clients connect to one namespace; events scoped to that namespace.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Authentication
+
+    ```ts
+    @WebSocketGateway()
+    export class ChatGateway implements OnGatewayConnection {
+        constructor(private auth: AuthService) {}
+
+        async handleConnection(client: Socket) {
+            const token = client.handshake.auth.token;
+            try {
+                const user = await this.auth.verifyToken(token);
+                client.data.user = user;
+            } catch {
+                client.disconnect();
+            }
+        }
+
+        @SubscribeMessage('message')
+        handleMessage(@ConnectedSocket() client: Socket, @MessageBody() data: any) {
+            const user = client.data.user;  // attached at connection
+            // use user.id
+        }
+    }
+    ```
+
+    Auth runs on connect; rejected connections are immediately disconnected. Subsequent messages trust `client.data.user`.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Scaling — Redis Adapter
+
+    For multi-instance apps:
+
+    ```bash
+    npm install @socket.io/redis-adapter ioredis
+    ```
+
+    ```ts
+    import { IoAdapter } from '@nestjs/platform-socket.io';
+    import { createAdapter } from '@socket.io/redis-adapter';
+
+    class RedisIoAdapter extends IoAdapter {
+        createIOServer(port: number, options?: ServerOptions) {
+            const server = super.createIOServer(port, options);
+            const pubClient = createClient({ url: 'redis://...' });
+            const subClient = pubClient.duplicate();
+            server.adapter(createAdapter(pubClient, subClient));
+            return server;
+        }
+    }
+
+    const app = await NestFactory.create(AppModule);
+    app.useWebSocketAdapter(new RedisIoAdapter(app));
+    ```
+
+    Without this, a `server.to('room').emit(...)` only reaches sockets connected to the same instance. With it, broadcasts route via Redis to all instances.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Validation Pipes
+
+    ```ts
+    @SubscribeMessage('message')
+    @UsePipes(new ValidationPipe())
+    handleMessage(@MessageBody() data: SendMessageDto) {
+        // validated by class-validator decorators on SendMessageDto
+    }
+    ```
+
+    Same pipes as HTTP. Validation errors are emitted to the client as exceptions.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Native WebSocket Adapter
+
+    For lower overhead and broader client compatibility:
+
+    ```bash
+    npm install @nestjs/platform-ws ws
+    ```
+
+    ```ts
+    const app = await NestFactory.create(AppModule);
+    app.useWebSocketAdapter(new WsAdapter(app));
+    ```
+
+    Trade-off: no rooms, no namespaces, no auto-reconnect — these are socket.io features. Native ws is simpler and more compatible (browser WebSocket API works directly).
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **No auth on connect.** Anyone can connect and emit. Always verify on `handleConnection`.
+    - **Not using rooms.** Broadcasting to all clients = privacy leak. Always scope with rooms.
+    - **Multi-instance without Redis adapter.** Half your users miss broadcasts. Use the adapter.
+    - **Storing connection state in memory.** Reload loses it. Persist user → socketId mappings in Redis if needed.
+    - **Sending too much data per event.** WebSockets aren't HTTP — large messages saturate the connection. Paginate or compress.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working WebSocket gateway:
+
+    - Connections require authentication; unauthenticated clients disconnect immediately.
+    - Room-scoped broadcasts deliver only to intended recipients.
+    - Multi-instance broadcasts work across replicas (Redis adapter).
+    - Reconnects work cleanly (socket.io auto-reconnect).
+    - Validation pipes catch malformed messages without crashing the gateway.

@@ -1,0 +1,345 @@
+skill_type: domain
+skill_id: nestjs-caching
+canonical_name: NestJS Caching with @CacheKey
+category: engineering
+skill_class: domain
+domain_tags:
+- nestjs
+- caching
+- redis-cache
+- cache-interceptor
+- ttl
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # NestJS Caching with @CacheKey
+
+  ## Overview
+
+  NestJS caching wraps cache-manager. Default in-memory store works for single-instance; Redis store for multi-instance. Two patterns: automatic via @UseInterceptors(CacheInterceptor) on routes, or manual via injecting Cache.
+
+  ---
+
+  ## Setup
+
+  ```bash
+  npm install @nestjs/cache-manager cache-manager
+  # Optional: Redis store
+  npm install cache-manager-redis-yet
+  ```
+
+  ```ts
+  import { CacheModule } from '@nestjs/cache-manager';
+  import { redisStore } from 'cache-manager-redis-yet';
+
+  @Module({
+      imports: [
+          CacheModule.registerAsync({
+              isGlobal: true,
+              useFactory: async () => ({
+                  store: await redisStore({ url: 'redis://localhost:6379', ttl: 60_000 }),
+              }),
+          }),
+      ],
+  })
+  export class AppModule {}
+  ```
+
+  `isGlobal: true` makes Cache injectable everywhere without re-importing. Default TTL applies to entries without an explicit one.
+
+  ## Automatic Caching with Interceptor
+
+  ```ts
+  @Controller('products')
+  @UseInterceptors(CacheInterceptor)
+  export class ProductsController {
+      @Get()
+      @CacheKey('all-products')
+      @CacheTTL(60)  // seconds
+      async findAll() {
+          return this.productService.findAll();
+      }
+
+      @Get(':id')
+      async findOne(@Param('id') id: string) {
+          return this.productService.findOne(id);
+          // Auto-keyed by URL: /products/123
+      }
+  }
+  ```
+
+  `CacheInterceptor` caches GET responses by URL. `@CacheKey` overrides the auto key. `@CacheTTL` overrides the default TTL.
+
+  Note: only caches successful GET responses. POST/PUT/DELETE bypass.
+
+  ## Manual Caching
+
+  ```ts
+  @Injectable()
+  export class ExpensiveService {
+      constructor(@Inject(CACHE_MANAGER) private cache: Cache) {}
+
+      async getReport(reportId: string): Promise<Report> {
+          const cached = await this.cache.get<Report>(`report:${reportId}`);
+          if (cached) return cached;
+
+          const report = await this.computeExpensiveReport(reportId);
+          await this.cache.set(`report:${reportId}`, report, 300_000);  // 5 min
+          return report;
+      }
+
+      async invalidate(reportId: string) {
+          await this.cache.del(`report:${reportId}`);
+      }
+  }
+  ```
+
+  The cache-aside pattern: read cache; if miss, compute and write back; on update, delete.
+
+  ## Cache Key Strategies
+
+  ```ts
+  // User-scoped:
+  const key = `user:${userId}:profile`;
+
+  // Versioned (invalidate by bumping version):
+  const key = `report:${reportId}:v${this.cacheVersion}`;
+
+  // Hash of inputs:
+  const key = `query:${crypto.createHash('sha256').update(JSON.stringify(args)).digest('hex')}`;
+  ```
+
+  The third pattern is useful for parameterized queries — different args produce different keys.
+
+  ## Invalidation Patterns
+
+  - **TTL-only**: simplest; entries expire after time. Stale-while-fresh window acceptable.
+  - **Explicit del**: on write, delete the cached key. Strong consistency but couples writers to cache keys.
+  - **Version bump**: on write, increment a version counter; subsequent reads use new keys; old keys age out.
+  - **Cache stampede prevention**: when many requests hit a cold cache, all compute simultaneously. Use a lock (Redis SETNX) or stale-while-revalidate.
+
+  ## Conditional Cache Headers
+
+  For HTTP-cacheable responses, use cache-control headers instead of in-process caching:
+
+  ```ts
+  @Get()
+  @Header('Cache-Control', 'public, max-age=60')
+  findAll() { ... }
+  ```
+
+  Browsers and CDNs handle this. In-process cache is for things that can't or shouldn't be HTTP-cached (per-user data, computed reports).
+
+  ## Multi-Instance Considerations
+
+  For multi-instance apps:
+
+  - In-memory cache: each instance has its own. Inconsistent reads across instances. Use only for hot per-instance state.
+  - Redis cache: shared across instances. Slightly slower (network) but consistent.
+
+  Most production apps use Redis for any cross-request cache.
+
+  ## Cache Bypass
+
+  ```ts
+  @Get(':id')
+  @UseInterceptors(CacheInterceptor)
+  async findOne(@Param('id') id: string, @Req() req: Request) {
+      if (req.headers['x-bypass-cache']) return this.service.findOne(id);
+      return this.service.findOne(id);
+  }
+  ```
+
+  Or use `@CacheKey(undefined)` conditionally. Useful for admin tools or debugging.
+
+  ## Common Pitfalls
+
+  - **Caching personalized responses with global keys.** User A sees User B's data. Always scope keys by user.
+  - **No invalidation on write.** Stale data persists until TTL. For mutable data, delete the key on update.
+  - **Caching errors.** A 500 response cached for 60s blocks recovery. Filter by status code.
+  - **Cache stampede.** Cold cache + simultaneous reads = N expensive computations. Use a lock or stale-while-revalidate.
+  - **In-memory cache in multi-instance prod.** Inconsistent reads across instances. Use Redis.
+
+  ## Verification
+
+  A working cache layer:
+
+  - Cache hits visible in logs / metrics; hit rate >50% for cacheable routes.
+  - Invalidation on write tested explicitly (write, read, expect new value).
+  - TTL respected — entries expire on schedule.
+  - No stale-data bugs in tests that mutate then read.
+  - Cache fail (Redis down) doesn't crash the app — fall through to source.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Setup
+
+    ```bash
+    npm install @nestjs/cache-manager cache-manager
+    # Optional: Redis store
+    npm install cache-manager-redis-yet
+    ```
+
+    ```ts
+    import { CacheModule } from '@nestjs/cache-manager';
+    import { redisStore } from 'cache-manager-redis-yet';
+
+    @Module({
+        imports: [
+            CacheModule.registerAsync({
+                isGlobal: true,
+                useFactory: async () => ({
+                    store: await redisStore({ url: 'redis://localhost:6379', ttl: 60_000 }),
+                }),
+            }),
+        ],
+    })
+    export class AppModule {}
+    ```
+
+    `isGlobal: true` makes Cache injectable everywhere without re-importing. Default TTL applies to entries without an explicit one.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Automatic Caching with Interceptor
+
+    ```ts
+    @Controller('products')
+    @UseInterceptors(CacheInterceptor)
+    export class ProductsController {
+        @Get()
+        @CacheKey('all-products')
+        @CacheTTL(60)  // seconds
+        async findAll() {
+            return this.productService.findAll();
+        }
+
+        @Get(':id')
+        async findOne(@Param('id') id: string) {
+            return this.productService.findOne(id);
+            // Auto-keyed by URL: /products/123
+        }
+    }
+    ```
+
+    `CacheInterceptor` caches GET responses by URL. `@CacheKey` overrides the auto key. `@CacheTTL` overrides the default TTL.
+
+    Note: only caches successful GET responses. POST/PUT/DELETE bypass.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Manual Caching
+
+    ```ts
+    @Injectable()
+    export class ExpensiveService {
+        constructor(@Inject(CACHE_MANAGER) private cache: Cache) {}
+
+        async getReport(reportId: string): Promise<Report> {
+            const cached = await this.cache.get<Report>(`report:${reportId}`);
+            if (cached) return cached;
+
+            const report = await this.computeExpensiveReport(reportId);
+            await this.cache.set(`report:${reportId}`, report, 300_000);  // 5 min
+            return report;
+        }
+
+        async invalidate(reportId: string) {
+            await this.cache.del(`report:${reportId}`);
+        }
+    }
+    ```
+
+    The cache-aside pattern: read cache; if miss, compute and write back; on update, delete.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Cache Key Strategies
+
+    ```ts
+    // User-scoped:
+    const key = `user:${userId}:profile`;
+
+    // Versioned (invalidate by bumping version):
+    const key = `report:${reportId}:v${this.cacheVersion}`;
+
+    // Hash of inputs:
+    const key = `query:${crypto.createHash('sha256').update(JSON.stringify(args)).digest('hex')}`;
+    ```
+
+    The third pattern is useful for parameterized queries — different args produce different keys.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Invalidation Patterns
+
+    - **TTL-only**: simplest; entries expire after time. Stale-while-fresh window acceptable.
+    - **Explicit del**: on write, delete the cached key. Strong consistency but couples writers to cache keys.
+    - **Version bump**: on write, increment a version counter; subsequent reads use new keys; old keys age out.
+    - **Cache stampede prevention**: when many requests hit a cold cache, all compute simultaneously. Use a lock (Redis SETNX) or stale-while-revalidate.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Conditional Cache Headers
+
+    For HTTP-cacheable responses, use cache-control headers instead of in-process caching:
+
+    ```ts
+    @Get()
+    @Header('Cache-Control', 'public, max-age=60')
+    findAll() { ... }
+    ```
+
+    Browsers and CDNs handle this. In-process cache is for things that can't or shouldn't be HTTP-cached (per-user data, computed reports).
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Multi-Instance Considerations
+
+    For multi-instance apps:
+
+    - In-memory cache: each instance has its own. Inconsistent reads across instances. Use only for hot per-instance state.
+    - Redis cache: shared across instances. Slightly slower (network) but consistent.
+
+    Most production apps use Redis for any cross-request cache.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Cache Bypass
+
+    ```ts
+    @Get(':id')
+    @UseInterceptors(CacheInterceptor)
+    async findOne(@Param('id') id: string, @Req() req: Request) {
+        if (req.headers['x-bypass-cache']) return this.service.findOne(id);
+        return this.service.findOne(id);
+    }
+    ```
+
+    Or use `@CacheKey(undefined)` conditionally. Useful for admin tools or debugging.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **Caching personalized responses with global keys.** User A sees User B's data. Always scope keys by user.
+    - **No invalidation on write.** Stale data persists until TTL. For mutable data, delete the key on update.
+    - **Caching errors.** A 500 response cached for 60s blocks recovery. Filter by status code.
+    - **Cache stampede.** Cold cache + simultaneous reads = N expensive computations. Use a lock or stale-while-revalidate.
+    - **In-memory cache in multi-instance prod.** Inconsistent reads across instances. Use Redis.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working cache layer:
+
+    - Cache hits visible in logs / metrics; hit rate >50% for cacheable routes.
+    - Invalidation on write tested explicitly (write, read, expect new value).
+    - TTL respected — entries expire on schedule.
+    - No stale-data bugs in tests that mutate then read.
+    - Cache fail (Redis down) doesn't crash the app — fall through to source.

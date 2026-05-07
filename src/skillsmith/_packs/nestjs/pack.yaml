@@ -30,3 +30,18 @@ skills:
 - skill_id: nestjs-pipes-guards-interceptors
   file: nestjs-pipes-guards-interceptors.yaml
   fragment_count: 8
+- skill_id: nestjs-caching
+  file: nestjs-caching.yaml
+  fragment_count: 10
+- skill_id: nestjs-graphql
+  file: nestjs-graphql.yaml
+  fragment_count: 10
+- skill_id: nestjs-microservices
+  file: nestjs-microservices.yaml
+  fragment_count: 10
+- skill_id: nestjs-queues-bull
+  file: nestjs-queues-bull.yaml
+  fragment_count: 11
+- skill_id: nestjs-websockets
+  file: nestjs-websockets.yaml
+  fragment_count: 10
