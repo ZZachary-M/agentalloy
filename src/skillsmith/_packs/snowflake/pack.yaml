@@ -28,3 +28,18 @@ skills:
 - skill_id: snowflake-warehouses-and-cost
   file: snowflake-warehouses-and-cost.yaml
   fragment_count: 7
+- skill_id: snowflake-cortex-ai-ml
+  file: snowflake-cortex-ai-ml.yaml
+  fragment_count: 10
+- skill_id: snowflake-cost-monitoring
+  file: snowflake-cost-monitoring.yaml
+  fragment_count: 10
+- skill_id: snowflake-dynamic-tables
+  file: snowflake-dynamic-tables.yaml
+  fragment_count: 10
+- skill_id: snowflake-rbac-and-security
+  file: snowflake-rbac-and-security.yaml
+  fragment_count: 10
+- skill_id: snowflake-snowpipe-auto-ingest
+  file: snowflake-snowpipe-auto-ingest.yaml
+  fragment_count: 10

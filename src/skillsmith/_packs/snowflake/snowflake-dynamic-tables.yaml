@@ -1,0 +1,331 @@
+skill_type: domain
+skill_id: snowflake-dynamic-tables
+canonical_name: Snowflake Dynamic Tables
+category: engineering
+skill_class: domain
+domain_tags:
+- snowflake
+- dynamic-tables
+- incremental-refresh
+- streams
+- tasks
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Snowflake Dynamic Tables
+
+  ## Overview
+
+  Dynamic tables are declarative, incremental SQL materializations. You write a SELECT; Snowflake figures out how to keep the result fresh. Replaces hand-rolled streams + tasks for many use cases.
+
+  ---
+
+  ## What They Replace
+
+  Before dynamic tables, incremental updates required:
+
+  ```sql
+  -- Source table
+  CREATE TABLE orders (...);
+
+  -- Stream tracks changes
+  CREATE STREAM orders_stream ON TABLE orders;
+
+  -- Task runs the merge on a schedule
+  CREATE TASK orders_dim_refresh
+    WAREHOUSE = compute_wh
+    SCHEDULE = '5 minute'
+  AS
+    MERGE INTO orders_dim t USING (SELECT * FROM orders_stream) s
+    ON t.id = s.id
+    WHEN MATCHED THEN UPDATE ...
+    WHEN NOT MATCHED THEN INSERT ...;
+  ```
+
+  Three objects to manage: stream, task, the merge logic. Easy to misconfigure.
+
+  ## Dynamic Table Equivalent
+
+  ```sql
+  CREATE OR REPLACE DYNAMIC TABLE orders_dim
+    TARGET_LAG = '5 minutes'
+    WAREHOUSE = compute_wh
+  AS
+  SELECT
+    id,
+    customer_id,
+    status,
+    amount,
+    created_at,
+    updated_at
+  FROM orders;
+  ```
+
+  That's it. Snowflake:
+  1. Computes the initial state.
+  2. Tracks the source for changes.
+  3. Refreshes incrementally to meet the TARGET_LAG.
+  4. Handles dependency chains automatically.
+
+  ## TARGET_LAG
+
+  Specifies how stale the dynamic table can be:
+
+  - `TARGET_LAG = '1 minute'` — refresh keeps within 1 minute of source.
+  - `TARGET_LAG = 'DOWNSTREAM'` — only refresh when a downstream consumer needs it.
+
+  Lower lag = more compute. Pick based on freshness needs:
+
+  - Customer-facing real-time dashboards: 30s-1m.
+  - Internal analytics: 5-15m.
+  - Daily reports: hours.
+
+  ## Incremental vs Full Refresh
+
+  Snowflake automatically picks. Incremental is preferred (cheaper). Falls back to full when:
+
+  - The query has functions that don't support incremental (some window functions, non-deterministic UDFs).
+  - The source has too many changes — full rebuild is cheaper.
+
+  Run `SHOW DYNAMIC TABLES;` and check `last_refresh_type` to see which mode kicked in.
+
+  ## Chains of Dynamic Tables
+
+  ```sql
+  -- Source dim
+  CREATE DYNAMIC TABLE customers AS SELECT ... FROM raw_customers;
+
+  -- Derived fact joining the dim
+  CREATE DYNAMIC TABLE order_facts
+    TARGET_LAG = '5 minutes'
+    WAREHOUSE = wh
+  AS
+  SELECT o.id, o.amount, c.country
+  FROM orders o
+  JOIN customers c ON o.customer_id = c.id;
+  ```
+
+  Snowflake refreshes in dependency order: customers first, then order_facts. The lag of `order_facts` accounts for the upstream lag.
+
+  ## Refresh Modes
+
+  ```sql
+  -- Manual refresh
+  ALTER DYNAMIC TABLE orders_dim REFRESH;
+
+  -- Suspend
+  ALTER DYNAMIC TABLE orders_dim SUSPEND;
+
+  -- Resume
+  ALTER DYNAMIC TABLE orders_dim RESUME;
+  ```
+
+  Suspend stops the auto-refresh; useful during maintenance or backfills.
+
+  ## Monitoring
+
+  ```sql
+  SELECT *
+  FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
+    DATE_RANGE_START => DATEADD('day', -1, CURRENT_TIMESTAMP())
+  ));
+  ```
+
+  Shows each refresh: time, rows changed, mode (incremental vs full), errors. Plot in monitoring.
+
+  ## Migration from Streams+Tasks
+
+  Audit existing pipelines for candidates:
+
+  - **Good fit**: incremental MERGE patterns, simple aggregations.
+  - **Bad fit**: complex multi-step procedures, calls to stored procedures, side effects.
+
+  Migration steps:
+  1. Author a dynamic table with the same SELECT logic.
+  2. Run side-by-side; compare outputs.
+  3. When matched, deprecate the old task; consumers point to the dynamic table.
+
+  Faster to maintain, easier to reason about, fewer moving pieces.
+
+  ## Common Pitfalls
+
+  - **Long TARGET_LAG with downstream-real-time consumers.** Lags compound through chains. End-to-end lag = sum of stages.
+  - **Non-deterministic SELECT.** `current_timestamp()` in the projection forces full refresh every time. Move time-of-load logic to a separate view.
+  - **Watching SQL change history without monitoring lag.** A pipeline that's silently falling behind. Alert on `last_refresh_age > 2 * target_lag`.
+  - **Cost surprises from too-aggressive lag.** A 10-second target on a busy table runs the warehouse near-continuously. Right-size lag for actual freshness needs.
+
+  ## Verification
+
+  Working dynamic tables:
+
+  - Refresh history shows incremental mode for most refreshes.
+  - Lag stays within TARGET_LAG.
+  - Chained dynamic tables refresh in dependency order.
+  - Costs are predictable and monitored via DYNAMIC_TABLE_REFRESH_HISTORY.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## What They Replace
+
+    Before dynamic tables, incremental updates required:
+
+    ```sql
+    -- Source table
+    CREATE TABLE orders (...);
+
+    -- Stream tracks changes
+    CREATE STREAM orders_stream ON TABLE orders;
+
+    -- Task runs the merge on a schedule
+    CREATE TASK orders_dim_refresh
+      WAREHOUSE = compute_wh
+      SCHEDULE = '5 minute'
+    AS
+      MERGE INTO orders_dim t USING (SELECT * FROM orders_stream) s
+      ON t.id = s.id
+      WHEN MATCHED THEN UPDATE ...
+      WHEN NOT MATCHED THEN INSERT ...;
+    ```
+
+    Three objects to manage: stream, task, the merge logic. Easy to misconfigure.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Dynamic Table Equivalent
+
+    ```sql
+    CREATE OR REPLACE DYNAMIC TABLE orders_dim
+      TARGET_LAG = '5 minutes'
+      WAREHOUSE = compute_wh
+    AS
+    SELECT
+      id,
+      customer_id,
+      status,
+      amount,
+      created_at,
+      updated_at
+    FROM orders;
+    ```
+
+    That's it. Snowflake:
+    1. Computes the initial state.
+    2. Tracks the source for changes.
+    3. Refreshes incrementally to meet the TARGET_LAG.
+    4. Handles dependency chains automatically.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## TARGET_LAG
+
+    Specifies how stale the dynamic table can be:
+
+    - `TARGET_LAG = '1 minute'` — refresh keeps within 1 minute of source.
+    - `TARGET_LAG = 'DOWNSTREAM'` — only refresh when a downstream consumer needs it.
+
+    Lower lag = more compute. Pick based on freshness needs:
+
+    - Customer-facing real-time dashboards: 30s-1m.
+    - Internal analytics: 5-15m.
+    - Daily reports: hours.
+- fragment_type: rationale
+  sequence: 4
+  content: |-
+    ## Incremental vs Full Refresh
+
+    Snowflake automatically picks. Incremental is preferred (cheaper). Falls back to full when:
+
+    - The query has functions that don't support incremental (some window functions, non-deterministic UDFs).
+    - The source has too many changes — full rebuild is cheaper.
+
+    Run `SHOW DYNAMIC TABLES;` and check `last_refresh_type` to see which mode kicked in.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Chains of Dynamic Tables
+
+    ```sql
+    -- Source dim
+    CREATE DYNAMIC TABLE customers AS SELECT ... FROM raw_customers;
+
+    -- Derived fact joining the dim
+    CREATE DYNAMIC TABLE order_facts
+      TARGET_LAG = '5 minutes'
+      WAREHOUSE = wh
+    AS
+    SELECT o.id, o.amount, c.country
+    FROM orders o
+    JOIN customers c ON o.customer_id = c.id;
+    ```
+
+    Snowflake refreshes in dependency order: customers first, then order_facts. The lag of `order_facts` accounts for the upstream lag.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Refresh Modes
+
+    ```sql
+    -- Manual refresh
+    ALTER DYNAMIC TABLE orders_dim REFRESH;
+
+    -- Suspend
+    ALTER DYNAMIC TABLE orders_dim SUSPEND;
+
+    -- Resume
+    ALTER DYNAMIC TABLE orders_dim RESUME;
+    ```
+
+    Suspend stops the auto-refresh; useful during maintenance or backfills.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Monitoring
+
+    ```sql
+    SELECT *
+    FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
+      DATE_RANGE_START => DATEADD('day', -1, CURRENT_TIMESTAMP())
+    ));
+    ```
+
+    Shows each refresh: time, rows changed, mode (incremental vs full), errors. Plot in monitoring.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Migration from Streams+Tasks
+
+    Audit existing pipelines for candidates:
+
+    - **Good fit**: incremental MERGE patterns, simple aggregations.
+    - **Bad fit**: complex multi-step procedures, calls to stored procedures, side effects.
+
+    Migration steps:
+    1. Author a dynamic table with the same SELECT logic.
+    2. Run side-by-side; compare outputs.
+    3. When matched, deprecate the old task; consumers point to the dynamic table.
+
+    Faster to maintain, easier to reason about, fewer moving pieces.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **Long TARGET_LAG with downstream-real-time consumers.** Lags compound through chains. End-to-end lag = sum of stages.
+    - **Non-deterministic SELECT.** `current_timestamp()` in the projection forces full refresh every time. Move time-of-load logic to a separate view.
+    - **Watching SQL change history without monitoring lag.** A pipeline that's silently falling behind. Alert on `last_refresh_age > 2 * target_lag`.
+    - **Cost surprises from too-aggressive lag.** A 10-second target on a busy table runs the warehouse near-continuously. Right-size lag for actual freshness needs.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    Working dynamic tables:
+
+    - Refresh history shows incremental mode for most refreshes.
+    - Lag stays within TARGET_LAG.
+    - Chained dynamic tables refresh in dependency order.
+    - Costs are predictable and monitored via DYNAMIC_TABLE_REFRESH_HISTORY.

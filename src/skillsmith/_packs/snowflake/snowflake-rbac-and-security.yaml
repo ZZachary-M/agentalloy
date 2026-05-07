@@ -1,0 +1,357 @@
+skill_type: domain
+skill_id: snowflake-rbac-and-security
+canonical_name: Snowflake RBAC and Security
+category: engineering
+skill_class: domain
+domain_tags:
+- snowflake
+- rbac
+- roles
+- data-masking
+- row-access-policies
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Snowflake RBAC and Security
+
+  ## Overview
+
+  Snowflake security centers on roles. Privileges flow through role hierarchy; grants flow downward. Dynamic data masking and row access policies enforce column- and row-level security based on the active role. Federated authentication (OAuth, SAML) for SSO.
+
+  ---
+
+  ## Role Hierarchy
+
+  ```sql
+  CREATE ROLE analyst;
+  CREATE ROLE engineer;
+  CREATE ROLE admin;
+
+  -- Hierarchy: admin > engineer > analyst
+  GRANT ROLE analyst TO ROLE engineer;
+  GRANT ROLE engineer TO ROLE admin;
+
+  -- Users get assigned roles
+  GRANT ROLE engineer TO USER alice;
+
+  -- Active role per session
+  USE ROLE engineer;
+  ```
+
+  A role implicitly has all privileges of roles granted to it. `engineer` can do everything `analyst` can plus its own grants.
+
+  ACCOUNTADMIN, SECURITYADMIN, SYSADMIN, USERADMIN are built-in. Most user-defined roles fall under SYSADMIN.
+
+  ## Ownership
+
+  Every object (database, schema, table, view, etc.) has an owner role. Owners can grant access:
+
+  ```sql
+  -- Owner grants
+  GRANT SELECT ON TABLE orders TO ROLE analyst;
+  GRANT SELECT, INSERT, UPDATE ON TABLE orders TO ROLE engineer;
+
+  -- Granular by column
+  GRANT SELECT (id, customer_id, amount) ON TABLE orders TO ROLE analyst;
+  -- (analyst sees these columns; queries on others fail)
+  ```
+
+  If ownership transfers (`GRANT OWNERSHIP TO ROLE x`), all existing grants on the object are dropped. Owner has implicit ALL privileges; explicit grants on top of ownership are redundant.
+
+  ## Future Grants
+
+  Grants apply only to objects existing at the time. For 'all current and future tables in this schema':
+
+  ```sql
+  GRANT SELECT ON FUTURE TABLES IN SCHEMA my_db.public TO ROLE analyst;
+  GRANT SELECT ON ALL TABLES IN SCHEMA my_db.public TO ROLE analyst;
+  ```
+
+  `FUTURE` covers tables created after the grant. `ALL` covers existing ones. Run both for full coverage.
+
+  ## Dynamic Data Masking
+
+  Mask sensitive columns based on the querying role:
+
+  ```sql
+  CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING ->
+    CASE
+      WHEN CURRENT_ROLE() IN ('ADMIN', 'COMPLIANCE') THEN val
+      WHEN CURRENT_ROLE() = 'ANALYST' THEN REGEXP_REPLACE(val, '.+@', '***@')
+      ELSE '***'
+    END;
+
+  ALTER TABLE customers MODIFY COLUMN email SET MASKING POLICY mask_email;
+  ```
+
+  Now `SELECT email FROM customers`:
+  - ADMIN sees `alice@example.com`.
+  - ANALYST sees `***@example.com`.
+  - Others see `***`.
+
+  The mask runs on read; data isn't modified. Useful for PII protection without separate redacted tables.
+
+  ## Row Access Policies
+
+  Filter rows by role:
+
+  ```sql
+  CREATE ROW ACCESS POLICY orders_by_region AS (region STRING) RETURNS BOOLEAN ->
+    CASE
+      WHEN CURRENT_ROLE() = 'ADMIN' THEN TRUE
+      WHEN CURRENT_ROLE() = 'EMEA_TEAM' THEN region IN ('UK', 'DE', 'FR')
+      WHEN CURRENT_ROLE() = 'AMER_TEAM' THEN region IN ('US', 'CA', 'MX')
+      ELSE FALSE
+    END;
+
+  ALTER TABLE orders ADD ROW ACCESS POLICY orders_by_region ON (region);
+  ```
+
+  A query against `orders` automatically filters to the rows the role can see. No additional WHERE needed; can't be bypassed.
+
+  ## OAuth and SAML
+
+  For SSO with Okta, Azure AD, etc.:
+
+  ```sql
+  CREATE SECURITY INTEGRATION my_oauth
+    TYPE = OAUTH
+    ENABLED = TRUE
+    OAUTH_CLIENT = CUSTOM
+    OAUTH_REDIRECT_URI = 'https://...';
+  ```
+
+  Users authenticate via the IdP; Snowflake trusts the assertion. Roles map to IdP groups.
+
+  ## Network Policies
+
+  Restrict which IPs can access:
+
+  ```sql
+  CREATE NETWORK POLICY corporate_only
+    ALLOWED_IP_LIST = ('203.0.113.0/24', '198.51.100.0/24')
+    BLOCKED_IP_LIST = ();
+
+  -- Apply
+  ALTER USER alice SET NETWORK_POLICY = corporate_only;
+  ```
+
+  Connection attempts from outside the allow list fail at TLS time. Pair with VPN for office workers.
+
+  ## Least Privilege
+
+  Don't grant ACCOUNTADMIN to humans for routine work. The pattern:
+
+  - ACCOUNTADMIN — emergency role only, used by a small group.
+  - SECURITYADMIN — manages users, roles, network policies.
+  - SYSADMIN — owns most production schemas, grants to engineering roles.
+  - Custom roles — `engineer`, `analyst`, `bi_user` — used for daily work.
+
+  Audit role usage:
+
+  ```sql
+  SELECT user_name, role_name, COUNT(*) AS query_count
+  FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+  WHERE start_time > CURRENT_TIMESTAMP() - INTERVAL '7 days'
+  GROUP BY 1, 2
+  ORDER BY query_count DESC;
+  ```
+
+  If `accountadmin` shows up in routine queries, that's a misconfiguration.
+
+  ## Common Pitfalls
+
+  - **Granting on PUBLIC role.** Everyone gets the grant. Used for reference data, never for sensitive tables.
+  - **Forgetting future grants.** New tables in a schema are inaccessible to existing users until granted explicitly. Always pair `ALL TABLES` + `FUTURE TABLES`.
+  - **Masking policies that look at session variables.** Variables can be set by the user; trust CURRENT_ROLE() instead.
+  - **No network policy on service accounts.** A leaked service-account credential can connect from anywhere. Restrict to known IPs.
+
+  ## Verification
+
+  A working RBAC setup:
+
+  - ACCOUNTADMIN appears in <1% of query history (humans use lower-privilege roles).
+  - Future grants ensure new tables are accessible to the right roles automatically.
+  - Masking + row-access policies hide PII from non-privileged roles.
+  - Network policies restrict service accounts to expected IPs.
+  - Audit logs answer 'who accessed what when'.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Role Hierarchy
+
+    ```sql
+    CREATE ROLE analyst;
+    CREATE ROLE engineer;
+    CREATE ROLE admin;
+
+    -- Hierarchy: admin > engineer > analyst
+    GRANT ROLE analyst TO ROLE engineer;
+    GRANT ROLE engineer TO ROLE admin;
+
+    -- Users get assigned roles
+    GRANT ROLE engineer TO USER alice;
+
+    -- Active role per session
+    USE ROLE engineer;
+    ```
+
+    A role implicitly has all privileges of roles granted to it. `engineer` can do everything `analyst` can plus its own grants.
+
+    ACCOUNTADMIN, SECURITYADMIN, SYSADMIN, USERADMIN are built-in. Most user-defined roles fall under SYSADMIN.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Ownership
+
+    Every object (database, schema, table, view, etc.) has an owner role. Owners can grant access:
+
+    ```sql
+    -- Owner grants
+    GRANT SELECT ON TABLE orders TO ROLE analyst;
+    GRANT SELECT, INSERT, UPDATE ON TABLE orders TO ROLE engineer;
+
+    -- Granular by column
+    GRANT SELECT (id, customer_id, amount) ON TABLE orders TO ROLE analyst;
+    -- (analyst sees these columns; queries on others fail)
+    ```
+
+    If ownership transfers (`GRANT OWNERSHIP TO ROLE x`), all existing grants on the object are dropped. Owner has implicit ALL privileges; explicit grants on top of ownership are redundant.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Future Grants
+
+    Grants apply only to objects existing at the time. For 'all current and future tables in this schema':
+
+    ```sql
+    GRANT SELECT ON FUTURE TABLES IN SCHEMA my_db.public TO ROLE analyst;
+    GRANT SELECT ON ALL TABLES IN SCHEMA my_db.public TO ROLE analyst;
+    ```
+
+    `FUTURE` covers tables created after the grant. `ALL` covers existing ones. Run both for full coverage.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Dynamic Data Masking
+
+    Mask sensitive columns based on the querying role:
+
+    ```sql
+    CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING ->
+      CASE
+        WHEN CURRENT_ROLE() IN ('ADMIN', 'COMPLIANCE') THEN val
+        WHEN CURRENT_ROLE() = 'ANALYST' THEN REGEXP_REPLACE(val, '.+@', '***@')
+        ELSE '***'
+      END;
+
+    ALTER TABLE customers MODIFY COLUMN email SET MASKING POLICY mask_email;
+    ```
+
+    Now `SELECT email FROM customers`:
+    - ADMIN sees `alice@example.com`.
+    - ANALYST sees `***@example.com`.
+    - Others see `***`.
+
+    The mask runs on read; data isn't modified. Useful for PII protection without separate redacted tables.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Row Access Policies
+
+    Filter rows by role:
+
+    ```sql
+    CREATE ROW ACCESS POLICY orders_by_region AS (region STRING) RETURNS BOOLEAN ->
+      CASE
+        WHEN CURRENT_ROLE() = 'ADMIN' THEN TRUE
+        WHEN CURRENT_ROLE() = 'EMEA_TEAM' THEN region IN ('UK', 'DE', 'FR')
+        WHEN CURRENT_ROLE() = 'AMER_TEAM' THEN region IN ('US', 'CA', 'MX')
+        ELSE FALSE
+      END;
+
+    ALTER TABLE orders ADD ROW ACCESS POLICY orders_by_region ON (region);
+    ```
+
+    A query against `orders` automatically filters to the rows the role can see. No additional WHERE needed; can't be bypassed.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## OAuth and SAML
+
+    For SSO with Okta, Azure AD, etc.:
+
+    ```sql
+    CREATE SECURITY INTEGRATION my_oauth
+      TYPE = OAUTH
+      ENABLED = TRUE
+      OAUTH_CLIENT = CUSTOM
+      OAUTH_REDIRECT_URI = 'https://...';
+    ```
+
+    Users authenticate via the IdP; Snowflake trusts the assertion. Roles map to IdP groups.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Network Policies
+
+    Restrict which IPs can access:
+
+    ```sql
+    CREATE NETWORK POLICY corporate_only
+      ALLOWED_IP_LIST = ('203.0.113.0/24', '198.51.100.0/24')
+      BLOCKED_IP_LIST = ();
+
+    -- Apply
+    ALTER USER alice SET NETWORK_POLICY = corporate_only;
+    ```
+
+    Connection attempts from outside the allow list fail at TLS time. Pair with VPN for office workers.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Least Privilege
+
+    Don't grant ACCOUNTADMIN to humans for routine work. The pattern:
+
+    - ACCOUNTADMIN — emergency role only, used by a small group.
+    - SECURITYADMIN — manages users, roles, network policies.
+    - SYSADMIN — owns most production schemas, grants to engineering roles.
+    - Custom roles — `engineer`, `analyst`, `bi_user` — used for daily work.
+
+    Audit role usage:
+
+    ```sql
+    SELECT user_name, role_name, COUNT(*) AS query_count
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    WHERE start_time > CURRENT_TIMESTAMP() - INTERVAL '7 days'
+    GROUP BY 1, 2
+    ORDER BY query_count DESC;
+    ```
+
+    If `accountadmin` shows up in routine queries, that's a misconfiguration.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **Granting on PUBLIC role.** Everyone gets the grant. Used for reference data, never for sensitive tables.
+    - **Forgetting future grants.** New tables in a schema are inaccessible to existing users until granted explicitly. Always pair `ALL TABLES` + `FUTURE TABLES`.
+    - **Masking policies that look at session variables.** Variables can be set by the user; trust CURRENT_ROLE() instead.
+    - **No network policy on service accounts.** A leaked service-account credential can connect from anywhere. Restrict to known IPs.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working RBAC setup:
+
+    - ACCOUNTADMIN appears in <1% of query history (humans use lower-privilege roles).
+    - Future grants ensure new tables are accessible to the right roles automatically.
+    - Masking + row-access policies hide PII from non-privileged roles.
+    - Network policies restrict service accounts to expected IPs.
+    - Audit logs answer 'who accessed what when'.

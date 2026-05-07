@@ -1,0 +1,369 @@
+skill_type: domain
+skill_id: snowflake-cortex-ai-ml
+canonical_name: Snowflake Cortex — AI and ML Functions
+category: engineering
+skill_class: domain
+domain_tags:
+- snowflake
+- cortex
+- ai
+- ml
+- llm-functions
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Snowflake Cortex — AI and ML Functions
+
+  ## Overview
+
+  Cortex brings AI/ML to Snowflake SQL. No model deployment, no inference endpoints — call functions like SQL. Vector search lives alongside structured data; LLM calls happen on the warehouse. Trade-off: locked into Snowflake's model catalog vs flexibility of external services.
+
+  ---
+
+  ## LLM Completions — COMPLETE
+
+  ```sql
+  SELECT
+    customer_id,
+    feedback,
+    SNOWFLAKE.CORTEX.COMPLETE(
+      'mistral-large',
+      CONCAT('Summarize this feedback in one sentence: ', feedback)
+    ) AS summary
+  FROM customer_feedback
+  WHERE created_at > CURRENT_DATE - 7;
+  ```
+
+  Calls a hosted LLM with the prompt. Returns the completion. Models available: mistral-large, llama2-70b-chat, mixtral-8x7b, snowflake-arctic, plus Anthropic Claude (in private preview).
+
+  Costs scale with token usage; track via `SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY`.
+
+  ## Embeddings — EMBED_TEXT
+
+  ```sql
+  SELECT
+    product_id,
+    description,
+    SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', description) AS embedding
+  FROM products;
+  ```
+
+  Returns a vector. Snowflake supports vector data types and vector similarity:
+
+  ```sql
+  CREATE TABLE products_with_emb (
+    product_id INT,
+    description STRING,
+    embedding VECTOR(FLOAT, 768)
+  );
+
+  INSERT INTO products_with_emb
+  SELECT product_id, description, SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', description)
+  FROM products;
+
+  -- Vector search
+  SELECT product_id, description,
+    VECTOR_COSINE_SIMILARITY(embedding, SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', 'wireless headphones')) AS sim
+  FROM products_with_emb
+  ORDER BY sim DESC
+  LIMIT 10;
+  ```
+
+  Vector index types: VECTOR_HNSW for fast approximate search at scale.
+
+  ## Pre-Built NLP Functions
+
+  ```sql
+  -- Summarize
+  SELECT SNOWFLAKE.CORTEX.SUMMARIZE(article_text) FROM articles;
+
+  -- Translate
+  SELECT SNOWFLAKE.CORTEX.TRANSLATE(text, 'en', 'es') FROM messages;
+
+  -- Sentiment
+  SELECT SNOWFLAKE.CORTEX.SENTIMENT(review_text) FROM reviews;
+  -- Returns -1 (negative) to 1 (positive)
+
+  -- Extract entities (PII redaction)
+  SELECT SNOWFLAKE.CORTEX.EXTRACT_ANSWER(text, 'who is mentioned?') FROM emails;
+  ```
+
+  These are pre-tuned for the use case; cheaper and faster than a generic COMPLETE call.
+
+  ## Classification
+
+  ```sql
+  SELECT
+    ticket_id,
+    description,
+    SNOWFLAKE.CORTEX.CLASSIFY_TEXT(
+      description,
+      ['billing', 'technical', 'account', 'feedback']
+    ) AS category
+  FROM support_tickets;
+  ```
+
+  Single-shot classification into a fixed label set. No training data required.
+
+  ## Document AI — Cortex Document AI
+
+  For PDF / image extraction:
+
+  ```sql
+  SELECT
+    doc_id,
+    SNOWFLAKE.CORTEX.PARSE_DOCUMENT(
+      @docs_stage,
+      file_name,
+      {'mode': 'OCR'}
+    ) AS extracted
+  FROM doc_metadata;
+  ```
+
+  Returns structured JSON with text + layout. Works on invoices, receipts, contracts. Reduces ETL pipelines that previously needed external OCR services.
+
+  ## Cost Management
+
+  LLM calls aren't free. Each call charges credits:
+
+  ```sql
+  SELECT
+    start_time,
+    service_type,
+    credits_used
+  FROM SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY
+  WHERE service_type LIKE '%CORTEX%'
+  ORDER BY start_time DESC;
+  ```
+
+  For high-volume calls, materialize results in a table; don't recompute on every query. Use dynamic tables to keep them fresh incrementally.
+
+  ## Vector Search at Scale
+
+  For million-row tables, brute-force VECTOR_COSINE_SIMILARITY is slow. Use HNSW index:
+
+  ```sql
+  CREATE OR REPLACE VECTOR_INDEX my_idx
+    ON products_with_emb (embedding)
+    TYPE = HNSW;
+
+  -- Index automatically used by similarity queries
+  ```
+
+  Approximate nearest neighbor; trade exact ranking for speed. Good for top-K retrieval where exact tie-breaking doesn't matter.
+
+  ## Snowflake Arctic
+
+  Snowflake's own LLM, optimized for code + SQL generation:
+
+  ```sql
+  SELECT SNOWFLAKE.CORTEX.COMPLETE(
+    'snowflake-arctic',
+    CONCAT('Generate SQL to find the top 10 customers by revenue from a table named orders with columns customer_id, amount: ')
+  );
+  ```
+
+  Comparable to GPT-4 on SQL, free for Snowflake customers up to a usage cap.
+
+  ## Common Pitfalls
+
+  - **LLM calls in interactive queries.** Latency adds up; warehouse stays busy. Materialize results.
+  - **No cost monitoring.** Easy to spend $$$ on LLM calls without realizing. Set per-warehouse budgets.
+  - **Vector search without an index.** Linear scan on millions of rows is slow. Always create a VECTOR_INDEX.
+  - **Treating Cortex as flexible model marketplace.** It's a closed catalog; if you need a specific model not offered, use external services.
+  - **Embedding drift.** If you change embedding model versions, regenerate all embeddings. Mixed versions don't compare meaningfully.
+
+  ## Verification
+
+  Cortex usage in good shape:
+
+  - LLM-generated columns are materialized, not computed on every query.
+  - Vector indexes are in place for high-cardinality embedding columns.
+  - Cost tracking shows steady-state usage matching expectations.
+  - Embeddings have a documented model version; regeneration is part of the migration process.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## LLM Completions — COMPLETE
+
+    ```sql
+    SELECT
+      customer_id,
+      feedback,
+      SNOWFLAKE.CORTEX.COMPLETE(
+        'mistral-large',
+        CONCAT('Summarize this feedback in one sentence: ', feedback)
+      ) AS summary
+    FROM customer_feedback
+    WHERE created_at > CURRENT_DATE - 7;
+    ```
+
+    Calls a hosted LLM with the prompt. Returns the completion. Models available: mistral-large, llama2-70b-chat, mixtral-8x7b, snowflake-arctic, plus Anthropic Claude (in private preview).
+
+    Costs scale with token usage; track via `SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY`.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Embeddings — EMBED_TEXT
+
+    ```sql
+    SELECT
+      product_id,
+      description,
+      SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', description) AS embedding
+    FROM products;
+    ```
+
+    Returns a vector. Snowflake supports vector data types and vector similarity:
+
+    ```sql
+    CREATE TABLE products_with_emb (
+      product_id INT,
+      description STRING,
+      embedding VECTOR(FLOAT, 768)
+    );
+
+    INSERT INTO products_with_emb
+    SELECT product_id, description, SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', description)
+    FROM products;
+
+    -- Vector search
+    SELECT product_id, description,
+      VECTOR_COSINE_SIMILARITY(embedding, SNOWFLAKE.CORTEX.EMBED_TEXT_768('e5-base-v2', 'wireless headphones')) AS sim
+    FROM products_with_emb
+    ORDER BY sim DESC
+    LIMIT 10;
+    ```
+
+    Vector index types: VECTOR_HNSW for fast approximate search at scale.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Pre-Built NLP Functions
+
+    ```sql
+    -- Summarize
+    SELECT SNOWFLAKE.CORTEX.SUMMARIZE(article_text) FROM articles;
+
+    -- Translate
+    SELECT SNOWFLAKE.CORTEX.TRANSLATE(text, 'en', 'es') FROM messages;
+
+    -- Sentiment
+    SELECT SNOWFLAKE.CORTEX.SENTIMENT(review_text) FROM reviews;
+    -- Returns -1 (negative) to 1 (positive)
+
+    -- Extract entities (PII redaction)
+    SELECT SNOWFLAKE.CORTEX.EXTRACT_ANSWER(text, 'who is mentioned?') FROM emails;
+    ```
+
+    These are pre-tuned for the use case; cheaper and faster than a generic COMPLETE call.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Classification
+
+    ```sql
+    SELECT
+      ticket_id,
+      description,
+      SNOWFLAKE.CORTEX.CLASSIFY_TEXT(
+        description,
+        ['billing', 'technical', 'account', 'feedback']
+      ) AS category
+    FROM support_tickets;
+    ```
+
+    Single-shot classification into a fixed label set. No training data required.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Document AI — Cortex Document AI
+
+    For PDF / image extraction:
+
+    ```sql
+    SELECT
+      doc_id,
+      SNOWFLAKE.CORTEX.PARSE_DOCUMENT(
+        @docs_stage,
+        file_name,
+        {'mode': 'OCR'}
+      ) AS extracted
+    FROM doc_metadata;
+    ```
+
+    Returns structured JSON with text + layout. Works on invoices, receipts, contracts. Reduces ETL pipelines that previously needed external OCR services.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Cost Management
+
+    LLM calls aren't free. Each call charges credits:
+
+    ```sql
+    SELECT
+      start_time,
+      service_type,
+      credits_used
+    FROM SNOWFLAKE.ACCOUNT_USAGE.METERING_HISTORY
+    WHERE service_type LIKE '%CORTEX%'
+    ORDER BY start_time DESC;
+    ```
+
+    For high-volume calls, materialize results in a table; don't recompute on every query. Use dynamic tables to keep them fresh incrementally.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Vector Search at Scale
+
+    For million-row tables, brute-force VECTOR_COSINE_SIMILARITY is slow. Use HNSW index:
+
+    ```sql
+    CREATE OR REPLACE VECTOR_INDEX my_idx
+      ON products_with_emb (embedding)
+      TYPE = HNSW;
+
+    -- Index automatically used by similarity queries
+    ```
+
+    Approximate nearest neighbor; trade exact ranking for speed. Good for top-K retrieval where exact tie-breaking doesn't matter.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Snowflake Arctic
+
+    Snowflake's own LLM, optimized for code + SQL generation:
+
+    ```sql
+    SELECT SNOWFLAKE.CORTEX.COMPLETE(
+      'snowflake-arctic',
+      CONCAT('Generate SQL to find the top 10 customers by revenue from a table named orders with columns customer_id, amount: ')
+    );
+    ```
+
+    Comparable to GPT-4 on SQL, free for Snowflake customers up to a usage cap.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **LLM calls in interactive queries.** Latency adds up; warehouse stays busy. Materialize results.
+    - **No cost monitoring.** Easy to spend $$$ on LLM calls without realizing. Set per-warehouse budgets.
+    - **Vector search without an index.** Linear scan on millions of rows is slow. Always create a VECTOR_INDEX.
+    - **Treating Cortex as flexible model marketplace.** It's a closed catalog; if you need a specific model not offered, use external services.
+    - **Embedding drift.** If you change embedding model versions, regenerate all embeddings. Mixed versions don't compare meaningfully.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    Cortex usage in good shape:
+
+    - LLM-generated columns are materialized, not computed on every query.
+    - Vector indexes are in place for high-cardinality embedding columns.
+    - Cost tracking shows steady-state usage matching expectations.
+    - Embeddings have a documented model version; regeneration is part of the migration process.

@@ -1,0 +1,347 @@
+skill_type: domain
+skill_id: snowflake-snowpipe-auto-ingest
+canonical_name: Snowflake Snowpipe and Auto-Ingest
+category: engineering
+skill_class: domain
+domain_tags:
+- snowflake
+- snowpipe
+- auto-ingest
+- streaming
+- s3-events
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Snowflake Snowpipe and Auto-Ingest
+
+  ## Overview
+
+  Snowpipe ingests data continuously rather than in bulk batches. Two flavors: auto-ingest (cloud notifications fire ingestion) and REST API (you POST file lists). Lower latency than scheduled COPY INTO; pay-per-second for the implicit warehouse.
+
+  ---
+
+  ## When Snowpipe Beats COPY INTO
+
+  - **Latency**: Snowpipe ingests within ~1 minute of file landing; scheduled COPY waits for the schedule.
+  - **Effort**: Snowpipe is set up once; new files trigger automatically. COPY needs a scheduler.
+  - **Cost**: Snowpipe is per-second of work; COPY uses your warehouse.
+
+  For streaming arrivals (every minute, every hour), Snowpipe wins. For nightly bulk loads, COPY is simpler and cheaper.
+
+  ## Auto-Ingest with S3
+
+  ```sql
+  -- Stage referencing S3
+  CREATE OR REPLACE STAGE my_stage
+    URL = 's3://my-bucket/orders/'
+    STORAGE_INTEGRATION = my_s3_integration
+    FILE_FORMAT = (TYPE = JSON);
+
+  -- Pipe definition
+  CREATE OR REPLACE PIPE orders_pipe
+    AUTO_INGEST = TRUE
+    AS
+    COPY INTO orders_raw
+    FROM @my_stage
+    FILE_FORMAT = (TYPE = JSON);
+  ```
+
+  `AUTO_INGEST = TRUE` makes Snowpipe listen for S3 event notifications. Get the SNS topic ARN:
+
+  ```sql
+  DESC PIPE orders_pipe;
+  -- Copy notification_channel value (an SNS topic ARN)
+  ```
+
+  Configure S3 to fire object-created events to that SNS topic. New files in `s3://my-bucket/orders/` trigger ingestion within ~1 minute.
+
+  ## REST API Snowpipe
+
+  For non-S3 sources or fine-grained control:
+
+  ```python
+  from snowflake.ingest import SimpleIngestManager
+
+  ingest = SimpleIngestManager(account, host, user, pipe, private_key)
+  ingest.ingest_files([
+      StagedFile('orders/2026-05-01/000.json'),
+      StagedFile('orders/2026-05-01/001.json'),
+  ])
+  ```
+
+  You upload to the stage (S3, GCS, Azure, internal) and POST the file list. Snowpipe picks them up.
+
+  ## File Pre-Processing
+
+  Snowpipe's COPY INTO supports the same transformations as bulk:
+
+  ```sql
+  CREATE OR REPLACE PIPE orders_pipe
+    AUTO_INGEST = TRUE
+    AS
+    COPY INTO orders_raw (id, customer_id, amount_cents, created_at)
+    FROM (
+        SELECT
+            $1:order_id::INT,
+            $1:customer_id::INT,
+            $1:amount_cents::NUMBER,
+            $1:created_at::TIMESTAMP_TZ
+        FROM @my_stage
+    )
+    FILE_FORMAT = (TYPE = JSON)
+    ON_ERROR = CONTINUE;
+  ```
+
+  Project nested JSON into typed columns. ON_ERROR controls behavior on bad rows.
+
+  ## Error Handling
+
+  ```sql
+  SELECT * FROM TABLE(VALIDATE_PIPE_LOAD(
+    PIPE_NAME => 'mydb.public.orders_pipe',
+    START_TIME => DATEADD('hour', -24, CURRENT_TIMESTAMP())
+  ));
+  ```
+
+  Validates loads in the last 24h; reports failures. Set up a NOTIFICATION_INTEGRATION to alert on errors:
+
+  ```sql
+  CREATE NOTIFICATION INTEGRATION pipe_alerts
+    TYPE = QUEUE
+    ENABLED = TRUE
+    NOTIFICATION_PROVIDER = AWS_SNS
+    AWS_SNS_TOPIC_ARN = '...'
+    AWS_SNS_ROLE_ARN = '...';
+
+  ALTER PIPE orders_pipe SET ERROR_INTEGRATION = pipe_alerts;
+  ```
+
+  Failed loads emit messages to the SNS topic; route to PagerDuty / Slack.
+
+  ## Cost Model
+
+  Snowpipe charges per-second of compute used (not your regular warehouse credits) plus a per-1000-files charge. For continuous ingestion, often cheaper than running a small warehouse 24/7.
+
+  To estimate: count files / second × per-file cost + compute time.
+
+  For dense streams (>10 files/sec), consider Snowpipe Streaming (a different API with sub-second latency and lower cost).
+
+  ## Snowpipe Streaming
+
+  For high-volume streams, Snowpipe Streaming inserts rows directly via Java SDK, no staging files required:
+
+  ```java
+  SnowflakeStreamingIngestClient client = ...;
+  SnowflakeStreamingIngestChannel channel = client.openChannel(...);
+
+  InsertValidationResponse response = channel.insertRows(rows, offsetToken);
+  ```
+
+  Sub-second latency, no per-file cost, Java SDK only (Python wrapper exists). Use when ingest rate is too high for file-based Snowpipe.
+
+  ## Monitoring
+
+  ```sql
+  -- Pipe status
+  SELECT SYSTEM$PIPE_STATUS('orders_pipe');
+
+  -- Recent ingest history
+  SELECT *
+  FROM TABLE(INFORMATION_SCHEMA.PIPE_USAGE_HISTORY(
+    DATE_RANGE_START => DATEADD('day', -1, CURRENT_TIMESTAMP()),
+    PIPE_NAME => 'mydb.public.orders_pipe'
+  ));
+  ```
+
+  `PIPE_USAGE_HISTORY` shows credits consumed, files ingested, errors. Plot in your monitoring dashboard.
+
+  ## Common Pitfalls
+
+  - **No file deduplication.** Snowpipe doesn't reload files (uses metadata to track). But if you re-upload a file with the same name, it's skipped — not reloaded with new content. Rename or use timestamps in filenames.
+  - **Auto-ingest with no S3 notification setup.** Pipe is created but never fires. Verify event configuration on S3 side.
+  - **No error notifications.** Failed loads get logged but nobody sees them. Always set ERROR_INTEGRATION.
+  - **Treating Snowpipe as a queue.** Files queue if they arrive faster than ingestion can process. Past a certain rate, lag accumulates. Monitor PIPE_USAGE_HISTORY.
+
+  ## Verification
+
+  A working Snowpipe:
+
+  - New files in S3 ingest within ~1 minute.
+  - Errors trigger alerts before downstream notices.
+  - PIPE_USAGE_HISTORY shows steady ingest rate without lag accumulation.
+  - Cost estimate matches actual via PIPE_USAGE_HISTORY.
+fragments:
+- fragment_type: rationale
+  sequence: 1
+  content: |-
+    ## When Snowpipe Beats COPY INTO
+
+    - **Latency**: Snowpipe ingests within ~1 minute of file landing; scheduled COPY waits for the schedule.
+    - **Effort**: Snowpipe is set up once; new files trigger automatically. COPY needs a scheduler.
+    - **Cost**: Snowpipe is per-second of work; COPY uses your warehouse.
+
+    For streaming arrivals (every minute, every hour), Snowpipe wins. For nightly bulk loads, COPY is simpler and cheaper.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Auto-Ingest with S3
+
+    ```sql
+    -- Stage referencing S3
+    CREATE OR REPLACE STAGE my_stage
+      URL = 's3://my-bucket/orders/'
+      STORAGE_INTEGRATION = my_s3_integration
+      FILE_FORMAT = (TYPE = JSON);
+
+    -- Pipe definition
+    CREATE OR REPLACE PIPE orders_pipe
+      AUTO_INGEST = TRUE
+      AS
+      COPY INTO orders_raw
+      FROM @my_stage
+      FILE_FORMAT = (TYPE = JSON);
+    ```
+
+    `AUTO_INGEST = TRUE` makes Snowpipe listen for S3 event notifications. Get the SNS topic ARN:
+
+    ```sql
+    DESC PIPE orders_pipe;
+    -- Copy notification_channel value (an SNS topic ARN)
+    ```
+
+    Configure S3 to fire object-created events to that SNS topic. New files in `s3://my-bucket/orders/` trigger ingestion within ~1 minute.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## REST API Snowpipe
+
+    For non-S3 sources or fine-grained control:
+
+    ```python
+    from snowflake.ingest import SimpleIngestManager
+
+    ingest = SimpleIngestManager(account, host, user, pipe, private_key)
+    ingest.ingest_files([
+        StagedFile('orders/2026-05-01/000.json'),
+        StagedFile('orders/2026-05-01/001.json'),
+    ])
+    ```
+
+    You upload to the stage (S3, GCS, Azure, internal) and POST the file list. Snowpipe picks them up.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## File Pre-Processing
+
+    Snowpipe's COPY INTO supports the same transformations as bulk:
+
+    ```sql
+    CREATE OR REPLACE PIPE orders_pipe
+      AUTO_INGEST = TRUE
+      AS
+      COPY INTO orders_raw (id, customer_id, amount_cents, created_at)
+      FROM (
+          SELECT
+              $1:order_id::INT,
+              $1:customer_id::INT,
+              $1:amount_cents::NUMBER,
+              $1:created_at::TIMESTAMP_TZ
+          FROM @my_stage
+      )
+      FILE_FORMAT = (TYPE = JSON)
+      ON_ERROR = CONTINUE;
+    ```
+
+    Project nested JSON into typed columns. ON_ERROR controls behavior on bad rows.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Error Handling
+
+    ```sql
+    SELECT * FROM TABLE(VALIDATE_PIPE_LOAD(
+      PIPE_NAME => 'mydb.public.orders_pipe',
+      START_TIME => DATEADD('hour', -24, CURRENT_TIMESTAMP())
+    ));
+    ```
+
+    Validates loads in the last 24h; reports failures. Set up a NOTIFICATION_INTEGRATION to alert on errors:
+
+    ```sql
+    CREATE NOTIFICATION INTEGRATION pipe_alerts
+      TYPE = QUEUE
+      ENABLED = TRUE
+      NOTIFICATION_PROVIDER = AWS_SNS
+      AWS_SNS_TOPIC_ARN = '...'
+      AWS_SNS_ROLE_ARN = '...';
+
+    ALTER PIPE orders_pipe SET ERROR_INTEGRATION = pipe_alerts;
+    ```
+
+    Failed loads emit messages to the SNS topic; route to PagerDuty / Slack.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Cost Model
+
+    Snowpipe charges per-second of compute used (not your regular warehouse credits) plus a per-1000-files charge. For continuous ingestion, often cheaper than running a small warehouse 24/7.
+
+    To estimate: count files / second × per-file cost + compute time.
+
+    For dense streams (>10 files/sec), consider Snowpipe Streaming (a different API with sub-second latency and lower cost).
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Snowpipe Streaming
+
+    For high-volume streams, Snowpipe Streaming inserts rows directly via Java SDK, no staging files required:
+
+    ```java
+    SnowflakeStreamingIngestClient client = ...;
+    SnowflakeStreamingIngestChannel channel = client.openChannel(...);
+
+    InsertValidationResponse response = channel.insertRows(rows, offsetToken);
+    ```
+
+    Sub-second latency, no per-file cost, Java SDK only (Python wrapper exists). Use when ingest rate is too high for file-based Snowpipe.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Monitoring
+
+    ```sql
+    -- Pipe status
+    SELECT SYSTEM$PIPE_STATUS('orders_pipe');
+
+    -- Recent ingest history
+    SELECT *
+    FROM TABLE(INFORMATION_SCHEMA.PIPE_USAGE_HISTORY(
+      DATE_RANGE_START => DATEADD('day', -1, CURRENT_TIMESTAMP()),
+      PIPE_NAME => 'mydb.public.orders_pipe'
+    ));
+    ```
+
+    `PIPE_USAGE_HISTORY` shows credits consumed, files ingested, errors. Plot in your monitoring dashboard.
+- fragment_type: guardrail
+  sequence: 9
+  content: |-
+    ## Common Pitfalls
+
+    - **No file deduplication.** Snowpipe doesn't reload files (uses metadata to track). But if you re-upload a file with the same name, it's skipped — not reloaded with new content. Rename or use timestamps in filenames.
+    - **Auto-ingest with no S3 notification setup.** Pipe is created but never fires. Verify event configuration on S3 side.
+    - **No error notifications.** Failed loads get logged but nobody sees them. Always set ERROR_INTEGRATION.
+    - **Treating Snowpipe as a queue.** Files queue if they arrive faster than ingestion can process. Past a certain rate, lag accumulates. Monitor PIPE_USAGE_HISTORY.
+- fragment_type: verification
+  sequence: 10
+  content: |-
+    ## Verification
+
+    A working Snowpipe:
+
+    - New files in S3 ingest within ~1 minute.
+    - Errors trigger alerts before downstream notices.
+    - PIPE_USAGE_HISTORY shows steady ingest rate without lag accumulation.
+    - Cost estimate matches actual via PIPE_USAGE_HISTORY.
