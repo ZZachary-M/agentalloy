@@ -1,0 +1,278 @@
+skill_type: domain
+skill_id: redis-pipelining
+canonical_name: Redis Pipelining
+category: engineering
+skill_class: domain
+domain_tags:
+  - redis
+  - pipelining
+  - throughput
+  - latency
+  - transactions
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: initial authoring draft
+raw_prose: |
+  # Redis Pipelining
+
+  ## Overview
+
+  Pipelining batches multiple Redis commands into one round trip. The client sends N commands without waiting for replies; the server queues responses and the client reads them all at once. Throughput improves dramatically when commands are issued in tight loops; latency for any single command is unchanged or slightly worse.
+
+  ## The Throughput Win
+
+  Without pipelining, each Redis command is a round trip:
+
+  ```
+  SET k1 v1   →
+              ← OK
+  SET k2 v2   →
+              ← OK
+  SET k3 v3   →
+              ← OK
+  ```
+
+  With pipelining, sends are batched:
+
+  ```
+  SET k1 v1
+  SET k2 v2   →
+  SET k3 v3
+              ← OK
+              ← OK
+              ← OK
+  ```
+
+  For 10,000 SETs, an unpiped client might do 10,000 round trips at 1ms each = 10 seconds. A pipelined client does 1 round trip = a few milliseconds.
+
+  The win scales with network latency. On localhost, pipelining helps but less dramatically. Across regions (10ms+ RTT), pipelining is a 100x speedup.
+
+  ## Pipelining ≠ Transactions
+
+  Pipelining is a network optimization. Transactions (MULTI/EXEC) are a semantic guarantee.
+
+  - Pipelining: send commands without waiting for replies. No atomicity. Other clients see intermediate states.
+  - Transactions: queue commands atomically. Commit all-or-nothing.
+
+  You can pipeline a transaction (MULTI/EXEC inside a pipeline), but the two are orthogonal.
+
+  ## Client Library Patterns
+
+  ```python
+  # redis-py
+  pipe = redis.pipeline(transaction=False)  # transaction=True to wrap in MULTI/EXEC
+  for key, value in items.items():
+      pipe.set(key, value)
+  results = pipe.execute()
+  ```
+
+  ```js
+  // node-redis
+  const multi = client.multi();
+  items.forEach(({key, value}) => multi.set(key, value));
+  const results = await multi.exec();
+  ```
+
+  ```go
+  // go-redis
+  pipe := rdb.Pipeline()
+  for _, item := range items {
+      pipe.Set(ctx, item.Key, item.Value, 0)
+  }
+  results, err := pipe.Exec(ctx)
+  ```
+
+  The API varies but the pattern is identical: build the batch, then execute.
+
+  ## Pipelining and Cluster
+
+  In a cluster, pipelining is per-shard. A client sending mixed-slot commands has to route each to its primary; the throughput win is per-shard.
+
+  Most cluster-aware clients handle this transparently, but watch for hot-shard pipelines that hit one primary disproportionately.
+
+  ## When Pipelining Hurts
+
+  - **Small batches over fast networks.** Localhost + 5 commands: pipelining overhead may exceed the round-trip saving.
+  - **Commands that depend on prior responses.** `INCR counter; if (counter > 100) DEL key` — you need the INCR result before deciding. Use Lua for this.
+  - **Memory pressure on the server.** A pipeline of millions of commands buffers responses on the server until the client reads. Use chunks of 1k-10k.
+
+  ## Chunked Pipelining
+
+  For huge batches, chunk:
+
+  ```python
+  batch_size = 5000
+  for chunk in chunks(items, batch_size):
+      pipe = redis.pipeline(transaction=False)
+      for key, value in chunk:
+          pipe.set(key, value)
+      pipe.execute()
+  ```
+
+  This bounds memory and lets the application observe progress.
+
+  ## Async Pipelining
+
+  Async clients (redis-py asyncio, ioredis) pipeline implicitly when commands are awaited concurrently:
+
+  ```python
+  import asyncio
+
+  async def main():
+      results = await asyncio.gather(
+          redis.set('a', 1),
+          redis.set('b', 2),
+          redis.set('c', 3),
+      )
+  ```
+
+  The client sends all three in one round trip. No explicit pipeline object needed.
+
+  ## Common Pitfalls
+
+  - **Reading pipeline responses out of order.** Most client libraries return them ordered; just don't index by command type.
+  - **Pipelining destructive commands without dry-run.** A bug in the loop builds up bad commands; pipelining executes them all at once. For high-stakes ops, validate the batch first.
+  - **Mixing reads and writes in cluster pipelines.** Routing logic gets complex. Either pipeline only writes or only reads, or use a multi-key-aware client.
+  - **Treating pipelining as transactional.** Other clients still see intermediate states. If atomicity matters, use MULTI/EXEC inside the pipeline or use Lua.
+
+  ## Verification
+
+  A working pipelined client:
+
+  - Round trips drop dramatically vs unpiped (count via CLIENT LIST or server INFO).
+  - Throughput scales with batch size up to the chunk limit, then plateaus.
+  - Failures are reported per-command (clients return the per-command results array).
+  - In cluster, the client routes each command to the right slot transparently.
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Pipelining batches multiple Redis commands into one round trip. The client sends N commands without waiting for replies; the server queues responses and the client reads them all at once. Throughput improves dramatically when commands are issued in tight loops; latency for any single command is unchanged or slightly worse.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      Without pipelining, each Redis command is a round trip:
+
+      ```
+      SET k1 v1   →
+                  ← OK
+      SET k2 v2   →
+                  ← OK
+      SET k3 v3   →
+                  ← OK
+      ```
+
+      With pipelining, sends are batched:
+
+      ```
+      SET k1 v1
+      SET k2 v2   →
+      SET k3 v3
+                  ← OK
+                  ← OK
+                  ← OK
+      ```
+
+      For 10,000 SETs, an unpiped client might do 10,000 round trips at 1ms each = 10 seconds. A pipelined client does 1 round trip = a few milliseconds.
+
+      The win scales with network latency. On localhost, pipelining helps but less dramatically. Across regions (10ms+ RTT), pipelining is a 100x speedup.
+  - fragment_type: rationale
+    sequence: 3
+    content: |
+      Pipelining is a network optimization. Transactions (MULTI/EXEC) are a semantic guarantee.
+
+      - Pipelining: send commands without waiting for replies. No atomicity. Other clients see intermediate states.
+      - Transactions: queue commands atomically. Commit all-or-nothing.
+
+      You can pipeline a transaction (MULTI/EXEC inside a pipeline), but the two are orthogonal.
+  - fragment_type: example
+    sequence: 4
+    content: |
+      ```python
+      # redis-py
+      pipe = redis.pipeline(transaction=False)  # transaction=True to wrap in MULTI/EXEC
+      for key, value in items.items():
+          pipe.set(key, value)
+      results = pipe.execute()
+      ```
+
+      ```js
+      // node-redis
+      const multi = client.multi();
+      items.forEach(({key, value}) => multi.set(key, value));
+      const results = await multi.exec();
+      ```
+
+      ```go
+      // go-redis
+      pipe := rdb.Pipeline()
+      for _, item := range items {
+          pipe.Set(ctx, item.Key, item.Value, 0)
+      }
+      results, err := pipe.Exec(ctx)
+      ```
+
+      The API varies but the pattern is identical: build the batch, then execute.
+  - fragment_type: rationale
+    sequence: 5
+    content: |
+      In a cluster, pipelining is per-shard. A client sending mixed-slot commands has to route each to its primary; the throughput win is per-shard.
+
+      Most cluster-aware clients handle this transparently, but watch for hot-shard pipelines that hit one primary disproportionately.
+  - fragment_type: guardrail
+    sequence: 6
+    content: |
+      - **Small batches over fast networks.** Localhost + 5 commands: pipelining overhead may exceed the round-trip saving.
+      - **Commands that depend on prior responses.** `INCR counter; if (counter > 100) DEL key` — you need the INCR result before deciding. Use Lua for this.
+      - **Memory pressure on the server.** A pipeline of millions of commands buffers responses on the server until the client reads. Use chunks of 1k-10k.
+  - fragment_type: example
+    sequence: 7
+    content: |
+      For huge batches, chunk:
+
+      ```python
+      batch_size = 5000
+      for chunk in chunks(items, batch_size):
+          pipe = redis.pipeline(transaction=False)
+          for key, value in chunk:
+              pipe.set(key, value)
+          pipe.execute()
+      ```
+
+      This bounds memory and lets the application observe progress.
+  - fragment_type: example
+    sequence: 8
+    content: |
+      Async clients (redis-py asyncio, ioredis) pipeline implicitly when commands are awaited concurrently:
+
+      ```python
+      import asyncio
+
+      async def main():
+          results = await asyncio.gather(
+              redis.set('a', 1),
+              redis.set('b', 2),
+              redis.set('c', 3),
+          )
+      ```
+
+      The client sends all three in one round trip. No explicit pipeline object needed.
+  - fragment_type: guardrail
+    sequence: 9
+    content: |
+      - **Reading pipeline responses out of order.** Most client libraries return them ordered; just don't index by command type.
+      - **Pipelining destructive commands without dry-run.** A bug in the loop builds up bad commands; pipelining executes them all at once. For high-stakes ops, validate the batch first.
+      - **Mixing reads and writes in cluster pipelines.** Routing logic gets complex. Either pipeline only writes or only reads, or use a multi-key-aware client.
+      - **Treating pipelining as transactional.** Other clients still see intermediate states. If atomicity matters, use MULTI/EXEC inside the pipeline or use Lua.
+  - fragment_type: verification
+    sequence: 10
+    content: |
+      A working pipelined client:
+
+      - Round trips drop dramatically vs unpiped (count via CLIENT LIST or server INFO).
+      - Throughput scales with batch size up to the chunk limit, then plateaus.
+      - Failures are reported per-command (clients return the per-command results array).
+      - In cluster, the client routes each command to the right slot transparently.

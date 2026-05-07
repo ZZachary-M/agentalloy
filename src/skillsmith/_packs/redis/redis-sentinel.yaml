@@ -1,0 +1,239 @@
+skill_type: domain
+skill_id: redis-sentinel
+canonical_name: Redis Sentinel — Automatic Failover
+category: engineering
+skill_class: domain
+domain_tags:
+- redis
+- sentinel
+- high-availability
+- failover
+- monitoring
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Redis Sentinel — Automatic Failover
+
+  ## Overview
+
+  Sentinel is a separate process that monitors Redis primaries and promotes replicas on failure. Quorum-based to avoid split-brain. Clients discover the current primary via Sentinel rather than hardcoding.
+
+  ---
+
+  ## What Sentinel Solves
+
+  Without Sentinel, a Redis primary failure means manual intervention: detect the failure, pick a replica, run REPLICAOF on it, repoint clients. Sentinel automates this.
+
+  Three roles in a Sentinel deployment:
+  - **Primary**: the current write-accepting Redis node.
+  - **Replicas**: read-only copies, candidates for promotion.
+  - **Sentinels**: separate monitoring processes (typically 3 or 5).
+
+  When Sentinels agree the primary is down, they elect a leader Sentinel which picks a replica to promote and reconfigures the topology.
+
+  ## Why Multiple Sentinels
+
+  Quorum prevents split-brain. With 3 Sentinels and quorum=2: if the primary's network partitions, the partition with 2+ Sentinels declares failure and promotes a replica. The minority partition (1 Sentinel) cannot.
+
+  Always odd counts: 3 or 5. Even counts can deadlock on tied votes.
+
+  ## Sentinel Configuration
+
+  A minimal sentinel.conf:
+
+  ```
+  port 26379
+  sentinel monitor mymaster 10.0.0.1 6379 2
+  sentinel down-after-milliseconds mymaster 5000
+  sentinel failover-timeout mymaster 60000
+  sentinel parallel-syncs mymaster 1
+  ```
+
+  - `monitor mymaster <host> <port> <quorum>` — what to watch and how many Sentinels must agree to declare a failure.
+  - `down-after-milliseconds` — how long before considering the primary down.
+  - `failover-timeout` — how long before declaring a failover failed.
+  - `parallel-syncs` — how many replicas can sync from the new primary at once. 1 keeps the new primary's load low; higher = faster recovery.
+
+  ## Client Discovery
+
+  Clients connect to Sentinels first, ask for the current primary, then connect:
+
+  ```python
+  from redis import Sentinel
+
+  sentinel = Sentinel([
+      ('sentinel-1', 26379),
+      ('sentinel-2', 26379),
+      ('sentinel-3', 26379),
+  ], socket_timeout=0.5)
+
+  primary = sentinel.master_for('mymaster')
+  replica = sentinel.slave_for('mymaster')
+
+  primary.set('key', 'value')
+  replica.get('key')
+  ```
+
+  The Sentinel-aware client transparently re-discovers after a failover. Without it, clients keep talking to the old primary and writes silently fail.
+
+  ## Failure Modes
+
+  - **S_DOWN (Subjective Down)**: a Sentinel hasn't heard from the primary. One Sentinel's opinion only.
+  - **O_DOWN (Objective Down)**: enough Sentinels agree (per quorum) to declare the primary down. Triggers failover.
+  - **Failover initiated**: leader Sentinel picks the highest-priority replica, runs REPLICAOF NO ONE on it, reconfigures the others.
+  - **Failover timeout**: if the new primary doesn't accept writes within `failover-timeout`, the failover is abandoned.
+
+  ## Sentinel vs Cluster
+
+  | | Sentinel | Cluster |
+  |---|---|---|
+  | Purpose | HA without sharding | HA + sharding |
+  | Single primary? | Yes | No (multi-shard) |
+  | Setup complexity | Lower | Higher |
+  | Multi-key commands | Always work | Same-slot only |
+  | Capacity scaling | No (one primary) | Yes (add shards) |
+
+  Use Sentinel when one primary handles your write load. Use Cluster when you need to scale writes across multiple primaries.
+
+  ## Operational Considerations
+
+  - **Run Sentinels on separate hosts** from Redis nodes. A failure that takes down the primary often takes down its host.
+  - **Network partition resilience**: place Sentinels in different availability zones / racks.
+  - **Test failover before depending on it**: kill -9 the primary in staging; verify clients re-route correctly.
+
+  ## Common Pitfalls
+
+  - **Quorum too low.** Quorum=1 with 3 Sentinels means a single Sentinel can trigger failover — split-brain risk.
+  - **Even-numbered Sentinels**. 4 Sentinels can deadlock; use 3 or 5.
+  - **Clients connecting directly to the primary IP.** They miss failovers. Always use Sentinel discovery.
+  - **Sentinels on the same host as Redis.** A host failure takes down both, defeating HA.
+  - **Ignoring `parallel-syncs`.** With many replicas, all syncing simultaneously after failover can saturate the new primary.
+
+  ## Verification
+
+  A working Sentinel deployment:
+
+  - Killing the primary triggers failover within `down-after-milliseconds + failover-timeout`.
+  - Clients reconnect to the new primary automatically (Sentinel-aware client).
+  - The old primary, when it returns, becomes a replica of the new primary.
+  - The Sentinel cluster survives losing one Sentinel without losing failover capability.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## What Sentinel Solves
+
+    Without Sentinel, a Redis primary failure means manual intervention: detect the failure, pick a replica, run REPLICAOF on it, repoint clients. Sentinel automates this.
+
+    Three roles in a Sentinel deployment:
+    - **Primary**: the current write-accepting Redis node.
+    - **Replicas**: read-only copies, candidates for promotion.
+    - **Sentinels**: separate monitoring processes (typically 3 or 5).
+
+    When Sentinels agree the primary is down, they elect a leader Sentinel which picks a replica to promote and reconfigures the topology.
+- fragment_type: rationale
+  sequence: 2
+  content: |-
+    ## Why Multiple Sentinels
+
+    Quorum prevents split-brain. With 3 Sentinels and quorum=2: if the primary's network partitions, the partition with 2+ Sentinels declares failure and promotes a replica. The minority partition (1 Sentinel) cannot.
+
+    Always odd counts: 3 or 5. Even counts can deadlock on tied votes.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Sentinel Configuration
+
+    A minimal sentinel.conf:
+
+    ```
+    port 26379
+    sentinel monitor mymaster 10.0.0.1 6379 2
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 60000
+    sentinel parallel-syncs mymaster 1
+    ```
+
+    - `monitor mymaster <host> <port> <quorum>` — what to watch and how many Sentinels must agree to declare a failure.
+    - `down-after-milliseconds` — how long before considering the primary down.
+    - `failover-timeout` — how long before declaring a failover failed.
+    - `parallel-syncs` — how many replicas can sync from the new primary at once. 1 keeps the new primary's load low; higher = faster recovery.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Client Discovery
+
+    Clients connect to Sentinels first, ask for the current primary, then connect:
+
+    ```python
+    from redis import Sentinel
+
+    sentinel = Sentinel([
+        ('sentinel-1', 26379),
+        ('sentinel-2', 26379),
+        ('sentinel-3', 26379),
+    ], socket_timeout=0.5)
+
+    primary = sentinel.master_for('mymaster')
+    replica = sentinel.slave_for('mymaster')
+
+    primary.set('key', 'value')
+    replica.get('key')
+    ```
+
+    The Sentinel-aware client transparently re-discovers after a failover. Without it, clients keep talking to the old primary and writes silently fail.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Failure Modes
+
+    - **S_DOWN (Subjective Down)**: a Sentinel hasn't heard from the primary. One Sentinel's opinion only.
+    - **O_DOWN (Objective Down)**: enough Sentinels agree (per quorum) to declare the primary down. Triggers failover.
+    - **Failover initiated**: leader Sentinel picks the highest-priority replica, runs REPLICAOF NO ONE on it, reconfigures the others.
+    - **Failover timeout**: if the new primary doesn't accept writes within `failover-timeout`, the failover is abandoned.
+- fragment_type: rationale
+  sequence: 6
+  content: |-
+    ## Sentinel vs Cluster
+
+    | | Sentinel | Cluster |
+    |---|---|---|
+    | Purpose | HA without sharding | HA + sharding |
+    | Single primary? | Yes | No (multi-shard) |
+    | Setup complexity | Lower | Higher |
+    | Multi-key commands | Always work | Same-slot only |
+    | Capacity scaling | No (one primary) | Yes (add shards) |
+
+    Use Sentinel when one primary handles your write load. Use Cluster when you need to scale writes across multiple primaries.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Operational Considerations
+
+    - **Run Sentinels on separate hosts** from Redis nodes. A failure that takes down the primary often takes down its host.
+    - **Network partition resilience**: place Sentinels in different availability zones / racks.
+    - **Test failover before depending on it**: kill -9 the primary in staging; verify clients re-route correctly.
+- fragment_type: guardrail
+  sequence: 8
+  content: |-
+    ## Common Pitfalls
+
+    - **Quorum too low.** Quorum=1 with 3 Sentinels means a single Sentinel can trigger failover — split-brain risk.
+    - **Even-numbered Sentinels**. 4 Sentinels can deadlock; use 3 or 5.
+    - **Clients connecting directly to the primary IP.** They miss failovers. Always use Sentinel discovery.
+    - **Sentinels on the same host as Redis.** A host failure takes down both, defeating HA.
+    - **Ignoring `parallel-syncs`.** With many replicas, all syncing simultaneously after failover can saturate the new primary.
+- fragment_type: verification
+  sequence: 9
+  content: |-
+    ## Verification
+
+    A working Sentinel deployment:
+
+    - Killing the primary triggers failover within `down-after-milliseconds + failover-timeout`.
+    - Clients reconnect to the new primary automatically (Sentinel-aware client).
+    - The old primary, when it returns, becomes a replica of the new primary.
+    - The Sentinel cluster survives losing one Sentinel without losing failover capability.

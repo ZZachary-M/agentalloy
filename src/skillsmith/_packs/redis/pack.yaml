@@ -28,3 +28,33 @@ skills:
 - skill_id: redis-streams
   file: redis-streams.yaml
   fragment_count: 8
+- skill_id: redis-acl-and-security
+  file: redis-acl-and-security.yaml
+  fragment_count: 3
+- skill_id: redis-cluster
+  file: redis-cluster.yaml
+  fragment_count: 6
+- skill_id: redis-json-module
+  file: redis-json-module.yaml
+  fragment_count: 8
+- skill_id: redis-lua-functions
+  file: redis-lua-functions.yaml
+  fragment_count: 4
+- skill_id: redis-lua-scripting
+  file: redis-lua-scripting.yaml
+  fragment_count: 4
+- skill_id: redis-persistence
+  file: redis-persistence.yaml
+  fragment_count: 9
+- skill_id: redis-pipelining
+  file: redis-pipelining.yaml
+  fragment_count: 10
+- skill_id: redis-replication
+  file: redis-replication.yaml
+  fragment_count: 6
+- skill_id: redis-sentinel
+  file: redis-sentinel.yaml
+  fragment_count: 9
+- skill_id: redis-transactions-multi-exec
+  file: redis-transactions-multi-exec.yaml
+  fragment_count: 7

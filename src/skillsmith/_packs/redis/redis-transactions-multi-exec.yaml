@@ -1,0 +1,177 @@
+skill_type: domain
+skill_id: redis-transactions-multi-exec
+canonical_name: Redis Transactions — MULTI / EXEC
+category: engineering
+skill_class: domain
+domain_tags:
+  - redis
+  - transactions
+  - multi
+  - exec
+  - optimistic concurrency control
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Redis Transactions — MULTI / EXEC
+
+  ## Overview
+
+  Redis transactions queue commands during MULTI and execute them atomically on EXEC. No isolation in the SQL sense — commands run sequentially, but the queue is committed all-or-nothing. WATCH adds optimistic concurrency control for read-modify-write patterns.
+
+  ## The MULTI / EXEC Block
+
+  ```
+  MULTI
+  SET counter 0
+  INCR counter
+  INCR counter
+  EXEC
+  ```
+
+  Commands between MULTI and EXEC are queued, not executed. EXEC runs them as a single atomic block — no other client sees an intermediate state. The reply is an array of each command's result.
+
+  If any queued command fails to be parsed (syntax error), EXEC aborts the whole block. If a command fails at execution (e.g., type mismatch on a key), other commands still run — there's no SQL-style rollback.
+
+  ## Why No Rollback
+
+  Redis transactions trade rollback for simplicity and performance. The reasoning: only programming errors cause runtime failures (incrementing a list, etc.), and those should be caught in development. In production, commands either parse-fail at queue time or succeed.
+
+  If you need rollback semantics, use Lua scripts — a Lua script is atomic and can implement compensating logic.
+
+  ## WATCH for Optimistic Locking
+
+  WATCH lets MULTI/EXEC abort if a watched key changed between WATCH and EXEC:
+
+  ```
+  WATCH balance
+  val = GET balance
+  MULTI
+  SET balance (val + 100)
+  EXEC   # nil if balance changed since WATCH; otherwise the result
+  ```
+
+  This is optimistic concurrency control — no locks held, but the transaction aborts if it would race with another writer. Retry on nil reply.
+
+  The pattern in pseudo-code:
+
+  ```python
+  while True:
+      redis.watch('balance')
+      val = int(redis.get('balance'))
+      new = val + 100
+
+      pipe = redis.pipeline()
+      pipe.multi()
+      pipe.set('balance', new)
+      result = pipe.execute()
+
+      if result is not None:
+          break  # success
+      # else: retry
+  ```
+
+  ## When Transactions Fit
+
+  - **Atomic multi-key updates**: 'remove from cart, add to inventory' — both or neither.
+  - **Conditional writes**: WATCH the key, check current value, write if unchanged.
+  - **Counter resets at midnight**: set to 0 + log the reset event in one block.
+
+  ## When to Use Lua Instead
+
+  Transactions queue commands but can't branch on intermediate values. If you need 'set X if Y > 5', that's:
+
+  - Awkward with WATCH/MULTI: read Y on the client, check, conditionally MULTI.
+  - Trivial in Lua: `if redis.call('GET', KEYS[2]) > 5 then redis.call('SET', KEYS[1], ARGV[1]) end`.
+
+  Lua is faster (no round trips), more expressive, and the semantics are easier to reason about. Reach for Lua when transactions feel awkward.
+
+  ## Common Pitfalls
+
+  - **Expecting rollback on runtime errors.** A failed INCR on a non-integer doesn't abort the block. Other commands still run.
+  - **Forgetting to UNWATCH on retry.** If your code retries the WATCH/MULTI/EXEC loop, EXEC implicitly unwatches; the retry calls WATCH again. Make sure you don't carry stale WATCH state.
+  - **Long transactions blocking other clients.** Redis is single-threaded — EXEC blocks the server until all queued commands run. Keep transactions short.
+  - **Transactions in a cluster.** All keys must be in the same slot (use hash tags) or the transaction fails with CROSSSLOT.
+
+  ## Verification
+
+  A working Redis transaction:
+
+  - All-or-nothing at the queue level — parse failures abort the whole block.
+  - WATCH-EXEC reliably detects concurrent writes; the retry loop converges.
+  - No long blocking transactions — keep them under a few hundred microseconds of work.
+fragments:
+  - fragment_type: rationale
+    sequence: 1
+    content: |
+      Redis transactions queue commands during MULTI and execute them atomically on EXEC. No isolation in the SQL sense — commands run sequentially, but the queue is committed all-or-nothing. WATCH adds optimistic concurrency control for read-modify-write patterns.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      Commands between MULTI and EXEC are queued, not executed. EXEC runs them as a single atomic block — no other client sees an intermediate state. The reply is an array of each command's result.
+
+      If any queued command fails to be parsed (syntax error), EXEC aborts the whole block. If a command fails at execution (e.g., type mismatch on a key), other commands still run — there's no SQL-style rollback.
+  - fragment_type: rationale
+    sequence: 3
+    content: |
+      Redis transactions trade rollback for simplicity and performance. The reasoning: only programming errors cause runtime failures (incrementing a list, etc.), and those should be caught in development. In production, commands either parse-fail at queue time or succeed.
+
+      If you need rollback semantics, use Lua scripts — a Lua script is atomic and can implement compensating logic.
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      WATCH lets MULTI/EXEC abort if a watched key changed between WATCH and EXEC:
+
+      ```
+      WATCH balance
+      val = GET balance
+      MULTI
+      SET balance (val + 100)
+      EXEC   # nil if balance changed since WATCH; otherwise the result
+      ```
+
+      This is optimistic concurrency control — no locks held, but the transaction aborts if it would race with another writer. Retry on nil reply.
+
+      The pattern in pseudo-code:
+
+      ```python
+      while True:
+          redis.watch('balance')
+          val = int(redis.get('balance'))
+          new = val + 100
+
+          pipe = redis.pipeline()
+          pipe.multi()
+          pipe.set('balance', new)
+          result = pipe.execute()
+
+          if result is not None:
+              break  # success
+          # else: retry
+      ```
+  - fragment_type: rationale
+    sequence: 5
+    content: |
+      Transactions queue commands but can't branch on intermediate values. If you need 'set X if Y > 5', that's:
+
+      - Awkward with WATCH/MULTI: read Y on the client, check, conditionally MULTI.
+      - Trivial in Lua: `if redis.call('GET', KEYS[2]) > 5 then redis.call('SET', KEYS[1], ARGV[1]) end`.
+
+      Lua is faster (no round trips), more expressive, and the semantics are easier to reason about. Reach for Lua when transactions feel awkward.
+  - fragment_type: guardrail
+    sequence: 6
+    content: |
+      - **Expecting rollback on runtime errors.** A failed INCR on a non-integer doesn't abort the block. Other commands still run.
+      - **Forgetting to UNWATCH on retry.** If your code retries the WATCH/MULTI/EXEC loop, EXEC implicitly unwatches; the retry calls WATCH again. Make sure you don't carry stale WATCH state.
+      - **Long transactions blocking other clients.** Redis is single-threaded — EXEC blocks the server until all queued commands run. Keep transactions short.
+      - **Transactions in a cluster.** All keys must be in the same slot (use hash tags) or the transaction fails with CROSSSLOT.
+  - fragment_type: verification
+    sequence: 7
+    content: |
+      A working Redis transaction:
+
+      - All-or-nothing at the queue level — parse failures abort the whole block.
+      - WATCH-EXEC reliably detects concurrent writes; the retry loop converges.
+      - No long blocking transactions — keep them under a few hundred microseconds of work.

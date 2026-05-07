@@ -1,0 +1,269 @@
+skill_type: domain
+skill_id: redis-json-module
+canonical_name: Redis JSON Module — RedisJSON
+category: engineering
+skill_class: domain
+domain_tags:
+- redis
+- redisjson
+- json
+- documents
+- jsonpath
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Redis JSON Module — RedisJSON
+
+  ## Overview
+
+  RedisJSON adds native JSON document support to Redis. JSONPath expressions (`$.field`) navigate nested structures; commands operate at field granularity. Combined with RediSearch, JSON documents become queryable.
+
+  ---
+
+  ## Why RedisJSON Beats String Storage
+
+  Storing JSON as a Redis string (`SET user:1 '{"name":"Alice"}'`) works but every field update requires read-modify-write of the whole blob. RedisJSON gives you per-field atomic operations.
+
+  ```
+  # String approach
+  GET user:1                              # whole JSON
+  SET user:1 '{"name":"Alice","age":31}'  # whole JSON
+
+  # RedisJSON
+  JSON.SET user:1 $ '{"name":"Alice","age":30}'
+  JSON.SET user:1 $.age 31                # just the age field
+  JSON.NUMINCRBY user:1 $.age 1           # atomic increment
+  JSON.GET user:1 $.name                  # "Alice"
+  ```
+
+  ## Core Commands
+
+  - `JSON.SET key path value` — set the value at a path. `$` is the root.
+  - `JSON.GET key [path...]` — get one or more paths.
+  - `JSON.DEL key path` — remove the value at a path.
+  - `JSON.TYPE key path` — type at a path (object, array, string, number, boolean, null).
+  - `JSON.NUMINCRBY key path n` — atomic numeric increment.
+  - `JSON.STRAPPEND key path "..."` — append to a string field.
+  - `JSON.ARRAPPEND key path val [val...]` — append to an array field.
+  - `JSON.OBJKEYS key path` — list keys at an object path.
+
+  ## JSONPath Syntax
+
+  ```
+  $         root
+  $.field   single field
+  $..field  recursive — all 'field' anywhere in the document
+  $.array[*]   all array elements
+  $.array[0]   first element
+  $.array[-1]  last element
+  $.array[1:3] slice
+  $.array[?(@.status=='active')]  filter expression
+  ```
+
+  JSONPath is broader than dot notation — supports filters, slices, recursion. Most commands accept either path style.
+
+  ## Atomic Operations
+
+  The killer feature: server-side atomic field updates without holding a transaction:
+
+  ```
+  JSON.NUMINCRBY user:1 $.login_count 1
+  JSON.ARRAPPEND order:abc $.line_items '{"product":"widget","qty":1}'
+  JSON.SET user:1 $.preferences.notifications true
+  ```
+
+  Each is atomic with respect to other Redis ops. No need for MULTI/EXEC for single-field updates.
+
+  ## Indexing With RediSearch
+
+  RedisJSON pairs with the RediSearch module to make JSON documents queryable:
+
+  ```
+  FT.CREATE idx:users
+    ON JSON
+    PREFIX 1 user:
+    SCHEMA $.name AS name TEXT
+           $.age AS age NUMERIC SORTABLE
+           $.email AS email TEXT
+
+  JSON.SET user:1 $ '{"name":"Alice","age":30,"email":"alice@example.com"}'
+  FT.SEARCH idx:users "@age:[20 40]"
+  ```
+
+  The schema declares which JSON paths to index and as what type. `FT.SEARCH` returns matching keys + the relevant fields.
+
+  This combination — JSON as the storage, RediSearch as the query engine — is Redis's answer to document databases (MongoDB, Elasticsearch).
+
+  ## Common Patterns
+
+  **User profile updates**:
+  ```
+  JSON.SET user:1 $.preferences.theme '"dark"'
+  JSON.NUMINCRBY user:1 $.login_count 1
+  JSON.SET user:1 $.last_login_at $now
+  ```
+
+  **Append-only lists**:
+  ```
+  JSON.ARRAPPEND user:1 $.recent_searches '"redis docs"'
+  # Trim to last 10
+  JSON.ARRTRIM user:1 $.recent_searches -10 -1
+  ```
+
+  **Conditional updates** (via Lua):
+  ```lua
+  local current = redis.call('JSON.GET', KEYS[1], '$.status')
+  if current == '"pending"' then
+    redis.call('JSON.SET', KEYS[1], '$.status', '"approved"')
+  end
+  ```
+
+  ## Common Pitfalls
+
+  - **Storing JSON as strings 'because it's simpler'.** Every update reads + writes the whole blob; concurrent updates clobber each other. Use RedisJSON.
+  - **Forgetting JSON encoding.** String values in JSONPath need quoting: `JSON.SET k $.name '"Alice"'`, not `'Alice'`.
+  - **Treating it like a relational store.** RedisJSON is a document store — design for retrieving whole documents or specific paths, not joins.
+  - **Querying without RediSearch.** `JSON.GET` on every key to find matches is O(N). Index the fields you query.
+
+  ## Verification
+
+  A working RedisJSON setup:
+
+  - Field-level updates atomic without MULTI/EXEC.
+  - JSONPath queries return the right subdocuments.
+  - Memory efficiency improves over string-based JSON (Redis stores parsed structures).
+  - RediSearch index queries return correct results in O(log N) time.
+fragments:
+- fragment_type: rationale
+  sequence: 1
+  content: |-
+    ## Why RedisJSON Beats String Storage
+
+    Storing JSON as a Redis string (`SET user:1 '{"name":"Alice"}'`) works but every field update requires read-modify-write of the whole blob. RedisJSON gives you per-field atomic operations.
+
+    ```
+    # String approach
+    GET user:1                              # whole JSON
+    SET user:1 '{"name":"Alice","age":31}'  # whole JSON
+
+    # RedisJSON
+    JSON.SET user:1 $ '{"name":"Alice","age":30}'
+    JSON.SET user:1 $.age 31                # just the age field
+    JSON.NUMINCRBY user:1 $.age 1           # atomic increment
+    JSON.GET user:1 $.name                  # "Alice"
+    ```
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Core Commands
+
+    - `JSON.SET key path value` — set the value at a path. `$` is the root.
+    - `JSON.GET key [path...]` — get one or more paths.
+    - `JSON.DEL key path` — remove the value at a path.
+    - `JSON.TYPE key path` — type at a path (object, array, string, number, boolean, null).
+    - `JSON.NUMINCRBY key path n` — atomic numeric increment.
+    - `JSON.STRAPPEND key path "..."` — append to a string field.
+    - `JSON.ARRAPPEND key path val [val...]` — append to an array field.
+    - `JSON.OBJKEYS key path` — list keys at an object path.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## JSONPath Syntax
+
+    ```
+    $         root
+    $.field   single field
+    $..field  recursive — all 'field' anywhere in the document
+    $.array[*]   all array elements
+    $.array[0]   first element
+    $.array[-1]  last element
+    $.array[1:3] slice
+    $.array[?(@.status=='active')]  filter expression
+    ```
+
+    JSONPath is broader than dot notation — supports filters, slices, recursion. Most commands accept either path style.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Atomic Operations
+
+    The killer feature: server-side atomic field updates without holding a transaction:
+
+    ```
+    JSON.NUMINCRBY user:1 $.login_count 1
+    JSON.ARRAPPEND order:abc $.line_items '{"product":"widget","qty":1}'
+    JSON.SET user:1 $.preferences.notifications true
+    ```
+
+    Each is atomic with respect to other Redis ops. No need for MULTI/EXEC for single-field updates.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Indexing With RediSearch
+
+    RedisJSON pairs with the RediSearch module to make JSON documents queryable:
+
+    ```
+    FT.CREATE idx:users
+      ON JSON
+      PREFIX 1 user:
+      SCHEMA $.name AS name TEXT
+             $.age AS age NUMERIC SORTABLE
+             $.email AS email TEXT
+
+    JSON.SET user:1 $ '{"name":"Alice","age":30,"email":"alice@example.com"}'
+    FT.SEARCH idx:users "@age:[20 40]"
+    ```
+
+    The schema declares which JSON paths to index and as what type. `FT.SEARCH` returns matching keys + the relevant fields.
+
+    This combination — JSON as the storage, RediSearch as the query engine — is Redis's answer to document databases (MongoDB, Elasticsearch).
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Common Patterns
+
+    **User profile updates**:
+    ```
+    JSON.SET user:1 $.preferences.theme '"dark"'
+    JSON.NUMINCRBY user:1 $.login_count 1
+    JSON.SET user:1 $.last_login_at $now
+    ```
+
+    **Append-only lists**:
+    ```
+    JSON.ARRAPPEND user:1 $.recent_searches '"redis docs"'
+    # Trim to last 10
+    JSON.ARRTRIM user:1 $.recent_searches -10 -1
+    ```
+
+    **Conditional updates** (via Lua):
+    ```lua
+    local current = redis.call('JSON.GET', KEYS[1], '$.status')
+    if current == '"pending"' then
+      redis.call('JSON.SET', KEYS[1], '$.status', '"approved"')
+    end
+    ```
+- fragment_type: guardrail
+  sequence: 7
+  content: |-
+    ## Common Pitfalls
+
+    - **Storing JSON as strings 'because it's simpler'.** Every update reads + writes the whole blob; concurrent updates clobber each other. Use RedisJSON.
+    - **Forgetting JSON encoding.** String values in JSONPath need quoting: `JSON.SET k $.name '"Alice"'`, not `'Alice'`.
+    - **Treating it like a relational store.** RedisJSON is a document store — design for retrieving whole documents or specific paths, not joins.
+    - **Querying without RediSearch.** `JSON.GET` on every key to find matches is O(N). Index the fields you query.
+- fragment_type: verification
+  sequence: 8
+  content: |-
+    ## Verification
+
+    A working RedisJSON setup:
+
+    - Field-level updates atomic without MULTI/EXEC.
+    - JSONPath queries return the right subdocuments.
+    - Memory efficiency improves over string-based JSON (Redis stores parsed structures).
+    - RediSearch index queries return correct results in O(log N) time.
