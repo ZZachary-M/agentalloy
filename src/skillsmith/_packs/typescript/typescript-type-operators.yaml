@@ -1,0 +1,367 @@
+skill_type: domain
+skill_id: typescript-type-operators
+canonical_name: TypeScript Type Operators — keyof, typeof, Indexed Access
+category: engineering
+skill_class: domain
+domain_tags:
+  - TypeScript
+  - type operators
+  - keyof
+  - typeof
+  - indexed access operator
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: machine authoring contract for pending-qa pipeline
+raw_prose: |
+  # TypeScript Type Operators — keyof, typeof, Indexed Access
+
+  ## Overview
+
+  TypeScript provides three operators that build types from other types or values: `keyof` for key unions, `typeof` for inferring from runtime values, and indexed access (`T[K]`) for extracting nested types. These are the core building blocks of derivative types. This skill covers all three.
+
+  Sourced from typescriptlang.org/docs/handbook/2/keyof-types.html, /typeof-types.html, /indexed-access-types.html.
+
+  ## The `keyof` type operator
+
+  The `keyof` operator takes an object type and produces a string or numeric literal union of its keys.
+  The following type `P` is the same type as `type P = "x" | "y"`:
+
+  ```ts twoslash
+  type Point = { x: number; y: number };
+  type P = keyof Point;
+  //   ^?
+  ```
+
+  If the type has a `string` or `number` index signature, `keyof` will return those types instead:
+
+  ```ts twoslash
+  type Arrayish = { [n: number]: unknown };
+  type A = keyof Arrayish;
+  //   ^?
+
+  type Mapish = { [k: string]: boolean };
+  type M = keyof Mapish;
+  //   ^?
+  ```
+
+  Note that in this example, `M` is `string | number` -- this is because JavaScript object keys are always coerced to a string, so `obj[0] is always the same as `obj["0"]`.
+
+  `keyof` types become especially useful when combined with mapped types, which we'll learn more about later.
+
+  ## The `typeof` type operator
+
+  JavaScript already has a `typeof` operator you can use in an _expression_ context:
+
+  ```ts twoslash
+  // Prints "string"
+  console.log(typeof "Hello world");
+  ```
+
+  TypeScript adds a `typeof` operator you can use in a _type_ context to refer to the _type_ of a variable or property:
+
+  ```ts twoslash
+  let s = "hello";
+  let n: typeof s;
+  //  ^?
+  ```
+
+  This isn't very useful for basic types, but combined with other type operators, you can use `typeof` to conveniently express many patterns.
+  For an example, let's start by looking at the predefined type `ReturnType<T>`.
+  It takes a _function type_ and produces its return type:
+
+  ```ts twoslash
+  type Predicate = (x: unknown) => boolean;
+  type K = ReturnType<Predicate>;
+  //   ^?
+  ```
+
+  If we try to use `ReturnType` on a function name, we see an instructive error:
+
+  ```ts twoslash
+  // @errors: 2749
+  function f() {
+    return { x: 10, y: 3 };
+  }
+  type P = ReturnType<f>;
+  ```
+
+  Remember that _values_ and _types_ aren't the same thing.
+  To refer to the _type that the _value `f`_ has, we use `typeof`:
+
+  ```ts twoslash
+  function f() {
+    return { x: 10, y: 3 };
+  }
+  type P = ReturnType<typeof f>;
+  //   ^?
+  ```
+
+  ### Limitations
+
+  TypeScript intentionally limits the sorts of expressions you can use `typeof` on.
+
+  Specifically, it's only legal to use `typeof` on identifiers (i.e. variable names) or their properties.
+  This helps avoid the confusing trap of writing code you think is executing, but isn't:
+
+  ```ts twoslash
+  // @errors: 1005
+  declare const msgbox: (prompt: string) => boolean;
+  // type msgbox = any;
+  // ---cut---
+  // Meant to use = ReturnType<typeof msgbox>
+  let shouldContinue: typeof msgbox("Are you sure you want to continue?");
+  ```
+
+  We can use an _indexed access type_ to look up a specific property on another type:
+
+  ```ts twoslash
+  type Person = { age: number; name: string; alive: boolean };
+  type Age = Person["age"];
+  //   ^?
+  ```
+
+  The indexing type is itself a type, so we can use unions, `keyof`, or other types entirely:
+
+  ```ts twoslash
+  type Person = { age: number; name: string; alive: boolean };
+  // ---cut---
+  type I1 = Person["age" | "name"];
+  //   ^?
+
+  type I2 = Person[keyof Person];
+  //   ^?
+
+  type AliveOrName = "alive" | "name";
+  type I3 = Person[AliveOrName];
+  //   ^?
+  ```
+
+  You'll even see an error if you try to index a property that doesn't exist:
+
+  ```ts twoslash
+  // @errors: 2339
+  type Person = { age: number; name: string; alive: boolean };
+  // ---cut---
+  type I1 = Person["alve"];
+  ```
+
+  Another example of indexing with an arbitrary type is using `number` to get the type of an array's elements.
+  We can combine this with `typeof` to conveniently capture the element type of an array literal:
+
+  ```ts twoslash
+  const MyArray = [
+    { name: "Alice", age: 15 },
+    { name: "Bob", age: 23 },
+    { name: "Eve", age: 38 },
+  ];
+
+  type Person = typeof MyArray[number];
+  //   ^?
+  type Age = typeof MyArray[number]["age"];
+  //   ^?
+  // Or
+  type Age2 = Person["age"];
+  //   ^?
+  ```
+
+  You can only use types when indexing, meaning you can't use a `const` to make a variable reference:
+
+  ```ts twoslash
+  // @errors: 2538 2749
+  type Person = { age: number; name: string; alive: boolean };
+  // ---cut---
+  const key = "age";
+  type Age = Person[key];
+  ```
+
+  However, you can use a type alias for a similar style of refactor:
+
+  ```ts twoslash
+  type Person = { age: number; name: string; alive: boolean };
+  // ---cut---
+  type key = "age";
+  type Age = Person[key];
+  ```
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      ## Overview
+
+      TypeScript provides three operators that build types from other types or values: `keyof` for key unions, `typeof` for inferring from runtime values, and indexed access (`T[K]`) for extracting nested types. These are the core building blocks of derivative types. This skill covers all three.
+
+      Sourced from typescriptlang.org/docs/handbook/2/keyof-types.html, /typeof-types.html, /indexed-access-types.html.
+  - fragment_type: setup
+    sequence: 2
+    content: |
+      ## The `keyof` type operator
+
+      The `keyof` operator takes an object type and produces a string or numeric literal union of its keys.
+      The following type `P` is the same type as `type P = "x" | "y"`:
+
+      ```ts twoslash
+      type Point = { x: number; y: number };
+      type P = keyof Point;
+      //   ^?
+      ```
+
+      If the type has a `string` or `number` index signature, `keyof` will return those types instead:
+
+      ```ts twoslash
+      type Arrayish = { [n: number]: unknown };
+      type A = keyof Arrayish;
+      //   ^?
+
+      type Mapish = { [k: string]: boolean };
+      type M = keyof Mapish;
+      //   ^?
+      ```
+
+      Note that in this example, `M` is `string | number` -- this is because JavaScript object keys are always coerced to a string, so `obj[0] is always the same as `obj["0"]`.
+
+      `keyof` types become especially useful when combined with mapped types, which we'll learn more about later.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      ## The `typeof` type operator
+
+      JavaScript already has a `typeof` operator you can use in an _expression_ context:
+
+      ```ts twoslash
+      // Prints "string"
+      console.log(typeof "Hello world");
+      ```
+
+      TypeScript adds a `typeof` operator you can use in a _type_ context to refer to the _type_ of a variable or property:
+
+      ```ts twoslash
+      let s = "hello";
+      let n: typeof s;
+      //  ^?
+      ```
+
+      This isn't very useful for basic types, but combined with other type operators, you can use `typeof` to conveniently express many patterns.
+      For an example, let's start by looking at the predefined type `ReturnType<T>`.
+      It takes a _function type_ and produces its return type:
+
+      ```ts twoslash
+      type Predicate = (x: unknown) => boolean;
+      type K = ReturnType<Predicate>;
+      //   ^?
+      ```
+
+      If we try to use `ReturnType` on a function name, we see an instructive error:
+
+      ```ts twoslash
+      // @errors: 2749
+      function f() {
+        return { x: 10, y: 3 };
+      }
+      type P = ReturnType<f>;
+      ```
+
+      Remember that _values_ and _types_ aren't the same thing.
+      To refer to the _type that the _value `f`_ has, we use `typeof`:
+
+      ```ts twoslash
+      function f() {
+        return { x: 10, y: 3 };
+      }
+      type P = ReturnType<typeof f>;
+      //   ^?
+      ```
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      ### Limitations
+
+      TypeScript intentionally limits the sorts of expressions you can use `typeof` on.
+
+      Specifically, it's only legal to use `typeof` on identifiers (i.e. variable names) or their properties.
+      This helps avoid the confusing trap of writing code you think is executing, but isn't:
+
+      ```ts twoslash
+      // @errors: 1005
+      declare const msgbox: (prompt: string) => boolean;
+      // type msgbox = any;
+      // ---cut---
+      // Meant to use = ReturnType<typeof msgbox>
+      let shouldContinue: typeof msgbox("Are you sure you want to continue?");
+      ```
+  - fragment_type: example
+    sequence: 5
+    content: |
+      We can use an _indexed access type_ to look up a specific property on another type:
+
+      ```ts twoslash
+      type Person = { age: number; name: string; alive: boolean };
+      type Age = Person["age"];
+      //   ^?
+      ```
+
+      The indexing type is itself a type, so we can use unions, `keyof`, or other types entirely:
+
+      ```ts twoslash
+      type Person = { age: number; name: string; alive: boolean };
+      // ---cut---
+      type I1 = Person["age" | "name"];
+      //   ^?
+
+      type I2 = Person[keyof Person];
+      //   ^?
+
+      type AliveOrName = "alive" | "name";
+      type I3 = Person[AliveOrName];
+      //   ^?
+      ```
+
+      You'll even see an error if you try to index a property that doesn't exist:
+
+      ```ts twoslash
+      // @errors: 2339
+      type Person = { age: number; name: string; alive: boolean };
+      // ---cut---
+      type I1 = Person["alve"];
+      ```
+
+      Another example of indexing with an arbitrary type is using `number` to get the type of an array's elements.
+      We can combine this with `typeof` to conveniently capture the element type of an array literal:
+
+      ```ts twoslash
+      const MyArray = [
+        { name: "Alice", age: 15 },
+        { name: "Bob", age: 23 },
+        { name: "Eve", age: 38 },
+      ];
+
+      type Person = typeof MyArray[number];
+      //   ^?
+      type Age = typeof MyArray[number]["age"];
+      //   ^?
+      // Or
+      type Age2 = Person["age"];
+      //   ^?
+      ```
+  - fragment_type: example
+    sequence: 6
+    content: |
+      You can only use types when indexing, meaning you can't use a `const` to make a variable reference:
+
+      ```ts twoslash
+      // @errors: 2538 2749
+      type Person = { age: number; name: string; alive: boolean };
+      // ---cut---
+      const key = "age";
+      type Age = Person[key];
+      ```
+
+      However, you can use a type alias for a similar style of refactor:
+
+      ```ts twoslash
+      type Person = { age: number; name: string; alive: boolean };
+      // ---cut---
+      type key = "age";
+      type Age = Person[key];
+      ```

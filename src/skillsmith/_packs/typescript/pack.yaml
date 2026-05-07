@@ -8,20 +8,49 @@ embedding_dim: 1024
 license: MIT
 homepage: https://github.com/nrmeyers/skillsmith
 always_install: false
-depends_on: [core, engineering]
+depends_on:
+- core
+- engineering
 skills:
-  - skill_id: ts-strict-mode-and-tsconfig
-    file: ts-strict-mode-and-tsconfig.yaml
-    fragment_count: 10
-  - skill_id: ts-types-vs-interfaces
-    file: ts-types-vs-interfaces.yaml
-    fragment_count: 11
-  - skill_id: ts-narrowing-and-discriminated-unions
-    file: ts-narrowing-and-discriminated-unions.yaml
-    fragment_count: 11
-  - skill_id: ts-generics-and-conditional-types
-    file: ts-generics-and-conditional-types.yaml
-    fragment_count: 12
-  - skill_id: ts-modules-and-declaration-files
-    file: ts-modules-and-declaration-files.yaml
-    fragment_count: 11
+- skill_id: ts-strict-mode-and-tsconfig
+  file: ts-strict-mode-and-tsconfig.yaml
+  fragment_count: 10
+- skill_id: ts-types-vs-interfaces
+  file: ts-types-vs-interfaces.yaml
+  fragment_count: 11
+- skill_id: ts-narrowing-and-discriminated-unions
+  file: ts-narrowing-and-discriminated-unions.yaml
+  fragment_count: 11
+- skill_id: ts-generics-and-conditional-types
+  file: ts-generics-and-conditional-types.yaml
+  fragment_count: 12
+- skill_id: ts-modules-and-declaration-files
+  file: ts-modules-and-declaration-files.yaml
+  fragment_count: 11
+- skill_id: typescript-conditional-types
+  file: typescript-conditional-types.yaml
+  fragment_count: 9
+- skill_id: typescript-decorators-stage-3
+  file: typescript-decorators-stage-3.yaml
+  fragment_count: 15
+- skill_id: typescript-generics-deep
+  file: typescript-generics-deep.yaml
+  fragment_count: 13
+- skill_id: typescript-mapped-and-template-literal-types
+  file: typescript-mapped-and-template-literal-types.yaml
+  fragment_count: 7
+- skill_id: typescript-modules-and-imports
+  file: typescript-modules-and-imports.yaml
+  fragment_count: 15
+- skill_id: typescript-narrowing-and-control-flow
+  file: typescript-narrowing-and-control-flow.yaml
+  fragment_count: 4
+- skill_id: typescript-project-references
+  file: typescript-project-references.yaml
+  fragment_count: 14
+- skill_id: typescript-type-operators
+  file: typescript-type-operators.yaml
+  fragment_count: 6
+- skill_id: typescript-utility-types
+  file: typescript-utility-types.yaml
+  fragment_count: 13

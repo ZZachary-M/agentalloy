@@ -181,13 +181,13 @@ raw_prose: |
 
   ```js
 
-  const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+  const secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
   // These were all sent from the server
   const headers = {
-    "svix-id": "msg_p5jXN8AQM9LWM0D4loKWxJek",
+    "svix-id": "msg_EXAMPLE_PLACEHOLDER",
     "svix-timestamp": "1614265330",
-    "svix-signature": "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+    "svix-signature": "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
   };
   const payload = '{"test": 2432232314}';
 
@@ -202,13 +202,13 @@ raw_prose: |
   ```python
   from svix.webhooks import Webhook
 
-  secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+  secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
   # These were all sent from the server
   headers = {
-    "svix-id": "msg_p5jXN8AQM9LWM0D4loKWxJek",
+    "svix-id": "msg_EXAMPLE_PLACEHOLDER",
     "svix-timestamp": "1614265330",
-    "svix-signature": "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+    "svix-signature": "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
   }
   payload = '{"test": 2432232314}'
 
@@ -223,14 +223,14 @@ raw_prose: |
   ```rust
   use svix::webhooks::Webhook;
 
-  let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw".to_string();
+  let secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET".to_string();
 
   let mut headers = http::HeaderMap::new();
-  headers.insert("svix-id", "msg_p5jXN8AQM9LWM0D4loKWxJek");
+  headers.insert("svix-id", "msg_EXAMPLE_PLACEHOLDER");
   headers.insert("svix-timestamp", "1614265330");
   headers.insert(
       "svix-signature",
-      "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+      "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
   );
 
   let payload = b"{\"test\": 2432232314}";
@@ -247,13 +247,13 @@ raw_prose: |
   svix "github.com/svix/svix-webhooks/go"
   )
 
-  secret := "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+  secret := "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
   // These were all sent from the server
   headers := http.Header{}
-  headers.Set("svix-id", "msg_p5jXN8AQM9LWM0D4loKWxJek")
+  headers.Set("svix-id", "msg_EXAMPLE_PLACEHOLDER")
   headers.Set("svix-timestamp", "1614265330")
-  headers.Set("svix-signature", "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=")
+  headers.Set("svix-signature", "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=")
 
   payload := []byte(`{"test": 2432232314}`)
 
@@ -267,13 +267,13 @@ raw_prose: |
 
   ```java
 
-  String secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+  String secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
   // These were all sent from the server
   HashMap<String, List<String>> headerMap = new HashMap<String, List<String>>();
-  headerMap.put("svix-id", Arrays.asList("msg_p5jXN8AQM9LWM0D4loKWxJek"));
+  headerMap.put("svix-id", Arrays.asList("msg_EXAMPLE_PLACEHOLDER"));
   headerMap.put("svix-timestamp", Arrays.asList("1614265330"));
-  headerMap.put("svix-signature", Arrays.asList("v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="));
+  headerMap.put("svix-signature", Arrays.asList("v1,EXAMPLE_PLACEHOLDER_SIGNATURE="));
   HttpHeaders headers = HttpHeaders.of(headerMap, BiPredicate<String, String>)
 
   String payload = "{\"test\": 2432232314}";
@@ -289,13 +289,13 @@ raw_prose: |
 
   ```kotlin
 
-  val secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+  val secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
   // These were all sent from the server
   val headersMap = mapOf(
-      "svix-id" to listOf("msg_p5jXN8AQM9LWM0D4loKWxJek"),
+      "svix-id" to listOf("msg_EXAMPLE_PLACEHOLDER"),
       "svix-timestamp" to listOf("1614265330"),
-      "svix-signature" to listOf("v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="),
+      "svix-signature" to listOf("v1,EXAMPLE_PLACEHOLDER_SIGNATURE="),
   )
   val headers = HttpHeaders(headersMap)
 
@@ -316,13 +316,13 @@ raw_prose: |
   ```ruby
   require 'svix'
 
-  secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+  secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
   # These were all sent from the server
   headers = {
-    "svix-id" => "msg_p5jXN8AQM9LWM0D4loKWxJek",
+    "svix-id" => "msg_EXAMPLE_PLACEHOLDER",
     "svix-timestamp" => "1614265330",
-    "svix-signature" => "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+    "svix-signature" => "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
   }
   payload = '{"test": 2432232314}'
 
@@ -337,13 +337,13 @@ raw_prose: |
   ```csharp
   using Svix;
 
-  string secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+  string secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
   // These were all sent from the server
   var headers = new Dictionary<string, List<string>> {
-      { "svix-id", new List<string> { "msg_p5jXN8AQM9LWM0D4loKWxJek" } },
+      { "svix-id", new List<string> { "msg_EXAMPLE_PLACEHOLDER" } },
       { "svix-timestamp", new List<string> { "1614265330" } },
-      { "svix-signature", new List<string> { "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=" } }
+      { "svix-signature", new List<string> { "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=" } }
   };
   string payload = "{\"test\": 2432232314}";
 
@@ -358,13 +358,13 @@ raw_prose: |
   ```php
   use Svix\Webhook;
 
-  $secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+  $secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
   // These were all sent from the server
   $headers = [
-      'svix-id' => ['msg_p5jXN8AQM9LWM0D4loKWxJek'],
+      'svix-id' => ['msg_EXAMPLE_PLACEHOLDER'],
       'svix-timestamp' => ['1614265330'],
-      'svix-signature' => ['v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=']
+      'svix-signature' => ['v1,EXAMPLE_PLACEHOLDER_SIGNATURE=']
   ];
   $payload = '{"test": 2432232314}';
 
@@ -377,7 +377,7 @@ raw_prose: |
   <TabItem value="CLI">
 
   ```sh
-  svix verify --secret whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw --body '{"test": 2432232314}' --headers 'svix-id=msg_p5jXN8AQM9LWM0D4loKWxJek' 'svix-timestamp=1614265330' 'svix-signature=v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE='
+  svix verify --secret whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET --body '{"test": 2432232314}' --headers 'svix-id=msg_EXAMPLE_PLACEHOLDER' 'svix-timestamp=1614265330' 'svix-signature=v1,EXAMPLE_PLACEHOLDER_SIGNATURE='
   ```
 
   </TabItem>
@@ -428,7 +428,7 @@ raw_prose: |
   Svix uses an [HMAC](https://en.wikipedia.org/wiki/Hash-based_message_authentication_code) with [SHA-256](https://en.wikipedia.org/wiki/SHA-2) to sign its webhooks.
 
   So to calculate the expected signature, you should HMAC the `signed_content` from above using the base64 portion of your signing secret (this is the part after the `whsec_` prefix) as the key.
-  For example, given the secret `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw` you will want to use `MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`.
+  For example, given the secret `whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET` you will want to use `MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`.
 
   For example, this is how you can calculate the signature in Node.js:
 
@@ -453,7 +453,7 @@ raw_prose: |
   The `svix-signature` header is composed of a list of space delimited signatures and their corresponding version identifiers. The signature list is most commonly of length one. Though there could be any number of signatures. For example:
 
   ```
-  v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE= v1,bm9ldHUjKzFob2VudXRob2VodWUzMjRvdWVvdW9ldQo= v2,MzJsNDk4MzI0K2VvdSMjMTEjQEBAQDEyMzMzMzEyMwo=
+  v1,EXAMPLE_PLACEHOLDER_SIGNATURE= v1,bm9ldHUjKzFob2VudXRob2VodWUzMjRvdWVvdW9ldQo= v2,MzJsNDk4MzI0K2VvdSMjMTEjQEBAQDEyMzMzMzEyMwo=
   ```
 
   Make sure to remove the version prefix and delimiter (e.g. `v1,`) before verifying the signature.
@@ -631,13 +631,13 @@ fragments:
 
       ```js
 
-      const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+      const secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
       // These were all sent from the server
       const headers = {
-        "svix-id": "msg_p5jXN8AQM9LWM0D4loKWxJek",
+        "svix-id": "msg_EXAMPLE_PLACEHOLDER",
         "svix-timestamp": "1614265330",
-        "svix-signature": "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+        "svix-signature": "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
       };
       const payload = '{"test": 2432232314}';
 
@@ -652,13 +652,13 @@ fragments:
       ```python
       from svix.webhooks import Webhook
 
-      secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+      secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
       # These were all sent from the server
       headers = {
-        "svix-id": "msg_p5jXN8AQM9LWM0D4loKWxJek",
+        "svix-id": "msg_EXAMPLE_PLACEHOLDER",
         "svix-timestamp": "1614265330",
-        "svix-signature": "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+        "svix-signature": "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
       }
       payload = '{"test": 2432232314}'
 
@@ -673,14 +673,14 @@ fragments:
       ```rust
       use svix::webhooks::Webhook;
 
-      let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw".to_string();
+      let secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET".to_string();
 
       let mut headers = http::HeaderMap::new();
-      headers.insert("svix-id", "msg_p5jXN8AQM9LWM0D4loKWxJek");
+      headers.insert("svix-id", "msg_EXAMPLE_PLACEHOLDER");
       headers.insert("svix-timestamp", "1614265330");
       headers.insert(
           "svix-signature",
-          "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+          "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
       );
 
       let payload = b"{\"test\": 2432232314}";
@@ -697,13 +697,13 @@ fragments:
       svix "github.com/svix/svix-webhooks/go"
       )
 
-      secret := "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+      secret := "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
       // These were all sent from the server
       headers := http.Header{}
-      headers.Set("svix-id", "msg_p5jXN8AQM9LWM0D4loKWxJek")
+      headers.Set("svix-id", "msg_EXAMPLE_PLACEHOLDER")
       headers.Set("svix-timestamp", "1614265330")
-      headers.Set("svix-signature", "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=")
+      headers.Set("svix-signature", "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=")
 
       payload := []byte(`{"test": 2432232314}`)
 
@@ -717,13 +717,13 @@ fragments:
 
       ```java
 
-      String secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+      String secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
       // These were all sent from the server
       HashMap<String, List<String>> headerMap = new HashMap<String, List<String>>();
-      headerMap.put("svix-id", Arrays.asList("msg_p5jXN8AQM9LWM0D4loKWxJek"));
+      headerMap.put("svix-id", Arrays.asList("msg_EXAMPLE_PLACEHOLDER"));
       headerMap.put("svix-timestamp", Arrays.asList("1614265330"));
-      headerMap.put("svix-signature", Arrays.asList("v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="));
+      headerMap.put("svix-signature", Arrays.asList("v1,EXAMPLE_PLACEHOLDER_SIGNATURE="));
       HttpHeaders headers = HttpHeaders.of(headerMap, BiPredicate<String, String>)
 
       String payload = "{\"test\": 2432232314}";
@@ -739,13 +739,13 @@ fragments:
 
       ```kotlin
 
-      val secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+      val secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
       // These were all sent from the server
       val headersMap = mapOf(
-          "svix-id" to listOf("msg_p5jXN8AQM9LWM0D4loKWxJek"),
+          "svix-id" to listOf("msg_EXAMPLE_PLACEHOLDER"),
           "svix-timestamp" to listOf("1614265330"),
-          "svix-signature" to listOf("v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="),
+          "svix-signature" to listOf("v1,EXAMPLE_PLACEHOLDER_SIGNATURE="),
       )
       val headers = HttpHeaders(headersMap)
 
@@ -766,13 +766,13 @@ fragments:
       ```ruby
       require 'svix'
 
-      secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+      secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET"
 
       # These were all sent from the server
       headers = {
-        "svix-id" => "msg_p5jXN8AQM9LWM0D4loKWxJek",
+        "svix-id" => "msg_EXAMPLE_PLACEHOLDER",
         "svix-timestamp" => "1614265330",
-        "svix-signature" => "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=",
+        "svix-signature" => "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=",
       }
       payload = '{"test": 2432232314}'
 
@@ -787,13 +787,13 @@ fragments:
       ```csharp
       using Svix;
 
-      string secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+      string secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
       // These were all sent from the server
       var headers = new Dictionary<string, List<string>> {
-          { "svix-id", new List<string> { "msg_p5jXN8AQM9LWM0D4loKWxJek" } },
+          { "svix-id", new List<string> { "msg_EXAMPLE_PLACEHOLDER" } },
           { "svix-timestamp", new List<string> { "1614265330" } },
-          { "svix-signature", new List<string> { "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=" } }
+          { "svix-signature", new List<string> { "v1,EXAMPLE_PLACEHOLDER_SIGNATURE=" } }
       };
       string payload = "{\"test\": 2432232314}";
 
@@ -808,13 +808,13 @@ fragments:
       ```php
       use Svix\Webhook;
 
-      $secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+      $secret = "whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET";
 
       // These were all sent from the server
       $headers = [
-          'svix-id' => ['msg_p5jXN8AQM9LWM0D4loKWxJek'],
+          'svix-id' => ['msg_EXAMPLE_PLACEHOLDER'],
           'svix-timestamp' => ['1614265330'],
-          'svix-signature' => ['v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=']
+          'svix-signature' => ['v1,EXAMPLE_PLACEHOLDER_SIGNATURE=']
       ];
       $payload = '{"test": 2432232314}';
 
@@ -827,7 +827,7 @@ fragments:
       <TabItem value="CLI">
 
       ```sh
-      svix verify --secret whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw --body '{"test": 2432232314}' --headers 'svix-id=msg_p5jXN8AQM9LWM0D4loKWxJek' 'svix-timestamp=1614265330' 'svix-signature=v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE='
+      svix verify --secret whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET --body '{"test": 2432232314}' --headers 'svix-id=msg_EXAMPLE_PLACEHOLDER' 'svix-timestamp=1614265330' 'svix-signature=v1,EXAMPLE_PLACEHOLDER_SIGNATURE='
       ```
 
       </TabItem>
@@ -880,7 +880,7 @@ fragments:
       Svix uses an [HMAC](https://en.wikipedia.org/wiki/Hash-based_message_authentication_code) with [SHA-256](https://en.wikipedia.org/wiki/SHA-2) to sign its webhooks.
 
       So to calculate the expected signature, you should HMAC the `signed_content` from above using the base64 portion of your signing secret (this is the part after the `whsec_` prefix) as the key.
-      For example, given the secret `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw` you will want to use `MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`.
+      For example, given the secret `whsec_EXAMPLE_PLACEHOLDER_NOT_A_REAL_SECRET` you will want to use `MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`.
 
       For example, this is how you can calculate the signature in Node.js:
 
@@ -905,7 +905,7 @@ fragments:
       The `svix-signature` header is composed of a list of space delimited signatures and their corresponding version identifiers. The signature list is most commonly of length one. Though there could be any number of signatures. For example:
 
       ```
-      v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE= v1,bm9ldHUjKzFob2VudXRob2VodWUzMjRvdWVvdW9ldQo= v2,MzJsNDk4MzI0K2VvdSMjMTEjQEBAQDEyMzMzMzEyMwo=
+      v1,EXAMPLE_PLACEHOLDER_SIGNATURE= v1,bm9ldHUjKzFob2VudXRob2VodWUzMjRvdWVvdW9ldQo= v2,MzJsNDk4MzI0K2VvdSMjMTEjQEBAQDEyMzMzMzEyMwo=
       ```
 
       Make sure to remove the version prefix and delimiter (e.g. `v1,`) before verifying the signature.
