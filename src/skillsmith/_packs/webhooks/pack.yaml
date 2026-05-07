@@ -1,0 +1,27 @@
+name: webhooks
+version: 1.0.0
+tier: protocol
+description: |
+  Webhook protocol patterns — HMAC signature verification (svix-id / svix-timestamp / svix-signature headers, replay protection), consumer idempotency for at-least-once delivery, event-type design and schemas, and consumer endpoint patterns (auth, scaling, polling fallbacks). Precision-favored protocol tier; sourced from svix/svix-docs GitHub repo per R1 tier-2 procedure (registry svix entry).
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on:
+- core
+- engineering
+skills:
+- skill_id: webhooks-consumer-patterns
+  file: webhooks-consumer-patterns.yaml
+  fragment_count: 16
+- skill_id: webhooks-event-types-and-schemas
+  file: webhooks-event-types-and-schemas.yaml
+  fragment_count: 9
+- skill_id: webhooks-idempotency
+  file: webhooks-idempotency.yaml
+  fragment_count: 7
+- skill_id: webhooks-signature-verification
+  file: webhooks-signature-verification.yaml
+  fragment_count: 11

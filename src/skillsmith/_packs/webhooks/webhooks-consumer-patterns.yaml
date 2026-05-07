@@ -1,0 +1,236 @@
+skill_type: domain
+skill_id: webhooks-consumer-patterns
+canonical_name: Webhooks — Consumer Patterns and Endpoint Authentication
+category: design
+skill_class: domain
+domain_tags:
+  - webhook-authentication
+  - oauth
+  - mTLS
+  - payload-handling
+  - endpoint-security
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Webhooks — Consumer Patterns and Endpoint Authentication
+
+  ## Overview
+
+  Webhook consumers face a small set of recurring problems: authenticate the producer, process payloads idempotently, scale horizontally without losing ordering guarantees, and recover from outages. This skill covers consumer-side patterns.
+
+  Sourced from svix-docs endpoint-authentication, additional-authentication, and common-usage-examples.
+
+  ## Advanced Endpoint Authentication
+
+  Svix supports advanced endpoint authentication methods that can be used by your customers on top of the standard signature verification.
+
+  These are advanced methods that are not required to keep your webhooks secure, but your customers might need them for their use case.
+  Read the [security docs](/security) for more information.
+
+  ## Enabling OAuth and mTLS
+
+  OAuth and mTLS can be enabled at the environment level in the [Svix Dashboard](https://dashboard.svix.com/settings/organization/general-settings).
+
+  ![Enable Endpoint Authentication](/img/endpoint-authentication/endpoint-authentication-enable.png)
+
+  When enabled, your users will see an option in the [App Portal](/app-portal) to configure the respective authentication method on their endpoints.
+
+  ![Endpoint Authentication Configure](/img/endpoint-authentication/endpoint-authentication-configure.png)
+
+  ## OAuth
+  To configure OAuth, your users will need to enter a `Client ID` and the `Authorization Server URL`, as well as the rest of the OAuth parameters, depending on the desired `Grant type` and `Authentication method`.
+
+  ![OAuth Authentication](/img/endpoint-authentication/endpoint-configure-oauth.png)
+
+  ## Mutual TLS (mTLS)
+
+  With mTLS, your users can upload a private PEM encoded private key and certificate, which will be used to sign the requests sent to the endpoint, and to verify the identity of the receiving server.
+
+  ![Mutual TLS Authentication](/img/endpoint-authentication/endpoint-configure-mtls.png)
+
+  For self-signed certificates, a custom Certificate Authority certificate can also be specified.
+
+  ## Additional Authentication
+
+  Svix [signs all webhooks](./verifying-payloads/why.mdx) in order to ensure the security and authenticity of all of the webhooks being sent.
+
+  This security mechanism is already sufficient (and better) than other methods such as [HTTP Basic Authentication](https://en.wikipedia.org/wiki/Basic_access_authentication), and using an authentication token. However, some systems and IT departments have varying requirements for any HTTP request hitting their services (including webhooks), so Svix has built in support for these additional authentication modes.
+
+  ## HTTP Basic Authentication
+
+  HTTP Basic Authentication (Basic Auth), is a common way of sending a server a pair of username and password, or more often a username and auth token. While there are different ways of passing these credentials, the simplest and most common way is by including it as part of the URL.
+
+  You can add it to the URL by prefixing the URL with the username and password (or token) and the @ symbol as such:
+
+  ```
+  https://USERNAME:PASSWORD@example.com/webhook/
+  ```
+
+  ## Header based authentication
+
+  Some services require specific headers to be passed in order to be processed by their load balancers or application servers. These services often require a specific authentication token passed in the `Authorization` header, but sometimes there could also be different headers and values.
+
+  Svix supports setting custom headers to be sent for each endpoint both [using the API](https://api.svix.com/docs#operation/update_endpoint_headers_api_v1_app__app_id__endpoint__endpoint_id__headers__put) and using [the application portal](./using-app-portal/adding-endpoints.mdx).
+
+  ## Common Usage Examples
+
+  This document includes examples and useful information for how to model your use-case with Svix.
+
+  This list is not exhaustive and only covers some of the more common examples. Svix is used by a variety of different customers for a variety of different use-cases. If your use-case doesn't fit any of the below, please [contact us](/get-help/) and we would be happy to chat on how to best use Svix in your particular circumstances.
+
+  ## Preamble
+
+  While different use-cases often require different solutions, there are a few Svix features that are useful in most use-cases and we will highlight them in this section.
+
+  ### Consumer Application and Endpoint UIDs, and message event IDs
+
+  Svix enables you to use your internal `ID`s as ids for Svix entities by using the `UID` property of consumer applications and endpoints, and `eventId` of messages.
+
+  This lets you use Svix in a completely stateless manner, without having to store the Svix identifiers (or anything) in your own database.
+
+  For more information, please refer to the [section about `UID`s in the overview](./overview.mdx#ids-and-uids).
+
+  ### Event types
+
+  Each message sent through Svix has an associated [event type](./event-types.mdx). Event types are identifiers denoting the type of message being sent and are the primary way for webhook consumers to configure what events they are interested in receiving.
+
+  You can even automatically generate public documentation for your webhooks [by making your event catalog public](./event-types.mdx#publishing-your-event-catalog).
+
+  ### Consumer Application portal
+
+  Svix comes with an application portal for your users that you can use out of the box. Your users can then use it to add endpoints, debug delivery, as well as inspect and replay past webhooks. The application portal can be used as a standalone page, or embedded in your own dashboard using an iframe.
+
+  Most Svix customers use it in an iframe, or implement it themselves (either fully or partially) using the Svix API.
+
+  For more information, please refer to the [app portal section of the docs](./app-portal.mdx).
+
+  ### Idempotency
+
+  Svix supports idempotency for safely retrying requests without accidentally performing the same operation twice. This is useful when an API call is disrupted in transit and you do not receive a response.
+
+  For more information, please refer to the [idempotency section of the docs](./idempotency.mdx).
+
+  ### Webhooks sent by Svix
+
+  As you may expect from a webhooks service, Svix also uses webhooks to notify you of events. For example, Svix will send you a webhook when a message delivery has failed, or an endpoint has been failing for too long of a period.
+
+  For more information, please refer to the [operational webhooks section of the docs](./incoming-webhooks.mdx).
+
+  ### Environments (sub-accounts)
+
+  Svix supports having multiple environments (sub-accounts) within the same Svix account. One common use-case is to separate production, staging and development environments. Another one, is ensuring data stays in a specific geography (e.g. the EU) for compliance reasons.
+
+  For more information, please refer to the [managing environments section of the docs](./account/environments.mdx).
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Webhook consumers face a small set of recurring problems: authenticate the producer, process payloads idempotently, scale horizontally without losing ordering guarantees, and recover from outages. This skill covers consumer-side patterns.
+
+      Sourced from svix-docs endpoint-authentication, additional-authentication, and common-usage-examples.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      Svix supports advanced endpoint authentication methods that can be used by your customers on top of the standard signature verification.
+
+      These are advanced methods that are not required to keep your webhooks secure, but your customers might need them for their use case.
+      Read the [security docs](/security) for more information.
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      OAuth and mTLS can be enabled at the environment level in the [Svix Dashboard](https://dashboard.svix.com/settings/organization/general-settings).
+
+      ![Enable Endpoint Authentication](/img/endpoint-authentication/endpoint-authentication-enable.png)
+
+      When enabled, your users will see an option in the [App Portal](/app-portal) to configure the respective authentication method on their endpoints.
+
+      ![Endpoint Authentication Configure](/img/endpoint-authentication/endpoint-authentication-configure.png)
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      To configure OAuth, your users will need to enter a `Client ID` and the `Authorization Server URL`, as well as the rest of the OAuth parameters, depending on the desired `Grant type` and `Authentication method`.
+
+      ![OAuth Authentication](/img/endpoint-authentication/endpoint-configure-oauth.png)
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      With mTLS, your users can upload a private PEM encoded private key and certificate, which will be used to sign the requests sent to the endpoint, and to verify the identity of the receiving server.
+
+      ![Mutual TLS Authentication](/img/endpoint-authentication/endpoint-configure-mtls.png)
+
+      For self-signed certificates, a custom Certificate Authority certificate can also be specified.
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      Svix [signs all webhooks](./verifying-payloads/why.mdx) in order to ensure the security and authenticity of all of the webhooks being sent.
+
+      This security mechanism is already sufficient (and better) than other methods such as [HTTP Basic Authentication](https://en.wikipedia.org/wiki/Basic_access_authentication), and using an authentication token. However, some systems and IT departments have varying requirements for any HTTP request hitting their services (including webhooks), so Svix has built in support for these additional authentication modes.
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      HTTP Basic Authentication (Basic Auth), is a common way of sending a server a pair of username and password, or more often a username and auth token. While there are different ways of passing these credentials, the simplest and most common way is by including it as part of the URL.
+
+      You can add it to the URL by prefixing the URL with the username and password (or token) and the @ symbol as such:
+
+      ```
+      https://USERNAME:PASSWORD@example.com/webhook/
+      ```
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      Some services require specific headers to be passed in order to be processed by their load balancers or application servers. These services often require a specific authentication token passed in the `Authorization` header, but sometimes there could also be different headers and values.
+
+      Svix supports setting custom headers to be sent for each endpoint both [using the API](https://api.svix.com/docs#operation/update_endpoint_headers_api_v1_app__app_id__endpoint__endpoint_id__headers__put) and using [the application portal](./using-app-portal/adding-endpoints.mdx).
+  - fragment_type: example
+    sequence: 9
+    content: |
+      This document includes examples and useful information for how to model your use-case with Svix.
+
+      This list is not exhaustive and only covers some of the more common examples. Svix is used by a variety of different customers for a variety of different use-cases. If your use-case doesn't fit any of the below, please [contact us](/get-help/) and we would be happy to chat on how to best use Svix in your particular circumstances.
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      While different use-cases often require different solutions, there are a few Svix features that are useful in most use-cases and we will highlight them in this section.
+  - fragment_type: example
+    sequence: 11
+    content: |
+      Svix enables you to use your internal `ID`s as ids for Svix entities by using the `UID` property of consumer applications and endpoints, and `eventId` of messages.
+
+      This lets you use Svix in a completely stateless manner, without having to store the Svix identifiers (or anything) in your own database.
+
+      For more information, please refer to the [section about `UID`s in the overview](./overview.mdx#ids-and-uids).
+  - fragment_type: example
+    sequence: 12
+    content: |
+      Each message sent through Svix has an associated [event type](./event-types.mdx). Event types are identifiers denoting the type of message being sent and are the primary way for webhook consumers to configure what events they are interested in receiving.
+
+      You can even automatically generate public documentation for your webhooks [by making your event catalog public](./event-types.mdx#publishing-your-event-catalog).
+  - fragment_type: example
+    sequence: 13
+    content: |
+      Svix comes with an application portal for your users that you can use out of the box. Your users can then use it to add endpoints, debug delivery, as well as inspect and replay past webhooks. The application portal can be used as a standalone page, or embedded in your own dashboard using an iframe.
+
+      Most Svix customers use it in an iframe, or implement it themselves (either fully or partially) using the Svix API.
+
+      For more information, please refer to the [app portal section of the docs](./app-portal.mdx).
+  - fragment_type: example
+    sequence: 14
+    content: |
+      Svix supports idempotency for safely retrying requests without accidentally performing the same operation twice. This is useful when an API call is disrupted in transit and you do not receive a response.
+
+      For more information, please refer to the [idempotency section of the docs](./idempotency.mdx).
+  - fragment_type: example
+    sequence: 15
+    content: |
+      As you may expect from a webhooks service, Svix also uses webhooks to notify you of events. For example, Svix will send you a webhook when a message delivery has failed, or an endpoint has been failing for too long of a period.
+
+      For more information, please refer to the [operational webhooks section of the docs](./incoming-webhooks.mdx).
+  - fragment_type: example
+    sequence: 16
+    content: |
+      Svix supports having multiple environments (sub-accounts) within the same Svix account. One common use-case is to separate production, staging and development environments. Another one, is ensuring data stays in a specific geography (e.g. the EU) for compliance reasons.
+
+      For more information, please refer to the [managing environments section of the docs](./account/environments.mdx).
