@@ -1,0 +1,411 @@
+skill_type: domain
+skill_id: fastify-schema-typebox
+canonical_name: Fastify Schemas with TypeBox
+category: engineering
+skill_class: domain
+domain_tags:
+- fastify
+- typebox
+- json-schema
+- validation
+- openapi
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Fastify Schemas with TypeBox
+
+  ## Overview
+
+  TypeBox is a JSON-Schema-compliant schema builder with TypeScript inference. Schemas you build with Type.* are valid JSON Schema at runtime AND statically-inferred TypeScript types. The Fastify integration is first-class.
+
+  ---
+
+  ## Composing Schemas
+
+  ```ts
+  import { Type, Static } from '@sinclair/typebox';
+
+  const Address = Type.Object({
+      street: Type.String(),
+      city: Type.String(),
+      zip: Type.String({ pattern: '^\\d{5}$' }),
+  });
+
+  const User = Type.Object({
+      id: Type.String({ format: 'uuid' }),
+      email: Type.String({ format: 'email' }),
+      name: Type.String({ minLength: 1, maxLength: 100 }),
+      age: Type.Optional(Type.Integer({ minimum: 0, maximum: 150 })),
+      addresses: Type.Array(Address, { minItems: 1, maxItems: 5 }),
+      createdAt: Type.String({ format: 'date-time' }),
+  });
+
+  type User = Static<typeof User>;
+  ```
+
+  Each Type.* function returns a JSON Schema object with TypeScript-static type info embedded. `Static<>` extracts the static type.
+
+  ## Unions, Literals, Enums
+
+  ```ts
+  const Status = Type.Union([
+      Type.Literal('pending'),
+      Type.Literal('shipped'),
+      Type.Literal('delivered'),
+  ]);
+  type Status = Static<typeof Status>;  // 'pending' | 'shipped' | 'delivered'
+
+  // Or via Type.Enum:
+  enum StatusEnum { Pending = 'pending', Shipped = 'shipped' }
+  const StatusSchema = Type.Enum(StatusEnum);
+  ```
+
+  The literal-union pattern is most idiomatic; produces JSON Schema `enum` field.
+
+  ## Optional, Nullable, Default
+
+  ```ts
+  Type.Optional(Type.String())    // omittable
+  Type.String({ default: 'foo' })  // default if omitted (depends on use)
+  Type.Union([Type.String(), Type.Null()])  // explicitly null OR string
+  ```
+
+  JSON Schema doesn't distinguish 'optional' from 'nullable' the same way TypeScript does. Be explicit.
+
+  ## $id and Schema Reuse
+
+  ```ts
+  const Address = Type.Object({...}, { $id: 'Address' });
+
+  // Register globally:
+  app.addSchema(Address);
+
+  const User = Type.Object({
+      address: Type.Ref(Address),  // $ref: 'Address'
+  });
+  ```
+
+  Once `addSchema` is called, the $id is referenceable across routes. Saves duplication in OpenAPI output.
+
+  ## Composition Helpers
+
+  ```ts
+  const Timestamps = Type.Object({
+      createdAt: Type.String({ format: 'date-time' }),
+      updatedAt: Type.String({ format: 'date-time' }),
+  });
+
+  const User = Type.Intersect([
+      Type.Object({ id: Type.String(), email: Type.String() }),
+      Timestamps,
+  ]);
+  // User has id, email, createdAt, updatedAt
+  ```
+
+  `Type.Intersect` for & types; `Type.Composite` is similar but flattens. `Type.Pick` and `Type.Omit` for derivative types:
+
+  ```ts
+  const PublicUser = Type.Pick(User, ['id', 'email']);
+  const UserWithoutTimestamps = Type.Omit(User, ['createdAt', 'updatedAt']);
+  ```
+
+  ## Fastify Route Schema
+
+  ```ts
+  import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+
+  const app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
+
+  app.post('/users', {
+      schema: {
+          body: Type.Object({
+              email: Type.String({ format: 'email' }),
+              name: Type.String({ minLength: 1 }),
+          }),
+          response: {
+              201: User,
+              400: Type.Object({ error: Type.String(), fields: Type.Optional(Type.Array(Type.Object({}))) }),
+          },
+      },
+      handler: async (req, reply) => {
+          // req.body typed
+          const user = await this.users.create(req.body);
+          reply.code(201);
+          return user;  // typed against User
+      },
+  });
+  ```
+
+  `req.body` is fully typed. Response shape is checked against the response schema.
+
+  ## OpenAPI Generation
+
+  ```ts
+  import swagger from '@fastify/swagger';
+
+  await app.register(swagger, {
+      openapi: { info: { title: 'My API', version: '1.0.0' } },
+  });
+  ```
+
+  Fastify auto-generates the OpenAPI spec from route schemas. Visit `/documentation` for the Swagger UI. Schemas registered via `addSchema` are referenced as components.
+
+  ## Custom Formats
+
+  ```ts
+  import { Format } from '@sinclair/typebox/value';
+
+  Format.Set('phone', /^\+?[1-9]\d{1,14}$/.test);
+
+  const ContactInfo = Type.Object({
+      phone: Type.String({ format: 'phone' }),
+  });
+  ```
+
+  Custom formats integrate with Fastify's Ajv validator.
+
+  ## Migration From Other Schema Libs
+
+  From Zod:
+  ```ts
+  // Zod
+  const z_user = z.object({ name: z.string(), age: z.number() });
+  // TypeBox
+  const tb_user = Type.Object({ name: Type.String(), age: Type.Number() });
+  ```
+
+  Most patterns translate directly. TypeBox is more verbose for simple cases; better for OpenAPI generation.
+
+  From plain JSON Schema:
+  ```ts
+  // Plain
+  const userSchema = { type: 'object', properties: { ... }, required: [...] };
+  // TypeBox
+  const userSchema = Type.Object({ ... });
+  ```
+
+  TypeBox produces equivalent JSON; gain is type inference.
+
+  ## Common Pitfalls
+
+  - **Forgetting `withTypeProvider`.** Routes registered before the type provider don't get inference.
+  - **Mixing schema styles in one route.** Body uses Type, query uses plain JSON Schema → parts are typed, parts aren't.
+  - **No validation on response.** Fastify uses response schemas for serialization, not validation by default. Schema mismatch silently emits the data anyway. Use a custom serializer to validate responses if it matters.
+  - **Over-using $ref.** Excellent for repeated types; needless for one-off schemas (extra layer of indirection in OpenAPI).
+
+  ## Verification
+
+  A clean TypeBox + Fastify setup:
+
+  - All routes have body/params/query schemas where applicable.
+  - `Static<typeof Schema>` provides the TS type used in handlers.
+  - Generated OpenAPI is accurate (matches actual validation).
+  - Composition helpers (Pick, Omit, Intersect) reduce duplication.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Composing Schemas
+
+    ```ts
+    import { Type, Static } from '@sinclair/typebox';
+
+    const Address = Type.Object({
+        street: Type.String(),
+        city: Type.String(),
+        zip: Type.String({ pattern: '^\\d{5}$' }),
+    });
+
+    const User = Type.Object({
+        id: Type.String({ format: 'uuid' }),
+        email: Type.String({ format: 'email' }),
+        name: Type.String({ minLength: 1, maxLength: 100 }),
+        age: Type.Optional(Type.Integer({ minimum: 0, maximum: 150 })),
+        addresses: Type.Array(Address, { minItems: 1, maxItems: 5 }),
+        createdAt: Type.String({ format: 'date-time' }),
+    });
+
+    type User = Static<typeof User>;
+    ```
+
+    Each Type.* function returns a JSON Schema object with TypeScript-static type info embedded. `Static<>` extracts the static type.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Unions, Literals, Enums
+
+    ```ts
+    const Status = Type.Union([
+        Type.Literal('pending'),
+        Type.Literal('shipped'),
+        Type.Literal('delivered'),
+    ]);
+    type Status = Static<typeof Status>;  // 'pending' | 'shipped' | 'delivered'
+
+    // Or via Type.Enum:
+    enum StatusEnum { Pending = 'pending', Shipped = 'shipped' }
+    const StatusSchema = Type.Enum(StatusEnum);
+    ```
+
+    The literal-union pattern is most idiomatic; produces JSON Schema `enum` field.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Optional, Nullable, Default
+
+    ```ts
+    Type.Optional(Type.String())    // omittable
+    Type.String({ default: 'foo' })  // default if omitted (depends on use)
+    Type.Union([Type.String(), Type.Null()])  // explicitly null OR string
+    ```
+
+    JSON Schema doesn't distinguish 'optional' from 'nullable' the same way TypeScript does. Be explicit.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## $id and Schema Reuse
+
+    ```ts
+    const Address = Type.Object({...}, { $id: 'Address' });
+
+    // Register globally:
+    app.addSchema(Address);
+
+    const User = Type.Object({
+        address: Type.Ref(Address),  // $ref: 'Address'
+    });
+    ```
+
+    Once `addSchema` is called, the $id is referenceable across routes. Saves duplication in OpenAPI output.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Composition Helpers
+
+    ```ts
+    const Timestamps = Type.Object({
+        createdAt: Type.String({ format: 'date-time' }),
+        updatedAt: Type.String({ format: 'date-time' }),
+    });
+
+    const User = Type.Intersect([
+        Type.Object({ id: Type.String(), email: Type.String() }),
+        Timestamps,
+    ]);
+    // User has id, email, createdAt, updatedAt
+    ```
+
+    `Type.Intersect` for & types; `Type.Composite` is similar but flattens. `Type.Pick` and `Type.Omit` for derivative types:
+
+    ```ts
+    const PublicUser = Type.Pick(User, ['id', 'email']);
+    const UserWithoutTimestamps = Type.Omit(User, ['createdAt', 'updatedAt']);
+    ```
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Fastify Route Schema
+
+    ```ts
+    import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+
+    const app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
+
+    app.post('/users', {
+        schema: {
+            body: Type.Object({
+                email: Type.String({ format: 'email' }),
+                name: Type.String({ minLength: 1 }),
+            }),
+            response: {
+                201: User,
+                400: Type.Object({ error: Type.String(), fields: Type.Optional(Type.Array(Type.Object({}))) }),
+            },
+        },
+        handler: async (req, reply) => {
+            // req.body typed
+            const user = await this.users.create(req.body);
+            reply.code(201);
+            return user;  // typed against User
+        },
+    });
+    ```
+
+    `req.body` is fully typed. Response shape is checked against the response schema.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## OpenAPI Generation
+
+    ```ts
+    import swagger from '@fastify/swagger';
+
+    await app.register(swagger, {
+        openapi: { info: { title: 'My API', version: '1.0.0' } },
+    });
+    ```
+
+    Fastify auto-generates the OpenAPI spec from route schemas. Visit `/documentation` for the Swagger UI. Schemas registered via `addSchema` are referenced as components.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Custom Formats
+
+    ```ts
+    import { Format } from '@sinclair/typebox/value';
+
+    Format.Set('phone', /^\+?[1-9]\d{1,14}$/.test);
+
+    const ContactInfo = Type.Object({
+        phone: Type.String({ format: 'phone' }),
+    });
+    ```
+
+    Custom formats integrate with Fastify's Ajv validator.
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## Migration From Other Schema Libs
+
+    From Zod:
+    ```ts
+    // Zod
+    const z_user = z.object({ name: z.string(), age: z.number() });
+    // TypeBox
+    const tb_user = Type.Object({ name: Type.String(), age: Type.Number() });
+    ```
+
+    Most patterns translate directly. TypeBox is more verbose for simple cases; better for OpenAPI generation.
+
+    From plain JSON Schema:
+    ```ts
+    // Plain
+    const userSchema = { type: 'object', properties: { ... }, required: [...] };
+    // TypeBox
+    const userSchema = Type.Object({ ... });
+    ```
+
+    TypeBox produces equivalent JSON; gain is type inference.
+- fragment_type: guardrail
+  sequence: 10
+  content: |-
+    ## Common Pitfalls
+
+    - **Forgetting `withTypeProvider`.** Routes registered before the type provider don't get inference.
+    - **Mixing schema styles in one route.** Body uses Type, query uses plain JSON Schema → parts are typed, parts aren't.
+    - **No validation on response.** Fastify uses response schemas for serialization, not validation by default. Schema mismatch silently emits the data anyway. Use a custom serializer to validate responses if it matters.
+    - **Over-using $ref.** Excellent for repeated types; needless for one-off schemas (extra layer of indirection in OpenAPI).
+- fragment_type: verification
+  sequence: 11
+  content: |-
+    ## Verification
+
+    A clean TypeBox + Fastify setup:
+
+    - All routes have body/params/query schemas where applicable.
+    - `Static<typeof Schema>` provides the TS type used in handlers.
+    - Generated OpenAPI is accurate (matches actual validation).
+    - Composition helpers (Pick, Omit, Intersect) reduce duplication.

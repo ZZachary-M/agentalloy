@@ -1,0 +1,363 @@
+skill_type: domain
+skill_id: fastify-performance-tuning
+canonical_name: Fastify Performance Tuning
+category: engineering
+skill_class: domain
+domain_tags:
+- fastify
+- performance
+- json-schema
+- fast-json-stringify
+- logging
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Fastify Performance Tuning
+
+  ## Overview
+
+  Fastify is fast by default; the wins come from schema-driven serialization (skipping reflection) and minimizing per-request work. Plus knowing where Node + V8 introduce overhead — JSON.stringify of huge objects, synchronous logging, etc.
+
+  ---
+
+  ## Response Schemas — The Big Win
+
+  Fastify uses fast-json-stringify when a response schema is provided. It pre-compiles a serializer based on the schema, beating JSON.stringify by 2-5x:
+
+  ```ts
+  const UserSchema = {
+      type: 'object',
+      properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          email: { type: 'string' },
+      },
+  };
+
+  app.get('/users/:id', {
+      schema: { response: { 200: UserSchema } },
+      handler: async (req) => ({ id: '1', name: 'Alice', email: 'a@b.c' }),
+  });
+  ```
+
+  Without the schema: JSON.stringify reflects on every property (slow at scale). With it: pre-compiled fast path.
+
+  For high-throughput APIs, declaring response schemas is the single highest-impact change.
+
+  ## Logger Configuration
+
+  ```ts
+  const app = Fastify({
+      logger: {
+          level: 'info',
+          // PREFER: pino with redaction
+          redact: { paths: ['req.headers.authorization'], remove: true },
+      },
+  });
+  ```
+
+  Pino (Fastify's default) is the fastest Node logger. Don't replace with winston / bunyan unless you have specific needs.
+
+  In production, pipe to a separate process for I/O (`pino | pino-pretty | tee`) or use async transports — synchronous file writes become a bottleneck under load.
+
+  ## Connection Timeouts
+
+  ```ts
+  const app = Fastify({
+      connectionTimeout: 5_000,    // close idle TCP after 5s
+      keepAliveTimeout: 5_000,      // close keep-alive after 5s idle
+      requestTimeout: 30_000,       // kill requests over 30s
+  });
+  ```
+
+  Defaults are generous for compatibility. Tune down for short-lived services; up for long-poll endpoints.
+
+  ## Compression
+
+  ```ts
+  import compress from '@fastify/compress';
+  app.register(compress, {
+      global: true,
+      threshold: 1024,  // only compress > 1KB
+      encodings: ['gzip', 'deflate', 'br'],
+  });
+  ```
+
+  Compression trades CPU for bandwidth. The threshold avoids the overhead on tiny responses where compression isn't worth it.
+
+  For static content, pre-compress at build time and serve from CDN; skip request-time compression.
+
+  ## sendFile and sendStream for Large Responses
+
+  ```ts
+  import path from 'node:path';
+  import sendFilePlugin from '@fastify/static';
+
+  await app.register(sendFilePlugin, {
+      root: path.join(__dirname, 'public'),
+  });
+
+  // Or manual:
+  app.get('/download/:id', async (req, reply) => {
+      const stream = fs.createReadStream(`/data/${req.params.id}.bin`);
+      return reply.type('application/octet-stream').send(stream);
+  });
+  ```
+
+  For multi-MB responses, streaming beats buffering. Fastify pipes the stream to the response without loading it into memory.
+
+  ## Hooks Order and Cost
+
+  ```
+  onRequest → preParsing → preValidation → preHandler → handler → preSerialization → onSend → onResponse
+  ```
+
+  Each hook adds latency. Audit your hooks:
+
+  - Cheap hooks (auth check, request ID injection): fine in the hot path.
+  - Expensive hooks (DB query in preHandler): consider lazy-loading instead.
+
+  ## Avoiding Synchronous Work
+
+  ```ts
+  // SLOW: sync crypto on every request
+  app.addHook('onRequest', async (req) => {
+      req.signature = crypto.createHash('sha256').update(req.url).digest('hex');
+  });
+
+  // FAST: only when needed
+  app.get('/secured', async (req) => {
+      const sig = crypto.createHash('sha256').update(req.url).digest('hex');
+      // ...
+  });
+  ```
+
+  Hooks run on every request. Move work into specific handlers when only some routes need it.
+
+  ## Benchmarking with autocannon
+
+  ```bash
+  npx autocannon -c 100 -d 30 http://localhost:3000/users
+  ```
+
+  100 concurrent connections, 30 seconds. Outputs requests/sec, latency p50/p99.
+
+  For meaningful comparison: run twice (warmup + measurement), keep CPU under 80% (saturated CPU shows worse latency than throughput).
+
+  ## CPU Profiling
+
+  ```bash
+  node --inspect=0.0.0.0:9229 server.js
+  # Open chrome://inspect; record a profile
+  ```
+
+  Or `clinic.js`:
+
+  ```bash
+  npx clinic doctor -- node server.js
+  # After traffic, generates HTML report
+  ```
+
+  Top consumers in a Fastify app are usually JSON serialization (fix with schemas), logging (fix with async transport), database calls (fix with connection pool).
+
+  ## Common Pitfalls
+
+  - **No response schemas on hot paths.** Easy 2-3x throughput win missed.
+  - **Synchronous file logging.** Becomes the bottleneck. Use async transport.
+  - **Shipping huge JSON responses.** Compression helps but not infinitely. Paginate.
+  - **Hooks doing DB work for routes that don't need it.** Audit and split into per-route logic.
+  - **Benchmarking without warmup.** First requests are slower (V8 JIT not warm). Discard the first 5s.
+
+  ## Verification
+
+  A tuned Fastify service:
+
+  - Hot routes have response schemas; fast-json-stringify is engaged.
+  - p99 latency stays bounded under 80% CPU load.
+  - Logging doesn't dominate the flame graph.
+  - Streams for large responses; no full-buffer memory spikes.
+  - Benchmarks reproducible — same numbers across consecutive runs.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Response Schemas — The Big Win
+
+    Fastify uses fast-json-stringify when a response schema is provided. It pre-compiles a serializer based on the schema, beating JSON.stringify by 2-5x:
+
+    ```ts
+    const UserSchema = {
+        type: 'object',
+        properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            email: { type: 'string' },
+        },
+    };
+
+    app.get('/users/:id', {
+        schema: { response: { 200: UserSchema } },
+        handler: async (req) => ({ id: '1', name: 'Alice', email: 'a@b.c' }),
+    });
+    ```
+
+    Without the schema: JSON.stringify reflects on every property (slow at scale). With it: pre-compiled fast path.
+
+    For high-throughput APIs, declaring response schemas is the single highest-impact change.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Logger Configuration
+
+    ```ts
+    const app = Fastify({
+        logger: {
+            level: 'info',
+            // PREFER: pino with redaction
+            redact: { paths: ['req.headers.authorization'], remove: true },
+        },
+    });
+    ```
+
+    Pino (Fastify's default) is the fastest Node logger. Don't replace with winston / bunyan unless you have specific needs.
+
+    In production, pipe to a separate process for I/O (`pino | pino-pretty | tee`) or use async transports — synchronous file writes become a bottleneck under load.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Connection Timeouts
+
+    ```ts
+    const app = Fastify({
+        connectionTimeout: 5_000,    // close idle TCP after 5s
+        keepAliveTimeout: 5_000,      // close keep-alive after 5s idle
+        requestTimeout: 30_000,       // kill requests over 30s
+    });
+    ```
+
+    Defaults are generous for compatibility. Tune down for short-lived services; up for long-poll endpoints.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Compression
+
+    ```ts
+    import compress from '@fastify/compress';
+    app.register(compress, {
+        global: true,
+        threshold: 1024,  // only compress > 1KB
+        encodings: ['gzip', 'deflate', 'br'],
+    });
+    ```
+
+    Compression trades CPU for bandwidth. The threshold avoids the overhead on tiny responses where compression isn't worth it.
+
+    For static content, pre-compress at build time and serve from CDN; skip request-time compression.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## sendFile and sendStream for Large Responses
+
+    ```ts
+    import path from 'node:path';
+    import sendFilePlugin from '@fastify/static';
+
+    await app.register(sendFilePlugin, {
+        root: path.join(__dirname, 'public'),
+    });
+
+    // Or manual:
+    app.get('/download/:id', async (req, reply) => {
+        const stream = fs.createReadStream(`/data/${req.params.id}.bin`);
+        return reply.type('application/octet-stream').send(stream);
+    });
+    ```
+
+    For multi-MB responses, streaming beats buffering. Fastify pipes the stream to the response without loading it into memory.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Hooks Order and Cost
+
+    ```
+    onRequest → preParsing → preValidation → preHandler → handler → preSerialization → onSend → onResponse
+    ```
+
+    Each hook adds latency. Audit your hooks:
+
+    - Cheap hooks (auth check, request ID injection): fine in the hot path.
+    - Expensive hooks (DB query in preHandler): consider lazy-loading instead.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Avoiding Synchronous Work
+
+    ```ts
+    // SLOW: sync crypto on every request
+    app.addHook('onRequest', async (req) => {
+        req.signature = crypto.createHash('sha256').update(req.url).digest('hex');
+    });
+
+    // FAST: only when needed
+    app.get('/secured', async (req) => {
+        const sig = crypto.createHash('sha256').update(req.url).digest('hex');
+        // ...
+    });
+    ```
+
+    Hooks run on every request. Move work into specific handlers when only some routes need it.
+- fragment_type: execution
+  sequence: 8
+  content: |-
+    ## Benchmarking with autocannon
+
+    ```bash
+    npx autocannon -c 100 -d 30 http://localhost:3000/users
+    ```
+
+    100 concurrent connections, 30 seconds. Outputs requests/sec, latency p50/p99.
+
+    For meaningful comparison: run twice (warmup + measurement), keep CPU under 80% (saturated CPU shows worse latency than throughput).
+- fragment_type: execution
+  sequence: 9
+  content: |-
+    ## CPU Profiling
+
+    ```bash
+    node --inspect=0.0.0.0:9229 server.js
+    # Open chrome://inspect; record a profile
+    ```
+
+    Or `clinic.js`:
+
+    ```bash
+    npx clinic doctor -- node server.js
+    # After traffic, generates HTML report
+    ```
+
+    Top consumers in a Fastify app are usually JSON serialization (fix with schemas), logging (fix with async transport), database calls (fix with connection pool).
+- fragment_type: guardrail
+  sequence: 10
+  content: |-
+    ## Common Pitfalls
+
+    - **No response schemas on hot paths.** Easy 2-3x throughput win missed.
+    - **Synchronous file logging.** Becomes the bottleneck. Use async transport.
+    - **Shipping huge JSON responses.** Compression helps but not infinitely. Paginate.
+    - **Hooks doing DB work for routes that don't need it.** Audit and split into per-route logic.
+    - **Benchmarking without warmup.** First requests are slower (V8 JIT not warm). Discard the first 5s.
+- fragment_type: verification
+  sequence: 11
+  content: |-
+    ## Verification
+
+    A tuned Fastify service:
+
+    - Hot routes have response schemas; fast-json-stringify is engaged.
+    - p99 latency stays bounded under 80% CPU load.
+    - Logging doesn't dominate the flame graph.
+    - Streams for large responses; no full-buffer memory spikes.
+    - Benchmarks reproducible — same numbers across consecutive runs.

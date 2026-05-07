@@ -30,3 +30,18 @@ skills:
 - skill_id: fastify-error-handling
   file: fastify-error-handling.yaml
   fragment_count: 3
+- skill_id: fastify-decorators-deep
+  file: fastify-decorators-deep.yaml
+  fragment_count: 9
+- skill_id: fastify-error-handling-deep
+  file: fastify-error-handling-deep.yaml
+  fragment_count: 10
+- skill_id: fastify-performance-tuning
+  file: fastify-performance-tuning.yaml
+  fragment_count: 11
+- skill_id: fastify-schema-typebox
+  file: fastify-schema-typebox.yaml
+  fragment_count: 11
+- skill_id: fastify-typescript-integration
+  file: fastify-typescript-integration.yaml
+  fragment_count: 8

@@ -1,0 +1,303 @@
+skill_type: domain
+skill_id: fastify-typescript-integration
+canonical_name: Fastify with TypeScript
+category: engineering
+skill_class: domain
+domain_tags:
+- fastify
+- typescript
+- type-providers
+- typebox
+- schemas
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Fastify with TypeScript
+
+  ## Overview
+
+  Fastify ships with TypeScript types but full safety requires a 'type provider' that bridges JSON Schema (Fastify's runtime validation) and TypeScript types. TypeBox is the most common; Zod and JSON Schema To TS are alternatives.
+
+  ---
+
+  ## Type Providers — The Connection
+
+  Fastify validates with JSON Schema at runtime; TypeScript types are static. Without a provider, you write the schema once and the type once — drift is inevitable. Type providers infer the type from the schema:
+
+  ```ts
+  import { TypeBoxTypeProvider, Type } from '@fastify/type-provider-typebox';
+  import Fastify from 'fastify';
+
+  const app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
+
+  const CreateUserSchema = Type.Object({
+      name: Type.String({ minLength: 1 }),
+      email: Type.String({ format: 'email' }),
+  });
+
+  app.post('/users', {
+      schema: { body: CreateUserSchema },
+      handler: async (req) => {
+          // req.body is typed as { name: string, email: string }
+          return { id: '1', name: req.body.name };
+      },
+  });
+  ```
+
+  Schema is the source of truth; types follow.
+
+  ## TypeBox
+
+  ```ts
+  import { Type, Static } from '@sinclair/typebox';
+
+  const User = Type.Object({
+      id: Type.String(),
+      email: Type.String({ format: 'email' }),
+      age: Type.Optional(Type.Number({ minimum: 0 })),
+      role: Type.Union([Type.Literal('admin'), Type.Literal('user')]),
+  });
+
+  type User = Static<typeof User>;  // { id: string; email: string; age?: number; role: 'admin' | 'user' }
+  ```
+
+  `Type.Static<>` extracts the inferred TypeScript type. The runtime schema and the static type are guaranteed to match.
+
+  ## Typed Reply Schemas
+
+  ```ts
+  const UserList = Type.Array(User);
+
+  app.get('/users', {
+      schema: { response: { 200: UserList } },
+      handler: async () => [{ id: '1', email: 'a@b.c' }],
+  });
+  ```
+
+  The handler return value is typed against the response schema. Returning the wrong shape is a TS error.
+
+  ## Zod Type Provider
+
+  ```ts
+  import { ZodTypeProvider } from 'fastify-type-provider-zod';
+  import { z } from 'zod';
+
+  const app = Fastify().withTypeProvider<ZodTypeProvider>();
+
+  const CreateOrder = z.object({
+      productId: z.string(),
+      quantity: z.number().int().positive(),
+  });
+
+  app.post('/orders', {
+      schema: { body: CreateOrder },
+      handler: async (req) => {
+          // req.body typed from Zod schema
+      },
+  });
+  ```
+
+  Zod is more popular in TS ecosystems; same idea, different schema language.
+
+  ## Plugin Typing
+
+  ```ts
+  const myPlugin: FastifyPluginAsync<{ greeting: string }> = async (fastify, opts) => {
+      fastify.get('/', async () => opts.greeting);
+  };
+
+  await app.register(myPlugin, { greeting: 'hi' });
+  ```
+
+  `FastifyPluginAsync<Options>` types the options. Use the callback variant `FastifyPluginCallback` for sync.
+
+  ## Decorators
+
+  ```ts
+  declare module 'fastify' {
+      interface FastifyInstance {
+          config: { dbUrl: string };
+      }
+      interface FastifyRequest {
+          user?: { id: string };
+      }
+  }
+
+  app.decorate('config', { dbUrl: process.env.DATABASE_URL });
+  app.addHook('preHandler', async (req) => {
+      req.user = await verifyAuth(req);
+  });
+
+  app.get('/me', async (req) => {
+      return req.user;  // typed
+  });
+  ```
+
+  Module declaration merges your custom properties into the Fastify types.
+
+  ## Common Pitfalls
+
+  - **Type provider not applied.** `withTypeProvider` returns a new typed instance; subsequent route registrations on the old instance don't get the typing. Capture the result.
+  - **Mixing schema sources.** TypeBox + plain JSON Schema in different routes works but mixing in the same definition fights the inference.
+  - **Forgetting module declarations for decorators.** `req.user` becomes `any`; defeats the purpose of TypeScript.
+  - **Schema with Type.Any.** Defeats both runtime validation and static typing. Be specific.
+
+  ## Verification
+
+  A typed Fastify app:
+
+  - `req.body`, `req.params`, `req.query` are typed from schemas, not `any`.
+  - Response shape mismatches fail compile.
+  - Custom decorators are visible in types.
+  - Schema validation matches what the type system thinks.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Type Providers — The Connection
+
+    Fastify validates with JSON Schema at runtime; TypeScript types are static. Without a provider, you write the schema once and the type once — drift is inevitable. Type providers infer the type from the schema:
+
+    ```ts
+    import { TypeBoxTypeProvider, Type } from '@fastify/type-provider-typebox';
+    import Fastify from 'fastify';
+
+    const app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
+
+    const CreateUserSchema = Type.Object({
+        name: Type.String({ minLength: 1 }),
+        email: Type.String({ format: 'email' }),
+    });
+
+    app.post('/users', {
+        schema: { body: CreateUserSchema },
+        handler: async (req) => {
+            // req.body is typed as { name: string, email: string }
+            return { id: '1', name: req.body.name };
+        },
+    });
+    ```
+
+    Schema is the source of truth; types follow.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## TypeBox
+
+    ```ts
+    import { Type, Static } from '@sinclair/typebox';
+
+    const User = Type.Object({
+        id: Type.String(),
+        email: Type.String({ format: 'email' }),
+        age: Type.Optional(Type.Number({ minimum: 0 })),
+        role: Type.Union([Type.Literal('admin'), Type.Literal('user')]),
+    });
+
+    type User = Static<typeof User>;  // { id: string; email: string; age?: number; role: 'admin' | 'user' }
+    ```
+
+    `Type.Static<>` extracts the inferred TypeScript type. The runtime schema and the static type are guaranteed to match.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Typed Reply Schemas
+
+    ```ts
+    const UserList = Type.Array(User);
+
+    app.get('/users', {
+        schema: { response: { 200: UserList } },
+        handler: async () => [{ id: '1', email: 'a@b.c' }],
+    });
+    ```
+
+    The handler return value is typed against the response schema. Returning the wrong shape is a TS error.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Zod Type Provider
+
+    ```ts
+    import { ZodTypeProvider } from 'fastify-type-provider-zod';
+    import { z } from 'zod';
+
+    const app = Fastify().withTypeProvider<ZodTypeProvider>();
+
+    const CreateOrder = z.object({
+        productId: z.string(),
+        quantity: z.number().int().positive(),
+    });
+
+    app.post('/orders', {
+        schema: { body: CreateOrder },
+        handler: async (req) => {
+            // req.body typed from Zod schema
+        },
+    });
+    ```
+
+    Zod is more popular in TS ecosystems; same idea, different schema language.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Plugin Typing
+
+    ```ts
+    const myPlugin: FastifyPluginAsync<{ greeting: string }> = async (fastify, opts) => {
+        fastify.get('/', async () => opts.greeting);
+    };
+
+    await app.register(myPlugin, { greeting: 'hi' });
+    ```
+
+    `FastifyPluginAsync<Options>` types the options. Use the callback variant `FastifyPluginCallback` for sync.
+- fragment_type: execution
+  sequence: 6
+  content: |-
+    ## Decorators
+
+    ```ts
+    declare module 'fastify' {
+        interface FastifyInstance {
+            config: { dbUrl: string };
+        }
+        interface FastifyRequest {
+            user?: { id: string };
+        }
+    }
+
+    app.decorate('config', { dbUrl: process.env.DATABASE_URL });
+    app.addHook('preHandler', async (req) => {
+        req.user = await verifyAuth(req);
+    });
+
+    app.get('/me', async (req) => {
+        return req.user;  // typed
+    });
+    ```
+
+    Module declaration merges your custom properties into the Fastify types.
+- fragment_type: guardrail
+  sequence: 7
+  content: |-
+    ## Common Pitfalls
+
+    - **Type provider not applied.** `withTypeProvider` returns a new typed instance; subsequent route registrations on the old instance don't get the typing. Capture the result.
+    - **Mixing schema sources.** TypeBox + plain JSON Schema in different routes works but mixing in the same definition fights the inference.
+    - **Forgetting module declarations for decorators.** `req.user` becomes `any`; defeats the purpose of TypeScript.
+    - **Schema with Type.Any.** Defeats both runtime validation and static typing. Be specific.
+- fragment_type: verification
+  sequence: 8
+  content: |-
+    ## Verification
+
+    A typed Fastify app:
+
+    - `req.body`, `req.params`, `req.query` are typed from schemas, not `any`.
+    - Response shape mismatches fail compile.
+    - Custom decorators are visible in types.
+    - Schema validation matches what the type system thinks.

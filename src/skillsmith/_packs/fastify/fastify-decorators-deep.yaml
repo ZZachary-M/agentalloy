@@ -1,0 +1,297 @@
+skill_type: domain
+skill_id: fastify-decorators-deep
+canonical_name: Fastify Decorators
+category: engineering
+skill_class: domain
+domain_tags:
+- fastify
+- decorators
+- request-decorators
+- instance-decorators
+- encapsulation
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # Fastify Decorators
+
+  ## Overview
+
+  Decorators add functionality to the Fastify instance, request, or reply objects. Unlike middleware (transient), decorators are persistent properties. They respect encapsulation — a decorator declared in a plugin is invisible to siblings unless made global via `fastify-plugin`.
+
+  ---
+
+  ## fastify.decorate — Instance Decorators
+
+  ```ts
+  fastify.decorate('multiply', (a: number, b: number) => a * b);
+
+  // Anywhere with access to the instance:
+  fastify.multiply(2, 3);  // 6
+  ```
+
+  `fastify.decorate(name, value)` adds a property. Useful for shared utilities, business-logic services, configuration.
+
+  ```ts
+  fastify.decorate('config', { dbUrl: 'postgres://...', apiKey: '...' });
+  ```
+
+  ## fastify.decorateRequest — Request Decorators
+
+  ```ts
+  fastify.decorateRequest('user', null);  // initialize default
+
+  fastify.addHook('preHandler', async (req) => {
+      req.user = await verifyToken(req.headers.authorization);
+  });
+
+  fastify.get('/me', async (req) => req.user);
+  ```
+
+  `decorateRequest` reserves a property on every request. The default value (here `null`) is set on every new request; populate via hooks.
+
+  Performance note: declaring with `null`/empty object is faster than not declaring (Fastify pre-allocates the slot). Declaring with a fresh object per call is slower.
+
+  ## fastify.decorateReply — Reply Decorators
+
+  ```ts
+  fastify.decorateReply('sendNoContent', function () {
+      return this.code(204).send();
+  });
+
+  fastify.delete('/users/:id', async (req, reply) => {
+      await this.users.delete(req.params.id);
+      return reply.sendNoContent();
+  });
+  ```
+
+  Reply decorators are methods on the response object. Use sparingly — most logic belongs in handlers.
+
+  ## Dependency Declarations
+
+  ```ts
+  fastify.decorate('db', dbConnection);
+
+  fastify.register(async (instance) => {
+      instance.decorate('orders', new OrderService(instance.db), ['db']);
+      // 'db' must exist before 'orders' is decorated
+  });
+  ```
+
+  The third argument is a list of required dependencies. Throws at registration if missing — surfaces config errors at startup, not at request time.
+
+  ## Encapsulation Context
+
+  By default, decorators are scoped to the plugin that registered them:
+
+  ```ts
+  fastify.register(async (plugin) => {
+      plugin.decorate('helper', () => 'hi');
+      plugin.get('/inner', async () => plugin.helper());  // works
+  });
+
+  fastify.get('/outer', async () => fastify.helper());  // ERROR — not in scope
+  ```
+
+  To make it global, use `fastify-plugin`:
+
+  ```ts
+  import fp from 'fastify-plugin';
+
+  const myPlugin = fp(async (fastify) => {
+      fastify.decorate('helper', () => 'hi');
+  });
+
+  fastify.register(myPlugin);
+  fastify.get('/outer', async () => fastify.helper());  // works now
+  ```
+
+  `fp` skips the encapsulation. Use for cross-cutting plugins (auth, db connection); skip for plugins that should stay scoped.
+
+  ## Decorators vs Hooks
+
+  - **Decorator** — persistent property/function. Set once, used many times.
+  - **Hook** — runs at lifecycle points. Set once, fires on every request/response.
+
+  A decorator might compute the user from a JWT (function); a hook calls that function and attaches result to `req.user`.
+
+  ## Performance Considerations
+
+  Adding many decorators is fine; Fastify allocates slots at startup. Adding decorators dynamically per-request is slow — use hooks to assign to pre-declared slots.
+
+  ```ts
+  // SLOW: dynamic property assignment per request
+  fastify.addHook('preHandler', async (req) => {
+      (req as any).startTime = Date.now();  // dynamic, slow
+  });
+
+  // FAST: pre-declared slot
+  fastify.decorateRequest('startTime', 0);
+  fastify.addHook('preHandler', async (req) => {
+      req.startTime = Date.now();
+  });
+  ```
+
+  ## Common Pitfalls
+
+  - **Decorating without declaring dependencies.** If `orders` decorator depends on `db`, declare it. Otherwise startup-order bugs are silent.
+  - **`fastify-plugin` everywhere.** Defeats encapsulation; everything global. Reserve for genuinely-global plugins.
+  - **Mutating decorated objects.** Decorating with `{}` then mutating per-request — sketchy. The same default object is shared. Use `decorateRequest('user', null)` and assign in hooks.
+  - **TypeScript decorator merge missing.** If `fastify.x` works at runtime but TS thinks it doesn't exist, you forgot the module declaration merge.
+
+  ## Verification
+
+  A working decorator setup:
+
+  - Required decorator dependencies fail startup with clear errors.
+  - Encapsulated decorators don't leak to sibling plugins.
+  - Pre-declared request slots are faster than dynamic assignment.
+  - TypeScript types include all decorators (module declaration merged).
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## fastify.decorate — Instance Decorators
+
+    ```ts
+    fastify.decorate('multiply', (a: number, b: number) => a * b);
+
+    // Anywhere with access to the instance:
+    fastify.multiply(2, 3);  // 6
+    ```
+
+    `fastify.decorate(name, value)` adds a property. Useful for shared utilities, business-logic services, configuration.
+
+    ```ts
+    fastify.decorate('config', { dbUrl: 'postgres://...', apiKey: '...' });
+    ```
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## fastify.decorateRequest — Request Decorators
+
+    ```ts
+    fastify.decorateRequest('user', null);  // initialize default
+
+    fastify.addHook('preHandler', async (req) => {
+        req.user = await verifyToken(req.headers.authorization);
+    });
+
+    fastify.get('/me', async (req) => req.user);
+    ```
+
+    `decorateRequest` reserves a property on every request. The default value (here `null`) is set on every new request; populate via hooks.
+
+    Performance note: declaring with `null`/empty object is faster than not declaring (Fastify pre-allocates the slot). Declaring with a fresh object per call is slower.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## fastify.decorateReply — Reply Decorators
+
+    ```ts
+    fastify.decorateReply('sendNoContent', function () {
+        return this.code(204).send();
+    });
+
+    fastify.delete('/users/:id', async (req, reply) => {
+        await this.users.delete(req.params.id);
+        return reply.sendNoContent();
+    });
+    ```
+
+    Reply decorators are methods on the response object. Use sparingly — most logic belongs in handlers.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Dependency Declarations
+
+    ```ts
+    fastify.decorate('db', dbConnection);
+
+    fastify.register(async (instance) => {
+        instance.decorate('orders', new OrderService(instance.db), ['db']);
+        // 'db' must exist before 'orders' is decorated
+    });
+    ```
+
+    The third argument is a list of required dependencies. Throws at registration if missing — surfaces config errors at startup, not at request time.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Encapsulation Context
+
+    By default, decorators are scoped to the plugin that registered them:
+
+    ```ts
+    fastify.register(async (plugin) => {
+        plugin.decorate('helper', () => 'hi');
+        plugin.get('/inner', async () => plugin.helper());  // works
+    });
+
+    fastify.get('/outer', async () => fastify.helper());  // ERROR — not in scope
+    ```
+
+    To make it global, use `fastify-plugin`:
+
+    ```ts
+    import fp from 'fastify-plugin';
+
+    const myPlugin = fp(async (fastify) => {
+        fastify.decorate('helper', () => 'hi');
+    });
+
+    fastify.register(myPlugin);
+    fastify.get('/outer', async () => fastify.helper());  // works now
+    ```
+
+    `fp` skips the encapsulation. Use for cross-cutting plugins (auth, db connection); skip for plugins that should stay scoped.
+- fragment_type: rationale
+  sequence: 6
+  content: |-
+    ## Decorators vs Hooks
+
+    - **Decorator** — persistent property/function. Set once, used many times.
+    - **Hook** — runs at lifecycle points. Set once, fires on every request/response.
+
+    A decorator might compute the user from a JWT (function); a hook calls that function and attaches result to `req.user`.
+- fragment_type: execution
+  sequence: 7
+  content: |-
+    ## Performance Considerations
+
+    Adding many decorators is fine; Fastify allocates slots at startup. Adding decorators dynamically per-request is slow — use hooks to assign to pre-declared slots.
+
+    ```ts
+    // SLOW: dynamic property assignment per request
+    fastify.addHook('preHandler', async (req) => {
+        (req as any).startTime = Date.now();  // dynamic, slow
+    });
+
+    // FAST: pre-declared slot
+    fastify.decorateRequest('startTime', 0);
+    fastify.addHook('preHandler', async (req) => {
+        req.startTime = Date.now();
+    });
+    ```
+- fragment_type: guardrail
+  sequence: 8
+  content: |-
+    ## Common Pitfalls
+
+    - **Decorating without declaring dependencies.** If `orders` decorator depends on `db`, declare it. Otherwise startup-order bugs are silent.
+    - **`fastify-plugin` everywhere.** Defeats encapsulation; everything global. Reserve for genuinely-global plugins.
+    - **Mutating decorated objects.** Decorating with `{}` then mutating per-request — sketchy. The same default object is shared. Use `decorateRequest('user', null)` and assign in hooks.
+    - **TypeScript decorator merge missing.** If `fastify.x` works at runtime but TS thinks it doesn't exist, you forgot the module declaration merge.
+- fragment_type: verification
+  sequence: 9
+  content: |-
+    ## Verification
+
+    A working decorator setup:
+
+    - Required decorator dependencies fail startup with clear errors.
+    - Encapsulated decorators don't leak to sibling plugins.
+    - Pre-declared request slots are faster than dynamic assignment.
+    - TypeScript types include all decorators (module declaration merged).
