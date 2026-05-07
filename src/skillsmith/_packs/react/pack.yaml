@@ -9,20 +9,47 @@ embedding_dim: 1024
 license: MIT
 homepage: https://github.com/nrmeyers/skillsmith
 always_install: false
-depends_on: [core, engineering, typescript]
+depends_on:
+- core
+- engineering
+- typescript
 skills:
-  - skill_id: react-hooks-rules-and-deps
-    file: react-hooks-rules-and-deps.yaml
-    fragment_count: 10
-  - skill_id: react-effects-and-cleanup
-    file: react-effects-and-cleanup.yaml
-    fragment_count: 9
-  - skill_id: react-state-and-context
-    file: react-state-and-context.yaml
-    fragment_count: 8
-  - skill_id: react-server-components-and-suspense
-    file: react-server-components-and-suspense.yaml
-    fragment_count: 10
-  - skill_id: react-rendering-keys-and-memoization
-    file: react-rendering-keys-and-memoization.yaml
-    fragment_count: 10
+- skill_id: react-hooks-rules-and-deps
+  file: react-hooks-rules-and-deps.yaml
+  fragment_count: 10
+- skill_id: react-effects-and-cleanup
+  file: react-effects-and-cleanup.yaml
+  fragment_count: 9
+- skill_id: react-state-and-context
+  file: react-state-and-context.yaml
+  fragment_count: 8
+- skill_id: react-server-components-and-suspense
+  file: react-server-components-and-suspense.yaml
+  fragment_count: 10
+- skill_id: react-rendering-keys-and-memoization
+  file: react-rendering-keys-and-memoization.yaml
+  fragment_count: 10
+- skill_id: react-error-boundaries
+  file: react-error-boundaries.yaml
+  fragment_count: 9
+- skill_id: react-form-actions-and-status
+  file: react-form-actions-and-status.yaml
+  fragment_count: 7
+- skill_id: react-forms-and-controlled-inputs
+  file: react-forms-and-controlled-inputs.yaml
+  fragment_count: 6
+- skill_id: react-optimistic-updates
+  file: react-optimistic-updates.yaml
+  fragment_count: 8
+- skill_id: react-performance-and-profiling
+  file: react-performance-and-profiling.yaml
+  fragment_count: 7
+- skill_id: react-refs-and-imperatives
+  file: react-refs-and-imperatives.yaml
+  fragment_count: 8
+- skill_id: react-tanstack-query
+  file: react-tanstack-query.yaml
+  fragment_count: 7
+- skill_id: react-transitions-and-deferred-values
+  file: react-transitions-and-deferred-values.yaml
+  fragment_count: 5

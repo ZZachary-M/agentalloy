@@ -1,0 +1,235 @@
+skill_type: domain
+skill_id: react-forms-and-controlled-inputs
+canonical_name: React Forms and Controlled Inputs
+category: engineering
+skill_class: domain
+domain_tags:
+- react
+- forms
+- controlled-inputs
+- input-handling
+- validation
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion (14B over-fragmented)
+raw_prose: |
+  # React Forms and Controlled Inputs
+
+  ## Overview
+
+  React forms are state-driven by default. Each input's `value` is bound to component state and `onChange` updates it. This 'controlled input' pattern is reactive but verbose; uncontrolled inputs (read via `ref`) are simpler for cases where you only need values at submit time.
+
+  ---
+
+  ## Controlled Inputs
+
+  A controlled input has its `value` driven by React state and updates via `onChange`:
+
+  ```jsx
+  function NameForm() {
+    const [name, setName] = useState('');
+    return (
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+    );
+  }
+  ```
+
+  The state is the source of truth. Every keystroke triggers a re-render. This is the right choice when you need to validate, transform, or react to changes as the user types.
+
+  ## Uncontrolled Inputs
+
+  Uncontrolled inputs use a ref to read the DOM value when needed (typically at submit):
+
+  ```jsx
+  function NameForm() {
+    const inputRef = useRef(null);
+    function handleSubmit(e) {
+      e.preventDefault();
+      submit(inputRef.current.value);
+    }
+    return (
+      <form onSubmit={handleSubmit}>
+        <input type="text" ref={inputRef} defaultValue="" />
+        <button type="submit">Submit</button>
+      </form>
+    );
+  }
+  ```
+
+  Use uncontrolled when you don't need to react during typing, when integrating with non-React code, or when the form is large enough that controlled re-renders would be expensive. Use `defaultValue` (not `value`) to set the initial state.
+
+  ## Multi-Input Forms
+
+  For forms with many fields, store all fields in one state object and use a single change handler keyed by `name`:
+
+  ```jsx
+  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  return (
+    <form>
+      <input name="name" value={form.name} onChange={handleChange} />
+      <input name="email" value={form.email} onChange={handleChange} />
+      <textarea name="message" value={form.message} onChange={handleChange} />
+    </form>
+  );
+  ```
+
+  For more complex forms, reach for a library (`react-hook-form`, `formik`) — they batch updates and skip per-keystroke re-renders.
+
+  ## Validation Strategies
+
+  Three common patterns:
+
+  - **Validate on submit** — cheapest. Show errors only after the user tries to submit. Best for short forms.
+  - **Validate on blur** — show errors as the user moves to the next field. Good UX balance.
+  - **Validate on change** — show errors as they type. Most aggressive; can feel nagging unless paired with debouncing.
+
+  Keep validation logic outside the component so it's testable in isolation:
+
+  ```jsx
+  function validateEmail(value) {
+    if (!value) return 'Email is required';
+    if (!value.includes('@')) return 'Invalid email';
+    return null;
+  }
+  ```
+
+  ## Common Pitfalls
+
+  - **Stale state in async handlers.** If you read state inside a `setTimeout` or fetch callback, you may see the value from the render where the handler was created, not the current value. Use the functional updater (`setName(prev => ...)`) or `useRef` for the latest value.
+
+  - **Forgetting `e.preventDefault()` on submit.** A native form submit reloads the page. Always preventDefault in `onSubmit`.
+
+  - **Mutating state instead of replacing it.** `form.name = 'X'; setForm(form)` doesn't trigger a re-render because the reference is unchanged. Always create a new object: `setForm({ ...form, name: 'X' })`.
+
+  - **Controlled inputs without `value` AND `onChange`.** React will warn at runtime. Either go fully controlled (both) or fully uncontrolled (`defaultValue` + ref).
+
+  ## Verification
+
+  A working form should:
+
+  - Reflect the current state value in each input on every render.
+  - Pass the latest values to `onSubmit`, not stale ones.
+  - Show validation errors at the chosen lifecycle point (submit/blur/change).
+  - Reset cleanly to initial state on `form.reset()` or after submit.
+
+  Test with React Testing Library by typing into inputs (`userEvent.type`) and asserting the submitted value matches expectations.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## Controlled Inputs
+
+    A controlled input has its `value` driven by React state and updates via `onChange`:
+
+    ```jsx
+    function NameForm() {
+      const [name, setName] = useState('');
+      return (
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      );
+    }
+    ```
+
+    The state is the source of truth. Every keystroke triggers a re-render. This is the right choice when you need to validate, transform, or react to changes as the user types.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Uncontrolled Inputs
+
+    Uncontrolled inputs use a ref to read the DOM value when needed (typically at submit):
+
+    ```jsx
+    function NameForm() {
+      const inputRef = useRef(null);
+      function handleSubmit(e) {
+        e.preventDefault();
+        submit(inputRef.current.value);
+      }
+      return (
+        <form onSubmit={handleSubmit}>
+          <input type="text" ref={inputRef} defaultValue="" />
+          <button type="submit">Submit</button>
+        </form>
+      );
+    }
+    ```
+
+    Use uncontrolled when you don't need to react during typing, when integrating with non-React code, or when the form is large enough that controlled re-renders would be expensive. Use `defaultValue` (not `value`) to set the initial state.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Multi-Input Forms
+
+    For forms with many fields, store all fields in one state object and use a single change handler keyed by `name`:
+
+    ```jsx
+    const [form, setForm] = useState({ name: '', email: '', message: '' });
+    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+    return (
+      <form>
+        <input name="name" value={form.name} onChange={handleChange} />
+        <input name="email" value={form.email} onChange={handleChange} />
+        <textarea name="message" value={form.message} onChange={handleChange} />
+      </form>
+    );
+    ```
+
+    For more complex forms, reach for a library (`react-hook-form`, `formik`) — they batch updates and skip per-keystroke re-renders.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Validation Strategies
+
+    Three common patterns:
+
+    - **Validate on submit** — cheapest. Show errors only after the user tries to submit. Best for short forms.
+    - **Validate on blur** — show errors as the user moves to the next field. Good UX balance.
+    - **Validate on change** — show errors as they type. Most aggressive; can feel nagging unless paired with debouncing.
+
+    Keep validation logic outside the component so it's testable in isolation:
+
+    ```jsx
+    function validateEmail(value) {
+      if (!value) return 'Email is required';
+      if (!value.includes('@')) return 'Invalid email';
+      return null;
+    }
+    ```
+- fragment_type: guardrail
+  sequence: 5
+  content: |-
+    ## Common Pitfalls
+
+    - **Stale state in async handlers.** If you read state inside a `setTimeout` or fetch callback, you may see the value from the render where the handler was created, not the current value. Use the functional updater (`setName(prev => ...)`) or `useRef` for the latest value.
+
+    - **Forgetting `e.preventDefault()` on submit.** A native form submit reloads the page. Always preventDefault in `onSubmit`.
+
+    - **Mutating state instead of replacing it.** `form.name = 'X'; setForm(form)` doesn't trigger a re-render because the reference is unchanged. Always create a new object: `setForm({ ...form, name: 'X' })`.
+
+    - **Controlled inputs without `value` AND `onChange`.** React will warn at runtime. Either go fully controlled (both) or fully uncontrolled (`defaultValue` + ref).
+- fragment_type: verification
+  sequence: 6
+  content: |-
+    ## Verification
+
+    A working form should:
+
+    - Reflect the current state value in each input on every render.
+    - Pass the latest values to `onSubmit`, not stale ones.
+    - Show validation errors at the chosen lifecycle point (submit/blur/change).
+    - Reset cleanly to initial state on `form.reset()` or after submit.
+
+    Test with React Testing Library by typing into inputs (`userEvent.type`) and asserting the submitted value matches expectations.

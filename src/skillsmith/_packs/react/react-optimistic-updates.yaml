@@ -1,0 +1,321 @@
+skill_type: domain
+skill_id: react-optimistic-updates
+canonical_name: React Optimistic Updates with useOptimistic
+category: engineering
+skill_class: domain
+domain_tags:
+- react
+- useOptimistic
+- optimistic-ui
+- concurrent-updates
+- server-actions
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion (14B over-fragmented)
+raw_prose: |
+  # React Optimistic Updates with useOptimistic
+
+  ## Overview
+
+  `useOptimistic` provides instant UI feedback while an async action is in flight. The hook returns an optimistic version of state plus an `addOptimistic` updater. When the underlying state catches up (or the action fails), React reverts to the actual state automatically.
+
+  ---
+
+  ## The Pattern
+
+  `useOptimistic(realState, reducer)` returns `[optimisticState, addOptimistic]`. The reducer takes the current optimistic state and an action, returning the new optimistic state.
+
+  ```jsx
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+    todos,
+    (state, newTodo) => [...state, { ...newTodo, pending: true }]
+  );
+  ```
+
+  Whenever you call `addOptimisticTodo(...)` inside a transition or action, the optimistic state immediately reflects the change. When the action settles and `todos` updates, the optimistic state resyncs.
+
+  ## Worked Example — Add Todo
+
+  ```jsx
+  function TodoList({ todos, addTodo }) {
+    const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+      todos,
+      (state, newTodo) => [...state, { ...newTodo, pending: true }]
+    );
+
+    async function handleAdd(formData) {
+      const text = formData.get('text');
+      addOptimisticTodo({ id: Date.now(), text });  // immediate
+      await addTodo(text);                            // async
+    }
+
+    return (
+      <>
+        <form action={handleAdd}>
+          <input name="text" />
+          <button>Add</button>
+        </form>
+        <ul>
+          {optimisticTodos.map(todo => (
+            <li key={todo.id} style={{ opacity: todo.pending ? 0.5 : 1 }}>
+              {todo.text}
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  }
+  ```
+
+  The new todo appears immediately at 50% opacity. When the server confirms, `todos` updates and the optimistic state resyncs — the todo becomes fully opaque.
+
+  ## Automatic Revert on Failure
+
+  If the action throws, React reverts to the real state. The optimistic update vanishes:
+
+  ```jsx
+  async function handleDelete(id) {
+    addOptimisticTodos(todos.filter(t => t.id !== id));  // optimistic remove
+    try {
+      await deleteTodo(id);
+    } catch (err) {
+      // optimistic state auto-reverts; show toast
+      showError(err);
+    }
+  }
+  ```
+
+  You don't have to manually undo the optimistic update. React resyncs from the real state when the action ends (success or error).
+
+  ## Must Be Inside An Action or Transition
+
+  `useOptimistic` only applies its change inside a transition. If you call `addOptimistic` outside an action or `startTransition`, it has no effect:
+
+  ```jsx
+  // WRONG: not in a transition
+  function handleClick() {
+    addOptimisticTodo({ text: 'new' });  // no-op
+  }
+
+  // RIGHT: form action
+  <form action={handleAdd}>...
+  // or
+  function handleClick() {
+    startTransition(() => {
+      addOptimisticTodo({ text: 'new' });
+      addTodo('new');
+    });
+  }
+  ```
+
+  Form actions wrap the handler in a transition automatically. Manual transitions need `startTransition`.
+
+  ## Pattern: Pending Flag
+
+  Mark optimistic items as `pending` in the reducer so the UI can render them differently:
+
+  ```jsx
+  const [optimistic, addOptimistic] = useOptimistic(
+    comments,
+    (state, action) => {
+      if (action.type === 'add') return [...state, { ...action.comment, pending: true }];
+      if (action.type === 'delete') return state.filter(c => c.id !== action.id);
+    }
+  );
+  ```
+
+  Then in the render:
+
+  ```jsx
+  {optimistic.map(c => (
+    <Comment key={c.id} text={c.text} muted={c.pending} />
+  ))}
+  ```
+
+  ## When To Use vs When To Skip
+
+  Reach for `useOptimistic` when:
+
+  - The action almost always succeeds (>99%).
+  - The user benefits significantly from instant feedback (lists, likes, comments).
+  - The cost of an occasional revert is acceptable (a flash of the wrong state).
+
+  Skip optimistic updates when:
+
+  - The action frequently fails (validation-heavy mutations).
+  - The optimistic state would mislead the user (financial transactions, irreversible actions).
+  - The data is shared with other users — your optimistic update doesn't reflect their state.
+
+  ## Common Pitfalls
+
+  - **Calling addOptimistic outside a transition.** No-op. Wrap in `startTransition` or use a form action.
+  - **Mutating the optimistic state.** The reducer must return new objects/arrays, not mutate.
+  - **Using stale closures.** The reducer should not capture state from the render — derive everything from the `state` argument.
+
+  ## Verification
+
+  To confirm optimistic updates work:
+
+  - Click the action; UI updates immediately (no spinner).
+  - Throttle the network; UI shows pending state during the wait.
+  - Force the action to fail; UI reverts cleanly.
+  - Test with React Testing Library by mocking a slow action and asserting the optimistic state appears before the action resolves.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## The Pattern
+
+    `useOptimistic(realState, reducer)` returns `[optimisticState, addOptimistic]`. The reducer takes the current optimistic state and an action, returning the new optimistic state.
+
+    ```jsx
+    const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+      todos,
+      (state, newTodo) => [...state, { ...newTodo, pending: true }]
+    );
+    ```
+
+    Whenever you call `addOptimisticTodo(...)` inside a transition or action, the optimistic state immediately reflects the change. When the action settles and `todos` updates, the optimistic state resyncs.
+- fragment_type: example
+  sequence: 2
+  content: |-
+    ## Worked Example — Add Todo
+
+    ```jsx
+    function TodoList({ todos, addTodo }) {
+      const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+        todos,
+        (state, newTodo) => [...state, { ...newTodo, pending: true }]
+      );
+
+      async function handleAdd(formData) {
+        const text = formData.get('text');
+        addOptimisticTodo({ id: Date.now(), text });  // immediate
+        await addTodo(text);                            // async
+      }
+
+      return (
+        <>
+          <form action={handleAdd}>
+            <input name="text" />
+            <button>Add</button>
+          </form>
+          <ul>
+            {optimisticTodos.map(todo => (
+              <li key={todo.id} style={{ opacity: todo.pending ? 0.5 : 1 }}>
+                {todo.text}
+              </li>
+            ))}
+          </ul>
+        </>
+      );
+    }
+    ```
+
+    The new todo appears immediately at 50% opacity. When the server confirms, `todos` updates and the optimistic state resyncs — the todo becomes fully opaque.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Automatic Revert on Failure
+
+    If the action throws, React reverts to the real state. The optimistic update vanishes:
+
+    ```jsx
+    async function handleDelete(id) {
+      addOptimisticTodos(todos.filter(t => t.id !== id));  // optimistic remove
+      try {
+        await deleteTodo(id);
+      } catch (err) {
+        // optimistic state auto-reverts; show toast
+        showError(err);
+      }
+    }
+    ```
+
+    You don't have to manually undo the optimistic update. React resyncs from the real state when the action ends (success or error).
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Must Be Inside An Action or Transition
+
+    `useOptimistic` only applies its change inside a transition. If you call `addOptimistic` outside an action or `startTransition`, it has no effect:
+
+    ```jsx
+    // WRONG: not in a transition
+    function handleClick() {
+      addOptimisticTodo({ text: 'new' });  // no-op
+    }
+
+    // RIGHT: form action
+    <form action={handleAdd}>...
+    // or
+    function handleClick() {
+      startTransition(() => {
+        addOptimisticTodo({ text: 'new' });
+        addTodo('new');
+      });
+    }
+    ```
+
+    Form actions wrap the handler in a transition automatically. Manual transitions need `startTransition`.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Pattern: Pending Flag
+
+    Mark optimistic items as `pending` in the reducer so the UI can render them differently:
+
+    ```jsx
+    const [optimistic, addOptimistic] = useOptimistic(
+      comments,
+      (state, action) => {
+        if (action.type === 'add') return [...state, { ...action.comment, pending: true }];
+        if (action.type === 'delete') return state.filter(c => c.id !== action.id);
+      }
+    );
+    ```
+
+    Then in the render:
+
+    ```jsx
+    {optimistic.map(c => (
+      <Comment key={c.id} text={c.text} muted={c.pending} />
+    ))}
+    ```
+- fragment_type: rationale
+  sequence: 6
+  content: |-
+    ## When To Use vs When To Skip
+
+    Reach for `useOptimistic` when:
+
+    - The action almost always succeeds (>99%).
+    - The user benefits significantly from instant feedback (lists, likes, comments).
+    - The cost of an occasional revert is acceptable (a flash of the wrong state).
+
+    Skip optimistic updates when:
+
+    - The action frequently fails (validation-heavy mutations).
+    - The optimistic state would mislead the user (financial transactions, irreversible actions).
+    - The data is shared with other users — your optimistic update doesn't reflect their state.
+- fragment_type: guardrail
+  sequence: 7
+  content: |-
+    ## Common Pitfalls
+
+    - **Calling addOptimistic outside a transition.** No-op. Wrap in `startTransition` or use a form action.
+    - **Mutating the optimistic state.** The reducer must return new objects/arrays, not mutate.
+    - **Using stale closures.** The reducer should not capture state from the render — derive everything from the `state` argument.
+- fragment_type: verification
+  sequence: 8
+  content: |-
+    ## Verification
+
+    To confirm optimistic updates work:
+
+    - Click the action; UI updates immediately (no spinner).
+    - Throttle the network; UI shows pending state during the wait.
+    - Force the action to fail; UI reverts cleanly.
+    - Test with React Testing Library by mocking a slow action and asserting the optimistic state appears before the action resolves.

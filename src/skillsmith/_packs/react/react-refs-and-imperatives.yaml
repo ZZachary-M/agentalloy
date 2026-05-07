@@ -1,0 +1,301 @@
+skill_type: domain
+skill_id: react-refs-and-imperatives
+canonical_name: React Refs, forwardRef, and useImperativeHandle
+category: engineering
+skill_class: domain
+domain_tags:
+- react
+- refs
+- useRef
+- forwardRef
+- useImperativeHandle
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion (14B over-fragmented)
+raw_prose: |
+  # React Refs, forwardRef, and useImperativeHandle
+
+  ## Overview
+
+  Refs hold a reference to a DOM node or any mutable value that survives re-renders without triggering them. `useRef` creates the ref; `forwardRef` lets a custom component accept a ref and forward it to a DOM child; `useImperativeHandle` customizes what the parent sees through the ref.
+
+  ---
+
+  ## useRef — The Mutable Bucket
+
+  `useRef(initialValue)` returns a ref object with a `.current` property. Mutating `.current` does NOT trigger a re-render. This is the escape hatch for state that doesn't drive UI:
+
+  ```jsx
+  function Timer() {
+    const intervalRef = useRef(null);
+
+    function start() {
+      intervalRef.current = setInterval(tick, 1000);
+    }
+
+    function stop() {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    return <button onClick={start}>Start</button>;
+  }
+  ```
+
+  Common uses: timer IDs, previous values, scroll positions, third-party library handles, latest-value access in async callbacks.
+
+  ## Refs to DOM Nodes
+
+  Pass a ref to a JSX element via the `ref` attribute. After the component mounts, `ref.current` is the DOM node:
+
+  ```jsx
+  function FocusInput() {
+    const inputRef = useRef(null);
+
+    useEffect(() => {
+      inputRef.current.focus();
+    }, []);
+
+    return <input ref={inputRef} />;
+  }
+  ```
+
+  DOM access is the most common ref pattern. Reach for it when you need to focus, scroll, measure, or imperatively animate.
+
+  ## React 19 — Refs as Props
+
+  React 19 made `ref` a regular prop. Function components can accept `ref` directly without `forwardRef`:
+
+  ```jsx
+  // React 19+
+  function Input({ ref, ...props }) {
+    return <input ref={ref} {...props} />;
+  }
+
+  // Pre-19: forwardRef required
+  const Input = forwardRef((props, ref) => <input ref={ref} {...props} />);
+  ```
+
+  For libraries supporting React 18, keep `forwardRef`. For greenfield React 19+ code, use the prop directly.
+
+  ## forwardRef — Pre-React-19 Compatibility
+
+  `forwardRef` wraps a component so it can accept a ref:
+
+  ```jsx
+  import { forwardRef } from 'react';
+
+  const FancyButton = forwardRef(function FancyButton({ label, ...props }, ref) {
+    return (
+      <button ref={ref} className="fancy" {...props}>
+        {label}
+      </button>
+    );
+  });
+
+  // Parent
+  <FancyButton ref={myRef} label="Click" />
+  ```
+
+  Without `forwardRef`, the parent's `ref={myRef}` would not propagate to the inner DOM node. Used heavily in component libraries that need to expose the underlying DOM element.
+
+  ## useImperativeHandle — Customize the Ref
+
+  By default, a forwarded ref points to whatever DOM node you attach it to. `useImperativeHandle` lets you expose a custom object instead:
+
+  ```jsx
+  const VideoPlayer = forwardRef(function VideoPlayer({ src }, ref) {
+    const videoRef = useRef(null);
+
+    useImperativeHandle(ref, () => ({
+      play: () => videoRef.current.play(),
+      pause: () => videoRef.current.pause(),
+      seek: (time) => { videoRef.current.currentTime = time; }
+    }));
+
+    return <video ref={videoRef} src={src} />;
+  });
+
+  // Parent
+  const playerRef = useRef(null);
+  <VideoPlayer ref={playerRef} src="..." />;
+  playerRef.current.play();  // controlled API, not raw DOM
+  ```
+
+  This narrows the public surface — the parent can play/pause/seek but can't (e.g.) modify arbitrary video element properties.
+
+  ## When NOT to Use Refs
+
+  Refs bypass React's data flow. Default to props/state; reach for refs only when:
+
+  - You need a DOM node directly (focus, scroll, measure, integrate with non-React).
+  - You need to persist a mutable value across renders without triggering them.
+  - You need to expose imperative methods on a component (rare — usually a sign that the API should be declarative).
+
+  If you find yourself using refs to communicate state between components, lift state up instead.
+
+  ## Common Pitfalls
+
+  - **Reading ref.current during render.** Refs are populated after mount. During the initial render, `ref.current` is null. Read in effects, callbacks, or after the component is mounted.
+
+  - **Stale ref values in closures.** A ref captured in a callback at render time still points to the same ref object — but `.current` reflects the latest value when the callback runs. Use this property when you need the latest state in an async callback.
+
+  - **Forgetting useImperativeHandle dependencies.** The third arg is a deps array. Omit and the imperative handle re-renders every time, breaking referential identity for parents that depend on it.
+
+  ## Verification
+
+  A working ref setup should:
+
+  - Provide DOM access in effects after mount, never during render.
+  - Survive re-renders without re-creating the ref object.
+  - For forwardRef components, expose the right element to the parent.
+  - For useImperativeHandle, expose only the documented methods — not the underlying DOM.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## useRef — The Mutable Bucket
+
+    `useRef(initialValue)` returns a ref object with a `.current` property. Mutating `.current` does NOT trigger a re-render. This is the escape hatch for state that doesn't drive UI:
+
+    ```jsx
+    function Timer() {
+      const intervalRef = useRef(null);
+
+      function start() {
+        intervalRef.current = setInterval(tick, 1000);
+      }
+
+      function stop() {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+
+      return <button onClick={start}>Start</button>;
+    }
+    ```
+
+    Common uses: timer IDs, previous values, scroll positions, third-party library handles, latest-value access in async callbacks.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Refs to DOM Nodes
+
+    Pass a ref to a JSX element via the `ref` attribute. After the component mounts, `ref.current` is the DOM node:
+
+    ```jsx
+    function FocusInput() {
+      const inputRef = useRef(null);
+
+      useEffect(() => {
+        inputRef.current.focus();
+      }, []);
+
+      return <input ref={inputRef} />;
+    }
+    ```
+
+    DOM access is the most common ref pattern. Reach for it when you need to focus, scroll, measure, or imperatively animate.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## React 19 — Refs as Props
+
+    React 19 made `ref` a regular prop. Function components can accept `ref` directly without `forwardRef`:
+
+    ```jsx
+    // React 19+
+    function Input({ ref, ...props }) {
+      return <input ref={ref} {...props} />;
+    }
+
+    // Pre-19: forwardRef required
+    const Input = forwardRef((props, ref) => <input ref={ref} {...props} />);
+    ```
+
+    For libraries supporting React 18, keep `forwardRef`. For greenfield React 19+ code, use the prop directly.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## forwardRef — Pre-React-19 Compatibility
+
+    `forwardRef` wraps a component so it can accept a ref:
+
+    ```jsx
+    import { forwardRef } from 'react';
+
+    const FancyButton = forwardRef(function FancyButton({ label, ...props }, ref) {
+      return (
+        <button ref={ref} className="fancy" {...props}>
+          {label}
+        </button>
+      );
+    });
+
+    // Parent
+    <FancyButton ref={myRef} label="Click" />
+    ```
+
+    Without `forwardRef`, the parent's `ref={myRef}` would not propagate to the inner DOM node. Used heavily in component libraries that need to expose the underlying DOM element.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## useImperativeHandle — Customize the Ref
+
+    By default, a forwarded ref points to whatever DOM node you attach it to. `useImperativeHandle` lets you expose a custom object instead:
+
+    ```jsx
+    const VideoPlayer = forwardRef(function VideoPlayer({ src }, ref) {
+      const videoRef = useRef(null);
+
+      useImperativeHandle(ref, () => ({
+        play: () => videoRef.current.play(),
+        pause: () => videoRef.current.pause(),
+        seek: (time) => { videoRef.current.currentTime = time; }
+      }));
+
+      return <video ref={videoRef} src={src} />;
+    });
+
+    // Parent
+    const playerRef = useRef(null);
+    <VideoPlayer ref={playerRef} src="..." />;
+    playerRef.current.play();  // controlled API, not raw DOM
+    ```
+
+    This narrows the public surface — the parent can play/pause/seek but can't (e.g.) modify arbitrary video element properties.
+- fragment_type: rationale
+  sequence: 6
+  content: |-
+    ## When NOT to Use Refs
+
+    Refs bypass React's data flow. Default to props/state; reach for refs only when:
+
+    - You need a DOM node directly (focus, scroll, measure, integrate with non-React).
+    - You need to persist a mutable value across renders without triggering them.
+    - You need to expose imperative methods on a component (rare — usually a sign that the API should be declarative).
+
+    If you find yourself using refs to communicate state between components, lift state up instead.
+- fragment_type: guardrail
+  sequence: 7
+  content: |-
+    ## Common Pitfalls
+
+    - **Reading ref.current during render.** Refs are populated after mount. During the initial render, `ref.current` is null. Read in effects, callbacks, or after the component is mounted.
+
+    - **Stale ref values in closures.** A ref captured in a callback at render time still points to the same ref object — but `.current` reflects the latest value when the callback runs. Use this property when you need the latest state in an async callback.
+
+    - **Forgetting useImperativeHandle dependencies.** The third arg is a deps array. Omit and the imperative handle re-renders every time, breaking referential identity for parents that depend on it.
+- fragment_type: verification
+  sequence: 8
+  content: |-
+    ## Verification
+
+    A working ref setup should:
+
+    - Provide DOM access in effects after mount, never during render.
+    - Survive re-renders without re-creating the ref object.
+    - For forwardRef components, expose the right element to the parent.
+    - For useImperativeHandle, expose only the documented methods — not the underlying DOM.

@@ -1,0 +1,297 @@
+skill_type: domain
+skill_id: react-form-actions-and-status
+canonical_name: React Form Actions — useActionState and useFormStatus
+category: engineering
+skill_class: domain
+domain_tags:
+- react
+- form-actions
+- useActionState
+- useFormStatus
+- server-actions
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion (14B over-fragmented)
+raw_prose: |
+  # React Form Actions — useActionState and useFormStatus
+
+  ## Overview
+
+  React 19 introduced form actions: a built-in pattern where a form's `action` prop is a function (sync or async) that receives FormData. `useActionState` gives the form a state machine; `useFormStatus` lets nested components read whether the form is pending. Together they replace ad-hoc loading-state plumbing.
+
+  ---
+
+  ## useActionState — Form-Level State Machine
+
+  `useActionState(action, initialState)` returns `[state, dispatch, isPending]`:
+
+  ```jsx
+  import { useActionState } from 'react';
+
+  async function submitForm(prevState, formData) {
+    const result = await fetch('/api/submit', { method: 'POST', body: formData });
+    if (!result.ok) return { error: 'Submit failed' };
+    return { success: true };
+  }
+
+  function MyForm() {
+    const [state, formAction, isPending] = useActionState(submitForm, {});
+    return (
+      <form action={formAction}>
+        <input name="email" />
+        <button disabled={isPending}>{isPending ? 'Sending…' : 'Submit'}</button>
+        {state.error && <p>{state.error}</p>}
+        {state.success && <p>Thanks!</p>}
+      </form>
+    );
+  }
+  ```
+
+  The action receives `(prevState, formData)` and returns the next state. React tracks pending state automatically.
+
+  ## useFormStatus — Read Pending Without Lifting
+
+  Nested components can read the parent form's pending state without the parent passing it down:
+
+  ```jsx
+  import { useFormStatus } from 'react-dom';
+
+  function SubmitButton() {
+    const { pending, data, method, action } = useFormStatus();
+    return <button disabled={pending}>{pending ? 'Sending…' : 'Submit'}</button>;
+  }
+
+  function Form() {
+    return (
+      <form action={async (formData) => { await save(formData); }}>
+        <input name="title" />
+        <SubmitButton />
+      </form>
+    );
+  }
+  ```
+
+  `useFormStatus` only works inside a child of a `<form>` — it reads the nearest form's status. The button doesn't know what action runs; it just disables when the form is busy.
+
+  ## Integration with Server Actions
+
+  Server actions (Next.js, Remix, Waku) marshal the form action across the network. The same `useActionState` API works:
+
+  ```jsx
+  // app/feedback/page.tsx
+  'use client';
+  import { useActionState } from 'react';
+  import { submitFeedback } from './actions';
+
+  export default function FeedbackForm() {
+    const [state, formAction, isPending] = useActionState(submitFeedback, null);
+    return (
+      <form action={formAction}>
+        <textarea name="comment" />
+        <button disabled={isPending}>Send</button>
+        {state?.error && <p>{state.error}</p>}
+      </form>
+    );
+  }
+
+  // actions.ts
+  'use server';
+  export async function submitFeedback(prev, formData) {
+    // server-side
+    return { error: null };
+  }
+  ```
+
+  Server actions pair naturally with optimistic updates via `useOptimistic`.
+
+  ## Action Functions Are Stable
+
+  The function passed to `useActionState` should be defined outside the component or wrapped in `useCallback`. React invalidates form state if the action identity changes, so an inline arrow function on every render causes loss of state.
+
+  ```jsx
+  // BAD: new function each render
+  const [state, action] = useActionState((p, fd) => save(fd), {});
+
+  // GOOD: stable reference
+  const handler = useCallback(async (p, fd) => save(fd), []);
+  const [state, action] = useActionState(handler, {});
+  ```
+
+  For server actions, the import is already stable.
+
+  ## Working with FormData
+
+  Form actions receive a `FormData` object — the native browser API. Read fields with `formData.get('name')`. To get a typed object, deserialize:
+
+  ```js
+  const data = Object.fromEntries(formData);
+  // or for fields that may have multiple values:
+  const tags = formData.getAll('tags');
+  ```
+
+  For complex types, encode them as JSON in a hidden input or use libraries (`zod-form-data`, `valibot`) to parse + validate.
+
+  ## Common Pitfalls
+
+  - **Action runs but state doesn't update.** The action probably threw — wrap in try/catch and return error state instead of letting it bubble.
+
+  - **`useFormStatus` returns pending=false during the action.** It's outside a `<form>` element, or the form's `action` is a string (URL submit), not a function.
+
+  - **Form re-mounts and loses state.** A parent re-render is replacing the form's key. Add a stable `key` or move state higher.
+
+  ## Verification
+
+  A working form-action setup should:
+
+  - Show pending UI immediately on submit, before the action resolves.
+  - Display the action's returned state after it resolves (success or error).
+  - Re-enable inputs after the action completes.
+  - Handle errors gracefully — never leave the form stuck in pending.
+
+  Test by mocking the action with a Promise that resolves on demand and asserting the UI transitions correctly.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## useActionState — Form-Level State Machine
+
+    `useActionState(action, initialState)` returns `[state, dispatch, isPending]`:
+
+    ```jsx
+    import { useActionState } from 'react';
+
+    async function submitForm(prevState, formData) {
+      const result = await fetch('/api/submit', { method: 'POST', body: formData });
+      if (!result.ok) return { error: 'Submit failed' };
+      return { success: true };
+    }
+
+    function MyForm() {
+      const [state, formAction, isPending] = useActionState(submitForm, {});
+      return (
+        <form action={formAction}>
+          <input name="email" />
+          <button disabled={isPending}>{isPending ? 'Sending…' : 'Submit'}</button>
+          {state.error && <p>{state.error}</p>}
+          {state.success && <p>Thanks!</p>}
+        </form>
+      );
+    }
+    ```
+
+    The action receives `(prevState, formData)` and returns the next state. React tracks pending state automatically.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## useFormStatus — Read Pending Without Lifting
+
+    Nested components can read the parent form's pending state without the parent passing it down:
+
+    ```jsx
+    import { useFormStatus } from 'react-dom';
+
+    function SubmitButton() {
+      const { pending, data, method, action } = useFormStatus();
+      return <button disabled={pending}>{pending ? 'Sending…' : 'Submit'}</button>;
+    }
+
+    function Form() {
+      return (
+        <form action={async (formData) => { await save(formData); }}>
+          <input name="title" />
+          <SubmitButton />
+        </form>
+      );
+    }
+    ```
+
+    `useFormStatus` only works inside a child of a `<form>` — it reads the nearest form's status. The button doesn't know what action runs; it just disables when the form is busy.
+- fragment_type: execution
+  sequence: 3
+  content: |-
+    ## Integration with Server Actions
+
+    Server actions (Next.js, Remix, Waku) marshal the form action across the network. The same `useActionState` API works:
+
+    ```jsx
+    // app/feedback/page.tsx
+    'use client';
+    import { useActionState } from 'react';
+    import { submitFeedback } from './actions';
+
+    export default function FeedbackForm() {
+      const [state, formAction, isPending] = useActionState(submitFeedback, null);
+      return (
+        <form action={formAction}>
+          <textarea name="comment" />
+          <button disabled={isPending}>Send</button>
+          {state?.error && <p>{state.error}</p>}
+        </form>
+      );
+    }
+
+    // actions.ts
+    'use server';
+    export async function submitFeedback(prev, formData) {
+      // server-side
+      return { error: null };
+    }
+    ```
+
+    Server actions pair naturally with optimistic updates via `useOptimistic`.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Action Functions Are Stable
+
+    The function passed to `useActionState` should be defined outside the component or wrapped in `useCallback`. React invalidates form state if the action identity changes, so an inline arrow function on every render causes loss of state.
+
+    ```jsx
+    // BAD: new function each render
+    const [state, action] = useActionState((p, fd) => save(fd), {});
+
+    // GOOD: stable reference
+    const handler = useCallback(async (p, fd) => save(fd), []);
+    const [state, action] = useActionState(handler, {});
+    ```
+
+    For server actions, the import is already stable.
+- fragment_type: execution
+  sequence: 5
+  content: |-
+    ## Working with FormData
+
+    Form actions receive a `FormData` object — the native browser API. Read fields with `formData.get('name')`. To get a typed object, deserialize:
+
+    ```js
+    const data = Object.fromEntries(formData);
+    // or for fields that may have multiple values:
+    const tags = formData.getAll('tags');
+    ```
+
+    For complex types, encode them as JSON in a hidden input or use libraries (`zod-form-data`, `valibot`) to parse + validate.
+- fragment_type: guardrail
+  sequence: 6
+  content: |-
+    ## Common Pitfalls
+
+    - **Action runs but state doesn't update.** The action probably threw — wrap in try/catch and return error state instead of letting it bubble.
+
+    - **`useFormStatus` returns pending=false during the action.** It's outside a `<form>` element, or the form's `action` is a string (URL submit), not a function.
+
+    - **Form re-mounts and loses state.** A parent re-render is replacing the form's key. Add a stable `key` or move state higher.
+- fragment_type: verification
+  sequence: 7
+  content: |-
+    ## Verification
+
+    A working form-action setup should:
+
+    - Show pending UI immediately on submit, before the action resolves.
+    - Display the action's returned state after it resolves (success or error).
+    - Re-enable inputs after the action completes.
+    - Handle errors gracefully — never leave the form stuck in pending.
+
+    Test by mocking the action with a Promise that resolves on demand and asserting the UI transitions correctly.

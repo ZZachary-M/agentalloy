@@ -1,0 +1,308 @@
+skill_type: domain
+skill_id: react-transitions-and-deferred-values
+canonical_name: React Transitions and Deferred Values
+category: engineering
+skill_class: domain
+domain_tags:
+  - react
+  - concurrent rendering
+  - useTransition
+  - useDeferredValue
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring draft
+raw_prose: |
+  # React Transitions and Deferred Values
+
+  ## Overview
+
+  React 18+ concurrent rendering lets some updates be marked low-priority. `useTransition` returns `[isPending, startTransition]` — wrap state updates in `startTransition` to mark them as interruptible. `useDeferredValue` defers re-renders triggered by a specific value. Together they keep UI responsive during expensive renders. This skill covers both hooks + patterns.
+
+  Sourced from react.dev/reference/react/useTransition and /useDeferredValue.
+
+  ---
+
+  <Intro>
+
+  `useTransition` is a React Hook that lets you render a part of the UI in the background.
+
+  ```js
+  const [isPending, startTransition] = useTransition()
+  ```
+
+  </Intro>
+
+  <InlineToc />
+
+  ---
+
+  ## Reference {/*reference*/}
+
+  ### `useTransition()` {/*usetransition*/}
+
+  Call `useTransition` at the top level of your component to mark some state updates as Transitions.
+
+  ```js
+  import { useTransition } from 'react';
+
+  function TabContainer() {
+    const [isPending, startTransition] = useTransition();
+    // ...
+  }
+  ```
+
+  [See more examples below.](#usage)
+
+  #### Parameters {/*parameters*/}
+
+  `useTransition` does not take any parameters.
+
+  #### Returns {/*returns*/}
+
+  `useTransition` returns an array with exactly two items:
+
+  1. The `isPending` flag that tells you whether there is a pending Transition.
+  2. The [`startTransition` function](#starttransition) that lets you mark updates as a Transition.
+
+  ---
+
+  ### `startTransition(action)` {/*starttransition*/}
+
+  The `startTransition` function returned by `useTransition` lets you mark an update as a Transition.
+
+  ```js {6,8}
+  function TabContainer() {
+    const [isPending, startTransition] = useTransition();
+    const [tab, setTab] = useState('about');
+
+    function selectTab(nextTab) {
+      startTransition(() => {
+        setTab(nextTab);
+      });
+    }
+    // ...
+  }
+  ```
+
+  <Note>
+  #### Functions called in `startTransition` are called "Actions". {/*functions-called-in-starttransition-are-called-actions*/}
+
+  The function passed to `startTransition` is called an "Action". By convention, any callback called inside `startTransition` (such as a callback prop) should be named `action` or include the "Action" suffix:
+
+  ```js {1,9}
+  function SubmitButton({ submitAction }) {
+    const [isPending, startTransition] = useTransition();
+
+    return (
+      <button
+        disabled={isPending}
+        onClick={() => {
+          startTransition(async () => {
+            await submitAction();
+          });
+        }}
+      >
+        Submit
+      </button>
+    );
+  }
+
+  ```
+
+  </Note>
+
+  #### Parameters {/*starttransition-parameters*/}
+
+  * `action`: A function that updates some state by calling one or more [`set` functions](/reference/react/useState#setstate). React calls `action` immediately with no parameters and marks all state updates scheduled synchronously during the `action` function call as Transitions. Any async calls that are awaited in the `action` will be included in the Transition, but currently require wrapping any `set` functions after the `await` in an additional `startTransition` (see [Troubleshooting](#react-doesnt-treat-my-state-update-after-await-as-a-transition)). State updates marked as Transitions will be [non-blocking](#perform-non-blocking-updates-with-actions) and [will not display unwanted loading indicators](#preventing-unwanted-loading-indicators).
+
+  #### Returns {/*starttransition-returns*/}
+
+  `startTransition` does not return anything.
+
+  #### Caveats {/*starttransition-caveats*/}
+
+  * `useTransition` is a Hook, so it can only be called inside components or custom Hooks. If you need to start a Transition somewhere else (for example, from a data library), call the standalone [`startTransition`](/reference/react/startTransition) instead.
+
+  * You can wrap an update into a Transition only if you have access to the `set` function of that state. If you want to start a Transition in response to some prop or a custom Hook value, try [`useDeferredValue`](/reference/react/useDeferredValue) instead.
+
+  * The function you pass to `startTransition` is called immediately, marking all state updates that happen while it executes as Transitions. If you try to perform state updates in a `setTimeout`, for example, they won't be marked as Transitions.
+
+  * You must wrap any state updates after any async requests in another `startTransition` to mark them as Transitions. This is a known limitation that we will fix in the future (see [Troubleshooting](#react-doesnt-treat-my-state-update-after-await-as-a-transition)).
+
+  * The `startTransition` function has a stable identity, so you will often see it omitted from Effect dependencies, but including it will not cause the Effect to fire. If the linter lets you omit a dependency without errors, it is safe to do. [Learn more about removing Effect dependencies.](/learn/removing-effect-dependencies#move-dynamic-objects-and-functions-inside-your-effect)
+
+  * A state update marked as a Transition will be interrupted by other state updates. For example, if you update a chart component inside a Transition, but then start typing into an input while the chart is in the middle of a re-render, React will restart the rendering work on the chart component after handling the input update.
+
+  * Transition updates can't be used to control text inputs.
+
+  * If there are multiple ongoing Transitions, React currently batches them together. This is a limitation that may be removed in a future release.
+
+  ---
+
+  <Intro>
+
+  `useDeferredValue` is a React Hook that lets you defer updating a part of the UI.
+
+  ```js
+  const deferredValue = useDeferredValue(value)
+  ```
+
+  </Intro>
+
+  <InlineToc />
+
+  ---
+
+  ## Reference {/*reference*/}
+
+  ### `useDeferredValue(value, initialValue?)` {/*usedeferredvalue*/}
+
+  Call `useDeferredValue` at the top level of your component to get a deferred version of that value.
+
+  ```js
+  import { useState, useDeferredValue } from 'react';
+
+  function SearchPage() {
+    const [query, setQuery] = useState('');
+    const deferredQuery = useDeferredValue(query);
+    // ...
+  }
+  ```
+
+  [See more examples below.](#usage)
+
+  #### Parameters {/*parameters*/}
+
+  * `value`: The value you want to defer. It can have any type.
+  * **optional** `initialValue`: A value to use during the initial render of a component. If this option is omitted, `useDeferredValue` will not defer during the initial render, because there's no previous version of `value` that it can render instead.
+
+  #### Returns {/*returns*/}
+
+  - `currentValue`: During the initial render, the returned deferred value will be the `initialValue`, or the same as the value you provided. During updates, React will first attempt a re-render with the old value (so it will return the old value), and then try another re-render in the background with the new value (so it will return the updated value).
+
+  #### Caveats {/*caveats*/}
+
+  - When an update is inside a Transition, `useDeferredValue` always returns the new `value` and does not spawn a deferred render, since the update is already deferred.
+
+  - The values you pass to `useDeferredValue` should either be primitive values (like strings and numbers) or objects created outside of rendering. If you create a new object during rendering and immediately pass it to `useDeferredValue`, it will be different on every render, causing unnecessary background re-renders.
+
+  - When `useDeferredValue` receives a different value (compared with [`Object.is`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/is)), in addition to the current render (when it still uses the previous value), it schedules a re-render in the background with the new value. The background re-render is interruptible: if there's another update to the `value`, React will restart the background re-render from scratch. For example, if the user is typing into an input faster than a chart receiving its deferred value can re-render, the chart will only re-render after the user stops typing.
+
+  - `useDeferredValue` is integrated with [`<Suspense>`.](/reference/react/Suspense) If the background update caused by a new value suspends the UI, the user will not see the fallback. They will see the old deferred value until the data loads.
+
+  - `useDeferredValue` does not by itself prevent extra network requests.
+
+  - There is no fixed delay caused by `useDeferredValue` itself. As soon as React finishes the original re-render, React will immediately start working on the background re-render with the new deferred value. Any updates caused by events (like typing) will interrupt the background re-render and get prioritized over it.
+
+  - The background re-render caused by `useDeferredValue` does not fire Effects until it's committed to the screen. If the background re-render suspends, its Effects will run after the data loads and the UI updates.
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      React 18+ concurrent rendering lets some updates be marked low-priority. `useTransition` returns `[isPending, startTransition]` — wrap state updates in `startTransition` to mark them as interruptible. `useDeferredValue` defers re-renders triggered by a specific value. Together they keep UI responsive during expensive renders. This skill covers both hooks + patterns.
+
+      Sourced from react.dev/reference/react/useTransition and /useDeferredValue.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      `useTransition` is a React Hook that lets you render a part of the UI in the background.
+
+      ```js
+      const [isPending, startTransition] = useTransition()
+      ```
+
+      Call `useTransition` at the top level of your component to mark some state updates as Transitions.
+
+      ```js
+      import { useTransition } from 'react';
+
+      function TabContainer() {
+        const [isPending, startTransition] = useTransition();
+        // ...
+      }
+      ```
+
+      The `startTransition` function returned by `useTransition` lets you mark an update as a Transition.
+
+      ```js {6,8}
+      function TabContainer() {
+        const [isPending, startTransition] = useTransition();
+        const [tab, setTab] = useState('about');
+
+        function selectTab(nextTab) {
+          startTransition(() => {
+            setTab(nextTab);
+          });
+        }
+        // ...
+      }
+      ```
+
+      The function passed to `startTransition` is called an "Action". By convention, any callback called inside `startTransition` (such as a callback prop) should be named `action` or include the "Action" suffix:
+
+      ```js {1,9}
+      function SubmitButton({ submitAction }) {
+        const [isPending, startTransition] = useTransition();
+
+        return (
+          <button
+            disabled={isPending}
+            onClick={() => {
+              startTransition(async () => {
+                await submitAction();
+              });
+            }}
+          >
+            Submit
+          </button>
+        );
+      }
+      ```
+  - fragment_type: verification
+    sequence: 3
+    content: |
+      `useTransition` is a Hook, so it can only be called inside components or custom Hooks. If you need to start a Transition somewhere else (for example, from a data library), call the standalone [`startTransition`](/reference/react/startTransition) instead.
+
+      You can wrap an update into a Transition only if you have access to the `set` function of that state. If you want to start a Transition in response to some prop or a custom Hook value, try [`useDeferredValue`](/reference/react/useDeferredValue) instead.
+
+      The function you pass to `startTransition` is called immediately, marking all state updates that happen while it executes as Transitions. If you try to perform state updates in a `setTimeout`, for example, they won't be marked as Transitions.
+
+      You must wrap any state updates after any async requests in another `startTransition` to mark them as Transitions. This is a known limitation that we will fix in the future (see [Troubleshooting](#react-doesnt-treat-my-state-update-after-await-as-a-transition)).
+
+      The `startTransition` function has a stable identity, so you will often see it omitted from Effect dependencies, but including it will not cause the Effect to fire. If the linter lets you omit a dependency without errors, it is safe to do. [Learn more about removing Effect dependencies.](/learn/removing-effect-dependencies#move-dynamic-objects-and-functions-inside-your-effect)
+
+      A state update marked as a Transition will be interrupted by other state updates. For example, if you update a chart component inside a Transition, but then start typing into an input while the chart is in the middle of a re-render, React will restart the rendering work on the chart component after handling the input update.
+
+      Transition updates can't be used to control text inputs.
+
+      If there are multiple ongoing Transitions, React currently batches them together. This is a limitation that may be removed in a future release.
+  - fragment_type: example
+    sequence: 4
+    content: |
+      ```js
+      import { useState, useDeferredValue } from 'react';
+
+      function SearchPage() {
+        const [query, setQuery] = useState('');
+        const deferredQuery = useDeferredValue(query);
+        // ...
+      }
+      ```
+  - fragment_type: verification
+    sequence: 5
+    content: |
+      When an update is inside a Transition, `useDeferredValue` always returns the new `value` and does not spawn a deferred render, since the update is already deferred.
+
+      The values you pass to `useDeferredValue` should either be primitive values (like strings and numbers) or objects created outside of rendering. If you create a new object during rendering and immediately pass it to `useDeferredValue`, it will be different on every render, causing unnecessary background re-renders.
+
+      When `useDeferredValue` receives a different value (compared with [`Object.is`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/is)), in addition to the current render (when it still uses the previous value), it schedules a re-render in the background with the new value. The background re-render is interruptible: if there's another update to the `value`, React will restart the background re-render from scratch. For example, if the user is typing into an input faster than a chart receiving its deferred value can re-render, the chart will only re-render after the user stops typing.
+
+      `useDeferredValue` is integrated with [`<Suspense>`.](/reference/react/Suspense) If the background update caused by a new value suspends the UI, the user will not see the fallback. They will see the old deferred value until the data loads.
+
+      `useDeferredValue` does not by itself prevent extra network requests.
+
+      There is no fixed delay caused by `useDeferredValue` itself. As soon as React finishes the original re-render, React will immediately start working on the background re-render with the new deferred value. Any updates caused by events (like typing) will interrupt the background re-render and get prioritized over it.
+
+      The background re-render caused by `useDeferredValue` does not fire Effects until it's committed to the screen. If the background re-render suspends, its Effects will run after the data loads and the UI updates.
