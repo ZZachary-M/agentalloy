@@ -1,0 +1,558 @@
+skill_type: domain
+skill_id: nextjs-forms-and-server-actions
+canonical_name: Next.js Forms and Server Actions
+category: engineering
+skill_class: domain
+domain_tags:
+  - nextjs
+  - forms
+  - server-actions
+  - progressive-enhancement
+  - validation
+always_apply: false
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # Next.js Forms and Server Actions
+
+  ## Overview
+
+  Next.js forms use the React 19 form-action API with server actions. Submissions work without JavaScript (progressive enhancement); pending state and validation are first-class. This skill covers the Next.js-specific patterns.
+
+  React Server Actions are [Server Functions](https://react.dev/reference/rsc/server-functions) that execute on the server. They can be called in Server and Client Components to handle form submissions. This guide will walk you through how to create forms in Next.js with Server Actions.
+
+  > [!WARNING]
+  > Always verify [authentication and authorization](/docs/app/guides/authentication) inside each Server Action, even if the form is only rendered on an authenticated page. See the [Data Security guide](/docs/app/guides/data-security) for more details.
+
+  ## How it works
+
+  React extends the HTML [`<form>`](https://developer.mozilla.org/docs/Web/HTML/Element/form) element to allow Server Actions to be invoked with the [`action`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form#action) attribute.
+
+  When used in a form, the function automatically receives the [`FormData`](https://developer.mozilla.org/docs/Web/API/FormData/FormData) object. You can then extract the data using the native [`FormData` methods](https://developer.mozilla.org/en-US/docs/Web/API/FormData#instance_methods):
+
+  ```tsx filename="app/invoices/page.tsx" switcher
+
+  export default function Page() {
+    async function createInvoice(formData: FormData) {
+      'use server'
+
+      const session = await auth()
+      if (!session?.user) {
+        throw new Error('Unauthorized')
+      }
+
+      const rawFormData = {
+        customerId: formData.get('customerId'),
+        amount: formData.get('amount'),
+        status: formData.get('status'),
+      }
+
+      // mutate data
+      // revalidate the cache
+    }
+
+    return <form action={createInvoice}>...</form>
+  }
+  ```
+
+  ```jsx filename="app/invoices/page.js" switcher
+
+  export default function Page() {
+    async function createInvoice(formData) {
+      'use server'
+
+      const session = await auth()
+      if (!session?.user) {
+        throw new Error('Unauthorized')
+      }
+
+      const rawFormData = {
+        customerId: formData.get('customerId'),
+        amount: formData.get('amount'),
+        status: formData.get('status'),
+      }
+
+      // mutate data
+      // revalidate the cache
+    }
+
+    return <form action={createInvoice}>...</form>
+  }
+  ```
+
+  > **Good to know:** When working with forms that have multiple fields, use JavaScript's [`Object.fromEntries()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries). For example: `const rawFormData = Object.fromEntries(formData)`. Note that this object will contain extra properties prefixed with `$ACTION_`.
+
+  ## Passing additional arguments
+
+  Outside of form fields, you can pass additional arguments to a Server Function using the JavaScript [`bind`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind) method. For example, to pass the `userId` argument to the `updateUser` Server Function:
+
+  ```tsx filename="app/client-component.tsx" highlight={6} switcher
+  'use client'
+
+
+  export function UserProfile({ userId }: { userId: string }) {
+    const updateUserWithId = updateUser.bind(null, userId)
+
+    return (
+      <form action={updateUserWithId}>
+        <input type="text" name="name" />
+        <button type="submit">Update User Name</button>
+      </form>
+    )
+  }
+  ```
+
+  ```jsx filename="app/client-component.js" highlight={6} switcher
+  'use client'
+
+
+  export function UserProfile({ userId }) {
+    const updateUserWithId = updateUser.bind(null, userId)
+
+    return (
+      <form action={updateUserWithId}>
+        <input type="text" name="name" />
+        <button type="submit">Update User Name</button>
+      </form>
+    )
+  }
+  ```
+
+  The Server Function will receive the `userId` as an additional argument:
+
+  ```ts filename="app/actions.ts" switcher
+  'use server'
+
+  export async function updateUser(userId: string, formData: FormData) {}
+  ```
+
+  ```js filename="app/actions.js" switcher
+  'use server'
+
+  export async function updateUser(userId, formData) {}
+  ```
+
+  > **Good to know**:
+  >
+  > - An alternative is to pass arguments as hidden input fields in the form (e.g. `<input type="hidden" name="userId" value={userId} />`). However, the value will be part of the rendered HTML and will not be encoded.
+  > - `bind` works in both Server and Client Components and supports progressive enhancement.
+
+  ## Form validation
+
+  Forms can be validated on the client or server.
+
+  - For **client-side validation**, you can use the HTML attributes like `required` and `type="email"` for basic validation.
+  - For **server-side validation**, you can use a library like [zod](https://zod.dev/) to validate the form fields. For example:
+
+  ```tsx filename="app/actions.ts" switcher
+  'use server'
+
+
+  const schema = z.object({
+    email: z.string({
+      invalid_type_error: 'Invalid Email',
+    }),
+  })
+
+  export default async function createUser(formData: FormData) {
+    const validatedFields = schema.safeParse({
+      email: formData.get('email'),
+    })
+
+    // Return early if the form data is invalid
+    if (!validatedFields.success) {
+      return {
+        errors: validatedFields.error.flatten().fieldErrors,
+      }
+    }
+
+    // Mutate data
+  }
+  ```
+
+  ```jsx filename="app/actions.js" switcher
+  'use server'
+
+
+  const schema = z.object({
+    email: z.string({
+      invalid_type_error: 'Invalid Email',
+    }),
+  })
+
+  export default async function createUser(formData) {
+    const validatedFields = schema.safeParse({
+      email: formData.get('email'),
+    })
+
+    // Return early if the form data is invalid
+    if (!validatedFields.success) {
+      return {
+        errors: validatedFields.error.flatten().fieldErrors,
+      }
+    }
+
+    // Mutate data
+  }
+  ```
+
+  ## Validation errors
+
+  To display validation errors or messages, turn the component that defines the `<form>` into a Client Component and use React [`useActionState`](https://react.dev/reference/react/useActionState).
+
+  When using `useActionState`, the Server function signature will change to receive a new `prevState` or `initialState` parameter as its first argument.
+
+  ```tsx filename="app/actions.ts" highlight={5} switcher
+  'use server'
+
+
+  export async function createUser(initialState: any, formData: FormData) {
+    const validatedFields = schema.safeParse({
+      email: formData.get('email'),
+    })
+    // ...
+  }
+  ```
+
+  ```jsx filename="app/actions.ts" highlight={7} switcher
+  'use server'
+
+
+  // ...
+
+  export async function createUser(initialState, formData) {
+    const validatedFields = schema.safeParse({
+      email: formData.get('email'),
+    })
+    // ...
+  }
+  ```
+
+  You can then conditionally render the error message based on the `state` object.
+
+  ```tsx filename="app/ui/signup.tsx" highlight={11,18-20} switcher
+  'use client'
+
+
+  const initialState = {
+    message: '',
+  }
+
+  export function Signup() {
+    const [state, formAction, pending] = useActionState(createUser, initialState)
+
+    return (
+      <form action={formAction}>
+        <label htmlFor="email">Email</label>
+        <input type="text" id="email" name="email" required />
+        
+        <p aria-live="polite">{state?.message}</p>
+        <button disabled={pending}>Sign up</button>
+      </form>
+    )
+  }
+  ```
+
+  ```jsx filename="app/ui/signup.js" highlight={11,18-20} switcher
+  'use client'
+
+
+  const initialState = {
+    message: '',
+  }
+
+  export function Signup() {
+    const [state, formAction, pending] = useActionState(createUser, initialState)
+
+    return (
+      <form action={formAction}>
+        <label htmlFor="email">Email</label>
+        <input type="text" id="email" name="email" required />
+        
+        <p aria-live="polite">{state?.message}</p>
+        <button disabled={pending}>Sign up</button>
+      </form>
+    )
+  }
+  ```
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      Next.js forms use the React 19 form-action API with server actions. Submissions work without JavaScript (progressive enhancement); pending state and validation are first-class. This skill covers the Next.js-specific patterns.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      React Server Actions are [Server Functions](https://react.dev/reference/rsc/server-functions) that execute on the server. They can be called in Server and Client Components to handle form submissions. This guide will walk you through how to create forms in Next.js with Server Actions.
+  - fragment_type: guardrail
+    sequence: 3
+    content: |
+      > [!WARNING]
+      > Always verify [authentication and authorization](/docs/app/guides/authentication) inside each Server Action, even if the form is only rendered on an authenticated page. See the [Data Security guide](/docs/app/guides/data-security) for more details.
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      React extends the HTML [`<form>`](https://developer.mozilla.org/docs/Web/HTML/Element/form) element to allow Server Actions to be invoked with the [`action`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form#action) attribute. When used in a form, the function automatically receives the [`FormData`](https://developer.mozilla.org/docs/Web/API/FormData/FormData) object. You can then extract the data using the native [`FormData` methods](https://developer.mozilla.org/en-US/docs/Web/API/FormData#instance_methods):
+  - fragment_type: example
+    sequence: 5
+    content: |
+      ```tsx filename="app/invoices/page.tsx" switcher
+
+      export default function Page() {
+        async function createInvoice(formData: FormData) {
+          'use server'
+
+          const session = await auth()
+          if (!session?.user) {
+            throw new Error('Unauthorized')
+          }
+
+          const rawFormData = {
+            customerId: formData.get('customerId'),
+            amount: formData.get('amount'),
+            status: formData.get('status'),
+          }
+
+          // mutate data
+          // revalidate the cache
+        }
+
+        return <form action={createInvoice}>...</form>
+      }
+      ```
+
+      ```jsx filename="app/invoices/page.js" switcher
+
+      export default function Page() {
+        async function createInvoice(formData) {
+          'use server'
+
+          const session = await auth()
+          if (!session?.user) {
+            throw new Error('Unauthorized')
+          }
+
+          const rawFormData = {
+            customerId: formData.get('customerId'),
+            amount: formData.get('amount'),
+            status: formData.get('status'),
+          }
+
+          // mutate data
+          // revalidate the cache
+        }
+
+        return <form action={createInvoice}>...</form>
+      }
+      ```
+  - fragment_type: rationale
+    sequence: 6
+    content: |
+      > **Good to know:** When working with forms that have multiple fields, use JavaScript's [`Object.fromEntries()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries). For example: `const rawFormData = Object.fromEntries(formData)`. Note that this object will contain extra properties prefixed with `$ACTION_`.
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      Outside of form fields, you can pass additional arguments to a Server Function using the JavaScript [`bind`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind) method. For example, to pass the `userId` argument to the `updateUser` Server Function:
+  - fragment_type: example
+    sequence: 8
+    content: |
+      ```tsx filename="app/client-component.tsx" highlight={6} switcher
+      'use client'
+
+
+      export function UserProfile({ userId }: { userId: string }) {
+        const updateUserWithId = updateUser.bind(null, userId)
+
+        return (
+          <form action={updateUserWithId}>
+            <input type="text" name="name" />
+            <button type="submit">Update User Name</button>
+          </form>
+        )
+      }
+      ```
+
+      ```jsx filename="app/client-component.js" highlight={6} switcher
+      'use client'
+
+
+      export function UserProfile({ userId }) {
+        const updateUserWithId = updateUser.bind(null, userId)
+
+        return (
+          <form action={updateUserWithId}>
+            <input type="text" name="name" />
+            <button type="submit">Update User Name</button>
+          </form>
+        )
+      }
+      ```
+  - fragment_type: example
+    sequence: 9
+    content: |
+      The Server Function will receive the `userId` as an additional argument:
+
+      ```ts filename="app/actions.ts" switcher
+      'use server'
+
+      export async function updateUser(userId: string, formData: FormData) {}
+      ```
+
+      ```js filename="app/actions.js" switcher
+      'use server'
+
+      export async function updateUser(userId, formData) {}
+      ```
+  - fragment_type: rationale
+    sequence: 10
+    content: |
+      > **Good to know**:
+      >
+      > - An alternative is to pass arguments as hidden input fields in the form (e.g. `<input type="hidden" name="userId" value={userId} />`). However, the value will be part of the rendered HTML and will not be encoded.
+      > - `bind` works in both Server and Client Components and supports progressive enhancement.
+  - fragment_type: execution
+    sequence: 11
+    content: |
+      Forms can be validated on the client or server.
+
+      - For **client-side validation**, you can use the HTML attributes like `required` and `type="email"` for basic validation.
+      - For **server-side validation**, you can use a library like [zod](https://zod.dev/) to validate the form fields. For example:
+  - fragment_type: example
+    sequence: 12
+    content: |
+      ```tsx filename="app/actions.ts" switcher
+      'use server'
+
+
+      const schema = z.object({
+        email: z.string({
+          invalid_type_error: 'Invalid Email',
+        }),
+      })
+
+      export default async function createUser(formData: FormData) {
+        const validatedFields = schema.safeParse({
+          email: formData.get('email'),
+        })
+
+        // Return early if the form data is invalid
+        if (!validatedFields.success) {
+          return {
+            errors: validatedFields.error.flatten().fieldErrors,
+          }
+        }
+
+        // Mutate data
+      }
+      ```
+
+      ```jsx filename="app/actions.js" switcher
+      'use server'
+
+
+      const schema = z.object({
+        email: z.string({
+          invalid_type_error: 'Invalid Email',
+        }),
+      })
+
+      export default async function createUser(formData) {
+        const validatedFields = schema.safeParse({
+          email: formData.get('email'),
+        })
+
+        // Return early if the form data is invalid
+        if (!validatedFields.success) {
+          return {
+            errors: validatedFields.error.flatten().fieldErrors,
+          }
+        }
+
+        // Mutate data
+      }
+      ```
+  - fragment_type: execution
+    sequence: 13
+    content: |
+      To display validation errors or messages, turn the component that defines the `<form>` into a Client Component and use React [`useActionState`](https://react.dev/reference/react/useActionState).
+  - fragment_type: example
+    sequence: 14
+    content: |
+      ```tsx filename="app/actions.ts" highlight={5} switcher
+      'use server'
+
+
+      export async function createUser(initialState: any, formData: FormData) {
+        const validatedFields = schema.safeParse({
+          email: formData.get('email'),
+        })
+        // ...
+      }
+      ```
+
+      ```jsx filename="app/actions.ts" highlight={7} switcher
+      'use server'
+
+
+      // ...
+
+      export async function createUser(initialState, formData) {
+        const validatedFields = schema.safeParse({
+          email: formData.get('email'),
+        })
+        // ...
+      }
+      ```
+  - fragment_type: example
+    sequence: 15
+    content: |
+      You can then conditionally render the error message based on the `state` object.
+
+      ```tsx filename="app/ui/signup.tsx" highlight={11,18-20} switcher
+      'use client'
+
+
+      const initialState = {
+        message: '',
+      }
+
+      export function Signup() {
+        const [state, formAction, pending] = useActionState(createUser, initialState)
+
+        return (
+          <form action={formAction}>
+            <label htmlFor="email">Email</label>
+            <input type="text" id="email" name="email" required />
+            
+            <p aria-live="polite">{state?.message}</p>
+            <button disabled={pending}>Sign up</button>
+          </form>
+        )
+      }
+      ```
+
+      ```jsx filename="app/ui/signup.js" highlight={11,18-20} switcher
+      'use client'
+
+
+      const initialState = {
+        message: '',
+      }
+
+      export function Signup() {
+        const [state, formAction, pending] = useActionState(createUser, initialState)
+
+        return (
+          <form action={formAction}>
+            <label htmlFor="email">Email</label>
+            <input type="text" id="email" name="email" required />
+            
+            <p aria-live="polite">{state?.message}</p>
+            <button disabled={pending}>Sign up</button>
+          </form>
+        )
+      }
+      ```

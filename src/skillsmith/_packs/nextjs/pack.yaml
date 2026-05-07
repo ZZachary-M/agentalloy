@@ -9,20 +9,54 @@ embedding_dim: 1024
 license: MIT
 homepage: https://github.com/nrmeyers/skillsmith
 always_install: false
-depends_on: [core, engineering, typescript, react]
+depends_on:
+- core
+- engineering
+- typescript
+- react
 skills:
-  - skill_id: nextjs-app-router-routing
-    file: nextjs-app-router-routing.yaml
-    fragment_count: 10
-  - skill_id: nextjs-server-actions-and-mutations
-    file: nextjs-server-actions-and-mutations.yaml
-    fragment_count: 10
-  - skill_id: nextjs-data-fetching-and-caching
-    file: nextjs-data-fetching-and-caching.yaml
-    fragment_count: 10
-  - skill_id: nextjs-metadata-and-og-images
-    file: nextjs-metadata-and-og-images.yaml
-    fragment_count: 8
-  - skill_id: nextjs-proxy-and-edge-runtime
-    file: nextjs-proxy-and-edge-runtime.yaml
-    fragment_count: 10
+- skill_id: nextjs-app-router-routing
+  file: nextjs-app-router-routing.yaml
+  fragment_count: 10
+- skill_id: nextjs-server-actions-and-mutations
+  file: nextjs-server-actions-and-mutations.yaml
+  fragment_count: 10
+- skill_id: nextjs-data-fetching-and-caching
+  file: nextjs-data-fetching-and-caching.yaml
+  fragment_count: 10
+- skill_id: nextjs-metadata-and-og-images
+  file: nextjs-metadata-and-og-images.yaml
+  fragment_count: 8
+- skill_id: nextjs-proxy-and-edge-runtime
+  file: nextjs-proxy-and-edge-runtime.yaml
+  fragment_count: 10
+- skill_id: nextjs-csp-and-security-headers
+  file: nextjs-csp-and-security-headers.yaml
+  fragment_count: 6
+- skill_id: nextjs-data-security-patterns
+  file: nextjs-data-security-patterns.yaml
+  fragment_count: 8
+- skill_id: nextjs-forms-and-server-actions
+  file: nextjs-forms-and-server-actions.yaml
+  fragment_count: 15
+- skill_id: nextjs-instrumentation-and-otel
+  file: nextjs-instrumentation-and-otel.yaml
+  fragment_count: 13
+- skill_id: nextjs-isr-and-revalidation
+  file: nextjs-isr-and-revalidation.yaml
+  fragment_count: 6
+- skill_id: nextjs-ppr-cache-components
+  file: nextjs-ppr-cache-components.yaml
+  fragment_count: 15
+- skill_id: nextjs-production-checklist
+  file: nextjs-production-checklist.yaml
+  fragment_count: 5
+- skill_id: nextjs-redirects-and-rewrites
+  file: nextjs-redirects-and-rewrites.yaml
+  fragment_count: 8
+- skill_id: nextjs-self-hosting
+  file: nextjs-self-hosting.yaml
+  fragment_count: 7
+- skill_id: nextjs-streaming-and-suspense
+  file: nextjs-streaming-and-suspense.yaml
+  fragment_count: 5
