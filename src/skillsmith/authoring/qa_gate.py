@@ -224,12 +224,11 @@ def run_critic(
         + (f"{semantic_tag_block}\n\n" if semantic_tag_block else "")
         + "Return JSON only. Schema per your system prompt."
     )
-    # LM Studio supports OpenAI-style ``json_schema`` Structured Outputs;
-    # ``json_object`` is rejected. We pin the schema to the QA verdict
-    # shape so the model can't return a bare ``tag_verdicts`` array (a
-    # failure mode observed with granite-4.1-30b on 2026-05-05). The
-    # schema is permissive on inner shapes (``additional_properties``)
-    # to tolerate model paraphrasing.
+    # LM Studio / Ollama support OpenAI-style ``json_schema`` Structured
+    # Outputs; ``json_object`` is rejected. We pin the schema to the QA
+    # verdict shape so the model can't return a bare ``tag_verdicts`` array.
+    # The schema is permissive on inner shapes (``additional_properties``)
+    # to tolerate model paraphrasing across critic models.
     qa_verdict_schema = {
         "type": "object",
         "properties": {
