@@ -20,12 +20,13 @@ Or copy `.env.example` and fill in manually. Full reference:
 | `LOG_LEVEL` | `INFO` | Python log level |
 | `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | OpenAI-compatible embedding endpoint |
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model (1024-dim) |
-| `AUTHORING_MODEL` | `qwen/qwen3.6-35b-a3b` | Model for skill generation (authoring only) |
-| `CRITIC_MODEL` | `qwen/qwen3.6-35b-a3b` | Model for QA critic (authoring only) |
+| `AUTHORING_MODEL` | `hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ4_NL_XL` | Author model — MoE, fast for drafting |
+| `CRITIC_MODEL` | `hf.co/unsloth/Qwen3.6-27B-GGUF:UD-Q5_K_XL` | Critic model — dense Q5, steadier for grading |
+| `AUTHORING_LM_BASE_URL` | (`= LM_STUDIO_BASE_URL`) | Author endpoint; equal to critic endpoint for swap-batched single-GPU use |
 | `AUTHORING_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Authoring embedding model (authoring only) |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Cosine threshold for hard dedup |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Cosine threshold for soft dedup |
-| `BOUNCE_BUDGET` | `3` | Max authoring bounce attempts |
+| `BOUNCE_BUDGET` | `5` | Max authoring bounce attempts |
 
 ---
 
@@ -377,16 +378,16 @@ uv run python -m skillsmith.authoring summary               # counts per bucket
 
 ### Configuration (authoring-specific)
 
-Separate from the runtime retrieval settings above. Both Author and Critic run against LM Studio today; all routes go through the same OpenAI-compatible endpoint.
+Separate from the runtime retrieval settings above. Author and Critic share a single OpenAI-compatible endpoint (Ollama or LM Studio). On a single-GPU host the swap-batched `run` keeps both models from needing to coexist by warming the right one before each phase.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AUTHORING_MODEL` | `qwen/qwen3.6-35b-a3b` | Non-reasoning via `/no_think` prompt directive |
-| `CRITIC_MODEL` | `qwen/qwen3.6-35b-a3b` | Thinking ON — judgment calls benefit |
+| `AUTHORING_MODEL` | `hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ4_NL_XL` | MoE, 3B active — non-reasoning via `/no_think` |
+| `CRITIC_MODEL` | `hf.co/unsloth/Qwen3.6-27B-GGUF:UD-Q5_K_XL` | Dense Q5 — thinking ON for rubric grading |
 | `AUTHORING_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Cosine similarity; matches ≥ this → auto-reject |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Matches in [soft, hard) → Critic review |
-| `BOUNCE_BUDGET` | `3` | Revise passes before needs-human escalation |
+| `BOUNCE_BUDGET` | `5` | Revise passes before needs-human escalation |
 
 ### Pipeline state layout
 

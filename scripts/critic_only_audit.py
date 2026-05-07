@@ -1,7 +1,7 @@
 """One-off Critic-only audit for already-merged YAMLs.
 
 Bypasses the full QA gate (deterministic checks + dedup) and calls
-``qa_gate.run_critic`` directly so we get a granite-4.1-30b second opinion
+``qa_gate.run_critic`` directly so we get a critic-model second opinion
 on skills that are already in the corpus (which would otherwise self-dup).
 
 Outputs ``<skill_id>.critic.md`` next to each skill's existing ``.qa.md``
@@ -60,7 +60,8 @@ def render_report(skill_id: str, verdict_obj) -> str:  # type: ignore[no-untyped
     lines = [
         f"# Critic-only audit: {skill_id}",
         "",
-        "- **Reviewer:** granite-4.1-30b via qa_gate.run_critic (no dedup, no SOURCE SKILL.md)",
+        f"- **Reviewer:** {get_settings().require_authoring_config().critic_model} "
+        "via qa_gate.run_critic (no dedup, no SOURCE SKILL.md)",
         f"- **Verdict:** `{verdict_obj.verdict}`",
         f"- **Summary:** {verdict_obj.summary}",
         "",

@@ -2,10 +2,15 @@
 
 Usage::
 
-    python -m skillsmith.authoring author <source-dir>   # SKILL.md → pending-qa/
-    python -m skillsmith.authoring qa                    # pending-qa/ → pending-review/ | ...
-    python -m skillsmith.authoring run <source-dir>      # author then qa in one pass
-    python -m skillsmith.authoring summary               # print pipeline state
+    python -m skillsmith.authoring author <source-dir>          # SKILL.md → pending-qa/
+    python -m skillsmith.authoring qa                           # pending-qa/ → pending-review/ | ...
+    python -m skillsmith.authoring run <source-dir>             # swap-batched (default)
+    python -m skillsmith.authoring run <source-dir> --single-skill  # per-skill convergence
+    python -m skillsmith.authoring summary                      # print pipeline state
+
+The swap-batched ``run`` is designed for single-GPU hosts that share an Ollama
+endpoint between author and critic. It warms the right model once per phase
+(author → critic → author → ...) so each batch hits a fully resident model.
 
 After ``qa`` or ``run``, the operator reviews ``pending-review/*.yaml`` and
 the sibling ``.qa.md`` reports, then runs::
@@ -23,12 +28,15 @@ import sys
 from pathlib import Path
 
 from skillsmith.authoring.driver import run_author, run_revise
+from skillsmith.authoring.lm_client import warmup_ollama
 from skillsmith.authoring.paths import PipelinePaths, default_paths
 from skillsmith.authoring.pipeline import SkillResult, run_per_skill, summarize_results
 from skillsmith.authoring.qa_gate import GateResult, run_qa
 from skillsmith.config import get_settings
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import open_or_create
+
+logger = logging.getLogger(__name__)
 
 EXIT_OK = 0
 EXIT_USAGE = 1
@@ -64,20 +72,32 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser(
         "run",
-        help="Per-skill pipeline: author → qa ↔ revise loop, one skill converging before the next",
+        help=(
+            "Swap-batched pipeline (default): author-all → swap → qa-all → swap → "
+            "revise-all. Designed for single-GPU hosts where author/critic can't "
+            "coexist. Warms the right Ollama model before each phase."
+        ),
     )
     p_run.add_argument("source_dir", help="Directory containing SKILL.md files")
-
-    p_run_batched = sub.add_parser(
-        "run-batched",
-        help="Stage-batched: author-all → qa-all → revise-all (legacy; keep for small batches)",
-    )
-    p_run_batched.add_argument("source_dir", help="Directory containing SKILL.md files")
-    p_run_batched.add_argument(
+    p_run.add_argument(
         "--max-rounds",
         type=int,
         default=4,
         help="Safety ceiling on QA↔revise iterations (default: 4 = 1 initial + 3 bounces)",
+    )
+    p_run.add_argument(
+        "--single-skill",
+        action="store_true",
+        help=(
+            "Per-skill mode: each SKILL.md converges (author↔qa↔revise) before the "
+            "next begins. Only useful when both models are pre-loaded on separate "
+            "endpoints — incurs heavy swap overhead on a single-GPU host."
+        ),
+    )
+    p_run.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip Ollama model warmup before each phase (LM Studio / non-Ollama backends).",
     )
 
     sub.add_parser("summary", help="Report current pipeline state")
@@ -93,9 +113,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "revise":
         return _cmd_revise(repo_root, paths)
     if args.cmd == "run":
-        return _cmd_run_per_skill(Path(args.source_dir), repo_root, paths)
-    if args.cmd == "run-batched":
-        return _cmd_run_batched(Path(args.source_dir), repo_root, paths, args.max_rounds)
+        if args.single_skill:
+            return _cmd_run_per_skill(Path(args.source_dir), repo_root, paths)
+        return _cmd_run_batched(
+            Path(args.source_dir),
+            repo_root,
+            paths,
+            args.max_rounds,
+            warmup=not args.no_warmup,
+        )
     if args.cmd == "summary":
         return _cmd_summary(paths)
     return EXIT_USAGE
@@ -151,20 +177,44 @@ def _cmd_run_per_skill(source_dir: Path, repo_root: Path, paths: PipelinePaths) 
 
 
 def _cmd_run_batched(
-    source_dir: Path, repo_root: Path, paths: PipelinePaths, max_rounds: int
+    source_dir: Path,
+    repo_root: Path,
+    paths: PipelinePaths,
+    max_rounds: int,
+    *,
+    warmup: bool = True,
 ) -> int:
-    """Legacy stage-batched pipeline: author-all → qa-all → revise-all.
+    """Swap-batched pipeline: author-all → swap → qa-all → swap → revise-all.
+
+    Designed for single-GPU hosts where author and critic models can't coexist.
+    Before each phase, fires an Ollama warmup against the model that phase
+    needs — the first call after a swap takes ~20s for a 20GB GGUF, so doing
+    it once per phase (instead of once per skill) keeps wall-clock sane.
 
     A partial Author failure (``EXIT_RUNTIME``) does NOT short-circuit the rest
-    of the pipeline — the drafts that *did* make it into pending-qa still get
+    of the pipeline — drafts that *did* make it into pending-qa still get
     QA'd and routed. Only a usage-level failure aborts.
     """
+    settings = get_settings()
+    ac = settings.require_authoring_config()
+
+    def _warm(role: str, base_url: str, model: str) -> None:
+        if not warmup:
+            return
+        logger.info("warmup: loading %s model %r on %s", role, model, base_url)
+        try:
+            warmup_ollama(base_url, model)
+        except Exception as e:  # noqa: BLE001 — surface but continue
+            logger.warning("warmup failed (continuing): %s", e)
+
+    _warm("author", ac.authoring_lm_base_url, ac.authoring_model)
     rc = _cmd_author(source_dir, repo_root, paths)
     if rc == EXIT_USAGE:
         return rc
 
     for round_num in range(1, max_rounds + 1):
         print(f"\n=== QA round {round_num} ===")
+        _warm("critic", ac.lm_studio_base_url, ac.critic_model)
         rc = _cmd_qa(repo_root, paths)
         if rc != EXIT_OK:
             return rc
@@ -175,6 +225,7 @@ def _cmd_run_batched(
             break
 
         print(f"\n=== revision round {round_num} ({len(pending_rev)} draft(s)) ===")
+        _warm("author", ac.authoring_lm_base_url, ac.authoring_model)
         rc = _cmd_revise(repo_root, paths)
         if rc != EXIT_OK:
             return rc

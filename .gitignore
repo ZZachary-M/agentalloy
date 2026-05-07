@@ -73,3 +73,4 @@ eval/runs/
 /.claude/
 .gitnexus
 docs/*.patch
+experiments/skill-tax/

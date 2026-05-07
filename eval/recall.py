@@ -62,8 +62,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             print(
-                f"{task.task_id:35s} recall={recall:.2f} ({hits}/{len(gold)})  "
-                f"retrieved={source}"
+                f"{task.task_id:35s} recall={recall:.2f} ({hits}/{len(gold)})  retrieved={source}"
             )
 
     micro = total_hits / total_gold if total_gold else 0.0
@@ -80,10 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         "per_task": rows,
     }
 
-    out_path = Path(
-        args.out
-        or f"eval/runs/recall__{args.label}.json"
-    )
+    out_path = Path(args.out or f"eval/runs/recall__{args.label}.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, indent=2))
 

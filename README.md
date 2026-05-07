@@ -122,23 +122,30 @@ To author a new pack, see `docs/PACK-AUTHORING.md`.
 
 ## How packs get authored
 
-Three-stage local pipeline. Skillsmith doesn't burn paid LLM tokens to grow the corpus.
+Local-first three-stage pipeline. Skillsmith doesn't burn paid LLM tokens to grow the corpus.
 
 ```
-SKILL.md  →  [14B Author]  →  draft YAML  →  [30B Critic]  →  approve / revise
-                                                  ↓
-                                          [Opus safety gate]
-                                                  ↓
-                                            pending-review/  →  ingest
+SKILL.md  →  [Author MoE]  →  draft YAML  →  [Critic dense]  →  approve / revise
+                                                   ↓
+                                           [Opus safety gate]
+                                                   ↓
+                                             pending-review/  →  ingest
 ```
 
 | Stage | Model | Where it runs |
 |---|---|---|
-| **Author** | `Qwen2.5-Coder-14B-Instruct` (Q4_K_M) | local Ollama / LM Studio |
-| **Critic** | `granite-4.1-30b` (UD-Q4_K_XL) | local Ollama / LM Studio |
+| **Author** | `Qwen3.6-35B-A3B` (UD-IQ4_NL_XL, MoE — 3B active) | local Ollama |
+| **Critic** | `Qwen3.6-27B` (UD-Q5_K_XL, dense) | local Ollama |
 | **Safety gate** | Claude Opus (one-pass review) | only when bounce budget exhausted |
 
-The bounce loop (`python -m skillsmith.authoring run <source-dir>`) bounces drafts between author and critic up to `bounce_budget=3` times. ~80% of skills converge in 1 round; ~15% in 2; the residue routes to `needs-human/` for hand-authoring.
+**Single-GPU friendly.** The pipeline is *swap-batched*: `run` warms the author model, drafts the whole batch, then warms the critic, grades the whole batch, then swaps back to author for revisions. Two model loads per round instead of two per skill — fits a 24GB-VRAM card (e.g. RTX 3090) where author and critic can't coexist.
+
+```bash
+python -m skillsmith.authoring run <source-dir>                # swap-batched (default)
+python -m skillsmith.authoring run <source-dir> --single-skill # per-skill (requires both models pre-loaded)
+```
+
+The bounce loop iterates author↔critic up to `bounce_budget=5` times per skill. ~70-80% of skills converge in 1 round; ~15% in 2-3; the residue routes to `needs-human/` for hand-authoring.
 
 ---
 
@@ -219,13 +226,13 @@ Environment variables (written automatically by `skillsmith install write-env`):
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model for retrieve / compose |
 | `LADYBUG_DB_PATH` | `./data/ladybug` | LadybugDB directory |
 | `DUCKDB_PATH` | `./data/skills.duck` | DuckDB vector + telemetry store |
-| `AUTHORING_MODEL` | `hf.co/unsloth/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M` | Author model (authoring only) |
-| `CRITIC_MODEL` | `hf.co/unsloth/granite-4.1-30b-GGUF:UD-Q4_K_XL` | Critic model (authoring only) |
-| `AUTHORING_LM_BASE_URL` | (falls back to `LM_STUDIO_BASE_URL`) | Author endpoint (lets author + critic run on different ports) |
+| `AUTHORING_MODEL` | `hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ4_NL_XL` | Author model (authoring only) |
+| `CRITIC_MODEL` | `hf.co/unsloth/Qwen3.6-27B-GGUF:UD-Q5_K_XL` | Critic model (authoring only) |
+| `AUTHORING_LM_BASE_URL` | (falls back to `LM_STUDIO_BASE_URL`) | Author endpoint — set equal to `LM_STUDIO_BASE_URL` for single-GPU swap-batched use |
 | `AUTHORING_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Authoring-pipeline embedding model |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Dedup hard cosine threshold |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Dedup soft cosine threshold |
-| `BOUNCE_BUDGET` | `3` | Max author↔critic revision rounds |
+| `BOUNCE_BUDGET` | `5` | Max author↔critic revision rounds |
 | `LOG_LEVEL` | `INFO` | Log verbosity |
 
 ---
