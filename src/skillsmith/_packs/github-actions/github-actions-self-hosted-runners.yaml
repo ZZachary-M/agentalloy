@@ -1,0 +1,197 @@
+skill_type: domain
+skill_id: github-actions-self-hosted-runners
+canonical_name: GitHub Actions — Self-Hosted Runners
+category: ops
+skill_class: domain
+domain_tags:
+  - github-actions
+  - self-hosted-runners
+  - ci-cd
+  - infrastructure
+  - security
+always_apply: false
+phase_scope: null
+category_scope: null
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # GitHub Actions — Self-Hosted Runners
+
+  ## Overview
+
+  Self-hosted runners run workflow jobs on infrastructure you operate. The trade-off: more flexibility, more responsibility. Security model requires care — never run untrusted code on self-hosted unless ephemeral.
+
+  Sourced from docs.github.com/en/actions self-hosted runners guidance.
+
+  ## Why Self-Hosted
+
+  GitHub-hosted runners cover most cases, but you'll reach for self-hosted when:
+
+  - **Specialized hardware** — GPUs for ML, ARM for cross-builds, large-RAM machines.
+  - **Network access** — running tests against an internal database, deploying to a private network.
+  - **Compliance** — running CI inside a VPC for regulatory reasons.
+  - **Cost at scale** — beyond ~50k minutes/month, self-hosted on existing infrastructure can be cheaper.
+
+  Don't reach for self-hosted just to skip a queue or get more memory — the operational cost is real.
+
+  ## Installation
+
+  Each runner registers to a repo, org, or enterprise via a token:
+
+  ```bash
+  mkdir actions-runner && cd actions-runner
+  curl -o actions-runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.x/actions-runner-linux-x64-2.x.tar.gz
+  tar xzf actions-runner.tar.gz
+  ./config.sh --url https://github.com/myorg/myrepo --token TOKEN
+  ./run.sh
+  ```
+
+  Run as a service in production: `./svc.sh install && ./svc.sh start`. Use systemd for finer control.
+
+  ## Labels and Routing
+
+  Workflows pick runners by label:
+
+  ```yaml
+  jobs:
+    build:
+      runs-on: [self-hosted, linux, gpu]
+  ```
+
+  Multiple labels = ALL must match. Default labels are `self-hosted` plus the OS and arch. Add custom labels at registration: `--labels gpu,large-mem`.
+
+  ## Security Model — The Critical Part
+
+  **Never run public-PR code on self-hosted runners** unless they're ephemeral. The PR can run arbitrary code as the runner user. Risks:
+
+  - Credential theft (runner has cloud creds for deploys)
+  - Persistence (modifying the runner installation)
+  - Network attacks (the runner is inside your VPC)
+
+  Mitigations:
+
+  - **Use ephemeral runners**: spin up per-job, destroy after. Tools like actions-runner-controller (Kubernetes) or Hashicorp Nomad do this.
+  - **Forks ↛ self-hosted**: configure org policy to require manual approval for first-time contributors.
+  - **Restrict secrets**: don't put production deploy credentials on runners that handle public PRs.
+  - **Network segmentation**: separate runner pools for trusted and untrusted code.
+
+  ## Runner Groups
+
+  Group runners and restrict which repos can use which group:
+
+  ```
+  group: production-deploys
+    runners: [prod-runner-1, prod-runner-2]
+    repositories: [myorg/main-app]
+    workflows: [deploy.yml]
+  ```
+
+  Org-level setting. Prevents a random repo from accidentally targeting your prod-deploy runners.
+
+  ## JIT (Just-in-Time) Runners
+
+  GitHub now supports JIT registration tokens — single-use, auto-expiring. Generate one programmatically when the job is queued, register the runner, run the job, exit. The actions-runner-controller pattern.
+
+  This is the modern way to run ephemeral runners on Kubernetes — each job gets a fresh pod with a JIT token, no shared state between jobs.
+
+  ## Common Pitfalls
+
+  - **Long-lived runners with sticky state.** A leaked artifact in /tmp persists across jobs; cache poisoning attacks. Use ephemeral.
+  - **Runners with broad cloud credentials.** A workflow that doesn't need AWS access should run on a runner without AWS creds.
+  - **Forgetting to upgrade the runner binary.** GitHub deprecates older versions; jobs eventually fail.
+  - **Running on an interactive shell.** Production runners should be daemonized; logs go to systemd journal or your log infrastructure.
+
+  ## Verification
+
+  Healthy self-hosted runners:
+
+  - Each job runs on a fresh ephemeral runner (or has explicit reasons not to).
+  - Runner pools have least-privilege credentials for the jobs they handle.
+  - Public PRs cannot reach self-hosted runners without manual approval.
+  - Runner version is current (within last 30 days of GitHub releases).
+  - Logs are centralized and queryable.
+
+fragments:
+  - fragment_type: rationale
+    sequence: 1
+    content: |
+      Self-hosted runners run workflow jobs on infrastructure you operate. The trade-off: more flexibility, more responsibility. Security model requires care — never run untrusted code on self-hosted unless ephemeral.
+  - fragment_type: rationale
+    sequence: 2
+    content: |
+      GitHub-hosted runners cover most cases, but you'll reach for self-hosted when:
+      - **Specialized hardware** — GPUs for ML, ARM for cross-builds, large-RAM machines.
+      - **Network access** — running tests against an internal database, deploying to a private network.
+      - **Compliance** — running CI inside a VPC for regulatory reasons.
+      - **Cost at scale** — beyond ~50k minutes/month, self-hosted on existing infrastructure can be cheaper.
+  - fragment_type: setup
+    sequence: 3
+    content: |
+      Each runner registers to a repo, org, or enterprise via a token:
+      ```bash
+      mkdir actions-runner && cd actions-runner
+      curl -o actions-runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.x/actions-runner-linux-x64-2.x.tar.gz
+      tar xzf actions-runner.tar.gz
+      ./config.sh --url https://github.com/myorg/myrepo --token TOKEN
+      ./run.sh
+      ```
+      Run as a service in production: `./svc.sh install && ./svc.sh start`. Use systemd for finer control.
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      Workflows pick runners by label:
+      ```yaml
+      jobs:
+        build:
+          runs-on: [self-hosted, linux, gpu]
+      ```
+      Multiple labels = ALL must match. Default labels are `self-hosted` plus the OS and arch. Add custom labels at registration: `--labels gpu,large-mem`.
+  - fragment_type: rationale
+    sequence: 5
+    content: |
+      **Never run public-PR code on self-hosted runners** unless they're ephemeral. The PR can run arbitrary code as the runner user. Risks:
+      - Credential theft (runner has cloud creds for deploys)
+      - Persistence (modifying the runner installation)
+      - Network attacks (the runner is inside your VPC)
+  - fragment_type: guardrail
+    sequence: 6
+    content: |
+      Mitigations:
+      - **Use ephemeral runners**: spin up per-job, destroy after. Tools like actions-runner-controller (Kubernetes) or Hashicorp Nomad do this.
+      - **Forks ↛ self-hosted**: configure org policy to require manual approval for first-time contributors.
+      - **Restrict secrets**: don't put production deploy credentials on runners that handle public PRs.
+      - **Network segmentation**: separate runner pools for trusted and untrusted code.
+  - fragment_type: example
+    sequence: 7
+    content: |
+      Group runners and restrict which repos can use which group:
+      ```
+      group: production-deploys
+        runners: [prod-runner-1, prod-runner-2]
+        repositories: [myorg/main-app]
+        workflows: [deploy.yml]
+      ```
+      Org-level setting. Prevents a random repo from accidentally targeting your prod-deploy runners.
+  - fragment_type: example
+    sequence: 8
+    content: |
+      GitHub now supports JIT registration tokens — single-use, auto-expiring. Generate one programmatically when the job is queued, register the runner, run the job, exit. The actions-runner-controller pattern.
+      This is the modern way to run ephemeral runners on Kubernetes — each job gets a fresh pod with a JIT token, no shared state between jobs.
+  - fragment_type: guardrail
+    sequence: 9
+    content: |
+      ## Common Pitfalls
+
+      - **Long-lived runners with sticky state.** A leaked artifact in /tmp persists across jobs; cache poisoning attacks. Use ephemeral.
+      - **Runners with broad cloud credentials.** A workflow that doesn't need AWS access should run on a runner without AWS creds.
+      - **Forgetting to upgrade the runner binary.** GitHub deprecates older versions; jobs eventually fail.
+      - **Running on an interactive shell.** Production runners should be daemonized; logs go to systemd journal or your log infrastructure.
+  - fragment_type: verification
+    sequence: 10
+    content: |
+      Healthy self-hosted runners:
+      - Each job runs on a fresh ephemeral runner (or has explicit reasons not to).
+      - Runner pools have least-privilege credentials for the jobs they handle.
+      - Public PRs cannot reach self-hosted runners without manual approval.
+      - Runner version is current (within last 30 days of GitHub releases).
+      - Logs are centralized and queryable.

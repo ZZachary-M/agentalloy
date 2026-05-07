@@ -1,0 +1,230 @@
+skill_type: domain
+skill_id: github-actions-concurrency
+canonical_name: GitHub Actions — Concurrency Control
+category: ops
+skill_class: domain
+domain_tags:
+  - github-actions
+  - concurrency
+  - workflow
+  - ci-cd
+  - automation
+always_apply: false
+phase_scope: []
+category_scope: []
+author: authoring-agent
+change_summary: initial authoring draft
+raw_prose: |
+  # GitHub Actions — Concurrency Control
+
+  ## Overview
+
+  The `concurrency` keyword groups workflow runs by a key — only one run per group at a time. Set `cancel-in-progress: true` to cancel earlier runs when a new one starts. Critical for deploy workflows and PR-validation suites where stale runs would waste compute or cause race conditions.
+
+  ## The Basic Pattern
+
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  ```
+
+  This ensures that for a given (workflow + branch) combo, only one run is active. A new push to the same branch cancels the in-flight run.
+
+  The `group` is a string. Two runs with the same group serialize; runs with different groups proceed independently. The `cancel-in-progress: true` flag cancels the earlier run when a new one queues.
+
+  ## Common Group Keys
+
+  **Per branch**:
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  ```
+
+  For PR validation. Each PR has its own ref; pushing new commits cancels the previous validation run.
+
+  **Per environment** (deploys):
+  ```yaml
+  concurrency:
+    group: deploy-production
+    cancel-in-progress: false  # never cancel mid-deploy
+  ```
+
+  Single deploy slot per environment. If two deploys queue, they serialize. Don't cancel — half-finished deploys are dangerous.
+
+  **Per PR**:
+  ```yaml
+  concurrency:
+    group: pr-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+  ```
+
+  Same as per-branch but explicit about PR scope. Useful when multiple workflows trigger off PR events.
+
+  ## Scope: Job vs Workflow
+
+  `concurrency` at workflow level controls the whole run. At job level, it controls just that job:
+
+  ```yaml
+  jobs:
+    deploy:
+      concurrency:
+        group: deploy-prod
+        cancel-in-progress: false
+      runs-on: ubuntu-latest
+  ```
+
+  Use job-level concurrency when only one job in the workflow needs serialization (the deploy step), but other jobs can run in parallel.
+
+  ## cancel-in-progress: true vs false
+
+  - **true**: new runs cancel existing ones. Fast feedback for PR validation; saves compute when superseding stale runs.
+  - **false**: new runs queue behind existing ones. Right for deploys where canceling mid-flight could leave the system in a weird state.
+
+  Default is false. Always set explicitly so the choice is visible.
+
+  ## Concurrency Across Workflows
+
+  Group keys are global per repo. If two different workflow files use the same group, they serialize:
+
+  ```yaml
+  # workflow-a.yml
+  concurrency:
+    group: deploy-prod
+
+  # workflow-b.yml
+  concurrency:
+    group: deploy-prod
+  ```
+
+  Both workflows share the deploy-prod slot. Useful for 'deploy.yml' and 'rollback.yml' that should never run simultaneously.
+
+  ## Common Pitfalls
+
+  - **Forgetting cancel-in-progress on PR validation.** Without it, every push to a PR queues a new run that waits for the previous one. Compute waste; slow feedback.
+  - **Setting cancel-in-progress: true on deploys.** Half-finished deploys leave the system inconsistent. Always false for deploys.
+  - **Group key that changes too often.** A group like `${{ github.sha }}` is unique per commit — every run gets its own group, concurrency does nothing. Use ref or workflow.
+  - **Concurrency ignored on workflow_dispatch.** Manual triggers do respect concurrency; verify your group key works for the manual case (it usually does if it uses `github.ref`).
+
+  ## Verification
+
+  A working concurrency setup:
+
+  - A new push to a PR cancels the previous validation run within seconds.
+  - Two simultaneous deploys to the same environment serialize; the second one waits.
+  - Deploys never cancel mid-flight (cancel-in-progress: false on deploy workflows).
+  - Group keys are visible in the workflow run UI; you can confirm what's gating what.
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      The `concurrency` keyword groups workflow runs by a key — only one run per group at a time. Set `cancel-in-progress: true` to cancel earlier runs when a new one starts. Critical for deploy workflows and PR-validation suites where stale runs would waste compute or cause race conditions.
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      ```yaml
+      concurrency:
+        group: ${{ github.workflow }}-${{ github.ref }}
+        cancel-in-progress: true
+      ```
+
+      This ensures that for a given (workflow + branch) combo, only one run is active. A new push to the same branch cancels the in-flight run.
+
+      The `group` is a string. Two runs with the same group serialize; runs with different groups proceed independently. The `cancel-in-progress: true` flag cancels the earlier run when a new one queues.
+  - fragment_type: example
+    sequence: 3
+    content: |
+      **Per branch**:
+      ```yaml
+      concurrency:
+        group: ${{ github.workflow }}-${{ github.ref }}
+        cancel-in-progress: true
+      ```
+
+      For PR validation. Each PR has its own ref; pushing new commits cancels the previous validation run.
+  - fragment_type: example
+    sequence: 4
+    content: |
+      **Per environment** (deploys):
+      ```yaml
+      concurrency:
+        group: deploy-production
+        cancel-in-progress: false  # never cancel mid-deploy
+      ```
+
+      Single deploy slot per environment. If two deploys queue, they serialize. Don't cancel — half-finished deploys are dangerous.
+  - fragment_type: example
+    sequence: 5
+    content: |
+      **Per PR**:
+      ```yaml
+      concurrency:
+        group: pr-${{ github.event.pull_request.number }}
+        cancel-in-progress: true
+      ```
+
+      Same as per-branch but explicit about PR scope. Useful when multiple workflows trigger off PR events.
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      `concurrency` at workflow level controls the whole run. At job level, it controls just that job:
+
+      ```yaml
+      jobs:
+        deploy:
+          concurrency:
+            group: deploy-prod
+            cancel-in-progress: false
+          runs-on: ubuntu-latest
+      ```
+
+      Use job-level concurrency when only one job in the workflow needs serialization (the deploy step), but other jobs can run in parallel.
+  - fragment_type: rationale
+    sequence: 7
+    content: |
+      ## cancel-in-progress: true vs false
+
+      - **true**: new runs cancel existing ones. Fast feedback for PR validation; saves compute when superseding stale runs.
+      - **false**: new runs queue behind existing ones. Right for deploys where canceling mid-flight could leave the system in a weird state.
+
+      Default is false. Always set explicitly so the choice is visible.
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      ## Concurrency Across Workflows
+
+      Group keys are global per repo. If two different workflow files use the same group, they serialize:
+
+      ```yaml
+      # workflow-a.yml
+      concurrency:
+        group: deploy-prod
+
+      # workflow-b.yml
+      concurrency:
+        group: deploy-prod
+      ```
+
+      Both workflows share the deploy-prod slot. Useful for 'deploy.yml' and 'rollback.yml' that should never run simultaneously.
+  - fragment_type: guardrail
+    sequence: 9
+    content: |
+      ## Common Pitfalls
+
+      - **Forgetting cancel-in-progress on PR validation.** Without it, every push to a PR queues a new run that waits for the previous one. Compute waste; slow feedback.
+      - **Setting cancel-in-progress: true on deploys.** Half-finished deploys leave the system inconsistent. Always false for deploys.
+      - **Group key that changes too often.** A group like `${{ github.sha }}` is unique per commit — every run gets its own group, concurrency does nothing. Use ref or workflow.
+      - **Concurrency ignored on workflow_dispatch.** Manual triggers do respect concurrency; verify your group key works for the manual case (it usually does if it uses `github.ref`).
+  - fragment_type: verification
+    sequence: 10
+    content: |
+      ## Verification
+
+      A working concurrency setup:
+
+      - A new push to a PR cancels the previous validation run within seconds.
+      - Two simultaneous deploys to the same environment serialize; the second one waits.
+      - Deploys never cancel mid-flight (cancel-in-progress: false on deploy workflows).
+      - Group keys are visible in the workflow run UI; you can confirm what's gating what.

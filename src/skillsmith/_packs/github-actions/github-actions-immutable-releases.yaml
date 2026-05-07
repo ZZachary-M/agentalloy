@@ -1,0 +1,183 @@
+skill_type: domain
+skill_id: github-actions-immutable-releases
+canonical_name: GitHub Actions — Immutable Releases and Tag Strategy
+category: ops
+skill_class: domain
+domain_tags:
+- github-actions
+- releases
+- immutable-tags
+- supply-chain
+- pinning
+always_apply: false
+phase_scope: []
+category_scope: []
+author: navistone
+change_summary: hand-authored Opus expansion
+raw_prose: |
+  # GitHub Actions — Immutable Releases and Tag Strategy
+
+  ## Overview
+
+  This skill covers github actions immutable releases patterns.
+
+  ---
+
+  ## What Immutable Releases Mean
+
+  A GitHub release tagged `v1.2.3` is mutable by default — you can re-tag it to a different commit later. That's a supply-chain hole: if I `uses: org/action@v1.2.3` today, the action could change tomorrow without my knowledge.
+
+  Immutable releases (the `immutable: true` flag on a published release) lock a tag to a specific commit forever. Subsequent attempts to re-tag fail. Combined with SHA-pinning in workflows, this hardens the supply chain.
+
+  ## Pinning Strategies
+
+  Three options, increasing in rigor:
+
+  ```yaml
+  # Floating major tag — easiest, gets bug fixes, slightly risky
+  uses: actions/checkout@v4
+
+  # Pinned exact version — explicit, won't move, may miss security fixes
+  uses: actions/checkout@v4.1.7
+
+  # Pinned by SHA — hardest to typosquat, requires Dependabot to update
+  uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
+  ```
+
+  Industry recommendation: pin by SHA, use Dependabot to bump SHAs in PRs, review the Dependabot PRs.
+
+  ## Mutable Major Tags vs Immutable Releases
+
+  Action authors typically maintain a mutable major tag (`v4`) that floats to the latest 4.x release. This gives consumers automatic bug fixes within a major version.
+
+  The immutable release is `v4.1.7` — once published with `immutable: true`, it can never be moved.
+
+  The pattern: consumers wanting stability pin to `v4.1.7` (or its SHA); consumers wanting auto-updates use `v4`. Authors update `v4` to point at new immutable releases as they ship.
+
+  ## Dependabot Integration
+
+  Pinning by SHA is only practical with Dependabot updating the pins:
+
+  ```yaml
+  # .github/dependabot.yml
+  version: 2
+  updates:
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+        interval: weekly
+  ```
+
+  Dependabot opens PRs that bump SHAs to the latest. Reviewers see exactly what changed (the new SHA + the action's release notes in the PR body).
+
+  ## When Immutable Matters Most
+
+  - **Production deploy workflows.** A compromised action can exfiltrate secrets, push malicious code, alter releases.
+  - **Workflows on self-hosted runners.** Running attacker-controlled code on your infrastructure.
+  - **High-value repos** (OS distros, package registries, financial software) — supply-chain attacks target these.
+
+  For low-stakes internal repos, pinning by version (or even floating major tag) is acceptable. The marginal security from SHA-pinning may not justify the Dependabot review burden.
+
+  ## Common Pitfalls
+
+  - **Pinning by SHA without Dependabot.** SHAs go stale; security fixes don't reach you. Pin OR enable Dependabot, ideally both.
+  - **Pinning to a fork's SHA.** Forks can be deleted or rebased. Pin to the upstream action's repo.
+  - **Missing `immutable: true` on production action releases.** A bad-actor maintainer (or compromised account) can re-tag.
+  - **Auto-merging Dependabot PRs without review.** Defeats the purpose; you've automated the supply chain attack.
+
+  ## Verification
+
+  A hardened action-pinning setup:
+
+  - All third-party `uses:` lines pin by SHA.
+  - Dependabot is enabled and runs at least weekly.
+  - Dependabot PRs are reviewed by humans, not auto-merged blindly.
+  - Action authors mark releases `immutable: true`.
+  - Audit trail: any non-trivial change to `uses:` lines goes through code review.
+fragments:
+- fragment_type: execution
+  sequence: 1
+  content: |-
+    ## What Immutable Releases Mean
+
+    A GitHub release tagged `v1.2.3` is mutable by default — you can re-tag it to a different commit later. That's a supply-chain hole: if I `uses: org/action@v1.2.3` today, the action could change tomorrow without my knowledge.
+
+    Immutable releases (the `immutable: true` flag on a published release) lock a tag to a specific commit forever. Subsequent attempts to re-tag fail. Combined with SHA-pinning in workflows, this hardens the supply chain.
+- fragment_type: execution
+  sequence: 2
+  content: |-
+    ## Pinning Strategies
+
+    Three options, increasing in rigor:
+
+    ```yaml
+    # Floating major tag — easiest, gets bug fixes, slightly risky
+    uses: actions/checkout@v4
+
+    # Pinned exact version — explicit, won't move, may miss security fixes
+    uses: actions/checkout@v4.1.7
+
+    # Pinned by SHA — hardest to typosquat, requires Dependabot to update
+    uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
+    ```
+
+    Industry recommendation: pin by SHA, use Dependabot to bump SHAs in PRs, review the Dependabot PRs.
+- fragment_type: rationale
+  sequence: 3
+  content: |-
+    ## Mutable Major Tags vs Immutable Releases
+
+    Action authors typically maintain a mutable major tag (`v4`) that floats to the latest 4.x release. This gives consumers automatic bug fixes within a major version.
+
+    The immutable release is `v4.1.7` — once published with `immutable: true`, it can never be moved.
+
+    The pattern: consumers wanting stability pin to `v4.1.7` (or its SHA); consumers wanting auto-updates use `v4`. Authors update `v4` to point at new immutable releases as they ship.
+- fragment_type: execution
+  sequence: 4
+  content: |-
+    ## Dependabot Integration
+
+    Pinning by SHA is only practical with Dependabot updating the pins:
+
+    ```yaml
+    # .github/dependabot.yml
+    version: 2
+    updates:
+      - package-ecosystem: github-actions
+        directory: /
+        schedule:
+          interval: weekly
+    ```
+
+    Dependabot opens PRs that bump SHAs to the latest. Reviewers see exactly what changed (the new SHA + the action's release notes in the PR body).
+- fragment_type: rationale
+  sequence: 5
+  content: |-
+    ## When Immutable Matters Most
+
+    - **Production deploy workflows.** A compromised action can exfiltrate secrets, push malicious code, alter releases.
+    - **Workflows on self-hosted runners.** Running attacker-controlled code on your infrastructure.
+    - **High-value repos** (OS distros, package registries, financial software) — supply-chain attacks target these.
+
+    For low-stakes internal repos, pinning by version (or even floating major tag) is acceptable. The marginal security from SHA-pinning may not justify the Dependabot review burden.
+- fragment_type: guardrail
+  sequence: 6
+  content: |-
+    ## Common Pitfalls
+
+    - **Pinning by SHA without Dependabot.** SHAs go stale; security fixes don't reach you. Pin OR enable Dependabot, ideally both.
+    - **Pinning to a fork's SHA.** Forks can be deleted or rebased. Pin to the upstream action's repo.
+    - **Missing `immutable: true` on production action releases.** A bad-actor maintainer (or compromised account) can re-tag.
+    - **Auto-merging Dependabot PRs without review.** Defeats the purpose; you've automated the supply chain attack.
+- fragment_type: verification
+  sequence: 7
+  content: |-
+    ## Verification
+
+    A hardened action-pinning setup:
+
+    - All third-party `uses:` lines pin by SHA.
+    - Dependabot is enabled and runs at least weekly.
+    - Dependabot PRs are reviewed by humans, not auto-merged blindly.
+    - Action authors mark releases `immutable: true`.
+    - Audit trail: any non-trivial change to `uses:` lines goes through code review.

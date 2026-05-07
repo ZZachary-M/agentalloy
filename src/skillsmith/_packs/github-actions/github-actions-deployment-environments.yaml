@@ -1,0 +1,338 @@
+skill_type: domain
+skill_id: github-actions-deployment-environments
+canonical_name: GitHub Actions — Deployment Environments
+category: ops
+skill_class: domain
+domain_tags:
+  - deployment
+  - github-actions
+  - environments
+  - secrets
+  - reviewers
+always_apply: false
+phase_scope: null
+category_scope: null
+author: navistone
+change_summary: initial authoring draft
+raw_prose: |
+  # GitHub Actions — Deployment Environments
+
+  ## Overview
+
+  Environments scope secrets and protection rules to a deployment target. Required reviewers gate prod deploys; wait timers enforce a delay; deployment branch restrictions prevent untested branches from reaching prod. This skill covers environments end-to-end.
+
+  ## Environments — Scoped Protection
+
+  An environment is a named deployment target with its own secrets, variables, and protection rules:
+
+  ```yaml
+  jobs:
+    deploy-prod:
+      runs-on: ubuntu-latest
+      environment:
+        name: production
+        url: https://myapp.com
+      steps:
+        - run: ./deploy.sh
+  ```
+
+  The `environment` key tells GitHub the job is deploying to that environment. Secrets scoped to the environment are available only to jobs that opt in.
+
+  ## Configuring Environments
+
+  In repo settings → Environments → New environment:
+
+  - **Required reviewers**: 1-6 users/teams must approve before the job runs. Hard gate.
+  - **Wait timer**: forced delay before the job starts. Up to 30 days. Cooling-off for risky deploys.
+  - **Deployment branches**: restrict which refs can deploy. e.g., 'only main' or 'only release-*' tags.
+  - **Environment secrets**: secrets scoped to this environment only.
+  - **Environment variables**: similar but unencrypted, for non-sensitive config.
+
+  ## Required Reviewers Pattern
+
+  ```yaml
+  deploy-prod:
+    environment:
+      name: production
+      url: https://myapp.com
+    steps:
+      - run: ./deploy.sh
+  ```
+
+  The job pauses at the environment gate. GitHub notifies the reviewers; they approve via the UI or CLI. The job continues.
+
+  For high-stakes deploys (prod databases, mass user notifications), require 2+ reviewers from the on-call team.
+
+  ## Branch Restrictions
+
+  Lock 'production' to deploys from main:
+
+  ```
+  Settings → Environments → production → Deployment branches:
+    - main
+    - releases/*  (wildcard)
+  ```
+
+  Now a workflow_dispatch from a feature branch targeting environment 'production' will be rejected. Defense-in-depth against accidental deploys from random branches.
+
+  ## Wait Timers
+
+  For 'production' environment, set a 5-minute wait timer. After approval (or auto-approve), the job pauses 5 minutes before running.
+
+  Use case: catch a 'wait, don't ship that!' moment between merging and the deploy starting. Smaller orgs find this annoying; larger orgs find it indispensable.
+
+  ## Multi-Environment Pipelines
+
+  Common pattern: deploy to staging on every merge, deploy to prod on tag:
+
+  ```yaml
+  deploy-staging:
+    environment: staging
+    if: github.ref == 'refs/heads/main'
+    ...
+
+  deploy-prod:
+    environment: production
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: deploy-staging
+    ...
+  ```
+
+  `needs:` chains the jobs; `production` requires staging to pass first.
+
+  ## Deployment URL
+
+  The `url` field links from the GitHub UI to the deployed environment. Useful for one-click access:
+
+  ```yaml
+  environment:
+    name: pr-preview
+    url: https://${{ github.event.pull_request.number }}.preview.example.com
+  ```
+
+  For PR previews, the URL is dynamic per PR. Click from the PR check to see the live preview.
+
+  ## Secrets Scoping
+
+  A 'production' environment secret is invisible to jobs targeting 'staging'. This is the right way to keep prod credentials out of preview workflows:
+
+  ```
+  Repo secrets: STAGING_DB_URL, STAGING_API_KEY  (visible to all jobs)
+  Environment secrets (production): PROD_DB_URL, PROD_API_KEY  (only visible when environment: production)
+  ```
+
+  Combined with required reviewers, this means a PR can't accidentally exfiltrate prod credentials.
+
+  ## Common Pitfalls
+
+  - **Putting prod secrets at repo level.** Available to every job, including PRs from contributors. Use environment secrets.
+  - **Required reviewers from the same team that opens the PR.** Self-approval defeats the gate. Set reviewers from a different team (security, ops).
+  - **Branch restrictions allowing wildcards too generously.** `branches: '*'` defeats the protection.
+  - **Using environments for non-deploys.** They're scoped to deployment URLs in the GitHub UI; using one for a 'run-tests' job creates noise in the deployments tab.
+
+  ## Verification
+
+  A healthy environment setup:
+
+  - Production deploys can only happen from approved branches.
+  - Required reviewers enforced on prod, not on staging or PR previews.
+  - Prod secrets are inaccessible from PR jobs (verify by attempting to access; expect them missing).
+  - Deployments tab shows accurate history of who deployed what when.
+
+fragments:
+  - fragment_type: setup
+    sequence: 1
+    content: |
+      ## Overview
+
+      Environments scope secrets and protection rules to a deployment target. Required reviewers gate prod deploys; wait timers enforce a delay; deployment branch restrictions prevent untested branches from reaching prod. This skill covers environments end-to-end.
+
+  - fragment_type: execution
+    sequence: 2
+    content: |
+      ## Environments — Scoped Protection
+
+      An environment is a named deployment target with its own secrets, variables, and protection rules:
+
+      ```yaml
+      jobs:
+        deploy-prod:
+          runs-on: ubuntu-latest
+          environment:
+            name: production
+            url: https://myapp.com
+          steps:
+            - run: ./deploy.sh
+      ```
+
+      The `environment` key tells GitHub the job is deploying to that environment. Secrets scoped to the environment are available only to jobs that opt in.
+
+  - fragment_type: execution
+    sequence: 3
+    content: |
+      ## Configuring Environments
+
+      In repo settings → Environments → New environment:
+
+      - **Required reviewers**: 1-6 users/teams must approve before the job runs. Hard gate.
+      - **Wait timer**: forced delay before the job starts. Up to 30 days. Cooling-off for risky deploys.
+      - **Deployment branches**: restrict which refs can deploy. e.g., 'only main' or 'only release-*' tags.
+      - **Environment secrets**: secrets scoped to this environment only.
+      - **Environment variables**: similar but unencrypted, for non-sensitive config.
+
+  - fragment_type: execution
+    sequence: 4
+    content: |
+      ## Required Reviewers Pattern
+
+      ```yaml
+      deploy-prod:
+        environment:
+          name: production
+          url: https://myapp.com
+        steps:
+          - run: ./deploy.sh
+      ```
+
+      The job pauses at the environment gate. GitHub notifies the reviewers; they approve via the UI or CLI. The job continues.
+
+      For high-stakes deploys (prod databases, mass user notifications), require 2+ reviewers from the on-call team.
+
+  - fragment_type: execution
+    sequence: 5
+    content: |
+      ## Branch Restrictions
+
+      Lock 'production' to deploys from main:
+
+      ```
+      Settings → Environments → production → Deployment branches:
+        - main
+        - releases/*  (wildcard)
+      ```
+
+      Now a workflow_dispatch from a feature branch targeting environment 'production' will be rejected. Defense-in-depth against accidental deploys from random branches.
+
+  - fragment_type: execution
+    sequence: 6
+    content: |
+      ## Wait Timers
+
+      For 'production' environment, set a 5-minute wait timer. After approval (or auto-approve), the job pauses 5 minutes before running.
+
+      Use case: catch a 'wait, don't ship that!' moment between merging and the deploy starting. Smaller orgs find this annoying; larger orgs find it indispensable.
+
+  - fragment_type: execution
+    sequence: 7
+    content: |
+      ## Multi-Environment Pipelines
+
+      Common pattern: deploy to staging on every merge, deploy to prod on tag:
+
+      ```yaml
+      deploy-staging:
+        environment: staging
+        if: github.ref == 'refs/heads/main'
+        ...
+
+      deploy-prod:
+        environment: production
+        if: startsWith(github.ref, 'refs/tags/v')
+        needs: deploy-staging
+        ...
+      ```
+
+      `needs:` chains the jobs; `production` requires staging to pass first.
+
+  - fragment_type: execution
+    sequence: 8
+    content: |
+      ## Deployment URL
+
+      The `url` field links from the GitHub UI to the deployed environment. Useful for one-click access:
+
+      ```yaml
+      environment:
+        name: pr-preview
+        url: https://${{ github.event.pull_request.number }}.preview.example.com
+      ```
+
+      For PR previews, the URL is dynamic per PR. Click from the PR check to see the live preview.
+
+  - fragment_type: execution
+    sequence: 9
+    content: |
+      ## Secrets Scoping
+
+      A 'production' environment secret is invisible to jobs targeting 'staging'. This is the right way to keep prod credentials out of preview workflows:
+
+      ```
+      Repo secrets: STAGING_DB_URL, STAGING_API_KEY  (visible to all jobs)
+      Environment secrets (production): PROD_DB_URL, PROD_API_KEY  (only visible when environment: production)
+      ```
+
+      Combined with required reviewers, this means a PR can't accidentally exfiltrate prod credentials.
+
+  - fragment_type: guardrail
+    sequence: 10
+    content: |
+      ## Common Pitfalls
+
+      - **Putting prod secrets at repo level.** Available to every job, including PRs from contributors. Use environment secrets.
+      - **Required reviewers from the same team that opens the PR.** Self-approval defeats the gate. Set reviewers from a different team (security, ops).
+      - **Branch restrictions allowing wildcards too generously.** `branches: '*'` defeats the protection.
+      - **Using environments for non-deploys.** They're scoped to deployment URLs in the GitHub UI; using one for a 'run-tests' job creates noise in the deployments tab.
+
+  - fragment_type: verification
+    sequence: 11
+    content: |
+      ## Verification
+
+      A healthy environment setup:
+
+      - Production deploys can only happen from approved branches.
+      - Required reviewers enforced on prod, not on staging or PR previews.
+      - Prod secrets are inaccessible from PR jobs (verify by attempting to access; expect them missing).
+      - Deployments tab shows accurate history of who deployed what when.
+
+  - fragment_type: rationale
+    sequence: 12
+    content: |
+      ## Rationale
+
+      This skill covers the configuration and usage of GitHub Actions deployment environments, including scoped secrets, required reviewers, deployment branches, wait timers, and integration with deployment workflows. It emphasizes the importance of gating production deploys behind manual approval or per-environment secrets to ensure security and reliability.
+
+  - fragment_type: example
+    sequence: 13
+    content: |
+      ## Example
+
+      ```yaml
+      jobs:
+        deploy-prod:
+          runs-on: ubuntu-latest
+          environment:
+            name: production
+            url: https://myapp.com
+          steps:
+            - run: ./deploy.sh
+      ```
+
+      This example shows how to configure a job that deploys to the 'production' environment, with secrets scoped to that environment.
+
+  - fragment_type: guardrail
+    sequence: 14
+    content: |
+      ## Guardrails
+
+      - Ensure that all production environments have required reviewers configured.
+      - Set appropriate wait timers for critical deployments.
+      - Restrict deployment branches to prevent untested code from reaching production.
+      - Use environment secrets instead of repository-level secrets for sensitive information.
+
+  - fragment_type: rationale
+    sequence: 15
+    content: |
+      ## Rationale
+
+      By following the guidelines outlined in this skill, teams can enhance the security and reliability of their deployment processes. Properly configured environments help prevent accidental deployments, ensure that only authorized personnel can deploy to production, and maintain a clear audit trail of who deployed what when.
