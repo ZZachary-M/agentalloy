@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from skillsmith.api.compose_models import Phase
-from skillsmith.authoring.lm_client import OpenAICompatClient
+from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.reads import ActiveFragment
 from skillsmith.reads.models import SkillClass
 from skillsmith.storage.vector_store import SimilarityHit, VectorStore

@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from skillsmith.authoring.lm_client import LMClientError, OpenAICompatClient
+from skillsmith.lm_client import LMClientError, OpenAICompatClient
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import VectorStore
 

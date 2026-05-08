@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from skillsmith.authoring.authoring_config import AuthoringConfig
+
+__all__ = ["AuthoringConfig", "Settings", "get_settings"]
 
 logger = logging.getLogger(__name__)
 
@@ -97,18 +100,6 @@ class Settings(BaseSettings):
             critic_model=self.critic_model,  # type: ignore[arg-type]
             authoring_embedding_model=self.authoring_embedding_model,  # type: ignore[arg-type]
         )
-
-
-@dataclass(frozen=True)
-class AuthoringConfig:
-    """Authoring fields narrowed to non-Optional str. Obtained via Settings.require_authoring_config()."""
-
-    lm_studio_base_url: str
-    authoring_lm_base_url: str
-    authoring_embed_base_url: str
-    authoring_model: str
-    critic_model: str
-    authoring_embedding_model: str
 
 
 def get_settings() -> Settings:

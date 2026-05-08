@@ -14,7 +14,7 @@ from skillsmith.api.retrieve_models import (
     RetrieveQueryHit,
     RetrieveQueryResponse,
 )
-from skillsmith.authoring.lm_client import (
+from skillsmith.lm_client import (
     LMClientError,
     LMModelNotLoaded,
     OpenAICompatClient,

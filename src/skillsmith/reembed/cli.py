@@ -29,14 +29,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from skillsmith.authoring.lm_client import (
+from skillsmith.config import Settings, get_settings
+from skillsmith.lm_client import (
     LMBadResponse,
     LMClientError,
     LMTimeout,
     LMUnavailable,
     OpenAICompatClient,
 )
-from skillsmith.config import Settings, get_settings
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import (
     FragmentEmbedding,
