@@ -1,0 +1,90 @@
+skill_type: domain
+skill_id: data-model-trace
+canonical_name: Trace a Field Across the Data Model (Schema, Migrations, Reads, Writes)
+category: engineering
+skill_class: domain
+domain_tags: [data-model, schema, migrations, propagation, prisma, sql]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal observations that "what models use program_id" and "trace task_id" queries fail when the worker LLM stops at the schema and skips the read/write/log/expose flow. Skill scope: producing complete data-model traces — schema, migrations, producers, consumers, log/audit sites, API surface — for any field-of-interest query.
+
+raw_prose: |
+  # Data Model Trace
+
+  When the user asks "what models use `<field>`" or "trace `<id>` across the schema", the answer must follow the field's full lifecycle: declared, written, read, logged, exposed. Stopping at the schema is incomplete; so is listing only the writers. A complete trace lets the user reason about consistency, privacy, and migration risk.
+
+  ## Procedure
+
+  1. **Start at the schema.** Identify the canonical declaration site — `prisma/schema.prisma`, SQL migration files, ORM model classes, type-alias modules. Cite file:line for every model that declares the field. Note FK relationships and indexes.
+  2. **Walk the migrations history.** When was the field added? Renamed? Made nullable / non-nullable? Cite the migration file. This explains shape mismatches between old and new code paths.
+  3. **List producers (writes).** Where is the field set? Request handlers extracting from `req.body`, ingest jobs, background workers, seed scripts. Cite each write site.
+  4. **List consumers (reads).** Queries that read the field, joins, derived calculations, conditional logic. Cite each read site.
+  5. **List log/audit sites.** String-literal usage in logs, audit events, telemetry. Privacy-relevant (a field logged in plaintext may need redaction).
+  6. **List API surface.** Where is the field exposed in HTTP responses, GraphQL schemas, WebSocket events? Cite the route/resolver/event.
+  7. **Distinguish "declared" from "used by name".** A grep for `program_id` returns both schema declarations and string mentions in unrelated logs. Mark each hit's role; do not conflate.
+
+  ## Anti-patterns
+
+  - **Schema-only answer.** "It's on the `Program` model" — the user asked where it's *used*. Walk the lifecycle.
+  - **Missing migrations.** Without history, the user can't tell if old data has the field set. Migrations are part of the trace.
+  - **Conflating reads and writes.** A write site is where the field is *set*; a read site is where it's *consumed*. Mixing them hides the dataflow.
+  - **Skipping logs and audits.** Privacy review and incident analysis depend on knowing where a field hits log files.
+  - **Ignoring API exposure.** Whether a field is returned to clients matters for backward-compat and for redaction.
+
+  ## Verification
+
+  - [ ] Schema declaration sites cited (file:line) for every model containing the field.
+  - [ ] Relevant migration entries cited (added, renamed, type-changed).
+  - [ ] Write sites enumerated (handlers, jobs, seeds).
+  - [ ] Read sites enumerated (queries, joins, conditions).
+  - [ ] Log / audit / telemetry sites enumerated.
+  - [ ] API exposure (HTTP/GraphQL/WS) enumerated.
+  - [ ] Each hit labeled by role (declare / write / read / log / expose).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Data Model Trace
+
+      When the user asks "what models use `<field>`" or "trace `<id>` across the schema", the answer must follow the field's full lifecycle: declared, written, read, logged, exposed. Stopping at the schema is incomplete; so is listing only the writers. A complete trace lets the user reason about consistency, privacy, and migration risk.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Procedure
+
+      1. **Start at the schema.** Identify the canonical declaration site — `prisma/schema.prisma`, SQL migration files, ORM model classes, type-alias modules. Cite file:line for every model that declares the field. Note FK relationships and indexes.
+      2. **Walk the migrations history.** When was the field added? Renamed? Made nullable / non-nullable? Cite the migration file. This explains shape mismatches between old and new code paths.
+      3. **List producers (writes).** Where is the field set? Request handlers extracting from `req.body`, ingest jobs, background workers, seed scripts. Cite each write site.
+      4. **List consumers (reads).** Queries that read the field, joins, derived calculations, conditional logic. Cite each read site.
+      5. **List log/audit sites.** String-literal usage in logs, audit events, telemetry. Privacy-relevant (a field logged in plaintext may need redaction).
+      6. **List API surface.** Where is the field exposed in HTTP responses, GraphQL schemas, WebSocket events? Cite the route/resolver/event.
+      7. **Distinguish "declared" from "used by name".** A grep for `program_id` returns both schema declarations and string mentions in unrelated logs. Mark each hit's role; do not conflate.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Schema-only answer.** "It's on the `Program` model" — the user asked where it's *used*. Walk the lifecycle.
+      - **Missing migrations.** Without history, the user can't tell if old data has the field set. Migrations are part of the trace.
+      - **Conflating reads and writes.** A write site is where the field is *set*; a read site is where it's *consumed*. Mixing them hides the dataflow.
+      - **Skipping logs and audits.** Privacy review and incident analysis depend on knowing where a field hits log files.
+      - **Ignoring API exposure.** Whether a field is returned to clients matters for backward-compat and for redaction.
+
+  - sequence: 4
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Schema declaration sites cited (file:line) for every model containing the field.
+      - [ ] Relevant migration entries cited (added, renamed, type-changed).
+      - [ ] Write sites enumerated (handlers, jobs, seeds).
+      - [ ] Read sites enumerated (queries, joins, conditions).
+      - [ ] Log / audit / telemetry sites enumerated.
+      - [ ] API exposure (HTTP/GraphQL/WS) enumerated.
+      - [ ] Each hit labeled by role (declare / write / read / log / expose).

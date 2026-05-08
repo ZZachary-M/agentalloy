@@ -1,0 +1,78 @@
+skill_type: domain
+skill_id: find-by-symbol-name
+canonical_name: Find Code by Exact Symbol Name (Definitions, References, Callers)
+category: engineering
+skill_class: domain
+domain_tags: [symbol-lookup, references, callers, callees, lsp, call-graph]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal review of failed code-navigation answers where the worker LLM hallucinated module paths instead of querying the index. Skill scope: answering "where is symbol X defined / called / referenced" against a real index, not from training-data memory.
+
+raw_prose: |
+  # Find Code by Exact Symbol Name
+
+  When the user names a specific symbol — a function, class, type, constant, env var — the answer must come from a static index, not from naming-convention guessing. The most common failure mode is reciting a plausible-looking path like `src/services/campaigns.ts` when the codebase has no such file. Refuse that path.
+
+  ## Procedure
+
+  1. **Query the index first.** In priority order: jcodemunch `search_symbols` / `find_references`, then `gitnexus_impact`, then ripgrep on the literal name. The first two return structured results; ripgrep is the fallback when the index is stale.
+  2. **Distinguish kinds of hits.** A single symbol query can produce four kinds of results: (a) the canonical definition site, (b) re-exports and barrel files, (c) call sites, (d) string-literal mentions in tests, logs, comments, or docs. Group your answer by kind. The user asking "where is `dispatchTurn` called" cares about (c); the user asking "where is `Campaign` defined" cares about (a).
+  3. **Cite file path and line.** Every result is `path:line — role`. Without the line number, the answer is unverifiable.
+  4. **Report shadowing.** If multiple definitions exist (overloads, re-exports, namespace collisions), list them all and flag the conflict.
+  5. **Empty result is a valid answer.** If the index returns nothing, say "no hits in the index for `<symbol>` — consider searching by concept or checking the index is current". Do not invent a path.
+
+  ## Anti-patterns
+
+  - **Guessing module paths from naming conventions.** "It's probably in `src/services/<feature>.ts`" — verify with the index every time.
+  - **Returning one result when many exist.** Multiple definitions or many call sites mean a list, not a single answer.
+  - **Conflating substring matches with symbol matches.** Searching for `task` returns `task_id`, `task_runner`, `taskQueue`. Use word-boundary or AST-aware search when the symbol is short.
+  - **Skipping the role label.** "It's used in `audit.ts:42`" is incomplete. Used as a definition? A call? A type annotation? Each is a different fact.
+
+  ## Verification
+
+  - [ ] Used a static index (jcodemunch / gitnexus / LSP), not a free-text guess.
+  - [ ] Every result includes path, line number, and role (def / call / import / string-literal).
+  - [ ] Multiple definitions or shadowing flagged.
+  - [ ] Empty index result reported as "not found", not papered over.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Finding Code by Exact Symbol Name
+
+      When the user names a specific symbol — a function, class, type, constant, env var — the answer must come from a static index, not from naming-convention guessing. The most common failure mode is reciting a plausible-looking path like `src/services/campaigns.ts` when the codebase has no such file. Refuse that path.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Procedure
+
+      1. **Query the index first.** In priority order: jcodemunch `search_symbols` / `find_references`, then `gitnexus_impact`, then ripgrep on the literal name. The first two return structured results; ripgrep is the fallback when the index is stale.
+      2. **Distinguish kinds of hits.** A single symbol query can produce four kinds of results: (a) the canonical definition site, (b) re-exports and barrel files, (c) call sites, (d) string-literal mentions in tests, logs, comments, or docs. Group your answer by kind. The user asking "where is `dispatchTurn` called" cares about (c); the user asking "where is `Campaign` defined" cares about (a).
+      3. **Cite file path and line.** Every result is `path:line — role`. Without the line number, the answer is unverifiable.
+      4. **Report shadowing.** If multiple definitions exist (overloads, re-exports, namespace collisions), list them all and flag the conflict.
+      5. **Empty result is a valid answer.** If the index returns nothing, say "no hits in the index for `<symbol>` — consider searching by concept or checking the index is current". Do not invent a path.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Guessing module paths from naming conventions.** "It's probably in `src/services/<feature>.ts`" — verify with the index every time.
+      - **Returning one result when many exist.** Multiple definitions or many call sites mean a list, not a single answer.
+      - **Conflating substring matches with symbol matches.** Searching for `task` returns `task_id`, `task_runner`, `taskQueue`. Use word-boundary or AST-aware search when the symbol is short.
+      - **Skipping the role label.** "It's used in `audit.ts:42`" is incomplete. Used as a definition? A call? A type annotation? Each is a different fact.
+
+  - sequence: 4
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Used a static index (jcodemunch / gitnexus / LSP), not a free-text guess.
+      - [ ] Every result includes path, line number, and role (def / call / import / string-literal).
+      - [ ] Multiple definitions or shadowing flagged.
+      - [ ] Empty index result reported as "not found", not papered over.

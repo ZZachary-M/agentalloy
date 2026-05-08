@@ -1,0 +1,88 @@
+skill_type: domain
+skill_id: endpoint-locator
+canonical_name: Locate HTTP/RPC Endpoints (Route, Handler, Request Shape)
+category: engineering
+skill_class: domain
+domain_tags: [http-routes, handlers, request-shape, middleware, proxy]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal observations that endpoint-locator queries fail when the answer omits the request shape or middleware stack, leading to follow-up debugging. Skill scope: producing complete endpoint identification — route, handler, request body, response shape, middleware, proxy mapping — for any HTTP/RPC endpoint query.
+
+raw_prose: |
+  # Endpoint Locator
+
+  When the user asks "where is the endpoint that <does X>?", a path-only answer is incomplete. A complete answer has six parts: HTTP method, route path, route registration site, handler function, request shape, and response shape. Anything less forces a follow-up question.
+
+  ## Procedure
+
+  1. **Find the route registration first.** Search for `app.post`, `app.get`, `router.<verb>`, or framework-equivalent (`@Post()` decorator, FastAPI `@app.post`, Next.js `route.ts`, Express middleware chain). Cite file:line.
+  2. **Identify the handler.** The registration points to a function (inline arrow, named import, or controller method). Cite that function's file:line.
+  3. **Extract the request shape.** Look for: a Zod schema, an OpenAPI spec entry, a Pydantic model, a TypeScript type guarding `req.body`, or — last resort — the destructuring inside the handler. Quote the schema literally if short; cite the file:line if long.
+  4. **Extract the response shape.** Same sources, applied to the return value or `res.json(...)` call.
+  5. **List the middleware stack.** Auth middleware, rate limiting, body parsers, CORS — these often determine why a request fails before reaching the handler. Cite the file that wires them.
+  6. **Resolve proxies.** If the client hits `/api/foo` but a Vite or gateway proxy forwards to `:3001/foo` or to an upstream service, document both sides. Mismatch between client-side and server-side paths is a common bug source.
+
+  ## Anti-patterns
+
+  - **Path-only answer.** "It's at `POST /api/upload`" — without the handler file, the user can't read the code.
+  - **Handler-only answer.** Names a function but skips the route registration; the user can't see how the function is exposed.
+  - **Skipping the request shape.** Forces the user to read the handler to learn what fields it expects.
+  - **Ignoring middleware.** "Auth required?" "Body parser limits?" These belong in the answer when the user is debugging or extending the endpoint.
+  - **Ignoring proxies.** Reporting only the upstream path when the client calls a proxied path leaves the user confused about why their fetch URL "doesn't match".
+
+  ## Verification
+
+  - [ ] HTTP method and full route path stated.
+  - [ ] Route registration site cited (file:line).
+  - [ ] Handler function file:line cited.
+  - [ ] Request shape sourced (schema, type, or destructure) with file:line.
+  - [ ] Response shape sourced.
+  - [ ] Middleware stack listed (auth, parsers, rate limits).
+  - [ ] Proxy / gateway mapping documented if the client path differs from the server path.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Endpoint Locator
+
+      When the user asks "where is the endpoint that <does X>?", a path-only answer is incomplete. A complete answer has six parts: HTTP method, route path, route registration site, handler function, request shape, and response shape. Anything less forces a follow-up question.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Procedure
+
+      1. **Find the route registration first.** Search for `app.post`, `app.get`, `router.<verb>`, or framework-equivalent (`@Post()` decorator, FastAPI `@app.post`, Next.js `route.ts`, Express middleware chain). Cite file:line.
+      2. **Identify the handler.** The registration points to a function (inline arrow, named import, or controller method). Cite that function's file:line.
+      3. **Extract the request shape.** Look for: a Zod schema, an OpenAPI spec entry, a Pydantic model, a TypeScript type guarding `req.body`, or — last resort — the destructuring inside the handler. Quote the schema literally if short; cite the file:line if long.
+      4. **Extract the response shape.** Same sources, applied to the return value or `res.json(...)` call.
+      5. **List the middleware stack.** Auth middleware, rate limiting, body parsers, CORS — these often determine why a request fails before reaching the handler. Cite the file that wires them.
+      6. **Resolve proxies.** If the client hits `/api/foo` but a Vite or gateway proxy forwards to `:3001/foo` or to an upstream service, document both sides. Mismatch between client-side and server-side paths is a common bug source.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Path-only answer.** "It's at `POST /api/upload`" — without the handler file, the user can't read the code.
+      - **Handler-only answer.** Names a function but skips the route registration; the user can't see how the function is exposed.
+      - **Skipping the request shape.** Forces the user to read the handler to learn what fields it expects.
+      - **Ignoring middleware.** "Auth required?" "Body parser limits?" These belong in the answer when the user is debugging or extending the endpoint.
+      - **Ignoring proxies.** Reporting only the upstream path when the client calls a proxied path leaves the user confused about why their fetch URL "doesn't match".
+
+  - sequence: 4
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] HTTP method and full route path stated.
+      - [ ] Route registration site cited (file:line).
+      - [ ] Handler function file:line cited.
+      - [ ] Request shape sourced (schema, type, or destructure) with file:line.
+      - [ ] Response shape sourced.
+      - [ ] Middleware stack listed (auth, parsers, rate limits).
+      - [ ] Proxy / gateway mapping documented if the client path differs from the server path.

@@ -1,0 +1,84 @@
+skill_type: domain
+skill_id: find-by-concept
+canonical_name: Find Code by Domain Concept (Hybrid Retrieval, Candidate Locations)
+category: engineering
+skill_class: domain
+domain_tags: [hybrid-retrieval, candidate-locations, verify, concept-search, bm25-and-semantic]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal observations that "where can we find <thing>" queries fail when the worker LLM commits early to one answer instead of returning candidates with verification steps. Skill scope: answering concept-shaped queries (campaign IDs, billing periods, creative metadata) against a real index using hybrid retrieval.
+
+raw_prose: |
+  # Find Code by Domain Concept
+
+  Concept queries — "where can we find campaign IDs?", "where do we store creative metadata?" — are not symbol queries. The user does not know the exact name. Hybrid retrieval is required: literal substring search across plausible spellings AND semantic search over the index. The output is a ranked list of candidate locations, each with a verification step.
+
+  ## Procedure
+
+  1. **Enumerate plausible spellings.** A concept like "campaign ID" maps to `campaign_id`, `campaignId`, `CampaignID`, `campaign.id`, `cid`, and possibly `campaign_external_id`. Search every spelling.
+  2. **Run two searches in parallel.**
+     - **Literal:** ripgrep / BM25 over the spelling list.
+     - **Semantic:** vector search over the indexed corpus with the natural-language phrase.
+  3. **Merge and rank.** Definition sites (schema columns, model fields, type aliases) outrank usage sites. Tests are valid hits but labeled as tests.
+  4. **Return a list, never a single answer.** Concept queries are inherently ambiguous; committing to one location hides options the user may need.
+  5. **For each candidate, supply a verification step.** "Read line N in `prisma/schema.prisma` to confirm the field is on the `Campaign` model" or "Hit `GET /api/campaigns/:id` to see the response shape". The user must be able to confirm without re-running the search.
+
+  ## Anti-patterns
+
+  - **Single-answer commitment on a concept query.** "Campaign IDs are in `campaigns.ts`" — verifiable how? List candidates instead.
+  - **Spelling tunnel-vision.** Searching only `campaign_id` and missing `campaignId`. Generate the spelling set first.
+  - **Skipping schema before code.** Most domain concepts are defined in the data model. Look at `prisma/schema.prisma`, SQL migrations, or model files before scanning service code.
+  - **Returning a long flat list.** Rank by definition > schema > query > log > comment. The user wants the canonical site at the top.
+
+  ## Verification
+
+  - [ ] Enumerated multiple plausible spellings before searching.
+  - [ ] Ran both literal and semantic search; merged results.
+  - [ ] Returned a ranked list with at least 2–3 candidates when ambiguity is real.
+  - [ ] Each candidate has a one-step verification action.
+  - [ ] Schema / data-model sources prioritized over service code when applicable.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Finding Code by Domain Concept
+
+      Concept queries — "where can we find campaign IDs?", "where do we store creative metadata?" — are not symbol queries. The user does not know the exact name. Hybrid retrieval is required: literal substring search across plausible spellings AND semantic search over the index. The output is a ranked list of candidate locations, each with a verification step.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Procedure
+
+      1. **Enumerate plausible spellings.** A concept like "campaign ID" maps to `campaign_id`, `campaignId`, `CampaignID`, `campaign.id`, `cid`, and possibly `campaign_external_id`. Search every spelling.
+      2. **Run two searches in parallel.**
+         - **Literal:** ripgrep / BM25 over the spelling list.
+         - **Semantic:** vector search over the indexed corpus with the natural-language phrase.
+      3. **Merge and rank.** Definition sites (schema columns, model fields, type aliases) outrank usage sites. Tests are valid hits but labeled as tests.
+      4. **Return a list, never a single answer.** Concept queries are inherently ambiguous; committing to one location hides options the user may need.
+      5. **For each candidate, supply a verification step.** "Read line N in `prisma/schema.prisma` to confirm the field is on the `Campaign` model" or "Hit `GET /api/campaigns/:id` to see the response shape". The user must be able to confirm without re-running the search.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Single-answer commitment on a concept query.** "Campaign IDs are in `campaigns.ts`" — verifiable how? List candidates instead.
+      - **Spelling tunnel-vision.** Searching only `campaign_id` and missing `campaignId`. Generate the spelling set first.
+      - **Skipping schema before code.** Most domain concepts are defined in the data model. Look at `prisma/schema.prisma`, SQL migrations, or model files before scanning service code.
+      - **Returning a long flat list.** Rank by definition > schema > query > log > comment. The user wants the canonical site at the top.
+
+  - sequence: 4
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Enumerated multiple plausible spellings before searching.
+      - [ ] Ran both literal and semantic search; merged results.
+      - [ ] Returned a ranked list with at least 2–3 candidates when ambiguity is real.
+      - [ ] Each candidate has a one-step verification action.
+      - [ ] Schema / data-model sources prioritized over service code when applicable.

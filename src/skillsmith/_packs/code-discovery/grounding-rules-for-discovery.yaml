@@ -1,0 +1,115 @@
+skill_type: domain
+skill_id: grounding-rules-for-discovery
+canonical_name: Grounding Rules for Code-Discovery Answers (No Path Hallucination)
+category: engineering
+skill_class: domain
+domain_tags: [grounding, citations, hallucination-prevention, index-first, no-guessing]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal review of code-discovery answers where the worker LLM produced plausible-looking but nonexistent module paths. Skill scope: hard grounding rules that override naming-convention guesses for any "where / how / which file" question.
+
+raw_prose: |
+  # Grounding Rules for Code-Discovery Answers
+
+  Code-discovery answers fail in one specific way: the worker LLM produces a plausible-looking path (`src/services/<feature>.ts`) that does not exist in the codebase. The user follows the path, finds nothing, loses trust. These rules override naming-convention guessing for every discovery query.
+
+  ## Hard rules
+
+  1. **Every file claim must come from the index.** A path appears in the answer only if a static search returned it. No path is inferred from naming conventions.
+  2. **Line numbers are mandatory when relevant.** A claim that "function X is in file Y" needs the line. Without it, the claim is unverifiable.
+  3. **"Not found in index" is a valid answer.** When the index returns nothing, say so. Do not invent a path to fill the silence.
+  4. **Multiple candidates → list, never collapse.** When the search returns several plausible hits, return all of them ranked. Committing to one with false confidence wastes the user's time.
+  5. **Tests are code; mark them.** Hits in `*.test.*`, `__tests__/`, `spec/` files are valid results, but label them as tests. The user reading "the field is used in `audit.test.ts`" needs to know that's a test, not production code.
+  6. **Distinguish symbol matches from string matches.** `task_id` may appear as a real identifier in code AND as a substring in a log message or comment. Each is a different fact.
+  7. **Indexer staleness is reportable.** If the user's query returns results that look out of date (e.g. file paths that no longer exist), mention "the index may be stale; consider re-indexing" rather than asserting.
+
+  ## Citation format
+
+  Use a consistent format the user can scan:
+
+  ```
+  src/services/orchestrator.ts:142 — definition of composeAndExecute
+  src/services/api-server.ts:88 — call site (chat route)
+  tests/integration/orchestrator.test.ts:34 — test (asserts plan emission)
+  ```
+
+  Every line: `path:line — role`. The role disambiguates between definition / call / test / log / config / docs.
+
+  ## Anti-patterns
+
+  - **Guessing paths from feature names.** "Campaigns must be in `src/services/campaigns.ts`" — verify with the index.
+  - **Citing a file without a line.** "It's in `audit.ts`" — where in `audit.ts`? A 600-line file has 50 plausible candidates.
+  - **Filling silence with guesses.** When the search is empty, say so. Don't paper over the gap with a likely-looking module path.
+  - **Confident single answers on ambiguous queries.** Concept queries are ambiguous by nature; pretend confidence and the user trusts you less when the answer turns out wrong.
+  - **Conflating tests with production code.** Both are valid, but the user's mental model treats them differently. Label them.
+
+  ## Verification
+
+  - [ ] Every cited file path was returned by a real search (jcodemunch, gitnexus, ripgrep), not inferred.
+  - [ ] Every cited file claim has a line number when the file is non-trivial.
+  - [ ] Empty results reported as "not found", not silently replaced with a guess.
+  - [ ] Multiple candidates listed when ambiguity is real.
+  - [ ] Test files labeled as tests.
+  - [ ] Citation format consistent (`path:line — role`).
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Grounding Rules for Code-Discovery Answers
+
+      Code-discovery answers fail in one specific way: the worker LLM produces a plausible-looking path (`src/services/<feature>.ts`) that does not exist in the codebase. The user follows the path, finds nothing, loses trust. These rules override naming-convention guessing for every discovery query.
+
+  - sequence: 2
+    fragment_type: guardrail
+    content: |
+      ## Hard rules
+
+      1. **Every file claim must come from the index.** A path appears in the answer only if a static search returned it. No path is inferred from naming conventions.
+      2. **Line numbers are mandatory when relevant.** A claim that "function X is in file Y" needs the line. Without it, the claim is unverifiable.
+      3. **"Not found in index" is a valid answer.** When the index returns nothing, say so. Do not invent a path to fill the silence.
+      4. **Multiple candidates → list, never collapse.** When the search returns several plausible hits, return all of them ranked. Committing to one with false confidence wastes the user's time.
+      5. **Tests are code; mark them.** Hits in `*.test.*`, `__tests__/`, `spec/` files are valid results, but label them as tests. The user reading "the field is used in `audit.test.ts`" needs to know that's a test, not production code.
+      6. **Distinguish symbol matches from string matches.** `task_id` may appear as a real identifier in code AND as a substring in a log message or comment. Each is a different fact.
+      7. **Indexer staleness is reportable.** If the user's query returns results that look out of date (e.g. file paths that no longer exist), mention "the index may be stale; consider re-indexing" rather than asserting.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Citation format
+
+      Use a consistent format the user can scan:
+
+      ```
+      src/services/orchestrator.ts:142 — definition of composeAndExecute
+      src/services/api-server.ts:88 — call site (chat route)
+      tests/integration/orchestrator.test.ts:34 — test (asserts plan emission)
+      ```
+
+      Every line: `path:line — role`. The role disambiguates between definition / call / test / log / config / docs.
+
+  - sequence: 4
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Guessing paths from feature names.** "Campaigns must be in `src/services/campaigns.ts`" — verify with the index.
+      - **Citing a file without a line.** "It's in `audit.ts`" — where in `audit.ts`? A 600-line file has 50 plausible candidates.
+      - **Filling silence with guesses.** When the search is empty, say so. Don't paper over the gap with a likely-looking module path.
+      - **Confident single answers on ambiguous queries.** Concept queries are ambiguous by nature; pretend confidence and the user trusts you less when the answer turns out wrong.
+      - **Conflating tests with production code.** Both are valid, but the user's mental model treats them differently. Label them.
+
+  - sequence: 5
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Every cited file path was returned by a real search (jcodemunch, gitnexus, ripgrep), not inferred.
+      - [ ] Every cited file claim has a line number when the file is non-trivial.
+      - [ ] Empty results reported as "not found", not silently replaced with a guess.
+      - [ ] Multiple candidates listed when ambiguity is real.
+      - [ ] Test files labeled as tests.
+      - [ ] Citation format consistent (`path:line — role`).

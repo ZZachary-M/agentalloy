@@ -1,0 +1,105 @@
+skill_type: domain
+skill_id: optimization-scan
+canonical_name: Optimization & Modernization Scan (Methodical Inventory, Graded Fixes)
+category: engineering
+skill_class: domain
+domain_tags: [dep-audit, dead-code, deprecations, hotspots, lint-gaps, modernization]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal observations that "what optimizations can be done" prompts produce generic advice unless guided into a methodical six-axis inventory with graded fixes. Skill scope: producing actionable optimization/deprecation/modernization scan reports against a concrete codebase.
+
+raw_prose: |
+  # Optimization & Modernization Scan
+
+  Open-ended "what should we optimize?" prompts produce generic advice ("add caching", "use async") unless the worker LLM is forced into a methodical inventory. Cover six axes in fixed order; for each finding, cite file:line and grade the fix as quick-win / medium / refactor so the user can plan rather than react.
+
+  ## The six axes (in order)
+
+  1. **Dependency audit.** Run `npm audit`, `pnpm audit`, `pip-audit`, or equivalent. Surface deprecated packages, abandoned upstreams (no commits in 18+ months), and major-version-behind libs. Cite the lockfile entry.
+  2. **Dead code.** Unreachable exports, never-imported symbols, unused files. Use jcodemunch `find_dead_code` / `get_dead_code_v2`, ts-prune, or vulture (Python). Cite each finding.
+  3. **Lint config gaps.** Disabled lint rules that should be on, missing strict-mode flags, missing TS strict options (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Cite `eslint.config.*`, `tsconfig.json`, `pyproject.toml`.
+  4. **Deprecated API usage.** Language-level: `Buffer()` constructor, `new Date(string)`, callback-style `fs`. Framework-level: `componentWillMount`, deprecated React lifecycle, deprecated Express methods, deprecated SDK calls. Cite each call site.
+  5. **Performance hotspots.** N+1 queries (look for `.map(async ... await db.find)`), sync I/O on hot paths, missing DB indexes (cross-reference query patterns vs. schema indexes), unbounded cache growth, missing memoization on heavy renders. Cite the smell with file:line.
+  6. **Test coverage cliffs.** Files with low or zero coverage in business-logic directories. Don't pad with trivial tests — flag real gaps in error paths and edge cases.
+
+  ## Grade every fix
+
+  For each finding, supply a grade:
+  - **Quick-win** — single-file edit, < 30 minutes, low blast radius.
+  - **Medium** — multi-file or requires a migration; same-day work.
+  - **Refactor** — touches public contracts, schema, or many callers; needs a plan.
+
+  The grade lets the user batch quick-wins for the next PR and schedule the refactors.
+
+  ## Anti-patterns
+
+  - **Generic advice.** "Add caching" with no file cited is not actionable. Every recommendation needs a concrete site.
+  - **Skipping the inventory.** Listing three findings instead of working through the six axes — the user wanted a scan, not a sample.
+  - **Equal-weight findings.** Without grades, the user can't prioritize. The list looks daunting and gets ignored.
+  - **Hot-take optimizations.** Suggesting micro-optimizations (loop unrolling, premature inlining) without profiler data. Performance claims need evidence.
+  - **Ignoring the lockfile.** `package.json` shows declared deps; the lockfile shows what's actually resolved. Audits read the lockfile.
+
+  ## Verification
+
+  - [ ] All six axes covered (dep audit, dead code, lint gaps, deprecated APIs, perf hotspots, coverage).
+  - [ ] Every finding has file:line.
+  - [ ] Every finding is graded quick-win / medium / refactor.
+  - [ ] Quick-wins surfaced separately so the user can batch them.
+  - [ ] Performance claims tied to a specific smell, not a general guess.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Optimization & Modernization Scan
+
+      Open-ended "what should we optimize?" prompts produce generic advice ("add caching", "use async") unless the worker LLM is forced into a methodical inventory. Cover six axes in fixed order; for each finding, cite file:line and grade the fix as quick-win / medium / refactor so the user can plan rather than react.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## The six axes (in order)
+
+      1. **Dependency audit.** Run `npm audit`, `pnpm audit`, `pip-audit`, or equivalent. Surface deprecated packages, abandoned upstreams (no commits in 18+ months), and major-version-behind libs. Cite the lockfile entry.
+      2. **Dead code.** Unreachable exports, never-imported symbols, unused files. Use jcodemunch `find_dead_code` / `get_dead_code_v2`, ts-prune, or vulture (Python). Cite each finding.
+      3. **Lint config gaps.** Disabled lint rules that should be on, missing strict-mode flags, missing TS strict options (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Cite `eslint.config.*`, `tsconfig.json`, `pyproject.toml`.
+      4. **Deprecated API usage.** Language-level: `Buffer()` constructor, `new Date(string)`, callback-style `fs`. Framework-level: `componentWillMount`, deprecated React lifecycle, deprecated Express methods, deprecated SDK calls. Cite each call site.
+      5. **Performance hotspots.** N+1 queries (look for `.map(async ... await db.find)`), sync I/O on hot paths, missing DB indexes (cross-reference query patterns vs. schema indexes), unbounded cache growth, missing memoization on heavy renders. Cite the smell with file:line.
+      6. **Test coverage cliffs.** Files with low or zero coverage in business-logic directories. Don't pad with trivial tests — flag real gaps in error paths and edge cases.
+
+  - sequence: 3
+    fragment_type: execution
+    content: |
+      ## Grade every fix
+
+      For each finding, supply a grade:
+      - **Quick-win** — single-file edit, < 30 minutes, low blast radius.
+      - **Medium** — multi-file or requires a migration; same-day work.
+      - **Refactor** — touches public contracts, schema, or many callers; needs a plan.
+
+      The grade lets the user batch quick-wins for the next PR and schedule the refactors.
+
+  - sequence: 4
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Generic advice.** "Add caching" with no file cited is not actionable. Every recommendation needs a concrete site.
+      - **Skipping the inventory.** Listing three findings instead of working through the six axes — the user wanted a scan, not a sample.
+      - **Equal-weight findings.** Without grades, the user can't prioritize. The list looks daunting and gets ignored.
+      - **Hot-take optimizations.** Suggesting micro-optimizations (loop unrolling, premature inlining) without profiler data. Performance claims need evidence.
+      - **Ignoring the lockfile.** `package.json` shows declared deps; the lockfile shows what's actually resolved. Audits read the lockfile.
+
+  - sequence: 5
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] All six axes covered (dep audit, dead code, lint gaps, deprecated APIs, perf hotspots, coverage).
+      - [ ] Every finding has file:line.
+      - [ ] Every finding is graded quick-win / medium / refactor.
+      - [ ] Quick-wins surfaced separately so the user can batch them.
+      - [ ] Performance claims tied to a specific smell, not a general guess.

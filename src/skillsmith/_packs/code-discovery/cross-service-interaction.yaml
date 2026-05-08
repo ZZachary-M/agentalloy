@@ -1,0 +1,88 @@
+skill_type: domain
+skill_id: cross-service-interaction
+canonical_name: Explain Cross-Service Interaction (Both Sides, Protocol, Code Path)
+category: engineering
+skill_class: domain
+domain_tags: [cross-service, protocol, env-vars, code-paths, adapters, fallback]
+always_apply: false
+phase_scope: build
+category_scope: null
+author: navistone
+change_summary: |
+  Initial authoring 2026-05-07 for the code-discovery pack. Source — internal review of cross-service explanations that named only the calling side and left the user to find the receiver. Skill scope: producing complete two-sided interaction explanations for any "how does X talk to Y" question.
+
+raw_prose: |
+  # Cross-Service Interaction
+
+  When the user asks "how does X interact with Y", a single-sided answer is incomplete. The interaction has two endpoints (caller and receiver), a protocol (HTTP, WebSocket, queue, in-process call, MCP), configuration (env vars, base URLs, timeouts), and at least one concrete code path. All four belong in the answer.
+
+  ## Procedure
+
+  1. **Name both sides.**
+     - **Caller side:** the adapter/client file (e.g. `src/services/code-indexer-client.ts`). Cite the function that issues the call and its file:line.
+     - **Receiver side:** the route handler, queue subscriber, or function the call lands in. Cite that file:line.
+  2. **State the protocol.** HTTP method + path, WebSocket event name, queue name, MCP tool name, or in-process import. If multiple protocols are in play (e.g. HTTP for control + WebSocket for streaming), list all.
+  3. **Enumerate configuration.** Every env var that controls the interaction: base URL, API key, timeout, retry count, circuit-breaker threshold. Cite the config file (`.env.example`, `forge/config.yaml`) where defaults live.
+  4. **Walk one concrete code path end-to-end.** Pick a realistic scenario (e.g. "Forge orchestrator requests a context bundle from Code Indexer for `repo=foo, k=12`"). Trace: caller function → HTTP request shape → receiver route → handler logic → response shape → caller's handling of the response. File:line citations at every step.
+  5. **Document failure modes.** Timeout behavior, retry policy, fallback adapter (e.g. "Manifest unreachable → falls back to Bedrock"), error envelope shape. These are the load-bearing parts when an integration breaks.
+
+  ## Anti-patterns
+
+  - **Caller-only narrative.** Names the client adapter, never shows the receiver. The user can't trace problems past the network boundary.
+  - **Hand-wavy protocol.** "It uses HTTP" — which method, which path, which request shape? Specifics or it's not useful.
+  - **Skipping env vars.** The user debugging an integration almost always needs to know "which env var sets the base URL", "which one is the API key". List them.
+  - **No concrete code path.** Abstract description of "the orchestrator calls the indexer" without a single file:line. Pick one realistic scenario and trace it.
+  - **Ignoring fallback adapters.** Many integrations have an escape hatch (compliance mode, local fallback). Omitting them hides operational behavior.
+
+  ## Verification
+
+  - [ ] Caller-side adapter file and function cited.
+  - [ ] Receiver-side handler file cited.
+  - [ ] Protocol named with full specifics (method + path / event + payload / queue + message).
+  - [ ] Every controlling env var listed, with the config file where defaults live.
+  - [ ] One end-to-end code path walked with file:line citations at each hop.
+  - [ ] Failure modes (timeout, retry, fallback) documented.
+
+fragments:
+  - sequence: 1
+    fragment_type: rationale
+    content: |
+      # Cross-Service Interaction
+
+      When the user asks "how does X interact with Y", a single-sided answer is incomplete. The interaction has two endpoints (caller and receiver), a protocol (HTTP, WebSocket, queue, in-process call, MCP), configuration (env vars, base URLs, timeouts), and at least one concrete code path. All four belong in the answer.
+
+  - sequence: 2
+    fragment_type: execution
+    content: |
+      ## Procedure
+
+      1. **Name both sides.**
+         - **Caller side:** the adapter/client file (e.g. `src/services/code-indexer-client.ts`). Cite the function that issues the call and its file:line.
+         - **Receiver side:** the route handler, queue subscriber, or function the call lands in. Cite that file:line.
+      2. **State the protocol.** HTTP method + path, WebSocket event name, queue name, MCP tool name, or in-process import. If multiple protocols are in play (e.g. HTTP for control + WebSocket for streaming), list all.
+      3. **Enumerate configuration.** Every env var that controls the interaction: base URL, API key, timeout, retry count, circuit-breaker threshold. Cite the config file (`.env.example`, `forge/config.yaml`) where defaults live.
+      4. **Walk one concrete code path end-to-end.** Pick a realistic scenario (e.g. "Forge orchestrator requests a context bundle from Code Indexer for `repo=foo, k=12`"). Trace: caller function → HTTP request shape → receiver route → handler logic → response shape → caller's handling of the response. File:line citations at every step.
+      5. **Document failure modes.** Timeout behavior, retry policy, fallback adapter (e.g. "Manifest unreachable → falls back to Bedrock"), error envelope shape. These are the load-bearing parts when an integration breaks.
+
+  - sequence: 3
+    fragment_type: guardrail
+    content: |
+      ## Anti-patterns
+
+      - **Caller-only narrative.** Names the client adapter, never shows the receiver. The user can't trace problems past the network boundary.
+      - **Hand-wavy protocol.** "It uses HTTP" — which method, which path, which request shape? Specifics or it's not useful.
+      - **Skipping env vars.** The user debugging an integration almost always needs to know "which env var sets the base URL", "which one is the API key". List them.
+      - **No concrete code path.** Abstract description of "the orchestrator calls the indexer" without a single file:line. Pick one realistic scenario and trace it.
+      - **Ignoring fallback adapters.** Many integrations have an escape hatch (compliance mode, local fallback). Omitting them hides operational behavior.
+
+  - sequence: 4
+    fragment_type: verification
+    content: |
+      ## Verification
+
+      - [ ] Caller-side adapter file and function cited.
+      - [ ] Receiver-side handler file cited.
+      - [ ] Protocol named with full specifics (method + path / event + payload / queue + message).
+      - [ ] Every controlling env var listed, with the config file where defaults live.
+      - [ ] One end-to-end code path walked with file:line citations at each hop.
+      - [ ] Failure modes (timeout, retry, fallback) documented.

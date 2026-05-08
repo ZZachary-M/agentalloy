@@ -1,0 +1,33 @@
+name: code-discovery
+version: 1.0.0
+tier: domain
+description: Code-navigation query patterns — find by symbol, find by concept, locate endpoints, explain cross-service interaction, optimization scans, data-model traces. Worker-LLM-facing grounding for "where / how / which file" questions.
+author: navistone
+embed_model: qwen3-embedding:0.6b
+embedding_dim: 1024
+license: MIT
+homepage: https://github.com/nrmeyers/skillsmith
+always_install: false
+depends_on: [core, engineering]
+skills:
+  - skill_id: find-by-symbol-name
+    file: find-by-symbol-name.yaml
+    fragment_count: 4
+  - skill_id: find-by-concept
+    file: find-by-concept.yaml
+    fragment_count: 4
+  - skill_id: endpoint-locator
+    file: endpoint-locator.yaml
+    fragment_count: 4
+  - skill_id: cross-service-interaction
+    file: cross-service-interaction.yaml
+    fragment_count: 4
+  - skill_id: optimization-scan
+    file: optimization-scan.yaml
+    fragment_count: 5
+  - skill_id: data-model-trace
+    file: data-model-trace.yaml
+    fragment_count: 4
+  - skill_id: grounding-rules-for-discovery
+    file: grounding-rules-for-discovery.yaml
+    fragment_count: 5
