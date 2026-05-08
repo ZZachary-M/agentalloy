@@ -1,5 +1,7 @@
 # Pack Authoring Guide
 
+> **Note:** The canonical authoring pipeline (bounce loop, QA gate, critic tooling) lives in the [skillsmith-authoring](../../skillsmith-authoring) repo. This document covers pack structure and manual authoring within skillsmith itself.
+
 Skillsmith uses a pack-based corpus model: skills are organized into named packs that users opt into at install time. This guide covers authoring a new pack and publishing it.
 
 ## What is a pack?

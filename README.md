@@ -116,7 +116,7 @@ The corpus is **packs** — opt-in groups of related skills. As of 2026-05-06, `
 
 Every skill is sourced from authoritative upstream docs and validated against the **R1–R8 quality contract** in `src/skillsmith/_packs/meta/sys-skill-authoring-rules.md`. Each pack ships with `.qa.md` reports under `docs/skill-review-history/` documenting independent Critic verdicts.
 
-To author a new pack, see `docs/PACK-AUTHORING.md`.
+To author a new pack, see `docs/PACK-AUTHORING.md`. For the full authoring pipeline (bounce loop, QA gate, critic tooling), see [skillsmith-authoring](../skillsmith-authoring).
 
 ---
 
