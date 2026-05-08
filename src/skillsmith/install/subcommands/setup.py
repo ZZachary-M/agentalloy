@@ -26,16 +26,29 @@ SCHEMA_VERSION = 1
 
 _INTERACTIVE = sys.stdin.isatty()
 
-_SETUP_STEPS = (
-    ("detect", "skillsmith.install.subcommands.detect"),
-    ("recommend-host-targets", "skillsmith.install.subcommands.recommend_host_targets"),
-    ("recommend-models", "skillsmith.install.subcommands.recommend_models"),
-    ("pull-models", "skillsmith.install.subcommands.pull_models"),
-    ("seed-corpus", "skillsmith.install.subcommands.seed_corpus"),
-    ("install-packs", "skillsmith.install.subcommands.install_packs"),
-    ("write-env", "skillsmith.install.subcommands.write_env"),
-    ("enable-service", "skillsmith.install.subcommands.enable_service"),
+# Each entry: (step_name, module_path, extra_argv).
+# extra_argv lets the composer pass flags to a step's parser (e.g. the
+# preflight phase). Most steps have static extras handled in
+# _argv_for_step; preflight uses two distinct entries that share one
+# module but pass different --phase flags.
+_SETUP_STEPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("preflight-early", "skillsmith.install.subcommands.preflight", ("--phase", "early")),
+    ("detect", "skillsmith.install.subcommands.detect", ()),
+    ("recommend-host-targets", "skillsmith.install.subcommands.recommend_host_targets", ()),
+    ("recommend-models", "skillsmith.install.subcommands.recommend_models", ()),
+    ("preflight-runner", "skillsmith.install.subcommands.preflight", ("--phase", "runner")),
+    ("pull-models", "skillsmith.install.subcommands.pull_models", ()),
+    ("seed-corpus", "skillsmith.install.subcommands.seed_corpus", ()),
+    ("install-packs", "skillsmith.install.subcommands.install_packs", ()),
+    ("write-env", "skillsmith.install.subcommands.write_env", ()),
+    ("enable-service", "skillsmith.install.subcommands.enable_service", ()),
 )
+
+# Step names that are gates: failures must abort regardless of
+# --continue-on-error. Preflight is the gate — proceeding past a fatal
+# preflight failure into model pulls / corpus seeds wastes 5+ minutes
+# on what will fail at the next step anyway.
+_GATE_STEPS = frozenset({"preflight-early", "preflight-runner"})
 
 
 def add_parser(
@@ -66,7 +79,7 @@ def _run(args: argparse.Namespace) -> int:
 
     print("skillsmith setup: starting user-scope install", file=sys.stderr, flush=True)
 
-    for step_name, module_path in _SETUP_STEPS:
+    for step_name, module_path, extra_argv in _SETUP_STEPS:
         print(f"  → {step_name}", file=sys.stderr, flush=True)
         # Prerequisite check: a step that needs an upstream output file
         # gets a clear "skipping — upstream X missing" rather than an
@@ -84,10 +97,18 @@ def _run(args: argparse.Namespace) -> int:
             if not getattr(args, "continue_on_error", False):
                 break
             continue
-        exit_code = _invoke_step(step_name, module_path, args)
+        exit_code = _invoke_step(step_name, module_path, args, extra_argv)
         results.append({"step": step_name, "exit_code": exit_code})
         if exit_code not in (0, 4):  # 4 = EXIT_NOOP idempotent skip
             failed_steps.append(step_name)
+            # Gate steps abort regardless of --continue-on-error.
+            if step_name in _GATE_STEPS:
+                print(
+                    f"setup: gate step '{step_name}' failed — aborting "
+                    "regardless of --continue-on-error.",
+                    file=sys.stderr,
+                )
+                break
             if not getattr(args, "continue_on_error", False):
                 break
 
@@ -117,7 +138,12 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _invoke_step(step_name: str, module_path: str, parent_args: argparse.Namespace) -> int:
+def _invoke_step(
+    step_name: str,
+    module_path: str,
+    parent_args: argparse.Namespace,
+    extra_argv: tuple[str, ...] = (),
+) -> int:
     """Invoke a subcommand via its registered argparse `add_parser` function.
 
     We build a fresh argparse parser, register the step's parser into it,
@@ -133,6 +159,8 @@ def _invoke_step(step_name: str, module_path: str, parent_args: argparse.Namespa
     mod.add_parser(subparsers)
 
     argv = _argv_for_step(step_name, parent_args)
+    if extra_argv:
+        argv = [argv[0], *argv[1:], *extra_argv]
     try:
         step_args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -168,6 +196,10 @@ def _argv_for_step(step_name: str, parent_args: argparse.Namespace) -> list[str]
     """
     _ = parent_args  # reserved for future per-step flag passthrough
     outputs = install_state.outputs_dir()
+    # Pseudo-step names share one underlying subcommand; remap to the
+    # real verb so argparse can dispatch.
+    if step_name in ("preflight-early", "preflight-runner"):
+        return ["preflight"]
     if step_name == "recommend-host-targets":
         return [step_name, "--hardware", str(outputs / "detect.json")]
     if step_name == "recommend-models":

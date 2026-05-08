@@ -288,15 +288,17 @@ class TestSetup:
         # Patch _invoke_step so the first step fails — composer must stop.
         calls: list[str] = []
 
-        def fake_invoke(step: str, _module: str, _args: object) -> int:
+        def fake_invoke(
+            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
+        ) -> int:
             calls.append(step)
             return 1 if step == "detect" else 0
 
         with patch.object(setup, "_invoke_step", side_effect=fake_invoke):
             rc = setup._run(argparse.Namespace(continue_on_error=False))
         assert rc == 1
-        # Only the first step ran; later steps never invoked.
-        assert calls == ["detect"]
+        # Preflight is the gate, runs first; then detect fails and stops.
+        assert calls == ["preflight-early", "detect"]
         out_lines = capsys.readouterr().out.strip().splitlines()
         # JSON output always emitted, even on early-stop
         result = json.loads("\n".join(out_lines))
@@ -313,9 +315,14 @@ class TestSetup:
 
         calls: list[str] = []
 
-        def fake_invoke(step: str, _module: str, _args: object) -> int:
+        def fake_invoke(
+            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
+        ) -> int:
             calls.append(step)
-            return 1  # every step fails
+            # Gate steps must succeed for the loop to continue past them.
+            if step.startswith("preflight"):
+                return 0
+            return 1  # every non-gate step fails
 
         with patch.object(setup, "_invoke_step", side_effect=fake_invoke):
             rc = setup._run(argparse.Namespace(continue_on_error=True))
@@ -377,7 +384,9 @@ class TestSetup:
         # but writing no output — recommend-host-targets should skip.
         invoked: list[str] = []
 
-        def fake_invoke(step: str, _module: str, _args: object) -> int:
+        def fake_invoke(
+            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
+        ) -> int:
             invoked.append(step)
             return 0  # claim success but write no output file
 

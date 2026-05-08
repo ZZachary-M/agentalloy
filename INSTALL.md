@@ -53,15 +53,33 @@ You need:
 - A network connection (for model downloads — the corpus is already in the wheel)
 - One of the supported handoff harnesses installed (we'll ask which one in step 5)
 
-If `uv` is missing, **stop and ask the user to install it** with the official command at https://docs.astral.sh/uv/getting-started/installation/. Do not auto-execute the install script — that's a non-reversible action that requires the human in the loop.
+The runbook itself runs `skillsmith preflight` (Step 0 below) to verify these. **Never bypass a failed preflight check** — every later step assumes the prereqs are met, and skipping a fatal failure here is what causes the LLM to hand-roll workarounds (`~/.local/bin/skillsmith install-packs --list` etc.) midstream.
 
-If step 4 picks **Ollama** as the runner and the `ollama` binary is missing (or `localhost:11434` is unreachable), step 5's pull will fail with a connection error. Same rule as `uv`: **stop and ask the user to install Ollama**. Do not auto-execute. Tell them:
+For missing binaries (`uv`, `ollama`), **stop and ask the user to install them**. Do not auto-execute install scripts — that's a non-reversible action that requires the human in the loop. Install commands:
 
-- **Linux:** `curl -fsSL https://ollama.com/install.sh | sh`
-- **macOS:** `brew install ollama`, or download from https://ollama.com/download/mac
-- **Windows / other:** see https://ollama.com/download
+- **uv:** see https://docs.astral.sh/uv/getting-started/installation/
+- **Ollama (Linux):** `curl -fsSL https://ollama.com/install.sh | sh`
+- **Ollama (macOS):** `brew install ollama`, or https://ollama.com/download/mac
+- **Ollama (Windows / other):** see https://ollama.com/download
 
-After install, the user must have `ollama serve` running (the official installer sets this up as a service on macOS/Windows; on Linux the install script registers a systemd unit). Confirm with `curl -s http://localhost:11434/api/tags` before re-running step 5.
+After installing Ollama, the user must have `ollama serve` running (the official installer sets this up as a service on macOS/Windows; on Linux the install script registers a systemd unit). Step 0's runner-phase preflight confirms reachability.
+
+---
+
+## Step 0: Preflight (run this first, every time)
+
+> RUN
+> ```bash
+> uv run python -m skillsmith.install preflight
+> ```
+
+This runs the host-agnostic checks: Python ≥ 3.12, `uv` present, `skillsmith` resolvable on PATH (i.e. `~/.local/bin` is in `$PATH`), XDG dirs writable, network reachable, default port `47950` free.
+
+> CONFIRM
+>
+> If `preflight` exits non-zero, the JSON output lists `fatal_failures` and a `remediation` line for each. **Surface every fatal remediation to the user verbatim and STOP.** Do not run `skillsmith setup`, do not move on to Step 1, and do not invent workarounds. Once the user has applied the fixes, re-run Step 0 until it exits 0.
+
+If `cli_on_path` fails before Step 1b has run, that's expected — Step 1b installs the CLI. Run Step 1 + Step 1b first, then re-run Step 0 to confirm `cli_on_path` now passes.
 
 ---
 
@@ -89,27 +107,14 @@ If `uv sync` fails:
 
 This installs the `skillsmith` command into the user's PATH (at `~/.local/bin/skillsmith` or equivalent) so it works from any directory — not just from inside this repo. Required so `skillsmith wire`, `skillsmith serve`, and `skillsmith status` work after you `cd` into a project repo.
 
-Verify it landed:
+Verify it landed by re-running preflight (which is the authoritative PATH check):
 
 > RUN
 > ```bash
-> skillsmith --help
+> skillsmith preflight
 > ```
 
-If the command is not found, `~/.local/bin` is not in PATH. Fix:
-
-> ASK
->
-> Tell the user:
-> > "`~/.local/bin` is not in your PATH. Add this line to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) and restart the shell:
-> >
-> > ```bash
-> > export PATH="$HOME/.local/bin:$PATH"
-> > ```
-> >
-> > Once done, confirm with `which skillsmith`."
->
-> Wait for confirmation before continuing.
+If `cli_on_path` still fails, the JSON `remediation` field gives the exact `export PATH=...` line to add. Surface it to the user verbatim and **STOP** until they confirm they've fixed their shell profile and `which skillsmith` resolves to `~/.local/bin/skillsmith`.
 
 ---
 

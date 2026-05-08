@@ -102,7 +102,7 @@ class TestRunnerProcesses:
 
 
 class TestRunDoctor:
-    def test_returns_all_12_checks(self, repo_root: Path) -> None:
+    def test_returns_all_checks(self, repo_root: Path) -> None:
         _minimal_state(repo_root)
         # Mock network calls to avoid real connections
         from urllib.error import URLError
@@ -117,12 +117,17 @@ class TestRunDoctor:
         ):
             result = run_doctor(root=repo_root)
         assert result["schema_version"] == 1
-        assert len(result["checks"]) == 12
+        # 6 preflight-early + 8 verify + 4 doctor = 18 (count may grow as
+        # checks are added; assert the named ones are all present rather
+        # than a brittle total).
         names = [c["name"] for c in result["checks"]]
         assert "skillsmith_service_reachable" in names
         assert "compose_endpoint_works" in names
         assert "state_file_consistent" in names
         assert "runner_processes_present" in names
+        # Preflight early checks now flow through doctor too.
+        assert "uv_present" in names
+        assert "cli_on_path" in names
 
     def test_output_shape(self, repo_root: Path) -> None:
         _minimal_state(repo_root)

@@ -24,6 +24,7 @@ from skillsmith.install.subcommands import (
     enable_service,
     install_pack,
     install_packs,
+    preflight,
     pull_models,
     recommend_host_targets,
     recommend_models,
@@ -53,6 +54,7 @@ EXIT_NOOP = 4
 
 _SUBCOMMANDS = [
     # User-facing verbs first — these are what end users typically run.
+    preflight,
     setup,
     wire,
     unwire,

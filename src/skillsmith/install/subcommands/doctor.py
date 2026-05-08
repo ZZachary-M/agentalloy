@@ -22,6 +22,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from skillsmith.install import state as install_state
+from skillsmith.install.subcommands.preflight import run_preflight
 from skillsmith.install.subcommands.verify import run_checks as verify_checks
 
 SCHEMA_VERSION = 1
@@ -238,9 +239,17 @@ def run_doctor(root: Path | None = None) -> dict[str, Any]:
     st = install_state.load_state(root)
     port = install_state.validate_port(st.get("port", 47950))
 
+    # Run preflight early checks first — if uv is missing or PATH is
+    # broken, every later check is downstream noise. Strip the severity
+    # field so the shape matches verify/doctor checks (which don't carry it).
+    preflight_result = run_preflight(phase="early", port=port)
+    checks: list[dict[str, Any]] = [
+        {k: v for k, v in c.items() if k != "severity"} for c in preflight_result["checks"]
+    ]
+
     # Run verify's 8 checks
     verify_result = verify_checks(st, root)
-    checks = list(verify_result["checks"])
+    checks.extend(verify_result["checks"])
 
     # Add doctor's 4 additional checks
     checks.append(_check_service_reachable(port))
