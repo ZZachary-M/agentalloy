@@ -30,7 +30,7 @@ from skillsmith.api.health_router import HealthChecker
 from skillsmith.api.retrieve_router import get_retrieve_orchestrator
 from skillsmith.api.skill_router import get_skill_store
 from skillsmith.app import create_app
-from skillsmith.authoring.lm_client import OpenAICompatClient
+from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.fixtures.loader import load_fixtures
 from skillsmith.orchestration.compose import ComposeOrchestrator
 from skillsmith.orchestration.retrieve import RetrieveOrchestrator

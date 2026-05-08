@@ -11,7 +11,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from skillsmith.authoring.lm_client import (
+from skillsmith.lm_client import (
     LMBadResponse,
     LMModelNotLoaded,
     LMUnavailable,

@@ -6,7 +6,7 @@ import hashlib
 import struct
 from typing import Any
 
-from skillsmith.authoring.lm_client import OpenAICompatClient
+from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.reads.models import ActiveFragment, SkillClass
 from skillsmith.storage.schema_cypher import EMBEDDING_DIM
 

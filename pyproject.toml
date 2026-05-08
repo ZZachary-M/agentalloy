@@ -1,7 +1,7 @@
 [project]
 name = "skillsmith"
 version = "0.1.0"
-description = "Runtime skill composition service — assembles task-specific guidance for agents with governance included."
+description = "Runtime skill composition service — assembles task-specific guidance for agents with governance included. Runtime only — see skillsmith-authoring for corpus authoring tooling."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

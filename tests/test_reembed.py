@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from skillsmith.authoring.lm_client import LMBadResponse, LMTimeout, LMUnavailable
+from skillsmith.lm_client import LMBadResponse, LMTimeout, LMUnavailable
 from skillsmith.reembed import (
     FragmentNeedingEmbedding,
     reembed_fragments,

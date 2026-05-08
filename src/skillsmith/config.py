@@ -9,9 +9,7 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from skillsmith.authoring.authoring_config import AuthoringConfig
-
-__all__ = ["AuthoringConfig", "Settings", "get_settings"]
+__all__ = ["Settings", "get_settings"]
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +47,6 @@ class Settings(BaseSettings):
     duckdb_path: str = Field(default_factory=lambda: str(_user_corpus_dir() / "skills.duck"))
     log_level: str = "INFO"
 
-    # Authoring pipeline — requires explicit configuration; not part of the
-    # default install. Invoke authoring code paths only when these are set.
-    lm_studio_base_url: str = "http://localhost:1234"
-    authoring_lm_base_url: str | None = None
-    authoring_embed_base_url: str | None = None
-    authoring_model: str | None = None
-    critic_model: str | None = None
-    authoring_embedding_model: str | None = None
-
     # Runtime serving (retrieve / compose). The runtime path holds zero
     # generative LLM dependency — only an embedding service.
     runtime_embed_base_url: str = "http://localhost:11434"
@@ -70,36 +59,6 @@ class Settings(BaseSettings):
         """Create parent directories for LadybugDB and DuckDB if missing."""
         Path(self.ladybug_db_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.duckdb_path).parent.mkdir(parents=True, exist_ok=True)
-
-    def require_authoring_config(self) -> AuthoringConfig:
-        """Return authoring fields as non-Optional strings.
-
-        Raises RuntimeError if any required authoring env var is unset —
-        authoring is an advanced workflow that requires explicit configuration.
-        """
-        missing = [
-            f
-            for f, v in [
-                ("AUTHORING_MODEL", self.authoring_model),
-                ("CRITIC_MODEL", self.critic_model),
-                ("AUTHORING_EMBEDDING_MODEL", self.authoring_embedding_model),
-                ("AUTHORING_EMBED_BASE_URL", self.authoring_embed_base_url),
-            ]
-            if v is None
-        ]
-        if missing:
-            raise RuntimeError(
-                f"Authoring requires explicit configuration. Missing: {', '.join(missing)}. "
-                "Set these environment variables before using the authoring pipeline."
-            )
-        return AuthoringConfig(
-            lm_studio_base_url=self.lm_studio_base_url,
-            authoring_lm_base_url=self.authoring_lm_base_url or self.lm_studio_base_url,
-            authoring_embed_base_url=self.authoring_embed_base_url,  # type: ignore[arg-type]
-            authoring_model=self.authoring_model,  # type: ignore[arg-type]
-            critic_model=self.critic_model,  # type: ignore[arg-type]
-            authoring_embedding_model=self.authoring_embedding_model,  # type: ignore[arg-type]
-        )
 
 
 def get_settings() -> Settings:

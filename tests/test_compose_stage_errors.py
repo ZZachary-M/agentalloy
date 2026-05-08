@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from skillsmith.api.compose_models import ComposeRequest
-from skillsmith.authoring.lm_client import (
+from skillsmith.lm_client import (
     LMModelNotLoaded,
     LMTimeout,
     LMUnavailable,

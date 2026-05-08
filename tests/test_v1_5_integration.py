@@ -25,7 +25,7 @@ from typing import Any
 import httpx
 import pytest
 
-from skillsmith.authoring.lm_client import (
+from skillsmith.lm_client import (
     LMClientError,
     LMModelNotLoaded,
     OpenAICompatClient,
