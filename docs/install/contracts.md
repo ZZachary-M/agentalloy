@@ -373,7 +373,7 @@ Embeddings are pre-computed in the shipped DuckDB; **no `reembed` is needed afte
   "preset": "apple-silicon",
   "port": 47950,
   "values_written": {
-    "RUNTIME_EMBED_BASE_URL": "http://localhost:11434",
+    "RUNTIME_EMBED_BASE_URL": "http://localhost:11436",
     "RUNTIME_EMBEDDING_MODEL": "qwen3-embedding:0.6b",
     "DEDUP_HARD_THRESHOLD": "0.92",
     "DEDUP_SOFT_THRESHOLD": "0.80",
@@ -391,7 +391,7 @@ Embeddings are pre-computed in the shipped DuckDB; **no `reembed` is needed afte
 preset: apple-silicon
 description: "Apple Silicon (M1/M2/M3/M4) with Metal acceleration via Ollama"
 defaults:
-  RUNTIME_EMBED_BASE_URL: "http://localhost:11434"
+  RUNTIME_EMBED_BASE_URL: "http://localhost:11436"
   RUNTIME_EMBEDDING_MODEL: "qwen3-embedding:0.6b"
   DEDUP_HARD_THRESHOLD: "0.92"
   DEDUP_SOFT_THRESHOLD: "0.80"
@@ -462,7 +462,7 @@ defaults:
   "schema_version": 1,
   "all_checks_passed": true,
   "checks": [
-    {"name": "embedding_endpoint_reachable", "passed": true, "duration_ms": 23, "detail": "GET http://localhost:11434/v1/models returned 200"},
+    {"name": "embedding_endpoint_reachable", "passed": true, "duration_ms": 23, "detail": "GET http://localhost:11436/v1/models returned 200"},
     {"name": "embedding_endpoint_returns_1024_dim", "passed": true, "duration_ms": 312, "detail": "POST /v1/embeddings with model=qwen3-embedding:0.6b returned 1024-dim vector"},
     {"name": "duckdb_present", "passed": true, "duration_ms": 5, "detail": "/home/user/.local/share/skillsmith/corpus/skills.duck has 1655 fragments"},
     {"name": "ladybug_present", "passed": true, "duration_ms": 4, "detail": "/home/user/.local/share/skillsmith/corpus/ladybug has 153 skills"},
@@ -618,7 +618,7 @@ FIX:   <one-line remediation, copy-pasteable command if applicable>
 Examples:
 
 ```
-ERROR: Embedding endpoint http://localhost:11434/v1/models returned 404
+ERROR: Embedding endpoint http://localhost:11436/v1/models returned 404
 CAUSE: Ollama is not running, or running on a different port
 FIX:   Start Ollama with `ollama serve`, then re-run `python -m skillsmith.install verify`
 

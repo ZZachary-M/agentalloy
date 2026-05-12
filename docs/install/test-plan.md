@@ -79,13 +79,13 @@ services:
       dockerfile: tests/install/integration/Dockerfile
     depends_on: [ollama]
     environment:
-      RUNTIME_EMBED_BASE_URL: "http://ollama:11434"
+      RUNTIME_EMBED_BASE_URL: "http://ollama:11436"
     command: pytest tests/install/integration/
 
   ollama:
     image: ollama/ollama:latest
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/v1/models"]
+      test: ["CMD", "curl", "-f", "http://localhost:11436/v1/models"]
 ```
 
 Tests in this layer hit a real Ollama instance.

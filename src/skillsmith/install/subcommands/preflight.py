@@ -270,7 +270,7 @@ def _check_ollama_present() -> dict[str, Any]:
 
 def _check_ollama_reachable() -> dict[str, Any]:
     t0 = time.monotonic()
-    url = "http://localhost:11434/api/tags"
+    url = "http://localhost:11436/api/tags"
     try:
         req = Request(url, method="GET")
         with urlopen(req, timeout=2) as resp:  # noqa: S310 — fixed URL
@@ -284,7 +284,7 @@ def _check_ollama_reachable() -> dict[str, Any]:
             remediation=(
                 "Start the Ollama daemon: `ollama serve` (Linux), or use the "
                 "menubar app (macOS/Windows). Re-run preflight once "
-                "`curl -s http://localhost:11434/api/tags` returns JSON."
+                "`curl -s http://localhost:11436/api/tags` returns JSON."
             ),
         )
     return _check("ollama_reachable", passed=True, started=t0, detail=f"GET {url} ok")

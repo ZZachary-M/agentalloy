@@ -18,7 +18,7 @@ Or copy `.env.example` and fill in manually. Full reference:
 | `LADYBUG_DB_PATH` | `./data/ladybug` | LadybugDB (KuzuDB) directory |
 | `DUCKDB_PATH` | `./data/skills.duck` | DuckDB vector + telemetry store |
 | `LOG_LEVEL` | `INFO` | Python log level |
-| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | OpenAI-compatible embedding endpoint |
+| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | OpenAI-compatible embedding endpoint |
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model (1024-dim) |
 | `AUTHORING_MODEL` | `hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ4_NL_XL` | Author model — MoE, fast for drafting |
 | `CRITIC_MODEL` | `hf.co/unsloth/Qwen3.6-27B-GGUF:UD-Q5_K_XL` | Critic model — dense Q5, steadier for grading |
@@ -450,7 +450,7 @@ uv run python -m skillsmith.reembed --skill-id <id> --force  # wipe + re-embed
 2. **Back up existing stores**: `cp -r data/ladybug data/ladybug.bak && cp data/telemetry.db data/telemetry.db.bak`.
 3. **Pull the v1.5 release** (all NXS-794..802 merged).
 4. **Install the new dep**: `uv sync` (adds `duckdb`).
-5. **Verify Ollama is up** with `qwen3-embedding:0.6b` loaded: `curl http://localhost:11434/v1/models`.
+5. **Verify Ollama is up** with `qwen3-embedding:0.6b` loaded: `curl http://localhost:11436/v1/models`.
 6. **Populate DuckDB from existing Fragment nodes**: `uv run python -m skillsmith.reembed`. Dry-run first if anxious (`--dry-run`).
 7. **Run the integration harness**: `uv run pytest tests/test_v1_5_integration.py -v`. All non-skipped tests should pass.
 8. **Restart the service**. `GET /health` should report `healthy` across all dependencies.

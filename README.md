@@ -89,7 +89,7 @@ The runtime needs only an embedding service. The install agent picks one for you
 | `nvidia` | NVIDIA + CUDA | Ollama (CUDA) | 4 GB VRAM |
 | `radeon` | AMD Radeon dGPU/iGPU | LM Studio (Vulkan) | 4 GB VRAM |
 
-All presets use **`qwen3-embedding:0.6b`** at 1024 dimensions. Ollama presets bind `localhost:11434`; radeon binds `localhost:1234`.
+All presets use **`qwen3-embedding:0.6b`** at 1024 dimensions. Ollama presets bind `localhost:11436`; radeon binds `localhost:11436`.
 
 ```bash
 # Ollama presets
@@ -160,7 +160,7 @@ curl http://localhost:47950/health
 
 This brings up:
 - `skillsmith` — FastAPI service on port 47950, pre-seeded corpus baked in
-- `ollama` — Ollama on port 11434 with `qwen3-embedding:0.6b` auto-pulled
+- `ollama` — Ollama on port 11436 with `qwen3-embedding:0.6b` auto-pulled
 
 Persistent state:
 - `./data` bind-mounted — runtime ingestions persist on the host
@@ -222,7 +222,7 @@ Environment variables (written automatically by `skillsmith install write-env`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | Embedding endpoint (`http://localhost:1234` for radeon) |
+| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | Embedding endpoint (`http://localhost:11436` for radeon) |
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model for retrieve / compose |
 | `LADYBUG_DB_PATH` | `./data/ladybug` | LadybugDB directory |
 | `DUCKDB_PATH` | `./data/skills.duck` | DuckDB vector + telemetry store |

@@ -17,7 +17,7 @@ native
 container
     Runs ``podman compose`` or ``docker compose up -d`` with the appropriate
     compose file. Radeon preset uses compose.radeon.yaml (skillsmith-only;
-    LM Studio lives on the host at host.containers.internal:1234). All other
+    LM Studio lives on the host at host.containers.internal:11436). All other
     presets use compose.yaml (skillsmith + Ollama bundled).
 
 manual

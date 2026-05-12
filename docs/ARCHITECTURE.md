@@ -648,9 +648,9 @@ Idempotent: rerunnable after partial failure.
 | `ladybug_db_path` | `LADYBUG_DB_PATH` | `$XDG_DATA_HOME/skillsmith/corpus/ladybug` (or `~/.local/share/...`) | runtime, ingest, reembed |
 | `duckdb_path` | `DUCKDB_PATH` | `$XDG_DATA_HOME/skillsmith/corpus/skills.duck` | runtime, reembed, telemetry |
 | `log_level` | `LOG_LEVEL` | `INFO` | global |
-| `runtime_embed_base_url` | `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | runtime retrieve/compose |
+| `runtime_embed_base_url` | `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | runtime retrieve/compose |
 | `runtime_embedding_model` | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | runtime retrieve/compose, reembed |
-| `lm_studio_base_url` | `LM_STUDIO_BASE_URL` | `http://localhost:1234` | authoring |
+| `lm_studio_base_url` | `LM_STUDIO_BASE_URL` | `http://localhost:11436` | authoring |
 | `authoring_embed_base_url` | `AUTHORING_EMBED_BASE_URL` | None | authoring (dedup) |
 | `authoring_model` | `AUTHORING_MODEL` | None | authoring (author stage) |
 | `critic_model` | `CRITIC_MODEL` | None | authoring (qa stage) |
@@ -728,7 +728,7 @@ Single-writer guarantee: enforced at the `LadybugStore` layer (Kùzu's filesyste
 
 ### 12.4 Hardware presets (`install/presets/`)
 
-YAML files: `cpu.yaml`, `nvidia.yaml`, `radeon.yaml`, `apple-silicon.yaml`. All write the same env-var set; the only difference is the embedding endpoint (port 11434 for Ollama presets, 1234 for `radeon` LM Studio).
+YAML files: `cpu.yaml`, `nvidia.yaml`, `radeon.yaml`, `apple-silicon.yaml`. All write the same env-var set; the only difference is the embedding endpoint (port 11436 for Ollama presets, 1234 for `radeon` LM Studio).
 
 ```yaml
 # Common (all presets)
@@ -740,9 +740,9 @@ LOG_LEVEL: INFO
 
 # Differs
 # cpu / nvidia / apple-silicon:
-RUNTIME_EMBED_BASE_URL: http://localhost:11434
+RUNTIME_EMBED_BASE_URL: http://localhost:11436
 # radeon:
-RUNTIME_EMBED_BASE_URL: http://localhost:1234
+RUNTIME_EMBED_BASE_URL: http://localhost:11436
 ```
 
 `write-env`:

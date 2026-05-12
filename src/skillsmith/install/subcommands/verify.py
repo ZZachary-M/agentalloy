@@ -548,7 +548,7 @@ def run_checks(st: dict[str, Any], root: Path | None = None) -> dict[str, Any]: 
     """Run all 8 verify checks and return the contract-shaped result."""
     env = _read_env_values(install_state.user_config_dir())
 
-    embed_url = env.get("RUNTIME_EMBED_BASE_URL", "http://localhost:11434")
+    embed_url = env.get("RUNTIME_EMBED_BASE_URL", "http://localhost:11436")
     embed_model = env.get("RUNTIME_EMBEDDING_MODEL", "embeddinggemma")
     user_corpus = install_state.corpus_dir()
     duck_path = env.get("DUCKDB_PATH", str(user_corpus / "skills.duck"))
