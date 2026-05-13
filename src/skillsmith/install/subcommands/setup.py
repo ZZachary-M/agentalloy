@@ -2,7 +2,8 @@
 
 Composes the existing subcommand surface into a single command:
 ``detect → recommend-host-targets → recommend-models → pull-models →
-seed-corpus → write-env → enable-service``. Stops on the first non-zero
+seed-corpus → start-embed-server → install-packs → write-env → enable-service``.
+Stops on the first non-zero
 exit (other than the documented EXIT_NOOP=4 idempotent skip). Each
 step's already-existing stdout JSON is preserved so the runbook LLM (or
 operator) can read each result.
@@ -39,6 +40,7 @@ _SETUP_STEPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("preflight-runner", "skillsmith.install.subcommands.preflight", ("--phase", "runner")),
     ("pull-models", "skillsmith.install.subcommands.pull_models", ()),
     ("seed-corpus", "skillsmith.install.subcommands.seed_corpus", ()),
+    ("start-embed-server", "skillsmith.install.subcommands.start_embed_server", ()),
     ("install-packs", "skillsmith.install.subcommands.install_packs", ()),
     ("write-env", "skillsmith.install.subcommands.write_env", ()),
     ("enable-service", "skillsmith.install.subcommands.enable_service", ()),
@@ -218,6 +220,8 @@ def _argv_for_step(step_name: str, parent_args: argparse.Namespace) -> list[str]
         ]
     if step_name == "pull-models":
         return [step_name, "--models", str(outputs / "recommend-models.json")]
+    if step_name == "start-embed-server":
+        return [step_name, "--models", str(outputs / "recommend-models.json")]
     if step_name == "write-env":
         preset = _read_preset()
         if preset is None:
@@ -246,6 +250,7 @@ _PREREQS: dict[str, tuple[str, ...]] = {
     "recommend-host-targets": ("detect.json",),
     "recommend-models": ("detect.json", "recommend-host-targets.json"),
     "pull-models": ("recommend-models.json",),
+    "start-embed-server": ("recommend-models.json", "pull-models.json"),
     "write-env": ("recommend-models.json",),
 }
 
