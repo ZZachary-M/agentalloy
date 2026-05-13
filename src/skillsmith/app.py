@@ -14,6 +14,8 @@ from skillsmith.api.compose_router import get_orchestrator
 from skillsmith.api.compose_router import router as compose_router
 from skillsmith.api.diagnostics_router import DiagnosticsChecker
 from skillsmith.api.diagnostics_router import router as diagnostics_router
+from skillsmith.api.telemetry_router import TelemetryQuerier
+from skillsmith.api.telemetry_router import router as telemetry_router
 from skillsmith.api.health_router import HealthChecker
 from skillsmith.api.health_router import router as health_router
 from skillsmith.api.retrieve_router import get_retrieve_orchestrator
@@ -98,6 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.health_checker = health_checker
     app.state.diagnostics_checker = DiagnosticsChecker(store, runtime, health_checker)
+    app.state.telemetry_querier = TelemetryQuerier(vector_store)
     try:
         yield
     finally:
@@ -165,6 +168,7 @@ def create_app(*, use_default_lifespan: bool = True) -> FastAPI:
     app.include_router(retrieve_router)
     app.include_router(skill_router)
     app.include_router(diagnostics_router)
+    app.include_router(telemetry_router)
 
     return app
 

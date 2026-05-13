@@ -32,6 +32,7 @@ from skillsmith.install.subcommands import (
     seed_corpus,
     serve,
     start_embed_server,
+    telemetry,
     server_restart,
     server_start,
     server_status,
@@ -83,6 +84,7 @@ _SUBCOMMANDS = [
     update,
     install_pack,
     install_packs,
+    telemetry,
 ]
 
 

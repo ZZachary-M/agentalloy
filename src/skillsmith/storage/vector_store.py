@@ -188,6 +188,32 @@ _FTS_CREATE_SQL = "PRAGMA create_fts_index('fragment_embeddings', 'fragment_id',
 # ---------------------------------------------------------------------------
 
 
+def _trace_where(
+    *,
+    phase: str | None,
+    status: str | None,
+    since: int | None,
+    until: int | None,
+) -> tuple[str, list[object]]:
+    """Build a parameterised WHERE clause for composition_traces queries."""
+    clauses: list[str] = []
+    params: list[object] = []
+    if phase is not None:
+        clauses.append("phase = ?")
+        params.append(phase)
+    if status is not None:
+        clauses.append("status = ?")
+        params.append(status)
+    if since is not None:
+        clauses.append("request_ts >= ?")
+        params.append(since)
+    if until is not None:
+        clauses.append("request_ts <= ?")
+        params.append(until)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where, params
+
+
 class VectorStoreError(Exception):
     """Base for vector-store errors."""
 
@@ -447,6 +473,83 @@ class VectorStore:
     def count_traces(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) FROM composition_traces").fetchone()
         return int(row[0]) if row else 0
+
+    def query_traces(
+        self,
+        *,
+        phase: str | None = None,
+        status: str | None = None,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[CompositionTrace]:
+        """Return composition traces newest-first with optional filters."""
+        where, params = _trace_where(phase=phase, status=status, since=since, until=until)
+        sql = f"""
+            SELECT trace_id, correlation_id, request_ts, phase, category,
+                   task_prompt, selected_fragment_ids, source_skill_ids,
+                   system_skill_ids, assembly_tier, assembly_model,
+                   retrieval_latency_ms, assembly_latency_ms, total_latency_ms,
+                   status, error_code, response_size_chars, prompt_version,
+                   workflow_skill_ids
+            FROM composition_traces
+            {where}
+            ORDER BY request_ts DESC
+            LIMIT ? OFFSET ?
+        """
+        rows = self._conn.execute(sql, params + [limit, offset]).fetchall()
+        return [
+            CompositionTrace(
+                trace_id=str(r[0]),
+                correlation_id=r[1],
+                request_ts=int(r[2]),
+                phase=str(r[3]),
+                category=r[4],
+                task_prompt=str(r[5]),
+                selected_fragment_ids=list(r[6] or []),
+                source_skill_ids=list(r[7] or []),
+                system_skill_ids=list(r[8] or []),
+                assembly_tier=r[9],
+                assembly_model=r[10],
+                retrieval_latency_ms=r[11],
+                assembly_latency_ms=r[12],
+                total_latency_ms=r[13],
+                status=str(r[14]),
+                error_code=r[15],
+                response_size_chars=r[16],
+                prompt_version=r[17],
+                workflow_skill_ids=list(r[18] or []),
+            )
+            for r in rows
+        ]
+
+    def count_traces_filtered(
+        self,
+        *,
+        phase: str | None = None,
+        status: str | None = None,
+        since: int | None = None,
+        until: int | None = None,
+    ) -> int:
+        where, params = _trace_where(phase=phase, status=status, since=since, until=until)
+        row = self._conn.execute(
+            f"SELECT COUNT(*) FROM composition_traces {where}", params
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def clear_telemetry(self) -> dict[str, int]:
+        """Delete all rows from composition_traces and prompt_loads.
+
+        Does NOT touch fragment_embeddings (the corpus).
+        Returns counts of deleted rows.
+        """
+        traces = self.count_traces()
+        self._conn.execute("DELETE FROM composition_traces")
+        loads_row = self._conn.execute("SELECT COUNT(*) FROM prompt_loads").fetchone()
+        loads = int(loads_row[0]) if loads_row else 0
+        self._conn.execute("DELETE FROM prompt_loads")
+        return {"traces_deleted": traces, "prompt_loads_deleted": loads}
 
 
 # ---------------------------------------------------------------------------
