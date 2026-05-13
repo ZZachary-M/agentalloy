@@ -54,10 +54,14 @@ def _run_clear(args: argparse.Namespace) -> int:
             )
             return 1
         try:
-            answer = input(
-                "This will permanently delete all composition traces and prompt-load "
-                "records from the local DuckDB.\nContinue? [y/N]: "
-            ).strip().lower()
+            answer = (
+                input(
+                    "This will permanently delete all composition traces and prompt-load "
+                    "records from the local DuckDB.\nContinue? [y/N]: "
+                )
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.", file=sys.stderr)
             return 0
