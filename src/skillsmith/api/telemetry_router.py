@@ -41,7 +41,7 @@ class TraceRecord(BaseModel):
     prompt_version: str | None
 
     @classmethod
-    def from_trace(cls, t: CompositionTrace) -> "TraceRecord":
+    def from_trace(cls, t: CompositionTrace) -> TraceRecord:
         return cls(
             trace_id=t.trace_id,
             correlation_id=t.correlation_id,
@@ -86,13 +86,9 @@ class TelemetryQuerier:
         limit: int,
         offset: int,
     ) -> TracesResponse:
-        kwargs: dict[str, Any] = dict(
-            phase=phase, status=status, since=since, until=until
-        )
+        kwargs: dict[str, Any] = dict(phase=phase, status=status, since=since, until=until)
         traces, total = await asyncio.gather(
-            asyncio.to_thread(
-                self._store.query_traces, **kwargs, limit=limit, offset=offset
-            ),
+            asyncio.to_thread(self._store.query_traces, **kwargs, limit=limit, offset=offset),
             asyncio.to_thread(self._store.count_traces_filtered, **kwargs),
         )
         return TracesResponse(

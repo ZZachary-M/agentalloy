@@ -594,7 +594,10 @@ def pull_models(
                 file=sys.stderr,
             )
             print(f"CAUSE: Available runners: {available}", file=sys.stderr)
-            print("FIX:   Pass one of the above runners, or omit --runner to use the default.", file=sys.stderr)
+            print(
+                "FIX:   Pass one of the above runners, or omit --runner to use the default.",
+                file=sys.stderr,
+            )
             raise SystemExit(1)
     else:
         option = next((o for o in options if o.get("default")), options[0])

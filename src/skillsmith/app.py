@@ -14,14 +14,14 @@ from skillsmith.api.compose_router import get_orchestrator
 from skillsmith.api.compose_router import router as compose_router
 from skillsmith.api.diagnostics_router import DiagnosticsChecker
 from skillsmith.api.diagnostics_router import router as diagnostics_router
-from skillsmith.api.telemetry_router import TelemetryQuerier
-from skillsmith.api.telemetry_router import router as telemetry_router
 from skillsmith.api.health_router import HealthChecker
 from skillsmith.api.health_router import router as health_router
 from skillsmith.api.retrieve_router import get_retrieve_orchestrator
 from skillsmith.api.retrieve_router import router as retrieve_router
 from skillsmith.api.skill_router import get_skill_store
 from skillsmith.api.skill_router import router as skill_router
+from skillsmith.api.telemetry_router import TelemetryQuerier
+from skillsmith.api.telemetry_router import router as telemetry_router
 from skillsmith.config import get_settings
 from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.orchestration.compose import (

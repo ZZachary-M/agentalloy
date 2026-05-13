@@ -120,9 +120,12 @@ def _start_llama_server(model: str, timeout: float) -> int:
     cmd = [
         "llama-server",
         "--embeddings",
-        "--port", str(EMBED_PORT),
-        "--ubatch-size", str(LLAMA_UBATCH_SIZE),
-        "-m", str(model_path),
+        "--port",
+        str(EMBED_PORT),
+        "--ubatch-size",
+        str(LLAMA_UBATCH_SIZE),
+        "-m",
+        str(model_path),
     ]
     log_path = install_state.user_data_dir() / "logs" / "embed-server.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
