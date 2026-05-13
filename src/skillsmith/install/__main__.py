@@ -38,6 +38,7 @@ from skillsmith.install.subcommands import (
     setup,
     start_embed_server,
     status,
+    telemetry,
     uninstall,
     unwire,
     update,
@@ -83,6 +84,7 @@ _SUBCOMMANDS = [
     update,
     install_pack,
     install_packs,
+    telemetry,
 ]
 
 
