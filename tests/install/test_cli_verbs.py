@@ -344,6 +344,7 @@ class TestSetup:
             "detect.json",
             "recommend-host-targets.json",
             "recommend-models.json",
+            "pull-models.json",
         ):
             (outputs / fname).write_text("{}")
         with patch.object(setup, "_invoke_step", return_value=4):
