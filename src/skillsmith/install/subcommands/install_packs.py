@@ -49,6 +49,11 @@ def add_parser(
             "don't exist (default: fail with the available pack list)."
         ),
     )
+    p.add_argument(
+        "--list",
+        action="store_true",
+        help="Print available pack names (one per line) and exit.",
+    )
     p.set_defaults(func=_run)
 
 
@@ -71,6 +76,14 @@ def _run(args: argparse.Namespace) -> int:
     packs_root = _packs_dir()
 
     available = _discover_packs(packs_root)
+
+    if getattr(args, "list", False):
+        for name in sorted(available):
+            meta = available[name]
+            always = " [always-on]" if meta.get("always_install") else ""
+            print(f"{name}{always}")
+        return 0
+
     if not available:
         print("install-packs: no packs found under seeds/packs/", file=sys.stderr)
         result = {
