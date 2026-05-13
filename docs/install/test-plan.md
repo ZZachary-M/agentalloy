@@ -94,7 +94,10 @@ Tests in this layer hit a real Ollama instance.
 
 | Test | Asserts |
 |---|---|
-| `test_full_install_cpu_preset` | Run `detect` → `recommend-host-targets` (auto-confirm CPU+RAM) → `recommend-models` → `seed-corpus` (mocked release URL) → `pull-models` → `write-env` → `wire-harness --harness manual` → `verify` exits 0 with all checks passing |
+| `test_full_install_cpu_preset` | Run `detect` → `recommend-host-targets` (auto-confirm CPU+RAM) → `recommend-models` → `seed-corpus` → `pull-models` → `start-embed-server` (mocked port-open) → `install-packs` → `write-env` → `wire-harness --harness manual` → `verify` exits 0 with all checks passing |
+| `test_start_embed_server_already_running` | When port 11436 already accepts connections, `start-embed-server` exits 0 with `action: already_running` without spawning a new process |
+| `test_start_embed_server_llama_server_timeout` | When llama-server fails to start within `--timeout`, step exits 1 with a clear error pointing at the log path |
+| `test_start_embed_server_lmstudio_manual` | When runner is `lm-studio`, step exits 0 with `action: manual_required` and a human-readable instruction |
 | `test_resume_after_partial_failure` | Run install, kill mid-step, re-run — completes from where it left off without redoing prior work |
 | `test_uninstall_clean` | After full install, `uninstall` leaves no skillsmith artifacts on disk (except `data/` if `--keep-data`) |
 | `test_update_in_place_migration` | Stage a corpus at schema v2, bump code to v3, run `update`, verify corpus is migrated in-place to v3 (no re-download) |

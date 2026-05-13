@@ -130,7 +130,7 @@ The 13 step subcommands above are the building blocks. The 5 user-facing **verbs
 
 | Verb | Composes | Purpose |
 |---|---|---|
-| `setup` | detect → recommend-host-targets → recommend-models → pull-models → seed-corpus → write-env | One-shot user-scope install. Stops at the first non-zero exit (use `--continue-on-error` to attempt every step). Emits a top-level summary JSON to `${XDG_DATA_HOME}/skillsmith/outputs/setup.json`. |
+| `setup` | detect → recommend-host-targets → recommend-models → pull-models → seed-corpus → start-embed-server → install-packs → write-env → enable-service | One-shot user-scope install. Stops at the first non-zero exit (use `--continue-on-error` to attempt every step). Emits a top-level summary JSON to `${XDG_DATA_HOME}/skillsmith/outputs/setup.json`. |
 | `wire` | wire-harness | Per-repo. Auto-detects the harness from cwd markers (`.cursor/`, `CLAUDE.md`, `GEMINI.md`, etc.). Reads port from user state. `--harness <name>` overrides detection; `--port <n>` overrides state. |
 | `unwire` | uninstall (cwd-only, no `--remove-data`) | Per-repo. Removes sentinel blocks for entries whose `repo_root` matches cwd; entries from other repos surface as `different repo` warnings. Does NOT touch user state, `.env`, or the corpus. |
 | `serve` | (uvicorn) | Sources `${XDG_CONFIG_HOME}/skillsmith/.env` into the process environment (process-env values take precedence) then `os.execvp`s `python -m uvicorn skillsmith.app:app` on the configured port. Foreground; same idiom as `ollama serve`. |
@@ -298,6 +298,8 @@ Authoritative for `pull-models`. Each runner has its own pull command, install U
 
 **Manual-pull runners (`lmstudio`, `vllm`, `mlx`):** when these are selected, `pull-models` does NOT attempt to pull. It emits a `manual_steps_required` array in its output with copy-pasteable instructions for the runbook to surface to the user. The runbook stops and waits for confirmation before proceeding.
 
+**`--runner <name>` flag:** overrides the runner selected by `recommend-models`. Useful when the agent ran `recommend-models` non-interactively (defaulted to `ollama`) but the user later confirmed they want `llama-server`. Pass the `embed_runner` value (e.g., `--runner llama-server`).
+
 **`pull-models` output:**
 
 ```json
@@ -360,6 +362,37 @@ Embeddings are pre-computed in the shipped DuckDB; **no `reembed` is needed afte
 
 ---
 
+## `start-embed-server`
+
+**Input:** `--models <path-to-recommend-models.json>` `[--timeout <seconds>]`
+
+**Output:**
+
+```json
+{
+  "schema_version": 1,
+  "action": "started",
+  "runner": "llama-server",
+  "model": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+  "model_path": "/home/user/.local/share/skillsmith/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
+  "port": 11436,
+  "ubatch_size": 2048,
+  "log_path": "/home/user/.local/share/skillsmith/logs/embed-server.log"
+}
+```
+
+**`action` values:** `started` | `already_running` | `manual_required`.
+
+**Behavior:** Reads `recommend-models.json` to determine the embed runner and model, then brings the embedding backend online before `install-packs` runs the ingest + embed pass.
+
+- **llama-server**: spawns `llama-server --embeddings --port 11436 --ubatch-size 2048 -m <gguf_path>` as a background process (new session). Polls the port until accepting connections. Default timeout: 120 seconds. Log written to `~/.local/share/skillsmith/logs/embed-server.log`.
+- **ollama**: fires `ollama serve` (idempotent — safe to call if already running). Polls port 11436 for up to 30 seconds.
+- **lm-studio / other GUI runners**: prints a manual instruction and exits 0. Pack ingest will fail with a clear `Connection refused` error if the user hasn't started their server.
+
+**Idempotency:** if port 11436 already accepts connections the step exits 0 immediately without spawning a second process (`action: already_running`).
+
+---
+
 ## `write-env`
 
 **Input:** `--preset <name>` `[--port <n>]` `[--overrides KEY=VALUE [KEY=VALUE ...]]`.
@@ -399,7 +432,7 @@ defaults:
   LOG_LEVEL: "INFO"
 ```
 
-**Port handling.** Preset URLs reference fixed *runner* ports (Ollama 11434, LM Studio 1234). The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 47950). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
+**Port handling.** All presets bind the embedding runner to `localhost:11436` regardless of runner. Port 11434 is reserved for the reasoning model and 11435 for the coder model. The `--port` flag is the **Skillsmith service port** (where this FastAPI service listens, default 47950). It does not appear in `.env` — it's recorded in `install-state.json` and read by `wire-harness` (to inject the correct URL into harness configs) and `verify` (to check the right port is reachable). Override runner URLs via `--overrides` if you run them on non-default ports.
 
 **Validation:** `write-env` rejects unknown keys in `--overrides` (typo guard). It also refuses to write if `.env` exists and was not produced by a previous `write-env` run (no overwriting hand-edited files without `--force`).
 

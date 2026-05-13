@@ -187,6 +187,12 @@ The output may include `manual_steps_required` if the user picked a runner witho
 >
 > Read the `manual_steps_required` instructions to the user verbatim. Wait for them to confirm they've completed those steps before proceeding.
 
+If `recommend-models` ran non-interactively and defaulted to `ollama` but the user has `llama-server` installed, pass `--runner llama-server` to override:
+
+```bash
+skillsmith pull-models --models ~/.local/share/skillsmith/outputs/recommend-models.json --runner llama-server
+```
+
 ---
 
 ## Step 6: Initialize the corpus directory
@@ -196,35 +202,65 @@ The output may include `manual_steps_required` if the user picked a runner witho
 > skillsmith seed-corpus
 > ```
 
-This creates the user-scoped corpus directory at `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/` and initializes empty LadybugDB + DuckDB stores. The wheel no longer ships pre-built skills — Step 7 below populates the corpus from packs the user picks.
+This creates the user-scoped corpus directory at `${XDG_DATA_HOME:-~/.local/share}/skillsmith/corpus/` and initializes empty LadybugDB + DuckDB stores. The wheel no longer ships pre-built skills — Step 8 below populates the corpus from packs the user picks.
 
 ---
 
-## Step 7: Pick and install skill packs
+## Step 7: Start the embedding server
+
+> RUN
+> ```bash
+> skillsmith start-embed-server --models ~/.local/share/skillsmith/outputs/recommend-models.json
+> ```
+
+This brings the embedding backend online before pack ingestion. What happens depends on the runner chosen in Step 4:
+
+- **llama-server**: spawns `llama-server --embeddings --port 11436 --ubatch-size 2048` in the background and waits up to 120 seconds for the server to accept connections. The log is written to `~/.local/share/skillsmith/logs/embed-server.log`.
+- **ollama**: fires `ollama serve` (idempotent — safe if already running) and polls port 11436.
+- **lm-studio / other**: prints instructions for you to start the server manually. Start it before proceeding to Step 8.
+
+The step is idempotent: if port 11436 is already listening it exits 0 immediately.
+
+> CONFIRM
+>
+> Wait for this step to exit 0 before continuing. If it times out, check the log at `~/.local/share/skillsmith/logs/embed-server.log` for startup errors.
+
+---
+
+## Step 8: Pick and install skill packs
+
+First, preview available packs:
+
+> RUN
+> ```bash
+> skillsmith install-packs --list
+> ```
+
+Then install selected packs:
 
 > RUN
 > ```bash
 > skillsmith install-packs
 > ```
 
-The user is shown a list of available packs (each with description + skill count) and asked to pick which ones to install. Two packs (`core`, `engineering`) are always installed automatically.
+The user is shown a numbered list of available packs (each with description + skill count) and asked to pick which ones to install. Two packs (`core`, `engineering`) are always installed automatically.
 
 > ASK
 >
 > Tell the user:
-> > "Skillsmith's corpus is split into packs. You opt in to the ones that match your stack. `core` and `engineering` install automatically. The most common picks for backend work: `nodejs`, `typescript`, plus your framework (e.g., `nestjs`, `fastify`). For agentic dev, add `agents`. Pick now or accept defaults — you can install more packs later with `skillsmith install-pack <name>`."
+> > "Skillsmith's corpus is split into packs. You opt in to the ones that match your stack. `core` and `engineering` install automatically. The most common picks for backend work: `nodejs`, `typescript`, plus your framework (e.g., `nestjs`, `fastify`). For agentic dev, add `agents`. Pick now or type `defaults` to go with always-on packs only — you can install more packs later with `skillsmith install-pack <name>`."
 >
-> Read the available packs from the CLI's interactive prompt. Wait for the user's selection.
+> Read the available packs from the CLI's interactive prompt. Wait for the user's selection. The prompt accepts: pack names (comma-separated), pack numbers (e.g. `1,3,5`), `all`, `defaults`, or blank — all install only the always-on packs.
 
 The command ingests each chosen pack and runs one bulk re-embed pass at the end. **Expect 5–10 minutes** on a warm-cache iGPU for a moderate selection (e.g., core + engineering + nodejs + typescript = ~115 skills, ~700 fragments).
 
 Non-interactive / scripted environments: pass `--packs <name1,name2,...>` (or `--packs all`) to skip the prompt. With no flag in non-TTY mode, only the always-on packs install. Unknown pack names in `--packs` cause the command to fail fast with the available pack list; pass `--ignore-unknown` to skip unrecognized names and continue with the known subset.
 
-If the bulk re-embed fails partway (e.g., LM Studio crashes mid-run), the install state records what landed and the embed step is idempotent — just re-run `skillsmith reembed` to finish.
+If the bulk re-embed fails partway (e.g., the embedding server crashes mid-run), the install state records what landed and the embed step is idempotent — just re-run `skillsmith reembed` to finish.
 
 ---
 
-## Step 8: Write `.env`
+## Step 9: Write `.env`
 
 > RUN
 > ```bash
@@ -237,7 +273,7 @@ If the user wants a non-default port (because 47950 is taken on their machine), 
 
 ---
 
-## Step 9: Handoff harness selection
+## Step 10: Handoff harness selection
 
 > ASK
 >
@@ -260,14 +296,14 @@ Record the harness choice. The CLI uses one of: `claude-code`, `gemini-cli`, `cu
 
 ---
 
-## Step 10: Wire the harness
+## Step 11: Wire the harness
 
 > RUN
 > ```bash
 > cd <user's repo> && skillsmith wire-harness --harness <chosen-harness>
 > ```
 
-(Substitute the harness key from step 8.) The shorter form is `skillsmith wire --harness <chosen>` — the verb auto-detects the harness from the cwd if you omit the flag.
+(Substitute the harness key from step 10.) The shorter form is `skillsmith wire --harness <chosen>` — the verb auto-detects the harness from the cwd if you omit the flag.
 
 **Auto-detection priority** (used when `--harness` is omitted; first match wins):
 1. `.cursor/` or `.cursorrules` → `cursor`
@@ -284,13 +320,13 @@ The output lists which file(s) were modified and where the sentinel-bounded skil
 
 > "I added a skillsmith integration block to **CLAUDE.md** in your project. The block is bounded by `<!-- BEGIN skillsmith install -->` / `<!-- END skillsmith install -->` markers — `skillsmith unwire` removes only what's between the markers, so your other content is safe.
 >
-> Repos are wired one-at-a-time. To wire another project, `cd` into it and run `skillsmith wire` again — Skillsmith state is user-scoped, so you don't need to re-do steps 1–7."
+> Repos are wired one-at-a-time. To wire another project, `cd` into it and run `skillsmith wire` again — Skillsmith state is user-scoped, so you don't need to re-do steps 1–8."
 
 If the user picked `manual`, the output includes copy-pasteable instructions for the user to apply themselves. Read those to the user.
 
 ---
 
-## Step 11: Verify
+## Step 12: Verify
 
 > RUN
 > ```bash
@@ -301,7 +337,7 @@ This runs 8 enumerated install-time checks (embedding endpoint reachable, return
 
 When the service is running, the corpus checks (`duckdb_present`, `ladybug_present`, `skill_count_meets_minimum`) query `GET /diagnostics/runtime` instead of opening DB files directly — Kùzu's single-writer lock would otherwise make those checks fail spuriously while the service holds the corpus open. `runtime_port_available` accepts `"healthy"` (passes) and `"degraded"` (passes with warning) responses from `/health`.
 
-If `all_checks_passed: true`, proceed to step 11.
+If `all_checks_passed: true`, proceed to step 13.
 
 If any check fails:
 > RUN
@@ -313,9 +349,9 @@ If any check fails:
 
 ---
 
-## Step 12: Enable persistent service
+## Step 13: Enable persistent service
 
-> **Note:** If you ran `skillsmith setup`, this step was already prompted interactively as part of that command. Skip to Step 12 if `install-state.json` already contains a `service_mode` entry.
+> **Note:** If you ran `skillsmith setup`, this step was already prompted interactively as part of that command. Skip to Step 13 if `install-state.json` already contains a `service_mode` entry.
 
 > ASK
 > "Do you want Skillsmith to start automatically in the background, or will you start it manually each session?
@@ -341,7 +377,7 @@ The subcommand detects the available service manager (systemd/launchd) or contai
 
 ---
 
-## Step 13: Start the service + first-run demo
+## Step 14: Start the service + first-run demo
 
 Start the service in foreground (recommended — same idiom as `ollama serve`):
 
