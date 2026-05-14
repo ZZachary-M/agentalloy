@@ -376,8 +376,10 @@ def _check_harness_config_present(st: dict[str, Any]) -> dict[str, Any]:
                 "remediation": "Re-run `python -m skillsmith.install wire-harness`",
             }
         content = fp.read_text()
-        sentinel = entry.get("sentinel_begin", _SENTINEL_BEGIN)
-        if sentinel not in content:
+        # sentinel_begin is null for dedicated files (we own the whole file),
+        # so only check for sentinel presence when one was recorded.
+        sentinel = entry.get("sentinel_begin")
+        if sentinel and sentinel not in content:
             duration = int((time.monotonic() - t0) * 1000)
             return {
                 "name": "harness_config_present",

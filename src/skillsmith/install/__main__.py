@@ -28,6 +28,7 @@ from skillsmith.install.subcommands import (
     pull_models,
     recommend_host_targets,
     recommend_models,
+    reembed,
     reset_step,
     seed_corpus,
     serve,
@@ -84,6 +85,7 @@ _SUBCOMMANDS = [
     update,
     install_pack,
     install_packs,
+    reembed,
     telemetry,
 ]
 

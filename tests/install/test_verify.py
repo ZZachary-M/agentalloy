@@ -136,6 +136,20 @@ class TestHarnessConfigPresent:
         result = _check_harness_config_present(st)
         assert result["passed"] is False
 
+    def test_pass_when_dedicated_file_has_null_sentinel(self, tmp_path: Path) -> None:
+        """Dedicated files (we own the whole file) record sentinel_begin=None.
+
+        The check must treat that as "no sentinel to verify" instead of
+        crashing on `None not in content`.
+        """
+        harness_file = tmp_path / ".skillsmith-aider-instructions.md"
+        harness_file.write_text("rendered content\n")
+        st: dict[str, Any] = {
+            "harness_files_written": [{"path": str(harness_file), "sentinel_begin": None}],
+        }
+        result = _check_harness_config_present(st)
+        assert result["passed"] is True
+
 
 # ---------------------------------------------------------------------------
 # Check 7: harness URL matches

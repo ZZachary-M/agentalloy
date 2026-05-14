@@ -344,3 +344,35 @@ class TestRewireMerge:
         paths = [f["path"] for f in st["harness_files_written"]]
         # No duplicates of the same path
         assert len(paths) == len(set(paths))
+
+
+class TestScopeFlag:
+    """Tests for --scope user|repo behavior. Maps to test-plan.md § Wire scope."""
+
+    def test_scope_user_defaults_to_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """scope='user' resolves root to $HOME so wiring is global across repos."""
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        monkeypatch.setenv("HOME", str(fake_home))
+        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        # State directory also routes through HOME; force a fresh per-test state.
+        monkeypatch.setenv("SKILLSMITH_STATE_DIR", str(fake_home / ".skillsmith"))
+
+        result = wire_harness("aider", port=8000, scope="user")
+        for entry in result["files_written"]:
+            assert str(fake_home) in entry["path"], entry
+
+    def test_scope_repo_uses_repo_root(
+        self, repo_root: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """scope='repo' falls back to the discovered repo root (cwd)."""
+        monkeypatch.chdir(repo_root)
+        result = wire_harness("aider", port=8000, scope="repo")
+        for entry in result["files_written"]:
+            assert str(repo_root) in entry["path"], entry
+
+    def test_scope_invalid_raises(self) -> None:
+        with pytest.raises(SystemExit):
+            wire_harness("aider", port=8000, scope="global")

@@ -303,6 +303,7 @@ def wire_harness(
     root: Path | None = None,
     force: bool = False,
     mcp_fallback: bool = False,
+    scope: str = "user",
 ) -> dict[str, Any]:
     """Wire the specified harness. Returns contract-shaped result.
 
@@ -317,7 +318,12 @@ def wire_harness(
     """
     from skillsmith.install.state import _repo_root  # pyright: ignore[reportPrivateUsage]
 
-    root = root or _repo_root()
+    if scope not in ("user", "repo"):
+        print(f"ERROR: --scope must be 'user' or 'repo', got '{scope}'", file=sys.stderr)
+        raise SystemExit(1)
+
+    if root is None:
+        root = Path.home() if scope == "user" else _repo_root()
 
     if harness not in _HARNESS_REGISTRY:
         print(f"ERROR: Unknown harness: '{harness}'", file=sys.stderr)
@@ -732,6 +738,17 @@ def add_parser(
         ),
     )
     p.add_argument(
+        "--scope",
+        choices=("user", "repo"),
+        default="user",
+        help=(
+            "Install scope. 'user' (default) wires at $HOME so every repo's "
+            "harness session picks up Skillsmith. 'repo' wires inside the "
+            "current repo only. Harnesses whose config path is inherently "
+            "user-scoped (e.g. claude-code at ~/.claude) ignore this flag."
+        ),
+    )
+    p.add_argument(
         "--mcp-fallback",
         action="store_true",
         help=(
@@ -754,6 +771,7 @@ def _run(args: argparse.Namespace) -> int:
         port=port,
         force=args.force,
         mcp_fallback=args.mcp_fallback,
+        scope=args.scope,
     )
     print(json.dumps(result, indent=2))
     return 0
