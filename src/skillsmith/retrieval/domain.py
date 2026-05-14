@@ -2,21 +2,26 @@
 
 Given a task + phase + optional filters, embed the task via the inference
 runtime, query DuckDB ``fragment_embeddings`` for top-k by cosine, fuse with
-a BM25 lexical leg via Reciprocal Rank Fusion (RRF, k=60), hydrate
+a BM25 lexical leg via Reciprocal Rank Fusion (RRF), hydrate
 ActiveFragment metadata from LadybugDB, then reshuffle for structural
 diversity (setup/execution/verification preferred).
 
 Per v5.3, vector storage is DuckDB; cosine ranking happens in DuckDB via
 ``array_cosine_distance`` over L2-normalized vectors. The
 ``cosine_similarity`` Python helper is no longer used in the hot path.
+
+Improvements (v5.4+):
+- Rule-based keyword extraction boosts BM25 lexical recall.
+- Phase-specific RRF weighting allows biasing dense vs. lexical legs.
 """
 
 from __future__ import annotations
 
 import os as _os
+import re as _re
 import time
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypedDict, runtime_checkable
 
 from skillsmith.api.compose_models import Phase
 from skillsmith.lm_client import OpenAICompatClient
@@ -24,7 +29,43 @@ from skillsmith.reads import ActiveFragment
 from skillsmith.reads.models import SkillClass
 from skillsmith.storage.vector_store import SimilarityHit, VectorStore
 
-_RRF_K = 60
+_RRF_K_DEFAULT = 60
+
+
+class _RRFConfig(TypedDict):
+    k: int
+    dense_weight: float
+    bm25_weight: float
+
+
+# Phase -> RRF configuration: k value, dense weight, bm25 weight.
+# Adjusting weights allows biasing retrieval towards semantic (dense) or lexical (bm25) matches.
+_PHASE_RRF_CONFIG: dict[str, _RRFConfig] = {
+    "default": {"k": _RRF_K_DEFAULT, "dense_weight": 1.0, "bm25_weight": 1.0},
+    "qa": {"k": _RRF_K_DEFAULT, "dense_weight": 0.8, "bm25_weight": 1.2},
+    "spec": {"k": _RRF_K_DEFAULT, "dense_weight": 1.2, "bm25_weight": 0.8},
+}
+
+# Regex to extract high-signal technical terms for BM25 boosting.
+# Matches: file extensions, CamelCase classes, snake_case functions, version numbers, common tech terms.
+_TECH_KEYWORD_RE = _re.compile(
+    r"\b(?:\.\w{2,4}|[A-Z][a-z]+\w*|[a-z_]+\d+\w*|[a-z]+-[a-z]+|[A-Z]{2,})\b",
+    _re.IGNORECASE,
+)
+
+
+def _get_rrf_params(phase: Phase) -> tuple[int, float, float]:
+    """Return phase-specific RRF parameters (k, dense_weight, bm25_weight)."""
+    cfg = _PHASE_RRF_CONFIG.get(phase, _PHASE_RRF_CONFIG["default"])
+    return cfg["k"], cfg["dense_weight"], cfg["bm25_weight"]
+
+
+def _extract_bm25_keywords(task: str) -> str:
+    """Extract high-signal technical terms and append them to the query for BM25 boosting."""
+    matches = list(dict.fromkeys(_TECH_KEYWORD_RE.findall(task)))
+    if matches:
+        return f"{task} {' '.join(matches)}"
+    return task
 
 
 @runtime_checkable
@@ -40,7 +81,7 @@ class FragmentSource(Protocol):
     ) -> list[ActiveFragment]: ...
 
 
-# Phase → eligible-category mapping. Aligned with the seeded corpus
+# Phase -> eligible-category mapping. Aligned with the seeded corpus
 # vocabulary (design, engineering, quality, review, tooling, ops). The
 # legacy phase-as-category vocabulary (spec/qa/build/governance/meta) is
 # kept where it overlaps so existing fragments authored to that schema
@@ -99,12 +140,16 @@ class StoreFragmentSource:
 def _rrf_fuse(
     dense_hits: list[SimilarityHit],
     bm25_fragment_ids: list[str],
-    k: int = _RRF_K,
+    k: int = _RRF_K_DEFAULT,
+    *,
+    dense_weight: float = 1.0,
+    bm25_weight: float = 1.0,
 ) -> list[str]:
     """Reciprocal Rank Fusion over dense and BM25 result lists.
 
     Returns fragment_ids ordered by descending RRF score. Documents appearing
     in only one leg get a rank of len(that_leg)+1 in the missing leg.
+    Applies configurable weights to bias towards semantic or lexical matches.
     """
     dense_ids = [h.fragment_id for h in dense_hits]
     all_ids = dict.fromkeys(dense_ids + bm25_fragment_ids)
@@ -116,9 +161,9 @@ def _rrf_fuse(
 
     scores: dict[str, float] = {}
     for fid in all_ids:
-        scores[fid] = 1.0 / (k + dense_rank.get(fid, dense_miss)) + 1.0 / (
-            k + bm25_rank.get(fid, bm25_miss)
-        )
+        dense_score = dense_weight * (1.0 / (k + dense_rank.get(fid, dense_miss)))
+        bm25_score = bm25_weight * (1.0 / (k + bm25_rank.get(fid, bm25_miss)))
+        scores[fid] = dense_score + bm25_score
 
     return sorted(all_ids, key=lambda fid: scores[fid], reverse=True)
 
@@ -146,8 +191,8 @@ def retrieve_domain_candidates(
 
     1. embed the task via ``lm.embed`` (propagates LMClientError on failure)
     2. DuckDB top-k vector search filtered by phase categories
-    3. DuckDB BM25 search on prose column filtered by phase categories
-    4. Reciprocal Rank Fusion of both legs
+    3. DuckDB BM25 search on prose column filtered by phase categories (with keyword extraction)
+    4. Reciprocal Rank Fusion of both legs (with phase-specific weighting)
     5. hydrate ActiveFragment metadata from ``source`` and apply optional
        domain_tags filter
     6. greedy diversity reshuffle — prefer fragment_types from the
@@ -172,7 +217,7 @@ def retrieve_domain_candidates(
     query_vec = lm.embed(model=embedding_model, texts=[embed_input])[0]
 
     categories = phase_to_categories(phase)
-    pool_size = max(k * 2, k)
+    pool_size = max(k * 2, 50)
 
     dense_hits = vector_store.search_similar(
         query_vec,
@@ -180,14 +225,20 @@ def retrieve_domain_candidates(
         k=pool_size,
     )
 
-    bm25_hits = vector_store.search_bm25(task, categories=categories, k=pool_size)
+    # Rule-based keyword extraction for BM25 boosting
+    bm25_query = _extract_bm25_keywords(task)
+    bm25_hits = vector_store.search_bm25(bm25_query, categories=categories, k=pool_size)
     bm25_ids = [h.fragment_id for h in bm25_hits]
 
     if not dense_hits and not bm25_hits:
         elapsed_ms = (time.perf_counter_ns() - start_ns) // 1_000_000
         return RetrievalResult(candidates=[], eligible_count=0, retrieval_ms=int(elapsed_ms))
 
-    fused_ids = _rrf_fuse(dense_hits, bm25_ids)
+    # Apply phase-specific RRF weights
+    rrf_k, dense_weight, bm25_weight = _get_rrf_params(phase)
+    fused_ids = _rrf_fuse(
+        dense_hits, bm25_ids, k=rrf_k, dense_weight=dense_weight, bm25_weight=bm25_weight
+    )
 
     # Hydrate ActiveFragment metadata from the source. Pull domain fragments
     # for the eligible categories; intersect with the fused ids.
