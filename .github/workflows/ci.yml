@@ -36,3 +36,35 @@ jobs:
 
       - name: Test (unit only)
         run: uv run pytest -m "not integration"
+
+  pipx-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build wheel
+        run: uv build
+
+      - name: Verify packs bundled in wheel
+        run: |
+          set -e
+          count=$(unzip -l dist/skillsmith-*.whl | grep -c '_packs/' || true)
+          echo "pack files in wheel: $count"
+          test "$count" -ge 50
+
+      - name: Install wheel into isolated tool env
+        run: uv tool install dist/skillsmith-*.whl
+
+      - name: Smoke — entry point resolves
+        run: skillsmith --help
+
+      - name: Smoke — wheel-bundled packs discoverable
+        run: skillsmith install-packs --list

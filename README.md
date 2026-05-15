@@ -56,26 +56,24 @@ Things your agent can ask for instead of you pasting them into the prompt:
 ## Quickstart
 
 ```bash
-git clone https://github.com/nrmeyers/skillsmith.git
-cd skillsmith
+pipx install git+https://github.com/nrmeyers/skillsmith.git
+skillsmith setup                                # one-time interactive install wizard
+skillsmith install-packs --packs all            # or: --packs core,engineering,python
+skillsmith server-start                         # background daemon on :47950
+cd ~/your-project && skillsmith wire            # wire harness in this repo
 ```
 
-Then open your coding harness (Claude Code, Cursor, Windsurf, Continue.dev, Aider, Cline, GitHub Copilot, Gemini CLI, OpenCode) and tell it:
+The setup wizard detects your hardware, pulls the embedding model, seeds the corpus, and writes your config. **3–5 minutes** on a warm machine.
 
-```
-Install this tool by following INSTALL.md
-```
+`install-packs --packs` accepts `all` or a comma-separated list. Unknown names fail fast in non-interactive mode; pass `--ignore-unknown` to skip them. List available packs with `skillsmith install-packs --list`.
 
-The agent reads `INSTALL.md`, detects your hardware, pulls the embedding model, seeds the corpus, and wires itself up. **3–5 minutes** on a warm machine.
-
-**Headless one-liner** (CI / containers / scripts):
+**Agent-driven install.** If you'd rather have your coding harness (Claude Code, Cursor, Windsurf, Continue.dev, Aider, Cline, GitHub Copilot, Gemini CLI, OpenCode) drive the install for you, clone the repo and tell it:
 
 ```bash
-uv sync
-uv run python -m skillsmith.install install-packs --packs all --non-interactive
+git clone https://github.com/nrmeyers/skillsmith.git && cd skillsmith
+# then in your coding harness:
+> Install this tool by following INSTALL.md
 ```
-
-`--packs` accepts `all` or a comma-separated list. Unknown names fail fast in non-interactive mode; pass `--ignore-unknown` to skip them.
 
 **Container alternative** (no Python required):
 
@@ -85,6 +83,14 @@ curl http://localhost:47950/health
 ```
 
 Brings up `skillsmith` on port 47950 (pre-seeded corpus baked in) plus `ollama` on port 11436 with `qwen3-embedding:0.6b` auto-pulled. Bind-mounts `./data` for persistence.
+
+**Developer / contributor install** (editable + dev deps):
+
+```bash
+git clone https://github.com/nrmeyers/skillsmith.git && cd skillsmith
+uv sync
+uv run python -m skillsmith.install setup
+```
 
 ---
 
@@ -152,14 +158,21 @@ The `skillsmith.install` module exposes a single CLI with subcommands. All write
 | `preflight` | Gate prereqs (Python, runtimes, ports) before any state changes. |
 | `pull-models` | Pull / verify the embedding model is loaded into your backend. |
 | `seed-corpus` | One-shot pack ingestion into LadybugDB + DuckDB. |
-| `install-packs [--packs <names>]` | Install/refresh specific pack(s) without re-seeding the whole corpus. |
-| `wire-harness --harness <name>` | Inject skillsmith access instructions into the harness's rules file. |
+| `install-packs [--packs <names>] [--list]` | Install/refresh specific pack(s), or `--list` to see what's available. |
+| `wire [--harness <name>]` | Auto-detect the harness in the current repo and inject sentinels (or pass `--harness` to force). |
+| `wire-harness --harness <name>` | Lower-level: explicit harness wiring with full flag control. |
+| `unwire` | Remove skillsmith sentinels from the current repo (keeps user state). |
 | `write-env` | Write `.env` with the resolved backend / model / paths. |
-| `verify` | Run the post-install integrity checks (corpus count, harness sentinels, port). |
+| `server-start` / `server-stop` / `server-restart` / `server-status` | Manage the background FastAPI daemon on :47950. |
+| `serve` | Run the service in the foreground (uvicorn). |
+| `enable-service` | Register skillsmith as a persistent background service (systemd-user / launchd). |
+| `status` | Show user-scope install state, wired repos, and service reachability. |
+| `verify` | Run post-install integrity checks (corpus count, harness sentinels, port). |
 | `doctor` | Diagnose a partial / broken install. |
 | `update` | Pull the latest packs and re-seed. |
 | `uninstall` | Cross-repo sentinel cleanup, optional data-dir wipe. |
 | `reset-step <step>` | Roll back one step of an in-progress install. |
+| `telemetry` | Query / inspect composition traces from the CLI. |
 
 Each subcommand emits structured JSON on stdout; pair with `jq` for scripting.
 
