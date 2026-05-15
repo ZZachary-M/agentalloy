@@ -78,11 +78,13 @@ def _run(args: argparse.Namespace) -> int:
 # will wire as `cursor` — pass `--harness claude-code` to override.
 _HARNESS_MARKERS: list[tuple[str, list[str]]] = [
     ("cursor", [".cursor", ".cursorrules"]),
+    ("windsurf", [".windsurf", ".windsurfrules"]),
     ("continue-local", [".continuerc.json"]),
     ("aider", [".aider.conf.yml"]),
     ("opencode", [".opencode"]),
     ("cline", [".clinerules"]),
     ("gemini-cli", ["GEMINI.md"]),
+    ("github-copilot", [".github/copilot-instructions.md"]),
     ("claude-code", ["CLAUDE.md"]),
 ]
 

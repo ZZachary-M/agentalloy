@@ -1,0 +1,22 @@
+---
+description: Fetch skill context before starting any coding task
+trigger: always_on
+---
+
+# Skillsmith — skill context
+
+A local skillsmith service runs at `http://localhost:{port}` with a curated corpus of engineering skills.
+
+**Before starting any task** (spec, design, build, test, debug):
+
+```bash
+curl -s -X POST http://localhost:{port}/compose/text \
+  -H 'Content-Type: application/json' \
+  -d '{"task": "<one sentence describing what you are about to do>", "phase": "build"}'
+```
+
+The response is plain text skill context. Read it and apply it before generating code or a plan.
+
+Phases: `spec`, `design`, `build`, `qa`, `ops`.
+
+Health check: `curl -s http://localhost:{port}/health` → `{"status":"ok"}`. If unreachable, run `skillsmith doctor` from the skillsmith repo.

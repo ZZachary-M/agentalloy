@@ -154,6 +154,63 @@ class TestCursor:
 
 
 # ---------------------------------------------------------------------------
+# Windsurf
+# ---------------------------------------------------------------------------
+
+
+class TestWindsurf:
+    def test_modern_windsurf_dir(self, repo_root: Path) -> None:
+        """If .windsurf/ exists, use .windsurf/rules/skillsmith.md (dedicated)."""
+        (repo_root / ".windsurf").mkdir()
+        result = wire_harness("windsurf", port=8000, root=repo_root)
+        assert len(result["files_written"]) == 1
+        md = repo_root / ".windsurf" / "rules" / "skillsmith.md"
+        assert md.exists()
+        content = md.read_text()
+        # Dedicated file — no sentinels
+        assert SENTINEL_BEGIN not in content
+        assert "localhost:8000" in content
+        # Has frontmatter
+        assert "trigger:" in content
+
+    def test_legacy_windsurfrules(self, repo_root: Path) -> None:
+        """No .windsurf/ → .windsurfrules with sentinels."""
+        wire_harness("windsurf", port=8000, root=repo_root)
+        rules = repo_root / ".windsurfrules"
+        assert rules.exists()
+        content = rules.read_text()
+        assert SENTINEL_BEGIN in content
+        assert "localhost:8000" in content
+
+
+# ---------------------------------------------------------------------------
+# GitHub Copilot
+# ---------------------------------------------------------------------------
+
+
+class TestGithubCopilot:
+    def test_writes_copilot_instructions(self, repo_root: Path) -> None:
+        result = wire_harness("github-copilot", port=8000, root=repo_root)
+        assert result["integration_vector"] == "markdown_injection"
+        path = repo_root / ".github" / "copilot-instructions.md"
+        assert path.exists()
+        content = path.read_text()
+        assert SENTINEL_BEGIN in content
+        assert "localhost:8000" in content
+
+    def test_preserves_existing_user_content(self, repo_root: Path) -> None:
+        """User-authored content above the sentinel block must survive re-wires."""
+        gh_dir = repo_root / ".github"
+        gh_dir.mkdir()
+        path = gh_dir / "copilot-instructions.md"
+        path.write_text("# Project copilot rules\n\nUse TypeScript strict mode.\n")
+        wire_harness("github-copilot", port=8000, root=repo_root)
+        content = path.read_text()
+        assert "Use TypeScript strict mode." in content
+        assert SENTINEL_BEGIN in content
+
+
+# ---------------------------------------------------------------------------
 # Open harnesses
 # ---------------------------------------------------------------------------
 

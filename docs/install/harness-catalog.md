@@ -123,6 +123,34 @@ Health check: `curl -s http://localhost:{port}/health` returns `{"status":"ok"}`
 
 ---
 
+## Windsurf
+
+**File path:** `<repo-root>/.windsurf/rules/skillsmith.md` (preferred — Windsurf's per-rule directory format), with fallback to `<repo-root>/.windsurfrules` for older versions.
+
+**Detection:** if `<repo-root>/.windsurf/` directory exists, use the modern path. Otherwise create `<repo-root>/.windsurfrules`.
+
+**Edge cases:**
+- `.windsurf/rules/skillsmith.md` is a dedicated file we own — no sentinel needed.
+- `.windsurfrules` is shared with the user's other rules — sentinel-bounded injection required.
+
+**Injected content:** rendered from `harness_templates/windsurf.md`. Uses Windsurf's `trigger: always_on` frontmatter so the rule is applied to every chat turn.
+
+---
+
+## GitHub Copilot (VS Code)
+
+**File path:** `<repo-root>/.github/copilot-instructions.md` (workspace-level Copilot Chat instructions).
+
+**Format:** Markdown. Copilot reads the whole file as instruction context, so sentinel comments are inert to the model but allow `uninstall` to remove our block cleanly while preserving user-authored content.
+
+**Edge cases:**
+- The user may already have `.github/copilot-instructions.md` with project rules. Our injection appends a sentinel-bounded block; existing content is preserved.
+- Parent `.github/` directory is auto-created if absent.
+
+**Injected content:** rendered from `harness_templates/github-copilot.md`.
+
+---
+
 ## Continue.dev (closed model)
 
 **File path:** `<repo-root>/.continuerc.json` (project-scoped Continue config) OR `~/.continue/config.json` (user-scoped). Default: project-scoped.
@@ -316,15 +344,17 @@ The runbook asks the user: "What harness are you using?" and presents this list:
 1. **Claude Code** → CLAUDE.md injection
 2. **Gemini CLI** → GEMINI.md injection
 3. **Cursor** → `.cursor/rules/skillsmith.mdc` or `.cursorrules`
-4. **Continue.dev (with Anthropic / OpenAI / other cloud model)** → `.continuerc.json` system message + custom command
-5. **Continue.dev (with a local LLM)** → `.continuerc.json` custom command only
-6. **OpenCode** → `.opencode/system-prompt.md` snippet (pending OpenCode docs)
-7. **Aider** → `.aider.conf.yml` + `.skillsmith-aider-instructions.md`
-8. **Cline** → `.clinerules`
-9. **Other / I'll wire it manually** → emit a generic snippet to stdout, no file injection
-10. **Use MCP server instead** → MCP fallback for whichever harness in 1–8 the user picks (compound choice)
+4. **Windsurf** → `.windsurf/rules/skillsmith.md` or `.windsurfrules`
+5. **GitHub Copilot (VS Code)** → `.github/copilot-instructions.md`
+6. **Continue.dev (with Anthropic / OpenAI / other cloud model)** → `.continuerc.json` system message + custom command
+7. **Continue.dev (with a local LLM)** → `.continuerc.json` custom command only
+8. **OpenCode** → `.opencode/system-prompt.md` snippet (pending OpenCode docs)
+9. **Aider** → `.aider.conf.yml` + `.skillsmith-aider-instructions.md`
+10. **Cline** → `.clinerules`
+11. **Other / I'll wire it manually** → emit a generic snippet to stdout, no file injection
+12. **Use MCP server instead** → MCP fallback for whichever harness in 1–10 the user picks (compound choice)
 
-The CLI flag `--harness <name>` takes one of: `claude-code`, `gemini-cli`, `cursor`, `continue-closed`, `continue-local`, `opencode`, `aider`, `cline`, `manual`. For the strict-tools MCP fallback, pass `--mcp-fallback` with one of the supported harnesses (claude-code, cursor, continue-closed, continue-local).
+The CLI flag `--harness <name>` takes one of: `claude-code`, `gemini-cli`, `cursor`, `windsurf`, `github-copilot`, `continue-closed`, `continue-local`, `opencode`, `aider`, `cline`, `manual`. For the strict-tools MCP fallback, pass `--mcp-fallback` with one of the supported harnesses (claude-code, cursor, continue-closed, continue-local).
 
 ---
 

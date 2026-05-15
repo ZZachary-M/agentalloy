@@ -5,9 +5,11 @@ Emit harness-specific integration files with sentinel markers for
 clean removal by ``uninstall``.
 
 Closed harnesses (markdown injection):
-  claude-code  → CLAUDE.md
-  gemini-cli   → GEMINI.md
-  cursor       → .cursor/rules/skillsmith.mdc  (or .cursorrules fallback)
+  claude-code     → CLAUDE.md
+  gemini-cli      → GEMINI.md
+  cursor          → .cursor/rules/skillsmith.mdc   (or .cursorrules fallback)
+  windsurf        → .windsurf/rules/skillsmith.md  (or .windsurfrules fallback)
+  github-copilot  → .github/copilot-instructions.md
 
 Open harnesses (system-prompt snippet):
   opencode     → .opencode/system-prompt.md
@@ -69,6 +71,19 @@ _HARNESS_REGISTRY: dict[str, dict[str, Any]] = {
         "target": None,
         "template": "cursor.mdc",
         "dedicated": None,  # depends on path chosen
+        "vector": "markdown_injection",
+    },
+    "windsurf": {
+        # Resolved at runtime: .windsurf/rules/skillsmith.md or .windsurfrules
+        "target": None,
+        "template": "windsurf.md",
+        "dedicated": None,  # depends on path chosen
+        "vector": "markdown_injection",
+    },
+    "github-copilot": {
+        "target": ".github/copilot-instructions.md",
+        "template": "github-copilot.md",
+        "dedicated": False,
         "vector": "markdown_injection",
     },
     "opencode": {
@@ -208,6 +223,18 @@ def _resolve_cursor_path(root: Path) -> tuple[str, bool]:
     if (root / ".cursor").is_dir():
         return ".cursor/rules/skillsmith.mdc", True
     return ".cursorrules", False
+
+
+def _resolve_windsurf_path(root: Path) -> tuple[str, bool]:
+    """Resolve Windsurf target path.
+
+    Returns (relative_path, is_dedicated_file).
+    Modern: .windsurf/rules/skillsmith.md (dedicated per-rule file)
+    Legacy: .windsurfrules (shared, sentinel-bounded)
+    """
+    if (root / ".windsurf").is_dir():
+        return ".windsurf/rules/skillsmith.md", True
+    return ".windsurfrules", False
 
 
 def _wire_continue(
@@ -379,6 +406,8 @@ def wire_harness(
     # Resolve target path
     if harness == "cursor":
         rel_path, dedicated = _resolve_cursor_path(root)
+    elif harness == "windsurf":
+        rel_path, dedicated = _resolve_windsurf_path(root)
     else:
         rel_path = reg["target"]
         dedicated = reg["dedicated"]
