@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "install_started_at": "2026-05-15T21:49:21.002004+00:00",
+  "completed_steps": [
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.002008+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "claude-code",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_appends_to_existing_claud0/CLAUDE.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "ea2b1d4c174b76b3a89b0cc7db97f6e0a273c652fe8540da2b2e4e17d4f7d7ac",
+            "harness": "claude-code",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_appends_to_existing_claud0"
+          }
+        ]
+      }
+    }
+  ],
+  "harness_files_written": [
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_appends_to_existing_claud0/CLAUDE.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "ea2b1d4c174b76b3a89b0cc7db97f6e0a273c652fe8540da2b2e4e17d4f7d7ac",
+      "harness": "claude-code",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_appends_to_existing_claud0"
+    }
+  ],
+  "models_pulled": [],
+  "env_path": null,
+  "port": 47950,
+  "last_verify_passed_at": null
+}

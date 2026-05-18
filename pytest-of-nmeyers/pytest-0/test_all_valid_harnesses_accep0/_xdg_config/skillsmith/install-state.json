@@ -1,0 +1,282 @@
+{
+  "schema_version": 2,
+  "install_started_at": "2026-05-15T21:49:21.017025+00:00",
+  "completed_steps": [
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.017031+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "continue-local",
+        "integration_vector": "system_prompt_snippet",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.continuerc.json",
+            "action": "injected_block",
+            "sentinel_begin": "_skillsmith_install_marker",
+            "sentinel_end": "_skillsmith_install_marker",
+            "content_sha256": "1c778c1f5d7871f4b5f8aab8b169fdc04007841762380b731def3f940bf5f6d5",
+            "harness": "continue-local",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.017215+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "opencode",
+        "integration_vector": "system_prompt_snippet",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.opencode/system-prompt.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+            "harness": "opencode",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.017427+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "continue-closed",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.continuerc.json",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- skillsmith:begin -->",
+            "sentinel_end": "<!-- skillsmith:end -->",
+            "content_sha256": "5f0d76b0404a1ab66689853251336607543b3a17551006d5d918377615708591",
+            "harness": "continue-closed",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.017604+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "cursor",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.cursorrules",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "eb28978dcab027e5b19d1ac2fa6fd8e49cc79b061ac0581a5298e9ed39fb1bfd",
+            "harness": "cursor",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.017807+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "cline",
+        "integration_vector": "system_prompt_snippet",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.clinerules",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "5d7e34fa4c38f412097fe67b1bfe18f74418fa228def023d0a59b9833b4a54d3",
+            "harness": "cline",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.018003+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "gemini-cli",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/GEMINI.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "d9d3ece7b8394adc827744d5e441178e1202a9081eacc2f3e14c7ec12b43f16a",
+            "harness": "gemini-cli",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.018230+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "aider",
+        "integration_vector": "system_prompt_snippet",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.skillsmith-aider-instructions.md",
+            "action": "wrote_new_file",
+            "sentinel_begin": null,
+            "sentinel_end": null,
+            "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+            "harness": "aider",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          },
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.aider.conf.yml",
+            "action": "injected_block",
+            "sentinel_begin": "# <!-- BEGIN skillsmith install -->",
+            "sentinel_end": "# <!-- END skillsmith install -->",
+            "content_sha256": "96c23d7f5da6d8f5958deb6f9511de3058ee3d2c19807b387c19ed298e766519",
+            "harness": "aider",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.018474+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "hermes-agent",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.hermes/SOUL.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "bc983c4bec9f2ceb91dde57559251465d2f4bca666a0d1462aca20580520c9f6",
+            "harness": "hermes-agent",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    },
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.018718+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "claude-code",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/CLAUDE.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "700c54e9f73dd578628dba1cbe4bb7126e1f2896fb072e283aae44462e9b06ce",
+            "harness": "claude-code",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+          }
+        ]
+      }
+    }
+  ],
+  "harness_files_written": [
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.opencode/system-prompt.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+      "harness": "opencode",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.continuerc.json",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- skillsmith:begin -->",
+      "sentinel_end": "<!-- skillsmith:end -->",
+      "content_sha256": "5f0d76b0404a1ab66689853251336607543b3a17551006d5d918377615708591",
+      "harness": "continue-closed",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.cursorrules",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "eb28978dcab027e5b19d1ac2fa6fd8e49cc79b061ac0581a5298e9ed39fb1bfd",
+      "harness": "cursor",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.clinerules",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "5d7e34fa4c38f412097fe67b1bfe18f74418fa228def023d0a59b9833b4a54d3",
+      "harness": "cline",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/GEMINI.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "d9d3ece7b8394adc827744d5e441178e1202a9081eacc2f3e14c7ec12b43f16a",
+      "harness": "gemini-cli",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.skillsmith-aider-instructions.md",
+      "action": "wrote_new_file",
+      "sentinel_begin": null,
+      "sentinel_end": null,
+      "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+      "harness": "aider",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.aider.conf.yml",
+      "action": "injected_block",
+      "sentinel_begin": "# <!-- BEGIN skillsmith install -->",
+      "sentinel_end": "# <!-- END skillsmith install -->",
+      "content_sha256": "96c23d7f5da6d8f5958deb6f9511de3058ee3d2c19807b387c19ed298e766519",
+      "harness": "aider",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/.hermes/SOUL.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "bc983c4bec9f2ceb91dde57559251465d2f4bca666a0d1462aca20580520c9f6",
+      "harness": "hermes-agent",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0/CLAUDE.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "700c54e9f73dd578628dba1cbe4bb7126e1f2896fb072e283aae44462e9b06ce",
+      "harness": "claude-code",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_all_valid_harnesses_accep0"
+    }
+  ],
+  "models_pulled": [],
+  "env_path": null,
+  "port": 47950,
+  "last_verify_passed_at": null
+}

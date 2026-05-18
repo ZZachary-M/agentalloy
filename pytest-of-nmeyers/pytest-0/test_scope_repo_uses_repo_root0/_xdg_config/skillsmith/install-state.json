@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "install_started_at": "2026-05-15T21:49:21.022395+00:00",
+  "completed_steps": [
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.022400+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "aider",
+        "integration_vector": "system_prompt_snippet",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0/.skillsmith-aider-instructions.md",
+            "action": "wrote_new_file",
+            "sentinel_begin": null,
+            "sentinel_end": null,
+            "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+            "harness": "aider",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0"
+          },
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0/.aider.conf.yml",
+            "action": "injected_block",
+            "sentinel_begin": "# <!-- BEGIN skillsmith install -->",
+            "sentinel_end": "# <!-- END skillsmith install -->",
+            "content_sha256": "96c23d7f5da6d8f5958deb6f9511de3058ee3d2c19807b387c19ed298e766519",
+            "harness": "aider",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0"
+          }
+        ]
+      }
+    }
+  ],
+  "harness_files_written": [
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0/.skillsmith-aider-instructions.md",
+      "action": "wrote_new_file",
+      "sentinel_begin": null,
+      "sentinel_end": null,
+      "content_sha256": "13cc335fa3737ffef66d5f4abf339902766d3dbb522536e913f03c7473b0df7c",
+      "harness": "aider",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0"
+    },
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0/.aider.conf.yml",
+      "action": "injected_block",
+      "sentinel_begin": "# <!-- BEGIN skillsmith install -->",
+      "sentinel_end": "# <!-- END skillsmith install -->",
+      "content_sha256": "96c23d7f5da6d8f5958deb6f9511de3058ee3d2c19807b387c19ed298e766519",
+      "harness": "aider",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_scope_repo_uses_repo_root0"
+    }
+  ],
+  "models_pulled": [],
+  "env_path": null,
+  "port": 47950,
+  "last_verify_passed_at": null
+}

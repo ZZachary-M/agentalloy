@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "install_started_at": "2026-05-15T21:49:21.012486+00:00",
+  "completed_steps": [
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.012491+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "continue-closed",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_preserves_existing_config0/.continuerc.json",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- skillsmith:begin -->",
+            "sentinel_end": "<!-- skillsmith:end -->",
+            "content_sha256": "1091855ead7987e39e7ad51bddf0e58c62e3f4eede0df8596a19d41ac584bf5f",
+            "harness": "continue-closed",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_preserves_existing_config0"
+          }
+        ]
+      }
+    }
+  ],
+  "harness_files_written": [
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_preserves_existing_config0/.continuerc.json",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- skillsmith:begin -->",
+      "sentinel_end": "<!-- skillsmith:end -->",
+      "content_sha256": "1091855ead7987e39e7ad51bddf0e58c62e3f4eede0df8596a19d41ac584bf5f",
+      "harness": "continue-closed",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_preserves_existing_config0"
+    }
+  ],
+  "models_pulled": [],
+  "env_path": null,
+  "port": 47950,
+  "last_verify_passed_at": null
+}

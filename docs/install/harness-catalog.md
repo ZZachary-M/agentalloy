@@ -365,7 +365,7 @@ The runbook asks the user: "What harness are you using?" and presents this list:
 5. **GitHub Copilot (VS Code)** → `.github/copilot-instructions.md`
 6. **Hermes Agent** → `~/.hermes/SOUL.md` (user scope, default) or `AGENTS.md` (repo scope)
 7. **Continue.dev (with Anthropic / OpenAI / other cloud model)** → `.continuerc.json` system message + custom command
-7. **Continue.dev (with a local LLM)** → `.continuerc.json` custom command only
+8. **Continue.dev (with a local LLM)** → `.continuerc.json` custom command only
 8. **OpenCode** → `.opencode/system-prompt.md` snippet (pending OpenCode docs)
 9. **Aider** → `.aider.conf.yml` + `.skillsmith-aider-instructions.md`
 10. **Cline** → `.clinerules`

@@ -235,6 +235,18 @@ def _resolve_cursor_path(root: Path) -> tuple[str, bool]:
     return ".cursorrules", False
 
 
+def _resolve_windsurf_path(root: Path) -> tuple[str, bool]:
+    """Resolve Windsurf target path.
+
+    Returns (relative_path, is_dedicated_file).
+    Modern: .windsurf/rules/skillsmith.md (dedicated per-rule file)
+    Legacy: .windsurfrules (shared, sentinel-bounded)
+    """
+    if (root / ".windsurf").is_dir():
+        return ".windsurf/rules/skillsmith.md", True
+    return ".windsurfrules", False
+
+
 def _resolve_hermes_path(scope: str) -> tuple[str, bool]:
     """Resolve Hermes Agent target path.
 
@@ -246,18 +258,6 @@ def _resolve_hermes_path(scope: str) -> tuple[str, bool]:
     if scope == "user":
         return ".hermes/SOUL.md", False
     return "AGENTS.md", False
-
-
-def _resolve_windsurf_path(root: Path) -> tuple[str, bool]:
-    """Resolve Windsurf target path.
-
-    Returns (relative_path, is_dedicated_file).
-    Modern: .windsurf/rules/skillsmith.md (dedicated per-rule file)
-    Legacy: .windsurfrules (shared, sentinel-bounded)
-    """
-    if (root / ".windsurf").is_dir():
-        return ".windsurf/rules/skillsmith.md", True
-    return ".windsurfrules", False
 
 
 def _wire_continue(

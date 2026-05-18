@@ -1,0 +1,57 @@
+
+# 2026-05-14 10:06:06.212796
++Y
+
+# 2026-05-14 10:10:32.304165
++When we install Skillsmith we wire it into our harnesses. What is the mechnism used that to go from a prompt given to the LLM to using the skills?
+
+# 2026-05-14 10:10:52.915671
++/exit
+
+# 2026-05-14 10:11:09.872511
++hi
+
+# 2026-05-14 10:11:35.511161
++When we install Skillsmith we wire it into our harnesses. What is the mechnism used that to go from a prompt given to the LLM to using the skills?
+
+# 2026-05-14 10:13:28.298078
++/exit
+
+# 2026-05-14 11:31:29.697427
++Review the /docs/llms.md file please
+
+# 2026-05-14 11:32:51.708128
++exit
+
+# 2026-05-14 11:32:55.345127
++/exit
+
+# 2026-05-14 11:33:03.723363
++Review the /docs/llms.md file please
+
+# 2026-05-14 11:34:05.521362
++/add docs/llms.md
+
+# 2026-05-14 11:34:18.043949
++Review the docs/llms.md file please
+
+# 2026-05-14 11:55:52.128461
++A
+
+# 2026-05-14 13:13:53.283956
++try again
+
+# 2026-05-14 13:28:47.782068
++Submit PR to remote and monitor the CI
+
+# 2026-05-14 13:40:09.201753
++You should be able to run all of those commands from this repo.
+
+# 2026-05-14 13:47:35.904816
++Y
+
+# 2026-05-14 14:10:54.296553
++Did you push and create the PR?
+
+# 2026-05-14 14:31:04.482070
++/exit

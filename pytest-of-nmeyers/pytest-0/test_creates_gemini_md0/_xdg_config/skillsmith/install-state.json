@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "install_started_at": "2026-05-15T21:49:21.006399+00:00",
+  "completed_steps": [
+    {
+      "step": "wire-harness",
+      "completed_at": "2026-05-15T21:49:21.006404+00:00",
+      "output": {
+        "schema_version": 1,
+        "harness": "gemini-cli",
+        "integration_vector": "markdown_injection",
+        "files_written": [
+          {
+            "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_creates_gemini_md0/GEMINI.md",
+            "action": "injected_block",
+            "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+            "sentinel_end": "<!-- END skillsmith install -->",
+            "content_sha256": "d9d3ece7b8394adc827744d5e441178e1202a9081eacc2f3e14c7ec12b43f16a",
+            "harness": "gemini-cli",
+            "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_creates_gemini_md0"
+          }
+        ]
+      }
+    }
+  ],
+  "harness_files_written": [
+    {
+      "path": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_creates_gemini_md0/GEMINI.md",
+      "action": "injected_block",
+      "sentinel_begin": "<!-- BEGIN skillsmith install -->",
+      "sentinel_end": "<!-- END skillsmith install -->",
+      "content_sha256": "d9d3ece7b8394adc827744d5e441178e1202a9081eacc2f3e14c7ec12b43f16a",
+      "harness": "gemini-cli",
+      "repo_root": "/home/nmeyers/dev/skillsmith/pytest-of-nmeyers/pytest-0/test_creates_gemini_md0"
+    }
+  ],
+  "models_pulled": [],
+  "env_path": null,
+  "port": 47950,
+  "last_verify_passed_at": null
+}

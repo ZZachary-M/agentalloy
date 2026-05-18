@@ -1,3 +1,15 @@
 # Skillsmith — skill context
 
-A local skillsmith service runs at http://localhost:{port}. **Before starting any task** (spec, design, build, test, debug), POST to /compose/text with `{"task":"...", "phase":"build|spec|design|qa|ops"}`. The response is plain text — read it before generating code or a plan.
+A local skillsmith service runs at http://localhost:{port}.
+
+**Health-gate.** Verify: `curl -fs http://localhost:{port}/health`. If unreachable, skip.
+
+**Session start — determine phase.** Check `.skillsmith/phase`. If it exists, use that phase. If not:
+- SDD work (coding, testing, debugging, designing, spec writing) -> pick the matching phase
+- Non-SDD work -> skip Skillsmith entirely
+
+**When in an SDD phase, before starting work, POST to `/compose/text` with `{"task": "...", "phase": "<phase from .skillsmith/phase>"}`. Read the response before generating code.
+
+**Phase transitions.** Update `.skillsmith/phase` if activity shifts.
+
+Phases: `spec`, `design`, `build`, `qa`, `ops`.

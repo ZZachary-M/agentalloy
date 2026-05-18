@@ -9,9 +9,29 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-__all__ = ["Settings", "get_settings"]
+__all__ = ["AuthoringConfig", "Settings", "get_settings"]
 
 logger = logging.getLogger(__name__)
+
+
+class AuthoringConfig(BaseSettings):
+    """Authoring pipeline configuration loaded from environment.
+
+    Env var prefix: ``AUTHORING_`` (e.g. ``AUTHORING_MODEL``).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="AUTHORING_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    authoring_model: str = "qwen3-14b-instruct"
+    critic_model: str = "qwen3.6-27b"
+    authoring_lm_base_url: str = "http://localhost:11435"
+    lm_studio_base_url: str = "http://localhost:11434"
+    authoring_embed_base_url: str = "http://localhost:11436"
+    authoring_embedding_model: str = "qwen3-embedding:0.6b"
 
 
 def _user_corpus_dir() -> Path:
@@ -59,6 +79,29 @@ class Settings(BaseSettings):
         """Create parent directories for LadybugDB and DuckDB if missing."""
         Path(self.ladybug_db_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.duckdb_path).parent.mkdir(parents=True, exist_ok=True)
+
+    def require_authoring_config(self) -> AuthoringConfig:
+        """Extract authoring config from environment.
+
+        Loads AuthoringConfig which reads AUTHORING_* env vars.
+        Raises RuntimeError if required fields are missing or empty.
+        """
+        ac = AuthoringConfig()
+        required = {
+            "authoring_model": ac.authoring_model,
+            "critic_model": ac.critic_model,
+            "authoring_lm_base_url": ac.authoring_lm_base_url,
+            "lm_studio_base_url": ac.lm_studio_base_url,
+            "authoring_embed_base_url": ac.authoring_embed_base_url,
+            "authoring_embedding_model": ac.authoring_embedding_model,
+        }
+        missing = [k for k, v in required.items() if not v]
+        if missing:
+            raise RuntimeError(
+                f"Authoring config incomplete — missing AUTHORING_ env vars for: "
+                f"{', '.join(missing)}. Source ~/.config/skillsmith/.env or set them manually."
+            )
+        return ac
 
 
 def get_settings() -> Settings:
