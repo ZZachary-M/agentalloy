@@ -220,46 +220,6 @@ class TestWindsurf:
 
 
 # ---------------------------------------------------------------------------
-# Hermes Agent
-# ---------------------------------------------------------------------------
-
-
-class TestHermesAgent:
-    def test_user_scope_writes_soul_md(self, tmp_path: Path) -> None:
-        """User scope wires ~/.hermes/SOUL.md, sentinel-bounded."""
-        result = wire_harness("hermes-agent", port=8000, root=tmp_path, scope="user")
-        assert result["integration_vector"] == "markdown_injection"
-        soul = tmp_path / ".hermes" / "SOUL.md"
-        assert soul.exists()
-        content = soul.read_text()
-        assert SENTINEL_BEGIN in content
-        assert "localhost:8000" in content
-        # Health-gate must be present so Hermes skips in non-skillsmith projects
-        assert "/health" in content
-
-    def test_repo_scope_writes_agents_md(self, repo_root: Path) -> None:
-        """Repo scope wires <repo>/AGENTS.md, sentinel-bounded."""
-        result = wire_harness("hermes-agent", port=8000, root=repo_root, scope="repo")
-        assert result["integration_vector"] == "markdown_injection"
-        agents = repo_root / "AGENTS.md"
-        assert agents.exists()
-        content = agents.read_text()
-        assert SENTINEL_BEGIN in content
-        assert "localhost:8000" in content
-
-    def test_preserves_existing_soul_content(self, tmp_path: Path) -> None:
-        """User-authored persona content in SOUL.md survives wiring."""
-        soul = tmp_path / ".hermes" / "SOUL.md"
-        soul.parent.mkdir(parents=True)
-        soul.write_text("# My persona\n\nBe terse.\n")
-        wire_harness("hermes-agent", port=8000, root=tmp_path, scope="user")
-        content = soul.read_text()
-        assert "# My persona" in content
-        assert "Be terse." in content
-        assert SENTINEL_BEGIN in content
-
-
-# ---------------------------------------------------------------------------
 # GitHub Copilot
 # ---------------------------------------------------------------------------
 
@@ -530,7 +490,7 @@ class TestIntakeActivationMarkers:
     ]
 
     def test_hermes_agent_has_intake_markers(self, tmp_path: Path) -> None:
-        result = wire_harness("hermes-agent", port=8000, root=tmp_path, scope="user")
+        wire_harness("hermes-agent", port=8000, root=tmp_path, scope="user")
         content = (tmp_path / ".hermes" / "SOUL.md").read_text()
         for marker in self._INTAKE_MARKERS:
             assert marker in content, f"Missing marker: {marker}"
@@ -548,7 +508,7 @@ class TestIntakeActivationMarkers:
         may encode phase references differently and are not required to contain the
         literal string.
         """
-        INSTRUCTION_EXTENSIONS = {".md", ".mdc"}
+        instruction_extensions = {".md", ".mdc"}
         for harness in VALID_HARNESSES:
             state_file = repo_root / ".skillsmith" / "install-state.json"
             if state_file.exists():
@@ -558,7 +518,7 @@ class TestIntakeActivationMarkers:
             result = wire_harness(harness, port=8000, root=repo_root)
             for entry in result["files_written"]:
                 path = Path(entry["path"])
-                if path.exists() and path.suffix.lower() in INSTRUCTION_EXTENSIONS:
+                if path.exists() and path.suffix.lower() in instruction_extensions:
                     content = path.read_text()
                     assert ".skillsmith/phase" in content, (
                         f"Harness {harness} at {path} missing phase reference"

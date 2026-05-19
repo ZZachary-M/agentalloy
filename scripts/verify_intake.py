@@ -1,10 +1,10 @@
 """Verify intake skills in LadybugDB and run reembed."""
-import sys
 import subprocess
-from pathlib import Path
+import sys
 
-from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.config import get_settings
+from skillsmith.storage.ladybug import LadybugStore
+
 
 def main():
     settings = get_settings()
