@@ -111,7 +111,7 @@ class HealthChecker:
 
     def _probe_embed_model(self) -> str | None:
         """FastFlowLM hides the embedding slot from /v1/models, so we probe by
-        actually embedding a short string. A 768-dim (or any non-empty) result
+        actually embedding a short string. A 1024-dim (or any non-empty) result
         proves both the endpoint and the model are responsive."""
         try:
             vectors = self._lm.embed(model=self._embedding_model, texts=["health"])

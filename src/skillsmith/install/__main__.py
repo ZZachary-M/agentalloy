@@ -37,7 +37,7 @@ from skillsmith.install.subcommands import (
     server_start,
     server_status,
     server_stop,
-    setup,
+    simple_setup,
     start_embed_server,
     status,
     telemetry,
@@ -59,7 +59,7 @@ EXIT_NOOP = 4
 _SUBCOMMANDS = [
     # User-facing verbs first — these are what end users typically run.
     preflight,
-    setup,
+    simple_setup,
     wire,
     unwire,
     serve,

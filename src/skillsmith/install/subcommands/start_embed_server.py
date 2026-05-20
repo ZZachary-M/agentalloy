@@ -279,3 +279,8 @@ def _port_open(host: str, port: int) -> bool:
 
 def _save(result: dict[str, Any]) -> None:
     install_state.save_output_file(result, f"{STEP_NAME}.json")
+
+
+def run(args: argparse.Namespace) -> int:
+    """Public entry point for non-argparse callers (e.g. simple_setup)."""
+    return _run(args)

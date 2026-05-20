@@ -829,3 +829,8 @@ def _run(args: argparse.Namespace) -> int:
     )
     print(json.dumps(result, indent=2))
     return 0
+
+
+def run(args: argparse.Namespace) -> int:
+    """Public entry point for non-argparse callers (e.g. simple_setup)."""
+    return _run(args)

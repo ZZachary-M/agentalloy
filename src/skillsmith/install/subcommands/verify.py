@@ -610,7 +610,7 @@ def run_checks(st: dict[str, Any], root: Path | None = None) -> dict[str, Any]: 
 def add_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     p: argparse.ArgumentParser = subparsers.add_parser(
         "verify",
-        help="Install-time smoke test (embed → retrieve → 768-dim, harness config, etc.).",
+        help="Install-time smoke test (embed → retrieve → 1024-dim, harness config, etc.).",
     )
     p.set_defaults(func=run)
 

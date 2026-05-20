@@ -343,3 +343,8 @@ def _bulk_reembed() -> int:
     except Exception as exc:  # noqa: BLE001 — surface but don't crash setup
         print(f"install-packs: reembed raised: {exc}", file=sys.stderr)
         return 2
+
+
+def run(args: argparse.Namespace) -> int:
+    """Public entry point for non-argparse callers (e.g. simple_setup)."""
+    return _run(args)

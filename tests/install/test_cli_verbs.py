@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -279,125 +278,10 @@ class TestServe:
 # ---------------------------------------------------------------------------
 
 
-class TestSetup:
-    def test_stops_at_first_failed_step_by_default(
-        self, repo_root: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        from skillsmith.install.subcommands import setup
-
-        # Patch _invoke_step so the first step fails — composer must stop.
-        calls: list[str] = []
-
-        def fake_invoke(
-            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
-        ) -> int:
-            calls.append(step)
-            return 1 if step == "detect" else 0
-
-        with patch.object(setup, "_invoke_step", side_effect=fake_invoke):
-            rc = setup._run(argparse.Namespace(continue_on_error=False))
-        assert rc == 1
-        # Preflight is the gate, runs first; then detect fails and stops.
-        assert calls == ["preflight-early", "detect"]
-        out_lines = capsys.readouterr().out.strip().splitlines()
-        # JSON output always emitted, even on early-stop
-        result = json.loads("\n".join(out_lines))
-        assert result["action"] == "setup_failed"
-        assert "detect" in result["failed_steps"]
-
-    def test_continue_on_error_keeps_running(self, repo_root: Path) -> None:
-        """With --continue-on-error, every step is at least *attempted*. Since
-        the underlying steps don't actually run (we patch _invoke_step), the
-        prereq-skip path will short-circuit downstream steps that need
-        upstream output files. The composer's behavior is: keep going past
-        the failure, attempting whatever still has its prereqs satisfied."""
-        from skillsmith.install.subcommands import setup
-
-        calls: list[str] = []
-
-        def fake_invoke(
-            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
-        ) -> int:
-            calls.append(step)
-            # Gate steps must succeed for the loop to continue past them.
-            if step.startswith("preflight"):
-                return 0
-            return 1  # every non-gate step fails
-
-        with patch.object(setup, "_invoke_step", side_effect=fake_invoke):
-            rc = setup._run(argparse.Namespace(continue_on_error=True))
-        assert rc == 1
-        # detect was at least attempted; downstream steps either ran or
-        # were skipped via the prereq check — both count as making progress.
-        assert "detect" in calls
-
-    def test_noop_exit_code_does_not_count_as_failure(self, repo_root: Path) -> None:
-        from skillsmith.install.subcommands import setup
-
-        # All steps return 4 (EXIT_NOOP) — composer must treat that as
-        # success. The prereq check fires before _invoke_step, so we also
-        # need to seed the upstream output files for downstream steps to
-        # be reachable.
-        outputs = install_state.outputs_dir()
-        outputs.mkdir(parents=True, exist_ok=True)
-        for fname in (
-            "detect.json",
-            "recommend-host-targets.json",
-            "recommend-models.json",
-            "pull-models.json",
-        ):
-            (outputs / fname).write_text("{}")
-        with patch.object(setup, "_invoke_step", return_value=4):
-            rc = setup._run(argparse.Namespace(continue_on_error=False))
-        assert rc == 0
-
-    def test_invoke_step_wraps_non_systemexit(self, repo_root: Path) -> None:
-        """The real _invoke_step must convert non-SystemExit exceptions to
-        exit code 2 so --continue-on-error keeps the loop alive."""
-        from skillsmith.install.subcommands import setup
-
-        def boom(_args: argparse.Namespace) -> int:
-            raise RuntimeError("upstream failure")
-
-        # Build a synthetic step module shape that _invoke_step can
-        # parse-and-dispatch. We patch importlib.import_module to return
-        # a stub module exposing the same `add_parser(subparsers)`
-        # contract real subcommand modules expose.
-        import types
-
-        stub = types.ModuleType("stub")
-
-        def add_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # noqa: ARG001
-            sp = subparsers.add_parser("detect")
-            sp.set_defaults(func=boom)
-
-        stub.add_parser = add_parser  # type: ignore[attr-defined]
-        with patch("importlib.import_module", return_value=stub):
-            rc = setup._invoke_step("detect", "stub", argparse.Namespace())
-        assert rc == 2
-
-    def test_missing_prereq_skips_with_clear_error(self, repo_root: Path) -> None:
-        """A step whose upstream output JSON is missing must be skipped
-        with a clear stderr message, not an opaque argparse error."""
-        from skillsmith.install.subcommands import setup
-
-        # Patch out the actual step invocation and simulate detect succeeding
-        # but writing no output — recommend-host-targets should skip.
-        invoked: list[str] = []
-
-        def fake_invoke(
-            step: str, _module: str, _args: object, _extra: tuple[str, ...] = ()
-        ) -> int:
-            invoked.append(step)
-            return 0  # claim success but write no output file
-
-        with patch.object(setup, "_invoke_step", side_effect=fake_invoke):
-            rc = setup._run(argparse.Namespace(continue_on_error=True))
-        # detect was attempted; downstream steps recognized the missing
-        # prereq and skipped without invoking the underlying command.
-        assert "detect" in invoked
-        assert "recommend-host-targets" not in invoked
-        assert rc == 1
+# TestSetup class removed: the old 11-step composer (subcommands/setup.py)
+# was replaced by simple_setup. Tests for the new flow live in
+# tests/test_simple_setup.py (18 tests covering prompts, execution,
+# argparse registration, and error handling).
 
 
 # ---------------------------------------------------------------------------

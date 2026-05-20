@@ -230,7 +230,7 @@ ollama pull qwen3-embedding:0.6b
 
 ## Packs shipping in-tree
 
-The corpus is **packs** — opt-in groups of related skills. As of 2026-05-16, `main` ships **37 packs / 324 declared skills** organized across 9 tiers:
+The corpus is **packs** — opt-in groups of related skills. As of 2026-05-16, `main` ships **35 packs / 324 declared skills** organized across 9 tiers:
 
 <table>
 <tr><th>Tier</th><th>Packs</th></tr>
@@ -340,15 +340,17 @@ Environment variables (written automatically by `skillsmith install write-env`):
 |---|---|---|
 | `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | Embedding endpoint |
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model for retrieve / compose |
-| `LADYBUG_DB_PATH` | `./data/ladybug` | LadybugDB directory |
-| `DUCKDB_PATH` | `./data/skills.duck` | DuckDB vector + telemetry store |
-| `AUTHORING_MODEL` | `hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-IQ4_NL_XL` | Author model (authoring only) |
-| `CRITIC_MODEL` | `hf.co/unsloth/Qwen3.6-27B-GGUF:UD-Q5_K_XL` | Critic model (authoring only) |
-| `AUTHORING_LM_BASE_URL` | (falls back to `LM_STUDIO_BASE_URL`) | Author endpoint — set equal to `LM_STUDIO_BASE_URL` for single-GPU swap-batched use |
+| `LADYBUG_DB_PATH` | `~/.local/share/skillsmith/corpus/ladybug` | LadybugDB directory |
+| `DUCKDB_PATH` | `~/.local/share/skillsmith/corpus/skills.duck` | DuckDB vector + telemetry store |
+| `AUTHORING_MODEL` | `qwen3-14b-instruct` | Author model (authoring only) |
+| `AUTHORING_LM_BASE_URL` | `http://localhost:11435` | Author endpoint |
+| `LM_STUDIO_BASE_URL` | `http://localhost:11434` | LM Studio endpoint (authoring only) |
+| `AUTHORING_EMBED_BASE_URL` | `http://localhost:11436` | Authoring-pipeline embedding endpoint |
 | `AUTHORING_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Authoring-pipeline embedding model |
+| `CRITIC_MODEL` | `qwen3.6-27b` | Critic model (authoring only) |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Dedup hard cosine threshold |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Dedup soft cosine threshold |
-| `BOUNCE_BUDGET` | `5` | Max author↔critic revision rounds |
+| `BOUNCE_BUDGET` | `3` | Max author↔critic revision rounds |
 | `LOG_LEVEL` | `INFO` | Log verbosity |
 
 Copy [`.env.example`](.env.example) and adjust paths for your machine. The example file documents every variable inline.
