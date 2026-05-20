@@ -66,6 +66,7 @@ class SetupConfig:
     harness: str = "manual"
     preset: str = ""  # filled by auto-detect: "cpu", "nvidia", etc.
     non_interactive: bool = False
+    hardware_target: str = ""  # explicit user choice: "nvidia", "radeon", "apple-silicon", "cpu"
 
     # Resolved during execution -- not user-facing.
     detected_runner: str | None = None  # from detect.json (e.g. "ollama", "llama-server")
@@ -93,12 +94,14 @@ _PRESET_MAP: dict[tuple[str, str], str] = {
 
 
 def _resolve_preset(cfg: SetupConfig) -> str:
-    """Resolve the write-env preset from runner + detected hardware.
+    """Resolve the write-env preset from runner + hardware target.
 
-    Falls back to "cpu" if the combination is unknown.
+    Uses the user's explicit hardware_target if set, otherwise falls back to
+    the auto-detected recommended_host. Falls back to "cpu" if the combination
+    is unknown.
     """
     runner = cfg.runner
-    hw = cfg.recommended_host or "cpu"
+    hw = cfg.hardware_target or cfg.recommended_host or "cpu"
     key = (runner, hw)
     preset = _PRESET_MAP.get(key)
     if preset is None:
@@ -129,7 +132,7 @@ def _build_namespace(cfg: SetupConfig, **overrides: Any) -> argparse.Namespace: 
         "ignore_unknown": False,
         "list": False,
         "runtime": None,
-        "hardware": None,
+        "hardware": cfg.hardware_target,
         "host": None,
         "timeout": 120.0,  # start_embed_server timeout
         "overrides": None,  # write_env overrides
@@ -147,8 +150,22 @@ def _prompt(text: str, default: Any = None) -> str:
     return input(f"{text} [{default}]: ") or (str(default) if default is not None else "")
 
 
+def _prompt_context(text: str, context: str, default: Any = None) -> str:
+    """Interactive prompt with a context description and default. Returns default if non-TTY."""
+    _print(f"  [dim]{context}[/dim]")
+    return _prompt(text, default=default)
+
+
 def run_setup(cfg: SetupConfig) -> int:
-    """Execute the simple interactive setup flow."""
+    """Execute the simple interactive setup flow.
+
+    Three phases:
+    1. Detect hardware
+    2. Gather user config with context descriptions
+    3. Show summary for confirmation
+    4. Execute install steps
+    5. Validate
+    """
     t0 = time.monotonic()
 
     # -- Phase 0: Auto-detect hardware --
@@ -167,7 +184,7 @@ def run_setup(cfg: SetupConfig) -> int:
     else:
         cfg.recommended_host = "cpu"
 
-    _print(f"  Detected host: {cfg.recommended_host or 'cpu'}")
+    _print(f"  Detected: {cfg.recommended_host or 'cpu'}")
 
     # -- Phase 1: Gather config --
 
@@ -175,7 +192,11 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # 1. Runner
     if cfg.runner == "ollama" and not cfg.non_interactive:
-        cfg.runner = _prompt("  Embedding runner", default="ollama")
+        cfg.runner = _prompt_context(
+            "  Embedding runner",
+            "  This determines how you want to execute the small LLM for skills retrieval.",
+            default="ollama",
+        )
     if cfg.runner not in ("ollama", "llama-server"):
         _print(f"  [red]Invalid runner: {cfg.runner}. Choose ollama or llama-server.[/red]")
         return 1
@@ -183,8 +204,9 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # 2. Model (default varies by runner)
     if not cfg.non_interactive:
-        cfg.model = _prompt(
+        cfg.model = _prompt_context(
             "  Model",
+            "  Which embedding model to use. We recommend the default for your hardware.",
             default=_MODEL_DEFAULTS.get(cfg.runner, "qwen3-embedding:0.6b"),
         )
     else:
@@ -193,7 +215,11 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # 3. Port
     if not cfg.non_interactive:
-        port_str = _prompt("  Service port", default=47950)
+        port_str = _prompt_context(
+            "  Service port",
+            "  Confirms which port you want to host the FastAPI service on.",
+            default=47950,
+        )
         try:
             cfg.port = int(port_str)
         except ValueError:
@@ -203,7 +229,11 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # 4. Service mode
     if not cfg.non_interactive:
-        cfg.mode = _prompt("  Service mode (persistent/manual)", default="persistent")
+        cfg.mode = _prompt_context(
+            "  Service mode",
+            "  'persistent' runs the service as a systemd daemon. 'manual' starts it on demand.",
+            default="persistent",
+        )
     if cfg.mode not in ("persistent", "manual"):
         _print(f"  [red]Invalid mode: {cfg.mode}. Use persistent or manual.[/red]")
         return 1
@@ -211,27 +241,77 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # 5. Packs
     if not cfg.non_interactive:
-        cfg.packs = _prompt(
-            "  Skill packs (comma-separated, 'all', or blank for always-on)",
+        cfg.packs = _prompt_context(
+            "  Skill packs",
+            "  Optional skill collections (comma-separated names, 'all', or blank for always-on).",
             default="",
         )
     _print(f"  Packs: {cfg.packs or '(always-on only)'}")
 
     # 6. Harness
     if not cfg.non_interactive:
-        cfg.harness = _prompt(
-            "  Harness (claude-code / cursor / continue / manual)",
+        cfg.harness = _prompt_context(
+            "  IDE harness",
+            "  Your coding assistant — claude-code, cursor, continue, or manual (skip).",
             default="manual",
         )
     _print(f"  Harness: {cfg.harness}")
 
-    # 7. Resolve preset (auto -- no prompt)
+    # 7. Hardware / Hosting target
+    if not cfg.non_interactive:
+        detected = cfg.recommended_host or "cpu"
+        hardware_str = _prompt_context(
+            "  Hardware target",
+            f"  Your system has {detected.replace('-', ' ').title()} hardware detected.\n  "
+            "  This controls the embedding model build and optimization. "
+            "  dGPU (nvidia/radeon) uses CUDA/ROCm acceleration. CPU uses RAM-only inference.",
+            default=detected,
+        )
+        if hardware_str not in ("nvidia", "radeon", "apple-silicon", "cpu"):
+            _print(
+                f"  [red]Invalid hardware: {hardware_str}. "
+                "Choose nvidia, radeon, apple-silicon, or cpu.[/red]"
+            )
+            return 1
+        cfg.hardware_target = hardware_str
+    else:
+        if cfg.hardware_target:
+            if cfg.hardware_target not in ("nvidia", "radeon", "apple-silicon", "cpu"):
+                _print(f"  [red]Invalid hardware: {cfg.hardware_target}.[/red]")
+                return 1
+        else:
+            # Non-interactive: use detected or default to cpu
+            cfg.hardware_target = cfg.recommended_host or "cpu"
+    _print(f"  Hardware: {cfg.hardware_target}")
+
+    # 8. Resolve preset from explicit choices (after all user input)
     preset = _resolve_preset(cfg)
     _print(f"  Preset: {preset}")
 
-    # -- Phase 2: Execute install steps --
+    # -- Phase 2: Summary confirmation --
 
-    _print("\n[bold]Running setup steps...[/bold]")
+    _print("\n[dim]" + "─" * 40)
+    _print("\n[bold]Review your choices:[/bold]")
+    _print(f"  Runner:     {cfg.runner}")
+    _print(f"  Model:      {cfg.model}")
+    _print(f"  Port:       {cfg.port}")
+    _print(f"  Mode:       {cfg.mode}")
+    _print(f"  Packs:      {cfg.packs or '(always-on only)'}")
+    _print(f"  Harness:    {cfg.harness}")
+    _print(f"  Hardware:   {cfg.hardware_target}")
+    _print(f"  Preset:     {preset}")
+    _print(f"  Detected:   {cfg.recommended_host or 'N/A'}")
+
+    if not cfg.non_interactive:
+        confirm = _prompt("  Confirm and continue? (y/n)", default="y")
+        if confirm.lower() not in ("y", "yes"):
+            _print("[yellow]Setup cancelled.[/yellow]")
+            return 1
+    _print()
+
+    # -- Phase 3: Execute install steps --
+
+    _print("[bold]Running setup steps...[/bold]")
 
     # Step a: Preflight (early)
     _print("  [dim]-> Preflight (early)[/dim]")
@@ -343,7 +423,7 @@ def run_setup(cfg: SetupConfig) -> int:
             return rc
         _print("  [green]  Done.[/green]")
 
-    # -- Phase 3: Validate --
+    # -- Phase 4: Validate --
 
     _print("\n[bold]Validating installation...[/bold]")
     rc = verify.run(_build_namespace(cfg))
@@ -410,6 +490,12 @@ def add_parser(
         default=None,
         help="IDE harness to wire (default: manual).",
     )
+    p.add_argument(
+        "--hardware",
+        choices=["nvidia", "radeon", "apple-silicon", "cpu"],
+        default=None,
+        help="Hardware target for embedding (default: auto-detected).",
+    )
     p.set_defaults(func=_run_from_args)
 
 
@@ -422,6 +508,7 @@ def _run_from_args(args: argparse.Namespace) -> int:
         mode=args.mode or "persistent",
         packs=args.packs or "",
         harness=args.harness or "manual",
+        hardware_target=getattr(args, "hardware", None) or "",
         non_interactive=args.non_interactive,
     )
     # Override model default based on runner if not explicitly set

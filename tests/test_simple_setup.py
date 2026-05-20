@@ -14,6 +14,7 @@ import pytest
 # ruff: noqa: I001
 from skillsmith.install.subcommands.simple_setup import (
     _prompt as _prompt,  # type: ignore[attr-defined]
+    _prompt_context as _prompt_context,  # type: ignore[attr-defined]
     _resolve_preset as _resolve_preset,  # type: ignore[attr-defined]
     _run_from_args as _run_from_args,  # type: ignore[attr-defined]
     SetupConfig,
@@ -108,6 +109,11 @@ class TestSimpleSetupPrompts:
             result = _prompt("Test prompt")
             assert result == ""
 
+    def test_prompt_context_returns_default_in_non_tty(self):
+        with patch.object(sys.stdin, "isatty", return_value=False):
+            result = _prompt_context("Test prompt", "Context here", default="hello")
+            assert result == "hello"
+
     def test_invalid_runner_rejected(self, tmp_state_dir: tuple[Path, Path]):
         from skillsmith.install.subcommands.simple_setup import run_setup
 
@@ -130,6 +136,17 @@ class TestSimpleSetupPrompts:
         cfg = SetupConfig(runner="llama-server", recommended_host="cpu")
         preset = _resolve_preset(cfg)
         assert preset == "cpu-llama-server"
+
+    def test_preset_uses_user_hardware_target_over_detected(self):
+        cfg = SetupConfig(runner="ollama", hardware_target="radeon", recommended_host="nvidia")
+        preset = _resolve_preset(cfg)
+        assert preset == "radeon"  # user choice wins over detected
+        assert cfg.preset == "radeon"
+
+    def test_preset_fallback_when_user_hardware_unknown(self):
+        cfg = SetupConfig(runner="ollama", hardware_target="unknown-gpu")
+        preset = _resolve_preset(cfg)
+        assert preset == "cpu"  # fallback
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +286,23 @@ class TestSimpleSetupExecution:
         # Steps after seed_corpus should NOT be called
         self.mock.mocks["start_embed_server"].assert_not_called()
 
+    def test_run_setup_rejects_invalid_hardware(self, tmp_state_dir: tuple[Path, Path]):
+        """Setup rejects invalid hardware target in interactive mode."""
+        setup_config, run_setup = self._import_run_setup()
+        cfg = setup_config(non_interactive=False, recommended_host="nvidia")
+        # Mock _prompt_context to return invalid hardware
+        with (
+            patch(
+                "skillsmith.install.subcommands.simple_setup._prompt_context",
+                return_value="invalid-gpu",
+            ),
+            patch(
+                "skillsmith.install.subcommands.simple_setup.sys.stdin.isatty", return_value=True
+            ),
+        ):
+            rc = run_setup(cfg)
+        assert rc == 1
+
 
 class TestAddParser:
     """Test argparse registration and flag parsing."""
@@ -311,6 +345,8 @@ class TestAddParser:
                 "a,b,c",
                 "--harness",
                 "cursor",
+                "--hardware",
+                "nvidia",
             ]
         )
         assert args.runner == "llama-server"
@@ -318,6 +354,7 @@ class TestAddParser:
         assert args.mode == "manual"
         assert args.packs == "a,b,c"
         assert args.harness == "cursor"
+        assert args.hardware == "nvidia"
 
 
 class TestRunFromArgs:
