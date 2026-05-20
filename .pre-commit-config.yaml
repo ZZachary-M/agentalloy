@@ -1,0 +1,14 @@
+# Pre-commit hooks for Skillsmith
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Auto-fix lint issues and format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.9
+    hooks:
+      # Auto-fix lint issues
+      - id: ruff
+        args: [--fix]
+      # Auto-format
+      - id: ruff-format

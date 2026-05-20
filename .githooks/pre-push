@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Pre-push quality gate: catches lint/format/type issues before pushing.
+# Skips full test suite (too slow for interactive use) - CI handles that.
+# Install: git config core.hooksPath .githooks
+# Bypass: git push --no-verify
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Detect virtual environment
+if [ -f "$REPO_ROOT/.venv/bin/python" ]; then
+    PYTHON="$REPO_ROOT/.venv/bin/python"
+elif [ -n "${VIRTUAL_ENV:-}" ]; then
+    PYTHON="$VIRTUAL_ENV/bin/python"
+else
+    PYTHON="python3"
+fi
+
+echo "=== Pre-push quality gate ==="
+FAILED=0
+
+# 1. Ruff format check (entire project)
+echo -n "ruff format... "
+if "$PYTHON" -m ruff format --check . 2>/dev/null; then
+    echo "OK"
+else
+    echo "FAILED"
+    echo "Fix: $PYTHON -m ruff format ."
+    FAILED=1
+fi
+
+# 2. Ruff check (lint)
+echo -n "ruff check... "
+if "$PYTHON" -m ruff check . 2>/dev/null; then
+    echo "OK"
+else
+    echo "FAILED"
+    echo "Fix: $PYTHON -m ruff check --fix ."
+    FAILED=1
+fi
+
+# 3. Pyright (type check)
+echo -n "pyright... "
+if "$PYTHON" -m pyright 2>/dev/null; then
+    echo "OK"
+else
+    echo "FAILED (check output above)"
+    FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+    echo ""
+    echo "Pre-push quality gate failed. Fix the issues above before pushing."
+    echo "Use 'git push --no-verify' to bypass (not recommended)."
+    exit 1
+fi
+
+echo "=== All quality gates passed ==="

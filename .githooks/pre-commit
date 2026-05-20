@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Pre-commit hook: auto-fix lint and format issues on staged files.
+# Runs ruff format and ruff check --fix on staged Python files.
+# Stages any auto-fixes so they're included in the commit.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Detect virtual environment
+if [ -f "$REPO_ROOT/.venv/bin/python" ]; then
+    PYTHON="$REPO_ROOT/.venv/bin/python"
+elif [ -n "${VIRTUAL_ENV:-}" ]; then
+    PYTHON="$VIRTUAL_ENV/bin/python"
+else
+    PYTHON="python3"
+fi
+
+# Get staged Python files
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+# Auto-fix lint issues
+"$PYTHON" -m ruff check --fix $STAGED_PY 2>/dev/null || true
+
+# Auto-format
+"$PYTHON" -m ruff format $STAGED_PY 2>/dev/null || true
+
+# Re-stage any auto-fixes
+git add $STAGED_PY 2>/dev/null || true
+
+# Final check - fail if there are still issues
+FAILED=0
+if ! "$PYTHON" -m ruff check $STAGED_PY 2>/dev/null; then
+    echo "Pre-commit: ruff check failed. Fix issues or use --no-verify to bypass."
+    FAILED=1
+fi
+
+if ! "$PYTHON" -m ruff format --check $STAGED_PY 2>/dev/null; then
+    echo "Pre-commit: ruff format failed. Fix issues or use --no-verify to bypass."
+    FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+    exit 1
+fi
