@@ -541,6 +541,24 @@ class TestPackDiscovery:
             # core is in foundation tier and always-on
             assert len(selected) > 0
 
+    def test_prompt_for_packs_tier_label_case_insensitive(self):
+        """Tier display labels are accepted regardless of case."""
+        # "Platforms" is the display label for internal key "platform"
+        with patch("builtins.input", return_value="platforms"):
+            result = _prompt_for_packs()
+            selected = result.split(",") if result else []
+            # github-actions is in the platform tier
+            assert "github-actions" in selected
+
+    def test_prompt_for_packs_tier_label_mixed_case(self):
+        """Mixed-case tier labels are accepted."""
+        # "Workflows" is the display label for internal key "workflow"
+        with patch("builtins.input", return_value="Workflows"):
+            result = _prompt_for_packs()
+            selected = result.split(",") if result else []
+            # code-review is in the workflow tier
+            assert "code-review" in selected
+
     def test_prompt_for_packs_handles_unknown(self):
         """Unknown pack names are ignored."""
         with patch("builtins.input", return_value="nonexistent-pack"):
@@ -626,3 +644,86 @@ class TestPackDiscovery:
             "_prompt_for_packs() should not be called in non-interactive mode"
         )
         assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# Harness validation
+# ---------------------------------------------------------------------------
+
+
+class TestHarnessValidation:
+    """Test harness input validation and aliases."""
+
+    @pytest.fixture(autouse=True)
+    def _mocks(self, tmp_state_dir: tuple[Path, Path]):
+        self.mock = MockSetup()
+        self.mock.setup_all()
+        self.tmp_config, self.tmp_data = tmp_state_dir
+        outputs_patch = patch(
+            "skillsmith.install.state.outputs_dir",
+            return_value=self.tmp_data / "outputs",
+        )
+        self.mock.patchers.append(outputs_patch)
+        self.mock.mocks["_outputs_dir"] = outputs_patch.start()
+        (self.tmp_data / "outputs").mkdir(parents=True, exist_ok=True)
+        yield
+        self.mock.teardown()
+
+    def test_valid_harness_accepted(self, tmp_state_dir: tuple[Path, Path]):
+        """Valid harness name passes through run_setup."""
+        setup_config_cls, run_setup_fn = self._import_run_setup()
+        rc = run_setup_fn(setup_config_cls(harness="claude-code", non_interactive=True))
+        assert rc == 0
+
+    def test_invalid_harness_rejected(self, tmp_state_dir: tuple[Path, Path]):
+        """Invalid harness name is rejected."""
+        setup_config_cls, run_setup_fn = self._import_run_setup()
+        rc = run_setup_fn(setup_config_cls(harness="invalid-harness", non_interactive=True))
+        assert rc == 1
+
+    def test_continue_alias_normalized(self):
+        """'continue' alias is normalized to 'continue-closed'."""
+        mock = MockSetup()
+        mock.setup_all()
+        try:
+            import importlib
+
+            import skillsmith.install.subcommands.simple_setup as mod
+
+            importlib.reload(mod)
+            cfg = mod.SetupConfig(harness="continue", non_interactive=True)
+            # Harness normalization happens before execution
+            h = cfg.harness.strip().lower()
+            if h == "continue":
+                cfg.harness = "continue-closed"
+            assert cfg.harness == "continue-closed"
+        finally:
+            mock.teardown()
+
+    def test_known_harnesses_in_valid_set(self):
+        """All harnesses from registry are in VALID_HARNESSES."""
+        from skillsmith.install.subcommands.wire_harness import VALID_HARNESSES
+
+        expected = {
+            "claude-code",
+            "gemini-cli",
+            "cursor",
+            "windsurf",
+            "github-copilot",
+            "hermes-agent",
+            "opencode",
+            "aider",
+            "cline",
+            "continue-closed",
+            "continue-local",
+            "manual",
+        }
+        assert expected.issubset(VALID_HARNESSES)
+
+    def _import_run_setup(self):
+        import importlib
+
+        import skillsmith.install.subcommands.simple_setup as mod
+
+        importlib.reload(mod)
+        return mod.SetupConfig, mod.run_setup

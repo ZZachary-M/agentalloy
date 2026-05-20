@@ -37,6 +37,7 @@ from skillsmith.install.subcommands import (
     wire_harness,
     write_env,
 )
+from skillsmith.install.subcommands.wire_harness import VALID_HARNESSES
 
 try:
     from rich.console import Console  # type: ignore[import-untyped]
@@ -232,6 +233,8 @@ def _prompt_for_packs() -> str:
         "workflow": "Workflows",
         "other": "Other",
     }
+    # Reverse map: display label (lowercased) -> internal tier key
+    _label_to_tier = {v.lower(): k for k, v in tier_labels.items()}
 
     # Build numbered list for reference
     _print("\n  [bold]Available skill packs[/bold]\n")
@@ -268,9 +271,14 @@ def _prompt_for_packs() -> str:
         t = token.strip()
         if not t:
             continue
-        # Tier-based selection
+        # Tier-based selection: match internal key or display label (case-insensitive)
+        tier_key = None
         if t in tiers:
-            chosen.extend(name for name, _, _ in tiers[t])
+            tier_key = t
+        elif t.lower() in _label_to_tier:
+            tier_key = _label_to_tier[t.lower()]
+        if tier_key is not None and tier_key in tiers:
+            chosen.extend(name for name, _, _ in tiers[tier_key])
         elif t in available:
             chosen.append(t)
         elif t.isdigit() and 1 <= int(t) <= len(pack_index):
@@ -431,12 +439,28 @@ def run_setup(cfg: SetupConfig) -> int:
         cfg.harness = _prompt_context(
             "  IDE harness",
             "  Wire SkillsSmith into your coding assistant:\n"
-            "    claude-code  - Claude Code CLI (Anthropic)\n"
-            "    cursor       - Cursor IDE\n"
-            "    continue     - Continue.dev extension\n"
-            "    manual       - Skip (configure later)",
+            "    claude-code    - Claude Code CLI (Anthropic)\n"
+            "    gemini-cli     - Gemini CLI (Google)\n"
+            "    cursor         - Cursor IDE\n"
+            "    windsurf       - Windsurf IDE\n"
+            "    github-copilot - GitHub Copilot (VS Code)\n"
+            "    hermes-agent   - Hermes Agent\n"
+            "    continue       - Continue.dev extension\n"
+            "    opencode       - OpenCode (with local LLM)\n"
+            "    aider          - Aider\n"
+            "    cline          - Cline\n"
+            "    manual         - Skip (configure later)",
             default="manual",
         )
+    # Normalize "continue" display alias → actual harness names
+    h = cfg.harness.strip().lower()
+    if h == "continue":
+        cfg.harness = "continue-closed"
+    elif h not in VALID_HARNESSES:
+        _print(
+            f"  [red]Invalid harness: {cfg.harness}. Choices: {', '.join(sorted(VALID_HARNESSES))}[/red]"
+        )
+        return 1
     _print(f"  Harness: {cfg.harness}")
 
     # 7. Hardware / Hosting target
