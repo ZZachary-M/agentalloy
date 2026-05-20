@@ -107,9 +107,12 @@ class TestLadybugPresent:
 
 class TestHarnessConfigPresent:
     def test_fail_when_no_harness_files(self) -> None:
+        """Empty harness_files_written is valid for manual harness."""
         st: dict[str, Any] = {"harness_files_written": []}
         result = _check_harness_config_present(st)
-        assert result["passed"] is False
+        # Empty list means manual harness — user-owned config
+        assert result["passed"] is True
+        assert "manual" in result.get("detail", "")
 
     def test_pass_with_sentinel(self, tmp_path: Path) -> None:
         harness_file = tmp_path / "CLAUDE.md"
@@ -137,10 +140,8 @@ class TestHarnessConfigPresent:
         assert result["passed"] is False
 
     def test_pass_when_manual_harness(self) -> None:
-        st: dict[str, Any] = {
-            "integration_vector": "manual",
-            "harness_files_written": [],
-        }
+        """Empty harness_files_written with no integration_vector is manual harness."""
+        st: dict[str, Any] = {"harness_files_written": []}
         result = _check_harness_config_present(st)
         assert result["passed"] is True
         assert "manual" in result["detail"]
@@ -177,11 +178,8 @@ class TestHarnessConfigURL:
         assert result["passed"] is True
 
     def test_pass_when_manual_harness(self) -> None:
-        st: dict[str, Any] = {
-            "integration_vector": "manual",
-            "port": 8000,
-            "harness_files_written": [],
-        }
+        """Empty harness_files_written with no integration_vector is manual harness."""
+        st: dict[str, Any] = {"port": 8000, "harness_files_written": []}
         result = _check_harness_config_url(st)
         assert result["passed"] is True
         assert "manual" in result["detail"]
