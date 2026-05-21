@@ -31,7 +31,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from skillsmith.authoring.lm_client import OpenAICompatClient
+from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.storage.vector_store import SimilarityHit, VectorStore
 
 logger = logging.getLogger(__name__)

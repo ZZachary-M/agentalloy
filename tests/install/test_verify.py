@@ -106,7 +106,7 @@ class TestLadybugPresent:
 
 
 class TestHarnessConfigPresent:
-    def test_fail_when_no_harness_files(self) -> None:
+    def test_pass_for_manual_harness_with_no_files(self) -> None:
         """Empty harness_files_written is valid for manual harness."""
         st: dict[str, Any] = {"harness_files_written": []}
         result = _check_harness_config_present(st)

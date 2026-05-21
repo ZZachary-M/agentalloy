@@ -20,7 +20,7 @@ pyproject.toml.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -81,8 +81,11 @@ def lm_studio_models(lm_studio_available: bool) -> list[str]:
     if not lm_studio_available:
         return []
     with httpx.Client(timeout=5.0) as c:
-        data = c.get(LM_STUDIO_MODELS_URL).json()
-    return [item["id"] for item in data.get("data", []) if isinstance(item, dict)]
+        body = cast("dict[str, object]", c.get(LM_STUDIO_MODELS_URL).json())
+    raw = body.get("data")
+    if not isinstance(raw, list):
+        return []
+    return [str(e["id"]) for e in cast("list[dict[str, object]]", raw) if "id" in e]
 
 
 @pytest.fixture

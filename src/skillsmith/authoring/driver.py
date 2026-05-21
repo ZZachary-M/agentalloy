@@ -19,9 +19,9 @@ from typing import Any, cast
 
 import yaml
 
-from skillsmith.authoring.lm_client import LMClientError, OpenAICompatClient
 from skillsmith.authoring.paths import PipelinePaths
 from skillsmith.config import get_settings
+from skillsmith.lm_client import LMClientError, OpenAICompatClient
 
 logger = logging.getLogger(__name__)
 

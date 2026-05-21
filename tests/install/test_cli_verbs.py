@@ -240,7 +240,6 @@ class TestServe:
         assert "export PORT" not in os.environ
 
     def test_loads_env_into_environ(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-
         env_path = install_state.env_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
         env_path.write_text("# header\nFOO=bar\nBAZ='quoted value'\nEMPTY=\nNO_EQUALS_LINE\n")

@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from skillsmith.authoring.dedup import dedup_candidates
-from skillsmith.authoring.lm_client import LMClientError, OpenAICompatClient
 from skillsmith.authoring.paths import PipelinePaths
 from skillsmith.authoring.prompt_loader import load_prompt
 from skillsmith.config import get_settings
@@ -29,6 +28,7 @@ from skillsmith.ingest import (
     _load_yaml,  # pyright: ignore[reportPrivateUsage]
     _validate,  # pyright: ignore[reportPrivateUsage]
 )
+from skillsmith.lm_client import LMClientError, OpenAICompatClient
 from skillsmith.reads.active import get_active_fragments
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import VectorStore

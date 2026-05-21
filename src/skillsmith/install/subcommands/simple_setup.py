@@ -675,10 +675,10 @@ def run_setup(cfg: SetupConfig) -> int:
     if cfg.harness and cfg.harness != "manual":
         _print(f"  [dim]-> Wiring harness ({cfg.harness})[/dim]")
         rc = wire_harness.run(_build_namespace(cfg, harness=cfg.harness, force=False))
-    if rc not in (0, 4):
-        _print(f"  [red]  wire-harness failed (exit {rc}).[/red]")
-        return rc
-    _print("  [green]  Done.[/green]")
+        if rc not in (0, 4):
+            _print(f"  [red]  wire-harness failed (exit {rc}).[/red]")
+            return rc
+        _print("  [green]  Done.[/green]")
 
     # -- Phase 4: Validate --
 

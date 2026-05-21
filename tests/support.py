@@ -8,7 +8,7 @@ from typing import Any
 
 from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.reads.models import ActiveFragment, SkillClass
-from skillsmith.storage.schema_cypher import EMBEDDING_DIM
+from skillsmith.storage.vector_store import EMBEDDING_DIM
 
 
 def fake_fragment(
@@ -51,17 +51,6 @@ class StubLMClient(OpenAICompatClient):
             seed = struct.unpack("<Q", h[:8])[0]
             out.append([((seed >> (i % 64)) & 0xFF) / 255.0 for i in range(EMBEDDING_DIM)])
         return out
-
-    def chat_with_stats(
-        self,
-        *,
-        model: str,  # noqa: ARG002
-        system: str,  # noqa: ARG002
-        user: str,
-        temperature: float = 0.2,  # noqa: ARG002
-        max_tokens: int = 16384,  # noqa: ARG002
-    ) -> tuple[str, int | None, int | None]:
-        return (f"stub assembly for: {user[:40]}", 0, 0)
 
     def chat(self, **_: Any) -> str:
         return "stub"

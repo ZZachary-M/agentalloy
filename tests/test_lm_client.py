@@ -119,14 +119,16 @@ def test_list_models_bad_json_maps_to_bad_response() -> None:
         client.close()
 
 
-def test_list_models_missing_data_field_maps_to_bad_response() -> None:
+def test_list_models_missing_data_field_returns_empty() -> None:
+    """When /v1/models returns no 'data' key, treat it as an empty list
+    (graceful handling for LM Studio backends that return data: null)."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"object": "list"})
 
     client = _client(handler)
     try:
-        with pytest.raises(LMBadResponse, match="unexpected"):
-            client.list_models()
+        assert client.list_models() == []
     finally:
         client.close()
 

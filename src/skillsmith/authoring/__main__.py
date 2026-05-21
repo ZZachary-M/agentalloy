@@ -28,11 +28,11 @@ import sys
 from pathlib import Path
 
 from skillsmith.authoring.driver import run_author, run_revise
-from skillsmith.authoring.lm_client import warmup_ollama
 from skillsmith.authoring.paths import PipelinePaths, default_paths
 from skillsmith.authoring.pipeline import SkillResult, run_per_skill, summarize_results
 from skillsmith.authoring.qa_gate import GateResult, run_qa
 from skillsmith.config import get_settings
+from skillsmith.lm_client import warmup_ollama
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import open_or_create
 

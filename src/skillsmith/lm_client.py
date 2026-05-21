@@ -95,6 +95,8 @@ class OpenAICompatClient:
             raise LMBadResponse(f"non-JSON /v1/models response: {e}") from e
         items: Any = cast(dict[str, Any], data).get("data") if isinstance(data, dict) else None
         if not isinstance(items, list):
+            if items is None:
+                return []
             raise LMBadResponse(f"unexpected /v1/models shape: {data!r}")
         ids: list[str] = []
         for item in cast(list[Any], items):
@@ -168,57 +170,6 @@ class OpenAICompatClient:
                 "likely max_tokens exhausted by reasoning_content — raise max_tokens"
             )
         return content
-
-    def chat_with_stats(
-        self,
-        *,
-        model: str,
-        system: str,
-        user: str,
-        temperature: float = 0.2,
-        max_tokens: int = 16384,
-    ) -> tuple[str, int | None, int | None]:
-        """Chat completion that also returns prompt/completion token counts."""
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": False,
-        }
-        data = self._post_json("/v1/chat/completions", payload)
-        choices: Any = data.get("choices")
-        if not isinstance(choices, list) or not choices:
-            raise LMBadResponse(f"no choices in response: {data!r}")
-        first: Any = cast(list[Any], choices)[0]
-        if not isinstance(first, dict):
-            raise LMBadResponse(f"malformed choice: {first!r}")
-        first_dict = cast(dict[str, Any], first)
-        msg: Any = first_dict.get("message")
-        if not isinstance(msg, dict):
-            raise LMBadResponse(f"malformed message: {first!r}")
-        content: Any = cast(dict[str, Any], msg).get("content")
-        if not isinstance(content, str):
-            raise LMBadResponse(f"non-string content: {msg!r}")
-        if not content.strip():
-            finish: Any = first_dict.get("finish_reason")
-            raise LMBadResponse(
-                f"empty content (finish_reason={finish!r}); "
-                "likely max_tokens exhausted by reasoning_content — raise max_tokens"
-            )
-        usage: Any = data.get("usage")
-        in_tok: int | None = None
-        out_tok: int | None = None
-        if isinstance(usage, dict):
-            usage_dict = cast(dict[str, Any], usage)
-            pt = usage_dict.get("prompt_tokens")
-            ct = usage_dict.get("completion_tokens")
-            in_tok = int(pt) if isinstance(pt, int) else None
-            out_tok = int(ct) if isinstance(ct, int) else None
-        return content, in_tok, out_tok
 
     def embed(self, *, model: str, texts: list[str]) -> list[list[float]]:
         """Batch embedding. Returns one vector per input text in order."""

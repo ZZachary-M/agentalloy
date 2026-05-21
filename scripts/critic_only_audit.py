@@ -18,10 +18,10 @@ import json
 import sys
 from pathlib import Path
 
-from skillsmith.authoring.lm_client import OpenAICompatClient
 from skillsmith.authoring.prompt_loader import load_prompt
 from skillsmith.authoring.qa_gate import run_critic
 from skillsmith.config import get_settings
+from skillsmith.lm_client import OpenAICompatClient
 
 REPO = Path(__file__).resolve().parents[1]
 

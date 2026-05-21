@@ -29,7 +29,6 @@ from skillsmith.authoring.driver import (
     load_authoring_prompt,
     revise_one,
 )
-from skillsmith.authoring.lm_client import OpenAICompatClient
 from skillsmith.authoring.paths import PipelinePaths
 from skillsmith.authoring.prompt_loader import load_prompt
 from skillsmith.authoring.qa_gate import (
@@ -39,6 +38,7 @@ from skillsmith.authoring.qa_gate import (
     save_bounces,
 )
 from skillsmith.config import AuthoringConfig, Settings, get_settings
+from skillsmith.lm_client import OpenAICompatClient
 from skillsmith.storage.ladybug import LadybugStore
 from skillsmith.storage.vector_store import VectorStore, open_or_create
 

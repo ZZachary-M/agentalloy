@@ -7,8 +7,7 @@ ActiveFragment metadata from LadybugDB, then reshuffle for structural
 diversity (setup/execution/verification preferred).
 
 Per v5.3, vector storage is DuckDB; cosine ranking happens in DuckDB via
-``array_cosine_distance`` over L2-normalized vectors. The
-``cosine_similarity`` Python helper is no longer used in the hot path.
+``array_cosine_distance`` over L2-normalized vectors.
 
 Improvements (v5.4+):
 - Rule-based keyword extraction boosts BM25 lexical recall.

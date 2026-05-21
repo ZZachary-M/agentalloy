@@ -5,12 +5,10 @@ Separate module so the migration path and tests share a single source of truth.
 Fragment embeddings live in DuckDB ``fragment_embeddings`` (see
 ``skillsmith.storage.vector_store``), not LadybugDB — per v5.3 the VECTOR
 extension is incompatible with restartable FastAPI service lifecycle. The
-``EMBEDDING_DIM`` constant remains here for the DuckDB column type.
+``EMBEDDING_DIM`` constant lives in ``skillsmith.storage.vector_store``.
 """
 
 from __future__ import annotations
-
-EMBEDDING_DIM = 1024
 
 NODE_TABLES: tuple[str, ...] = (
     """
