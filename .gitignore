@@ -84,9 +84,8 @@ eval/runs/
 .nanocoder/
 AGENTS.md
 CLAUDE.md
-docs/*.patch
+docs/
 experiments/
-docs/superpowers/
 
 # Local agent/dev workspace configs
 .cgr/
