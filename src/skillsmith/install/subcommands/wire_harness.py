@@ -511,6 +511,20 @@ def wire_harness(
     if harness == "aider":
         files_written.extend(_wire_aider_conf(root))
 
+    # For Tier 3 harnesses, write watcher config and print guidance
+    _tier3_harnesses = frozenset(
+        {"cursor", "windsurf", "github-copilot", "cline", "gemini-cli", "aider"}
+    )
+    if harness in _tier3_harnesses:
+        _wire_tier3_watcher_config(harness, root)
+
+    # For claude-code, additionally wire signal-layer hooks
+    if harness == "claude-code":
+        files_written.extend(_wire_claude_code_hooks(root))
+
+    # Probe for code-indexer and persist result to state.json
+    _probe_code_indexer(root)
+
     return _build_result(harness, reg["vector"], files_written, root)
 
 
@@ -553,6 +567,204 @@ def _wire_aider_conf(root: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # MCP fallback wiring
 # ---------------------------------------------------------------------------
+
+_SKILLSMITH_HOOKS_MARKER = "skillsmith-signal"
+
+# Hook command template — SKILLSMITH_HOOK_PATH is replaced at wire time.
+_HOOK_COMMAND_TEMPLATE = (
+    "SKILLSMITH_HOOK_EVENT={event} SKILLSMITH_TOOL_NAME=$CLAUDE_TOOL_NAME "
+    "SKILLSMITH_TOOL_PATH=$CLAUDE_TOOL_PATH bash {hook_path}"
+)
+_HOOK_COMMAND_UPS = "SKILLSMITH_HOOK_EVENT=UserPromptSubmit bash {hook_path}"
+
+
+def _resolve_hook_path() -> str:
+    """Return the installed path to skillsmith-signal.sh, copying it to ~/.skillsmith/hooks/ first."""
+    import shutil
+
+    hooks_dir = Path.home() / ".skillsmith" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    dest = hooks_dir / "skillsmith-signal.sh"
+
+    # Try to find the script relative to this package
+    import skillsmith
+
+    candidates = [
+        Path(skillsmith.__file__).resolve().parent.parent.parent.parent
+        / "tools"
+        / "skillsmith-signal.sh",
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "tools"
+        / "skillsmith-signal.sh",
+    ]
+    for src in candidates:
+        if src.exists():
+            shutil.copy2(str(src), str(dest))
+            dest.chmod(0o755)
+            return str(dest)
+
+    # Fallback: write a minimal stub if not found
+    if not dest.exists():
+        dest.write_text(
+            "#!/usr/bin/env bash\nskillsmith signal evaluate-phase 2>/dev/null || true\nexit 0\n"
+        )
+        dest.chmod(0o755)
+    return str(dest)
+
+
+def _wire_claude_code_hooks(root: Path) -> list[dict[str, Any]]:
+    """Write Skillsmith signal-layer hooks to .claude/settings.json (merging with existing)."""
+    settings_path = root / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    config: dict[str, Any] = {}
+    if settings_path.exists():
+        try:
+            config = json.loads(settings_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    hook_path = _resolve_hook_path()
+    hooks = config.setdefault("hooks", {})
+
+    # UserPromptSubmit
+    ups_cmd = f"SKILLSMITH_HOOK_EVENT=UserPromptSubmit bash {hook_path}"
+    ups_hooks = hooks.setdefault("UserPromptSubmit", [])
+    # Remove any existing skillsmith entry before re-adding
+    ups_hooks[:] = [h for h in ups_hooks if _SKILLSMITH_HOOKS_MARKER not in str(h)]
+    ups_hooks.append(
+        {
+            "matcher": "",
+            "_skillsmith": _SKILLSMITH_HOOKS_MARKER,
+            "hooks": [{"type": "command", "command": ups_cmd}],
+        }
+    )
+
+    # PostToolUse
+    ptu_cmd = (
+        f"SKILLSMITH_HOOK_EVENT=PostToolUse "
+        f"SKILLSMITH_TOOL_NAME=$TOOL_NAME "
+        f"SKILLSMITH_TOOL_PATH=$TOOL_INPUT_PATH bash {hook_path}"
+    )
+    ptu_hooks = hooks.setdefault("PostToolUse", [])
+    ptu_hooks[:] = [h for h in ptu_hooks if _SKILLSMITH_HOOKS_MARKER not in str(h)]
+    ptu_hooks.append(
+        {
+            "matcher": "Edit|Write|MultiEdit",
+            "_skillsmith": _SKILLSMITH_HOOKS_MARKER,
+            "hooks": [{"type": "command", "command": ptu_cmd}],
+        }
+    )
+
+    # PreToolUse
+    pretool_cmd = (
+        f"SKILLSMITH_HOOK_EVENT=PreToolUse SKILLSMITH_TOOL_NAME=$TOOL_NAME bash {hook_path}"
+    )
+    pretool_hooks = hooks.setdefault("PreToolUse", [])
+    pretool_hooks[:] = [h for h in pretool_hooks if _SKILLSMITH_HOOKS_MARKER not in str(h)]
+    pretool_hooks.append(
+        {
+            "matcher": ".*",
+            "_skillsmith": _SKILLSMITH_HOOKS_MARKER,
+            "hooks": [{"type": "command", "command": pretool_cmd}],
+        }
+    )
+
+    serialized = json.dumps(config, indent=2) + "\n"
+    install_state._atomic_write(settings_path, serialized)  # pyright: ignore[reportPrivateUsage]
+
+    return [
+        {
+            "path": str(settings_path),
+            "action": "merged_hooks",
+            "marker_key": _SKILLSMITH_HOOKS_MARKER,
+            "content_sha256": _sha256(serialized),
+        }
+    ]
+
+
+def _wire_tier3_watcher_config(harness: str, root: Path) -> None:
+    """Write watcher config and print Tier 3 guidance. Soft-fail."""
+    try:
+        import yaml as _yaml
+
+        watch_dir = Path.home() / ".skillsmith" / "watch"
+        watch_dir.mkdir(parents=True, exist_ok=True)
+        config = {
+            "project_root": str(root),
+            "profile_name": "default",
+            "harness": harness,
+            "poll_interval_s": 1.0,
+            "debounce_ms": 500,
+        }
+        (watch_dir / "default.yaml").write_text(_yaml.dump(config))
+    except Exception:
+        pass
+
+    print(
+        f"\n[Skillsmith — Tier 3 wiring]\n"
+        f"You selected: {harness}\n\n"
+        "Tier 3 harnesses do not support per-turn hooks. To get phase- and\n"
+        "contract-driven context updates, run the watcher sidecar:\n\n"
+        f"    skillsmith watch start --harness {harness}\n\n"
+        "Run under tmux, systemd, or launchd for persistence. Without the\n"
+        "watcher, you'll only get the initial workflow skill context. System\n"
+        "skills (commit-safety, etc.) are advisory-only on Tier 3.\n\n"
+        "See docs/tier3-experience.md for the full picture.\n",
+        file=sys.stderr,
+    )
+
+
+def _probe_code_indexer(root: Path) -> None:
+    """Probe code-indexer health and persist reachability to state.json. Soft-fail."""
+    import time
+    import urllib.request
+
+    from skillsmith.config import get_settings
+
+    ci_url = get_settings().code_indexer_url
+    reachable = False
+    try:
+        req = urllib.request.urlopen(f"{ci_url}/health", timeout=2)
+        reachable = req.status == 200
+    except Exception:
+        pass
+
+    st = install_state.load_state(root)
+    st["code_indexer"] = {
+        "reachable": reachable,
+        "url": ci_url,
+        "last_health_at": int(time.time()),
+    }
+    install_state.save_state(st, root)
+
+
+def _unwire_claude_code_hooks(root: Path) -> list[dict[str, Any]]:
+    """Remove Skillsmith signal-layer hooks from .claude/settings.json."""
+    settings_path = root / ".claude" / "settings.json"
+    if not settings_path.exists():
+        return []
+    try:
+        config = json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    hooks = config.get("hooks", {})
+    changed = False
+    for event in ("UserPromptSubmit", "PostToolUse", "PreToolUse"):
+        original = hooks.get(event, [])
+        filtered = [h for h in original if _SKILLSMITH_HOOKS_MARKER not in str(h)]
+        if len(filtered) != len(original):
+            hooks[event] = filtered
+            changed = True
+
+    if not changed:
+        return []
+
+    serialized = json.dumps(config, indent=2) + "\n"
+    install_state._atomic_write(settings_path, serialized)  # pyright: ignore[reportPrivateUsage]
+    return [{"path": str(settings_path), "action": "removed_hooks"}]
+
 
 # Harnesses we know how to wire MCP for. Others (gemini-cli, opencode,
 # aider, cline) get a clear "not yet supported" error.

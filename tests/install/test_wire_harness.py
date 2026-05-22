@@ -79,7 +79,7 @@ class TestClaudeCode:
         result = wire_harness("claude-code", port=8000, root=repo_root)
         assert result["harness"] == "claude-code"
         assert result["integration_vector"] == "markdown_injection"
-        assert len(result["files_written"]) == 1
+        assert len(result["files_written"]) == 2  # CLAUDE.md + .claude/settings.json hooks
         claude_md = repo_root / "CLAUDE.md"
         assert claude_md.exists()
         content = claude_md.read_text()
@@ -371,7 +371,7 @@ class TestState:
     def test_records_files_written(self, repo_root: Path) -> None:
         wire_harness("claude-code", port=8000, root=repo_root)
         st = install_state.load_state(repo_root)
-        assert len(st["harness_files_written"]) == 1
+        assert len(st["harness_files_written"]) == 2  # CLAUDE.md + settings.json hooks
 
 
 # ---------------------------------------------------------------------------

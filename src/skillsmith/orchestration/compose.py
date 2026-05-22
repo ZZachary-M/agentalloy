@@ -175,6 +175,7 @@ class ComposeOrchestrator:
                 domain_tags=req.domain_tags,
                 k=req.resolved_k(),
                 embedding_model=self._embedding_model,
+                contract_tags=req.resolved_contract_tags,
             )
         except LMModelNotLoaded as e:
             raise RetrievalStageError("embedding_model_unavailable", str(e), available=None) from e

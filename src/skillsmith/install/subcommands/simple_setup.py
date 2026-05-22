@@ -1,8 +1,6 @@
 """``skillsmith setup`` — interactive one-shot install wizard.
 
-Mirrors the code-indexer-service UX:
-
-    pipx install git+https://github.com/navistone/skillsmith.git
+    pipx install git+https://github.com/nrmeyers/skillsmith.git
     skillsmith setup          # interactive: questions -> execution -> validation
 
 The command:
@@ -67,6 +65,8 @@ class SetupConfig:
     harness: str = "manual"
     preset: str = ""  # filled by auto-detect: "cpu", "nvidia", etc.
     non_interactive: bool = False
+    force: bool = False
+    acknowledge_tier3: bool = False
     hardware_target: str = ""  # explicit user choice: "nvidia", "radeon", "apple-silicon", "cpu"
 
     # Resolved during execution -- not user-facing.
@@ -496,7 +496,43 @@ def run_setup(cfg: SetupConfig) -> int:
     4. Execute install steps
     5. Validate
     """
+    from skillsmith.install.__main__ import EXIT_NOOP
+
     t0 = time.monotonic()
+
+    # -- Profile detection and refuse-if-existing check --
+    try:
+        from skillsmith.profiles import (
+            _ensure_profile_dir,  # pyright: ignore[reportPrivateUsage]
+            detect_profile,
+        )
+
+        _ensure_profile_dir("default")  # pyright: ignore[reportPrivateUsage]
+        active_profile = detect_profile()
+        ds_path = active_profile.datastore_path
+
+        if ds_path.exists() and not getattr(cfg, "force", False):
+            try:
+                import duckdb
+
+                con = duckdb.connect(str(ds_path), read_only=True)
+                has_skills = (
+                    con.execute("SELECT 1 FROM profile_skills LIMIT 1").fetchone() is not None
+                )
+                con.close()
+            except Exception:
+                has_skills = False
+
+            if has_skills:
+                _print(
+                    f"\n[yellow]Skillsmith is already initialized for profile "
+                    f"'{active_profile.name}' (datastore: {ds_path}). "
+                    f"Use 'skillsmith update' to refresh defaults or "
+                    f"'skillsmith reset' to wipe and reinstall.[/yellow]"
+                )
+                return EXIT_NOOP
+    except ImportError:
+        active_profile = None  # type: ignore[assignment]
 
     # -- Phase 0: Auto-detect hardware --
 
@@ -614,6 +650,34 @@ def run_setup(cfg: SetupConfig) -> int:
         )
         return 1
     _print(f"  Harness: {cfg.harness}")
+
+    # Tier 3 harness guardrail: these harnesses lack per-turn hooks so
+    # system-skill gating degrades to advisory. Non-interactive installs must
+    # explicitly acknowledge that with --acknowledge-tier3; interactive
+    # installs get a y/n prompt with a 'no' default.
+    _tier3_harnesses = frozenset(
+        {"cursor", "windsurf", "github-copilot", "cline", "gemini-cli", "aider"}
+    )
+    if cfg.harness in _tier3_harnesses:
+        tier3_msg = (
+            f"\n  [yellow]Tier 3 harness selected: {cfg.harness}[/yellow]\n"
+            "  Skillsmith routes context best on harnesses with per-turn hooks.\n"
+            "  This harness has no hook API, so a file-watching sidecar is used\n"
+            "  instead. System skill enforcement is advisory-only; phase transitions\n"
+            "  require a manual command.\n"
+            "  See docs/tier3-experience.md for the full picture."
+        )
+        if cfg.non_interactive:
+            if not cfg.acknowledge_tier3:
+                _print(tier3_msg)
+                _print("  [red]Non-interactive Tier 3 setup requires --acknowledge-tier3.[/red]")
+                return 1
+        else:
+            _print(tier3_msg)
+            ans = _prompt_context("  Continue with Tier 3?", "y/n", default="n")
+            if (ans or "n").strip().lower() != "y":
+                _print("  [yellow]Setup cancelled.[/yellow]")
+                return 0
 
     # Resolve preset from explicit choices (after all user input)
     preset = _resolve_preset(cfg)
@@ -788,6 +852,21 @@ def run_setup(cfg: SetupConfig) -> int:
     _print(f"  URL:     http://localhost:{cfg.port}")
     _print(f"  Config:  {install_state.user_config_dir()}")
     _print(f"  Data:    {install_state.user_data_dir()}")
+
+    # Profile-aware completion message
+    try:
+        from skillsmith.profiles import detect_profile  # noqa: PLC0415
+
+        _profile = detect_profile()
+        _print(f"\n  [bold]Profile:[/bold]  {_profile.name}")
+        _print(f"  Datastore: {_profile.datastore_path}")
+        _print(
+            "  Customize skills: [bold]skillsmith customize list[/bold] "
+            "to see available system+workflow skills."
+        )
+    except Exception:
+        pass
+
     _print("\n  [bold]Next:[/bold] cd to your project repo and run [bold]skillsmith wire[/bold]")
     return 0
 
@@ -805,6 +884,11 @@ def add_parser(
         "-n",
         action="store_true",
         help="Accept all defaults without prompting.",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass the already-initialized check and overwrite existing state without prompting (dangerous).",
     )
     p.add_argument(
         "--runner",
@@ -845,6 +929,13 @@ def add_parser(
         default=None,
         help="Hardware target for embedding (default: auto-detected).",
     )
+    p.add_argument(
+        "--acknowledge-tier3",
+        action="store_true",
+        default=False,
+        dest="acknowledge_tier3",
+        help="Acknowledge Tier 3 harness limitations (required for non-interactive Tier 3 setup).",
+    )
     p.set_defaults(func=_run_from_args)
 
 
@@ -859,6 +950,8 @@ def _run_from_args(args: argparse.Namespace) -> int:
         harness=args.harness or "manual",
         hardware_target=getattr(args, "hardware", None) or "",
         non_interactive=args.non_interactive,
+        force=getattr(args, "force", False),
+        acknowledge_tier3=getattr(args, "acknowledge_tier3", False),
     )
     # Model default is resolved inside run_setup() after cfg.runner is finalized.
     return run_setup(cfg)

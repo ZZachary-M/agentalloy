@@ -111,6 +111,7 @@ class RetrievalResult:
     retrieval_ms: int
     # cosine similarity per fragment_id (in [0, 1]); 1 = identical direction.
     scores_by_id: dict[str, float] = field(default_factory=lambda: {})
+    bm25_source: str = "rule-extracted"  # "rule-extracted" | "contract" | "union"
 
 
 class StoreFragmentSource:
@@ -178,6 +179,7 @@ def retrieve_domain_candidates(
     k: int,
     embedding_model: str,
     raw_scores: bool = False,
+    contract_tags: list[str] | None = None,
 ) -> RetrievalResult:
     """Execute the retrieval pipeline and return a bounded candidate set.
 
@@ -224,14 +226,28 @@ def retrieve_domain_candidates(
         k=pool_size,
     )
 
-    # Rule-based keyword extraction for BM25 boosting
-    bm25_query = _extract_bm25_keywords(task)
+    # BM25 query: contract tags take priority over rule-extracted keywords.
+    # The paid LLM picked them deliberately; they're better keywords than
+    # rule-extracted ones. Union mode enabled by SKILLSMITH_UNION_KEYWORDS=1.
+
+    if contract_tags:
+        bm25_query = " ".join(contract_tags)
+        if _os.environ.get("SKILLSMITH_UNION_KEYWORDS") == "1":
+            bm25_query += " " + _extract_bm25_keywords(task)
+            _bm25_source = "union"
+        else:
+            _bm25_source = "contract"
+    else:
+        bm25_query = _extract_bm25_keywords(task)
+        _bm25_source = "rule-extracted"
     bm25_hits = vector_store.search_bm25(bm25_query, categories=categories, k=pool_size)
     bm25_ids = [h.fragment_id for h in bm25_hits]
 
     if not dense_hits and not bm25_hits:
         elapsed_ms = (time.perf_counter_ns() - start_ns) // 1_000_000
-        return RetrievalResult(candidates=[], eligible_count=0, retrieval_ms=int(elapsed_ms))
+        return RetrievalResult(
+            candidates=[], eligible_count=0, retrieval_ms=int(elapsed_ms), bm25_source=_bm25_source
+        )
 
     # Apply phase-specific RRF weights
     rrf_k, dense_weight, bm25_weight = _get_rrf_params(phase)
@@ -273,6 +289,7 @@ def retrieve_domain_candidates(
         eligible_count=eligible_count,
         retrieval_ms=int(elapsed_ms),
         scores_by_id=scores_by_id,
+        bm25_source=_bm25_source,
     )
 
 

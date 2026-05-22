@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/Skithsmith_cover.png" alt="Skillsmith — Runtime Skill Composition Service" width="720" />
+  <img src="docs/Skithsmith_cover.png" alt="Skillsmith — Just-in-Time Skill Composer" width="720" />
 </p>
 
 <p align="center">
@@ -15,19 +15,21 @@
   &nbsp;
   <img src="https://img.shields.io/badge/runtime-no--LLM-success" alt="no LLM in runtime" />
   &nbsp;
-  <img src="https://img.shields.io/badge/packs-37-orange" alt="37 packs" />
+  <img src="https://img.shields.io/badge/packs-35+-orange" alt="35+ packs" />
   &nbsp;
-  <img src="https://img.shields.io/badge/skills-324-orange" alt="324 declared skills" />
+  <img src="https://img.shields.io/badge/skills-300+-orange" alt="300+ skills" />
 </p>
 
-`skillsmith` is a FastAPI gateway and CLI that serves a curated corpus of engineering skills — testing, error handling, deployment, observability, security, framework patterns — composed dynamically per task and handed to your coding agent over HTTP. The runtime is a hybrid BM25 + dense retriever over [LadybugDB](https://docs.ladybugdb.com/) (an embedded [kuzu](https://kuzudb.com/) fork — no Docker) and DuckDB. **No generative LLM in the hot path** — your agent owns generation, skillsmith owns retrieval.
+`AGENTS.md` and skill files were a clever first attempt — and they're already breaking. They load once at session start, then suffer context rot as the conversation drags on. Your agent drifts from the script. Reloading them every turn would waste tokens *and miss the point*: over the course of a session, your agent's persona, phase, and the skills it needs change dozens of times. Static files can't keep up.
 
-Use it standalone from your shell, or wire it into your coding harness — the same `/compose` endpoint drives both.
+Skillsmith is a **just-in-time agent and skills composer**. A signal layer — a small local embed model (`qwen3-embedding:0.6b`) plus deterministic Python — wakes when the agent's situation shifts: a phase transition, a new task contract, a meaningful file change. When nothing has changed, nothing is injected — your agent keeps working with the context it already has. When something *has* changed, skillsmith composes a fresh pre-prompt injection tailored to the new situation: the right workflow persona, the right system skills, and a focused slice of a curated 300+ skill corpus (across 35+ packs) retrieved via hybrid BM25 + dense scoring. Phase-aware, intent-aware, and zero paid-LLM tokens spent on routing.
 
-Things your agent can ask for instead of you pasting them into the prompt:
+No generative LLM in the hot path. No Docker. No remote calls. The whole loop runs locally on one 0.6B embed model and embedded [LadybugDB](https://docs.ladybugdb.com/) + DuckDB.
+
+Things your agent gets composed-and-injected without you pasting them into the prompt:
 
 - "How do I write a failing pytest before the implementation?" — TDD + framework idioms, composed from `pytest` + `testing` packs.
-- "What's the safe way to add a NOT NULL column to a 50M-row table?" — migration safety, composed from `redis` + `engineering` packs.
+- "How do I structure an incremental dbt model so it stays correct across re-runs?" — composed from `data-engineering` + `engineering` packs.
 - "Wire OpenTelemetry into this FastAPI app." — observability + framework patterns, composed from `fastapi` + `analytics` packs.
 - "I'm reviewing this PR — what should I check?" — review heuristics, composed phase-aware from `code-review` packs.
 
@@ -37,13 +39,14 @@ Things your agent can ask for instead of you pasting them into the prompt:
 
 - [Quickstart](#quickstart)
 - [Demo](#demo)
-- [Why not just paste skills into CLAUDE.md](#why-not-just-paste-skills-into-claudemd)
-- [Two ways to use it](#two-ways-to-use-it)
+- [What makes the composition different](#what-makes-the-composition-different)
+- [How it works: phases, contracts, signal layer](#how-it-works-phases-contracts-signal-layer)
+- [How to use it](#how-to-use-it)
+- [Harness support](#harness-support)
 - [Standalone CLI](#standalone-cli)
 - [REST API](#rest-api)
 - [Hardware presets](#hardware-presets)
 - [Packs shipping in-tree](#packs-shipping-in-tree)
-- [How packs get authored](#how-packs-get-authored)
 - [Architecture](#architecture)
 - [Telemetry](#telemetry)
 - [Configuration](#configuration)
@@ -78,7 +81,7 @@ skillsmith setup                                # one-time interactive install w
 cd ~/your-project && skillsmith wire            # wire harness in this repo
 ```
 
-The setup wizard walks you through everything: hardware detection, runner selection (`ollama` or `llama-server`), model and port, service mode, **skill pack selection** (with tier-grouped listing), IDE harness wiring, and hardware target. It then executes all install steps and validates the result. **3–5 minutes** on a warm machine.
+The setup wizard walks you through everything: hardware detection, runner selection (`ollama`, `lm-studio`, or `llama-server`), model and port, service mode, **skill pack selection** (with tier-grouped listing), IDE harness wiring, and hardware target. It then executes all install steps and validates the result. **3–5 minutes** on a warm machine.
 
 The pack selection screen groups packs by tier (Foundation, Languages, Frameworks, Tooling, etc.) and marks always-on packs. Select by pack name, tier name (e.g., `foundation`, `languages`), `all`, or leave blank for always-on packs only. You can always add more packs later with `skillsmith install-pack <name>`.
 
@@ -88,13 +91,15 @@ Non-interactive / scripted installs: pass flags directly:
 skillsmith setup -n --runner ollama --hardware nvidia --packs all --harness cursor
 ```
 
-**Agent-driven install.** If you'd rather have your coding harness (Claude Code, Cursor, Windsurf, Continue.dev, Aider, Cline, GitHub Copilot, Gemini CLI, Hermes Agent, OpenCode) drive the install for you, clone the repo and tell it:
+**Agent-driven install.** If you'd rather have your coding harness drive the install for you, clone the repo and tell it:
 
 ```bash
 git clone https://github.com/nrmeyers/skillsmith.git && cd skillsmith
 # then in your coding harness:
 > Install this tool by following INSTALL.md
 ```
+
+Works in any of the [supported harnesses](#harness-support).
 
 **Container alternative** (no Python required):
 
@@ -126,9 +131,7 @@ Your agent calls `/compose`, gets back the relevant raw skill prose, and assembl
 
 ---
 
-## Why not just paste skills into CLAUDE.md
-
-Pasting `CLAUDE.md` (or `.cursorrules`, or `.windsurfrules`, or `.github/copilot-instructions.md`) full of skills tops out where skillsmith starts:
+## What makes the composition different
 
 - **Composed per task, not loaded every turn.** A skill that's irrelevant to the current task isn't in the prompt at all — RRF + applicability filtering picks the right subset for each request. 60% smaller prompts on average vs. flat injection (see [Empirical results](#empirical-results)).
 - **Phase-aware.** Build-phase skills weight differently than QA-phase or review-phase skills. The same task gets a different composition at different points in the lifecycle.
@@ -138,32 +141,141 @@ Pasting `CLAUDE.md` (or `.cursorrules`, or `.windsurfrules`, or `.github/copilot
 
 ---
 
-## Two ways to use it
+## How it works: phases, contracts, signal layer
 
-### 1. Standalone HTTP service
+Three small artifacts on disk drive everything skillsmith does. None of them belong to your agent's prompt — they're state files that the signal layer reads.
 
-Run skillsmith on its own port; your agent (or your script, or your CI) calls `POST /compose` and reads the response. Zero coupling to a specific harness — works with any agent that can hit an HTTP endpoint.
+### 1. The phase file
 
-```bash
-uv run python -m skillsmith.app           # default :47950
-curl -s http://localhost:47950/health     # {"status":"ok"}
+```
+.skillsmith/phase       →  phase: build
 ```
 
-### 2. Wired into your coding harness
+A sticky, one-line YAML file under your project. Tracks where the agent is in the SDD lifecycle: `spec → design → build → qa → ship`. Each phase has a corresponding **workflow skill** (e.g., `sdd-build`) that ships persona prose and a set of declarative **exit gates**. When the agent enters a phase, that workflow skill's prose is injected as the persona for the duration; when the exit gates pass, the phase advances and the next workflow skill takes over.
 
-Use the bundled `wire-harness` subcommand to drop sentinel-bounded skill-access instructions into the right file for your harness. One command, one rules-file. Cleanly removable via `uninstall`.
+### 2. Task contracts
 
-```bash
-uv run python -m skillsmith.install wire-harness --harness <name>
+```
+.skillsmith/contracts/build/add-auth-middleware.md
 ```
 
-Supported harnesses: `claude-code`, `gemini-cli`, `cursor`, `windsurf`, `github-copilot`, `continue-closed`, `continue-local`, `hermes-agent`, `opencode`, `aider`, `cline`, and `manual` (paste-it-yourself). Add `--mcp-fallback` to wire via MCP server config instead of markdown injection (Claude Code, Cursor, Continue). Full catalog in [`docs/install/harness-catalog.md`](docs/install/harness-catalog.md).
+A short markdown file the agent writes when starting a task. The frontmatter declares intent:
+
+```yaml
+---
+phase: build
+task_slug: add-auth-middleware
+domain_tags: ["NestJS", "Express middleware", "JWT validation"]
+scope:
+  touches: ["src/auth/**", "tests/auth/**"]
+  avoids:  ["src/billing/**"]
+success_criteria:
+  - "Existing auth tests still pass"
+  - "Middleware tested with valid + invalid tokens"
+---
+
+# Add Auth Middleware
+<one paragraph of task prose>
+```
+
+The agent writes the contract once at task start. From then on, **`domain_tags` is the BM25 input for retrieval** — surgical, intent-aware, and stable across the conversation. No prompt engineering required; the agent just records what it's about to do.
+
+### 3. The signal layer
+
+A small Python module that wakes on three kinds of events: a user prompt arrives, a contract file is written, a tool is about to fire. It runs a cheap **pre-filter** (signal keywords, file-event scope checks) to decide if anything needs to happen. If nothing matches, it returns silently — no tokens spent, no injection. If something matches, it evaluates the active phase's **exit gates** (deterministic predicates like `artifact_exists`, `git_state`, `contract_has_tags`, plus a few semantic ones that cosine-similarity-score the prompt against named intents using the same 0.6B embed server). When gates pass, the phase file is updated atomically and the next workflow skill's prose is emitted as pre-prompt context.
+
+```
+        ┌───────────────────┐
+        │  prompt / event   │
+        └─────────┬─────────┘
+                  ▼
+        ┌───────────────────┐
+        │   pre-filter      │ ── no match ──► silent exit
+        │   (cheap)         │
+        └─────────┬─────────┘
+                  ▼ match
+        ┌───────────────────┐
+        │  evaluate gates   │
+        │  (deterministic + │
+        │   cosine sim)     │
+        └─────────┬─────────┘
+                  ▼
+   ┌──────────────┴──────────────┐
+   │                             │
+   ▼                             ▼
+phase transition          system skill fires
+  → next workflow            (commit-safety,
+    skill injected            secret-handling,
+                              etc.)
+```
+
+Everything between the agent and the embed model is deterministic Python. Zero paid-LLM tokens spent on "where am I?", "what should I be doing?", or "should I call skillsmith now?"
+
+---
+
+## How to use it
+
+Three paths, depending on how your harness integrates with external tools.
+
+### Standalone HTTP service
+
+Run skillsmith on its own port; your agent (or your script, or your CI) calls `POST /compose` and reads the response. Zero coupling to a specific harness — works with anything that can hit an HTTP endpoint.
+
+```bash
+python -m skillsmith                  # default :47950
+curl -s http://localhost:47950/health # {"status":"ok"}
+```
+
+### Wired into a Tier 1 harness (full integration)
+
+If your harness exposes per-turn hooks, skillsmith installs hook scripts that fire on `UserPromptSubmit`, `PreToolUse`, and `PostToolUse`. Phase transitions, contract retrieval, and system skill enforcement all happen automatically.
+
+```bash
+skillsmith wire --harness <name>
+```
+
+### Wired into a Tier 3 harness (sidecar)
+
+If your harness only reads static rules files, skillsmith installs a file-watching sidecar that regenerates the rules file within ~1s of a phase or contract change. You start the sidecar once per session:
+
+```bash
+skillsmith wire --harness <name>
+skillsmith watch start --harness <name>
+```
+
+The capability matrix and a fuller picture live in [Harness support](#harness-support) below.
+
+---
+
+## Harness support
+
+Tier classification depends entirely on whether the harness exposes a hook mechanism that fires on every turn.
+
+| Capability | Tier 1 (per-turn hooks) | Tier 3 (no hooks; sidecar) |
+|---|---|---|
+| Initial workflow skill context | ✅ | ✅ |
+| Phase transition detection (automatic) | ✅ Per-turn hook | ⚠️ Manual via `skillsmith phase set <name>` |
+| System skill enforcement (gates) | ✅ PreToolUse hook blocks tool call | ⚠️ Advisory text only — no enforcement |
+| Mid-session context updates | ✅ Injected into next turn | ⚠️ Requires file reload (harness-dependent) |
+| Contract → skill injection | ✅ PostToolUse hook | ✅ Sidecar (`skillsmith watch start`) |
+| Semantic gate evaluation | ✅ Runs per-turn | ⚠️ Falls back to `UNKNOWN` without hook |
+
+**Tier 3 is a real reduction in capability.** Without a per-turn hook, system skills become suggestions rather than gates, and phase transitions require a manual command. If you need enforcement, use a Tier 1 harness. See [`docs/tier3-experience.md`](docs/tier3-experience.md) for sidecar setup details.
+
+Examples of each tier today (lists evolve as harness vendors add or remove hook APIs — check `skillsmith wire --harness <name>` for current support):
+
+- **Tier 1**: Claude Code, Continue.dev
+- **Tier 3**: Cursor, Windsurf, GitHub Copilot, Cline, Gemini CLI, Aider
+
+Full per-harness catalog: [`docs/install/harness-catalog.md`](docs/install/harness-catalog.md).
 
 ---
 
 ## Standalone CLI
 
 The `skillsmith.install` module exposes a single CLI with subcommands. All write paths are user-scoped (LadybugDB and pack drafts live under `user_config_dir()`).
+
+**Install & lifecycle**
 
 | Command | Description |
 |---|---|
@@ -179,15 +291,53 @@ The `skillsmith.install` module exposes a single CLI with subcommands. All write
 | `wire-harness --harness <name>` | Lower-level: explicit harness wiring with full flag control. |
 | `unwire` | Remove skillsmith sentinels from the current repo (keeps user state). |
 | `write-env` | Write `.env` with the resolved backend / model / paths. |
-| `server-start` / `server-stop` / `server-restart` / `server-status` | Manage the background FastAPI daemon on :47950. |
+| `update` | Pull the latest packs and re-seed. |
+| `uninstall` | Cross-repo sentinel cleanup, optional data-dir wipe. |
+| `reset-step <step>` | Roll back one step of an in-progress install. |
+
+**Service**
+
+| Command | Description |
+|---|---|
 | `serve` | Run the service in the foreground (uvicorn). |
+| `server-start` / `server-stop` / `server-restart` / `server-status` | Manage the background FastAPI daemon on :47950. |
 | `enable-service` | Register skillsmith as a persistent background service (systemd-user / launchd). |
 | `status` | Show user-scope install state, wired repos, and service reachability. |
 | `verify` | Run post-install integrity checks (corpus count, harness sentinels, port). |
 | `doctor` | Diagnose a partial / broken install. |
-| `update` | Pull the latest packs and re-seed. |
-| `uninstall` | Cross-repo sentinel cleanup, optional data-dir wipe. |
-| `reset-step <step>` | Roll back one step of an in-progress install. |
+
+**Phases, contracts, signal layer**
+
+| Command | Description |
+|---|---|
+| `phase {get,set,clear}` | Read / write `.skillsmith/phase`. `set` advances or resets the SDD phase manually (Tier 3 fallback when no per-turn hook is available). |
+| `contract {write,validate,list}` | Create or validate task contracts under `.skillsmith/contracts/<phase>/`. |
+| `signal evaluate-phase` | Fire the pre-filter + gate evaluator; emits the next workflow skill's prose if a transition occurs. Wired by Tier 1 harnesses as a hook. |
+| `signal evaluate-system --tool <name>` | Find system skills whose `applies_when` matches a tool that's about to fire. |
+| `signal watch-contract --path <p>` | Validate a contract and trigger composition. |
+| `signal check` | Diagnostics: dump current phase + active workflow skill + pre-filter state. |
+| `compose --contract <path> [--inject]` | One-shot composition from a contract file. Used by hook scripts; can also be called directly. |
+
+**Profiles & customization**
+
+| Command | Description |
+|---|---|
+| `profile {list,active,create,use}` | Per-profile datastores (e.g., `work` vs `personal`). Auto-detected from cwd via git remote or path. |
+| `customize {list,edit,validate,update,diff,reset}` | Three-layer skill overrides (project → profile → shipped default). Edit a skill's prose, gates, or applicability for your project or profile without forking. |
+| `reset` | Wipe profile overrides and re-ingest shipped defaults. |
+
+**Tier 3 sidecar**
+
+| Command | Description |
+|---|---|
+| `watch start --harness <name>` | Start the file-watching sidecar for harnesses without per-turn hooks. |
+| `watch stop` | Stop the sidecar. |
+| `watch status` | Report whether the sidecar is running and where its log lives. |
+
+**Telemetry**
+
+| Command | Description |
+|---|---|
 | `telemetry` | Query / inspect composition traces from the CLI. |
 
 Each subcommand emits structured JSON on stdout; pair with `jq` for scripting.
@@ -212,10 +362,14 @@ Request body for `/compose`:
 ```json
 {
   "task": "<one-sentence task description>",
-  "phase": "spec" | "design" | "build" | "qa" | "ops",
-  "domain_tags": ["postgres", "fastapi"]   // optional hard filter
+  "phase": "spec" | "design" | "build" | "qa" | "ship",
+  "domain_tags": ["postgres", "fastapi"],     // optional hard filter
+  "contract_path": ".skillsmith/contracts/build/<slug>.md",  // optional — overrides task + tags
+  "contract_tags": ["NestJS", "JWT"]          // optional — explicit tags without a contract file
 }
 ```
+
+When `contract_path` is provided, skillsmith parses the contract's frontmatter and uses `domain_tags` as the BM25 input — the surgical, intent-aware path. When neither contract field is present, skillsmith rule-extracts keywords from `task` as a fallback.
 
 ---
 
@@ -243,7 +397,7 @@ ollama pull qwen3-embedding:0.6b
 
 ## Packs shipping in-tree
 
-The corpus is **packs** — opt-in groups of related skills. As of 2026-05-16, `main` ships **35 packs / 324 declared skills** organized across 9 tiers:
+The corpus is **packs** — opt-in groups of related skills. `main` ships **35+ packs / 300+ declared skills** organized across 9 tiers:
 
 <table>
 <tr><th>Tier</th><th>Packs</th></tr>
@@ -260,84 +414,78 @@ The corpus is **packs** — opt-in groups of related skills. As of 2026-05-16, `
 
 Every skill is sourced from authoritative upstream docs and validated against the **R1–R8 quality contract** in `src/skillsmith/_packs/meta/sys-skill-authoring-rules.md`. Each pack ships with `.qa.md` reports under `docs/skill-review-history/` documenting independent Critic verdicts.
 
-To author a new pack, see `docs/PACK-AUTHORING.md`. For the full authoring pipeline (bounce loop, QA gate, critic tooling), see [skillsmith-authoring](../skillsmith-authoring).
-
----
-
-## How packs get authored
-
-Local-first three-stage pipeline. Skillsmith doesn't burn paid LLM tokens to grow the corpus.
-
-```
-SKILL.md  →  [Author MoE]  →  draft YAML  →  [Critic dense]  →  approve / revise
-                                                   ↓
-                                           [Opus safety gate]
-                                                   ↓
-                                             pending-review/  →  ingest
-```
-
-| Stage | Model | Where it runs |
-|---|---|---|
-| **Author** | `Qwen3.6-35B-A3B` (UD-IQ4_NL_XL, MoE — 3B active) | local Ollama |
-| **Critic** | `Qwen3.6-27B` (UD-Q5_K_XL, dense) | local Ollama |
-| **Safety gate** | Claude Opus (one-pass review) | only when bounce budget exhausted |
-
-**Single-GPU friendly.** The pipeline is *swap-batched*: `run` warms the author model, drafts the whole batch, then warms the critic, grades the whole batch, then swaps back to author for revisions. Two model loads per round instead of two per skill — fits a 24GB-VRAM card (e.g. RTX 3090) where author and critic can't coexist.
-
-```bash
-python -m skillsmith.authoring run <source-dir>                # swap-batched (default)
-python -m skillsmith.authoring run <source-dir> --single-skill # per-skill (requires both models pre-loaded)
-```
-
-The bounce loop iterates author↔critic up to `bounce_budget=5` times per skill. ~70-80% of skills converge in 1 round; ~15% in 2-3; the residue routes to `needs-human/` for hand-authoring.
+Pack authoring lives in a separate repo and tooling — see [skillsmith-authoring](../skillsmith-authoring). It uses a local-first author-critic pipeline that produces validated YAML packs; nothing about authoring is required to *use* skillsmith at runtime.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│   POST /compose                                          │
-│      ↓                                                   │
-│   embed task → hybrid retrieve (BM25 + dense, RRF) →    │
-│   hydrate fragments → return raw concatenated text       │
-│      ↓                                                   │
-│   agent assembles in its own prompt context              │
-└──────────────────────────────────────────────────────────┘
-                ↓                              ↓
-   ┌────────────────────────┐    ┌──────────────────────────┐
-   │   DuckDB               │    │   LadybugDB (Kùzu)       │
-   │   ─────────────        │    │   ────────────────       │
-   │   • 1024-dim vectors   │    │   • Skill nodes          │
-   │   • BM25 FTS index     │    │   • SkillVersion nodes   │
-   │   • Composition traces │    │   • Fragment nodes       │
-   │                        │    │   • Pack relationships   │
-   │   "what to retrieve"   │    │   "what it means"        │
-   └────────────────────────┘    └──────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │   paid LLM (your coding agent)               │
+                    └────────┬──────────────────────────┬──────────┘
+                             │                          │
+                  writes contract                executes workflow
+                  per phase task                 skill instructions
+                             │                          │
+                             ▼                          ▼
+                  ┌──────────────────────┐    ┌──────────────────────┐
+                  │ .skillsmith/         │    │ .skillsmith/phase    │
+                  │  contracts/<phase>/  │    │ (sticky)             │
+                  └──────────┬───────────┘    └─────────┬────────────┘
+                             │                          │
+                file-write event              prompt / file pre-filter
+                             │                          │
+                             ▼                          ▼
+                  ┌──────────────────────┐    ┌──────────────────────┐
+                  │ /compose             │    │ signal layer         │
+                  │ (deterministic)      │    │ deterministic + cosine
+                  │                      │    │ similarity            │
+                  └──────────┬───────────┘    └─────────┬────────────┘
+                             │                          │
+              hybrid BM25 + dense over            transition? → write
+              LadybugDB + DuckDB                  phase, emit next
+                             │                    workflow skill
+                             ▼                          │
+                       composed prose ◄────────────────┘
+                             │
+                             ▼
+                  Tier 1: hook stdout → agent next turn
+                  Tier 3: file watcher rewrites rules file
 ```
 
-- **Embedding** — `qwen3-embedding:0.6b` (1024-dim). Backend-agnostic via OpenAI-compatible `/v1/embeddings`.
-- **Retrieval** — hybrid BM25 + dense cosine fused via Reciprocal Rank Fusion with phase-specific leg weighting. Token-literal queries hit BM25; semantic queries hit dense.
-- **Applicability filter** — pure-rule predicates on `ActiveSkill` records (always_apply, phase_scope, category_scope). No LLM parsing; governance rules are strictly deterministic.
-- **Telemetry** — every `/compose` and `/retrieve` call writes a structured trace to DuckDB inline-before-response. See [Telemetry](#telemetry).
-- **No generative LLM in the runtime path.** The agent owns generation; skillsmith owns retrieval.
+**Data plane** (the two embedded stores):
 
-For a deeper look at the dual-DB design (and why it's the right shape for code intelligence too), see `docs/code-indexer-architecture-1pager.md`.
+| Store | Role |
+|---|---|
+| **DuckDB** | 1024-dim vector index • BM25 FTS index • composition traces |
+| **LadybugDB** (embedded [kuzu](https://kuzudb.com/)) | Skill / Version / Fragment / Pack graph — "what skill means and how its pieces relate" |
+
+**Components**
+
+- **Embedding** — `qwen3-embedding:0.6b` (1024-dim). Backend-agnostic via OpenAI-compatible `/v1/embeddings`.
+- **Retrieval** — hybrid BM25 + dense cosine fused via Reciprocal Rank Fusion with phase-specific leg weighting. Contract `domain_tags` drive BM25 when present.
+- **Applicability filter** — deterministic rule predicates on `ActiveSkill` records (always_apply, phase_scope, category_scope). No LLM parsing.
+- **Signal layer** — pre-filter (keywords + file-event scope) → exit-gate evaluation (deterministic predicates + cosine-similarity gates) → atomic phase write + workflow-skill prose emission. Soft-fails everywhere; failure never blocks the agent.
+- **Telemetry** — every `/compose`, `/retrieve`, and signal evaluation writes a structured trace to DuckDB inline-before-response. See [Telemetry](#telemetry).
+- **Single-model runtime** — `qwen3-embedding:0.6b` does both retrieval embeddings *and* semantic gate scoring (cosine similarity against reference phrase sets). No second model, no chat classifier, no Docker.
+- **No generative LLM in the runtime path.** The agent owns generation; skillsmith owns retrieval and routing.
 
 ---
 
 ## Telemetry
 
-Every `/compose` and `/retrieve` call writes a structured trace to DuckDB **before the response returns** — no async backlog, no dropped traces. Trace-write failures are logged but never propagate; the response always succeeds regardless of telemetry state.
+Every `/compose`, `/retrieve`, and signal evaluation writes a structured trace to DuckDB **before the response returns** — no async backlog, no dropped traces. Trace-write failures are logged but never propagate; the response always succeeds regardless of telemetry state.
 
-Each trace captures: `trace_id`, `phase`, `task_prompt`, `status`, `selected_fragment_ids`, `source_skill_ids`, `system_skill_ids`, `workflow_skill_ids`, `retrieval_latency_ms`, `assembly_latency_ms`, `total_latency_ms`, `response_size_chars`, and (on failure) `error_code`.
+Each trace captures: `trace_id`, `request_ts`, `phase`, `task_prompt`, `status`, `selected_fragment_ids`, `source_skill_ids`, `system_skill_ids`, `workflow_skill_ids`, `retrieval_latency_ms`, `assembly_latency_ms`, `total_latency_ms`, `response_size_chars`, and (on failure) `error_code`. Signal-layer evaluations additionally capture: `event_type` (`phase_eval` / `phase_transition` / `system_skill_applied` / `contract_retrieval`), `pre_filter_matched` (which signal triggered the evaluation), `gates_met`, `gates_unmet`, and `qwen_calls` (number of embed-server calls made during gate evaluation).
 
 Query via `GET /telemetry/traces` with optional filters:
 
 | Filter | Type | Purpose |
 |---|---|---|
-| `phase` | string | `spec` / `design` / `build` / `qa` / `ops` |
+| `phase` | string | `spec` / `design` / `build` / `qa` / `ship` |
 | `status` | string | success / error / degraded result type |
+| `event_type` | string | `compose` / `phase_eval` / `phase_transition` / `system_skill_applied` / `contract_retrieval` |
 | `since`, `until` | epoch ms | time-range window |
 | `limit`, `offset` | int | pagination (1 ≤ limit ≤ 500, default 50) |
 
@@ -347,23 +495,19 @@ Use it to inspect which skills got composed for a task, profile retrieval latenc
 
 ## Configuration
 
-Environment variables (written automatically by `skillsmith install write-env`):
+Runtime environment variables (written automatically by `skillsmith write-env`):
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | Embedding endpoint |
-| `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model for retrieve / compose |
+| `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model — used for both retrieval and semantic gate scoring |
 | `LADYBUG_DB_PATH` | `~/.local/share/skillsmith/corpus/ladybug` | LadybugDB directory |
 | `DUCKDB_PATH` | `~/.local/share/skillsmith/corpus/skills.duck` | DuckDB vector + telemetry store |
-| `AUTHORING_MODEL` | `qwen3-14b-instruct` | Author model (authoring only) |
-| `AUTHORING_LM_BASE_URL` | `http://localhost:11435` | Author endpoint |
-| `LM_STUDIO_BASE_URL` | `http://localhost:11434` | LM Studio endpoint (authoring only) |
-| `AUTHORING_EMBED_BASE_URL` | `http://localhost:11436` | Authoring-pipeline embedding endpoint |
-| `AUTHORING_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Authoring-pipeline embedding model |
-| `CRITIC_MODEL` | `qwen3.6-27b` | Critic model (authoring only) |
+| `PROFILE_ROOT` | `~/.skillsmith` | Profile root (per-profile datastores live here) |
+| `FORCED_PROFILE` | _(unset)_ | Override profile auto-detection (useful for tests) |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Dedup hard cosine threshold |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Dedup soft cosine threshold |
-| `BOUNCE_BUDGET` | `3` | Max author↔critic revision rounds |
+| `BOUNCE_BUDGET` | `3` | Compose retry budget |
 | `LOG_LEVEL` | `INFO` | Log verbosity |
 
 Copy [`.env.example`](.env.example) and adjust paths for your machine. The example file documents every variable inline.

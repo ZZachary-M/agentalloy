@@ -75,6 +75,33 @@ class Settings(BaseSettings):
     dedup_soft_threshold: float = 0.80
     bounce_budget: int = 3
 
+    # Profile root. Resolves to ~/.skillsmith by default.
+    profile_root: str = Field(default_factory=lambda: str(Path.home() / ".skillsmith"))
+
+    # When set, overrides auto-detection (useful for tests).
+    forced_profile: str | None = None
+
+    code_indexer_url: str = "http://127.0.0.1:8003"
+
+    def active_datastore_path(self, cwd: Path | None = None) -> Path:
+        """Return the skills.duck for the active profile.
+
+        Falls back to the legacy ``duckdb_path`` when the active profile has
+        no datastore yet (first-run grace).
+        """
+        try:
+            from skillsmith.profiles import detect_profile, profile_datastore_path
+
+            if self.forced_profile:
+                return profile_datastore_path(self.forced_profile)
+            profile = detect_profile(cwd)
+            candidate = profile.datastore_path
+            if candidate.exists():
+                return candidate
+        except Exception:
+            pass
+        return Path(self.duckdb_path)
+
     def ensure_data_dirs(self) -> None:
         """Create parent directories for LadybugDB and DuckDB if missing."""
         Path(self.ladybug_db_path).parent.mkdir(parents=True, exist_ok=True)

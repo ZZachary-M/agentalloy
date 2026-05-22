@@ -12,6 +12,8 @@ partial data.
 from __future__ import annotations
 
 import logging
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -122,6 +124,37 @@ class RuntimeCache:
         return self._version_details.get(version_id)
 
 
+_PROFILE_CACHE_LOCK = threading.Lock()
+_PROFILE_CACHE_MAX = 4
+# OrderedDict used as LRU: newest at end, evict from front.
+_PROFILE_CACHES: OrderedDict[str, RuntimeCache] = OrderedDict()
+
+
+def get_profile_cache(profile_name: str) -> RuntimeCache | None:
+    """Return the cached RuntimeCache for a profile, or None if not loaded."""
+    with _PROFILE_CACHE_LOCK:
+        cache = _PROFILE_CACHES.get(profile_name)
+        if cache is not None:
+            # Move to end (most recently used)
+            _PROFILE_CACHES.move_to_end(profile_name)
+        return cache
+
+
+def set_profile_cache(profile_name: str, cache: RuntimeCache) -> None:
+    """Store a RuntimeCache for a profile, evicting LRU if needed."""
+    with _PROFILE_CACHE_LOCK:
+        _PROFILE_CACHES[profile_name] = cache
+        _PROFILE_CACHES.move_to_end(profile_name)
+        while len(_PROFILE_CACHES) > _PROFILE_CACHE_MAX:
+            _PROFILE_CACHES.popitem(last=False)
+
+
+def invalidate_profile_cache(profile_name: str) -> None:
+    """Remove the cached RuntimeCache for a profile."""
+    with _PROFILE_CACHE_LOCK:
+        _PROFILE_CACHES.pop(profile_name, None)
+
+
 def load_runtime_cache(store: LadybugStore) -> RuntimeCache:
     """Query the store and build a ``RuntimeCache``.
 
@@ -172,3 +205,68 @@ def load_runtime_cache(store: LadybugStore) -> RuntimeCache:
         cache.fragment_count,
     )
     return cache
+
+
+def load_profile_runtime_cache(profile_name: str) -> RuntimeCache:
+    """Load a RuntimeCache from a profile's DuckDB (profile_skills table).
+
+    Falls back to an empty cache if the profile has no datastore or no
+    profile_skills table yet (soft-fail — the domain cache handles retrieval).
+    """
+    # Check in-memory LRU first
+    cached = get_profile_cache(profile_name)
+    if cached is not None:
+        return cached
+
+    try:
+        import duckdb
+
+        from skillsmith.profiles import profile_datastore_path
+
+        ds_path = profile_datastore_path(profile_name)
+        if not ds_path.exists():
+            return _empty_runtime_cache()
+
+        conn = duckdb.connect(str(ds_path), read_only=True)
+        try:
+            rows = conn.execute(
+                "SELECT skill_id, skill_class, canonical_name, raw_prose FROM profile_skills"
+            ).fetchall()
+        except duckdb.CatalogException:
+            # Table doesn't exist yet
+            return _empty_runtime_cache()
+        finally:
+            conn.close()
+    except Exception:
+        logger.debug("profile cache load failed for %s, returning empty", profile_name)
+        return _empty_runtime_cache()
+
+    skills_by_id: dict[str, ActiveSkill] = {}
+    for row in rows:
+        skill_id, skill_class, canonical_name, _raw_prose = row
+        # ActiveSkill requires active_version_id — use skill_id as a stand-in.
+        skills_by_id[str(skill_id)] = ActiveSkill(
+            skill_id=str(skill_id),
+            canonical_name=str(canonical_name),
+            category="",
+            skill_class=str(skill_class),  # type: ignore[arg-type]
+            domain_tags=[],
+            always_apply=False,
+            phase_scope=None,
+            category_scope=None,
+            active_version_id=str(skill_id),
+            tier=None,
+        )
+
+    cache = RuntimeCache(
+        skills=skills_by_id,
+        fragments=[],
+        version_details={},
+    )
+    set_profile_cache(profile_name, cache)
+    logger.info("Profile cache loaded: %d skills for '%s'", len(skills_by_id), profile_name)
+    return cache
+
+
+def _empty_runtime_cache() -> RuntimeCache:
+    return RuntimeCache(skills={}, fragments=[], version_details={})

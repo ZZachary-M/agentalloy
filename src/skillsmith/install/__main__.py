@@ -19,6 +19,9 @@ import argparse
 import sys
 
 from skillsmith.install.subcommands import (
+    compose,
+    contract,
+    customize,
     detect,
     doctor,
     enable_service,
@@ -26,10 +29,12 @@ from skillsmith.install.subcommands import (
     install_packs,
     phase,
     preflight,
+    profile,
     pull_models,
     recommend_host_targets,
     recommend_models,
     reembed,
+    reset,
     reset_step,
     seed_corpus,
     serve,
@@ -49,6 +54,12 @@ from skillsmith.install.subcommands import (
     wire_harness,
     write_env,
 )
+from skillsmith.install.subcommands import (
+    signal as signal_cmd,
+)
+from skillsmith.install.subcommands import (
+    watch as watch_cmd,
+)
 
 EXIT_OK = 0
 EXIT_USER = 1
@@ -60,6 +71,13 @@ _SUBCOMMANDS = [
     # User-facing verbs first — these are what end users typically run.
     preflight,
     simple_setup,
+    profile,
+    customize,
+    reset,
+    contract,
+    compose,
+    signal_cmd,
+    watch_cmd,
     wire,
     unwire,
     serve,

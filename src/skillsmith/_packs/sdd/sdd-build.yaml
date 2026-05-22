@@ -1,0 +1,96 @@
+skill_type: workflow
+skill_id: sdd-build
+canonical_name: SDD — Build (sdd-build)
+category: build
+skill_class: workflow
+domain_tags:
+  - spec-driven-development
+  - implementation
+  - coding
+  - build
+always_apply: false
+applies_to_phases:
+  - build
+exit_gates:
+  all_of:
+    - artifact_exists:
+        path: "src/**"
+    - artifact_contains:
+        path: "tests/**"
+        sections: []
+signal_keywords:
+  - done building
+  - ready for qa
+  - implementation complete
+  - next phase
+contract_template: |
+  ---
+  phase: build
+  task_slug: {{task_slug}}
+  domain_tags: []
+  scope:
+    touches: []
+    avoids: []
+  success_criteria: []
+  related_contracts: []
+  created_at: {{created_at}}
+  ---
+
+  # {{task_slug}}
+
+  ## Task description
+
+  <fill in what you intend to implement and why>
+
+  ## Implementation plan
+
+  <outline key changes, files affected, and approach>
+author: navistone
+change_summary: initial build-phase workflow skill
+raw_prose: |
+  # SDD — Build (sdd-build)
+
+  ## Overview
+
+  The build phase is where you implement what the spec and design phases produced.
+  This workflow skill guides the paid LLM through implementation following SDD
+  discipline: one concern at a time, with tests, and with a contract that declares
+  intent and domain scope before writing code.
+
+  ## Entering the build phase
+
+  Before writing any code:
+
+  1. Confirm the spec exists and has Acceptance Criteria and Out of Scope sections.
+  2. Confirm the design doc exists and describes the approach.
+  3. Write a contract (`skillsmith contract init --phase build --slug <task-slug>`)
+     that declares `domain_tags` and `scope.touches` for the work ahead.
+  4. Use the contract to focus domain retrieval on the right skills.
+
+  ## During the build phase
+
+  - Work in small commits with clear messages.
+  - Keep the contract's `scope.touches` honest — if you touch a file not listed,
+    update the contract.
+  - Run tests after each meaningful change.
+  - Do not move to QA until the acceptance criteria in the spec are met.
+
+  ## Exit gate
+
+  The build phase is done when:
+
+  - All spec acceptance criteria have a corresponding test.
+  - No known regressions in the existing test suite.
+  - The contract's `success_criteria` are checkable and checked.
+
+  Signal readiness with: "done building", "ready for qa", or "implementation complete".
+
+  ## After writing a task contract
+
+  After writing a task contract at `.skillsmith/contracts/build/<slug>.md`,
+  skillsmith's PostToolUse hook automatically composes the domain skill
+  fragments matching the contract's `domain_tags` and injects them into
+  your next turn. If for some reason the hook didn't fire, you can run
+  composition manually:
+
+      skillsmith compose --contract .skillsmith/contracts/build/<slug>.md

@@ -101,7 +101,13 @@ Implementation notes:
 - [ ] Predicates never raise on missing context fields; they return `UNKNOWN`.
 - [ ] Predicates that read files use `try/except OSError` and degrade to `UNKNOWN` on read failure.
 
-### Step 3.2 — Qwen-based semantic predicate evaluator
+### Step 3.2 — Semantic predicate evaluator
+
+> **Superseded by Phase 6 (06-classifier-elimination.md).** The classifier
+> model approach described here was replaced after Phase 3 completed. The
+> implementation uses cosine similarity via the embed server instead of a
+> separate chat model. `artifact_completeness` is a soft advisory, not a hard
+> gate. Do not re-introduce `runtime_classifier_model` or port 11436.
 
 **Create** `src/skillsmith/signals/classifier.py`.
 

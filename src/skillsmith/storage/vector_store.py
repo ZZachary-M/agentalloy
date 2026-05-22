@@ -95,6 +95,15 @@ class CompositionTrace:
     response_size_chars: int | None = None
     prompt_version: str | None = None
     workflow_skill_ids: list[str] = field(default_factory=lambda: [])
+    contract_path: str | None = None
+    contract_tags: list[str] = field(default_factory=lambda: [])
+    bm25_source: str = "rule-extracted"  # "rule-extracted" | "contract" | "union"
+    # Signal-layer fields
+    event_type: str = "compose"  # "compose" | "phase_eval" | "phase_transition" | "system_skill_applied" | "contract_retrieval"
+    pre_filter_matched: str | None = None
+    gates_met: list[str] = field(default_factory=lambda: list[str]())
+    gates_unmet: list[str] = field(default_factory=lambda: list[str]())
+    qwen_calls: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +163,15 @@ CREATE TABLE IF NOT EXISTS composition_traces (
     error_code VARCHAR,
     response_size_chars INTEGER,
     prompt_version VARCHAR,
-    workflow_skill_ids VARCHAR[]
+    workflow_skill_ids VARCHAR[],
+    event_type VARCHAR NOT NULL DEFAULT 'compose',
+    pre_filter_matched VARCHAR,
+    gates_met VARCHAR[],
+    gates_unmet VARCHAR[],
+    qwen_calls INTEGER NOT NULL DEFAULT 0,
+    contract_path VARCHAR,
+    contract_tags VARCHAR[],
+    bm25_source VARCHAR NOT NULL DEFAULT 'rule-extracted'
 );
 
 CREATE INDEX IF NOT EXISTS idx_traces_ts ON composition_traces(request_ts);
@@ -444,8 +461,10 @@ class VectorStore:
                 system_skill_ids, assembly_tier, assembly_model,
                 retrieval_latency_ms, assembly_latency_ms, total_latency_ms,
                 status, error_code, response_size_chars,
-                prompt_version, workflow_skill_ids
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                prompt_version, workflow_skill_ids,
+                event_type, pre_filter_matched, gates_met, gates_unmet, qwen_calls,
+                contract_path, contract_tags, bm25_source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 trace.trace_id,
@@ -467,6 +486,14 @@ class VectorStore:
                 trace.response_size_chars,
                 trace.prompt_version,
                 trace.workflow_skill_ids,
+                trace.event_type,
+                trace.pre_filter_matched,
+                trace.gates_met,
+                trace.gates_unmet,
+                trace.qwen_calls,
+                trace.contract_path,
+                trace.contract_tags,
+                trace.bm25_source,
             ],
         )
 
@@ -562,17 +589,60 @@ def _fts_index_exists(conn: duckdb.DuckDBPyConnection) -> bool:
     return bool(row and row[0] > 0)
 
 
+# Columns added to ``composition_traces`` after the initial DDL shipped.
+# Listed as (column_name, type, default_clause) — default_clause is appended
+# verbatim after the type if non-empty. New columns added here are picked up
+# by existing installs on next ``open_or_create()``.
+_COMPOSITION_TRACES_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("event_type", "VARCHAR", "DEFAULT 'compose'"),
+    ("pre_filter_matched", "VARCHAR", ""),
+    ("gates_met", "VARCHAR[]", ""),
+    ("gates_unmet", "VARCHAR[]", ""),
+    ("qwen_calls", "INTEGER", "DEFAULT 0"),
+    ("contract_path", "VARCHAR", ""),
+    ("contract_tags", "VARCHAR[]", ""),
+    ("bm25_source", "VARCHAR", "DEFAULT 'rule-extracted'"),
+)
+
+
+def _apply_migrations(conn: duckdb.DuckDBPyConnection) -> None:
+    """Apply additive schema migrations to ``composition_traces``.
+
+    Existing installs predate columns added in later phases. ``CREATE TABLE
+    IF NOT EXISTS`` does not back-fill missing columns, so each subsequent
+    INSERT would raise. This walks the live schema and issues ``ALTER TABLE
+    ADD COLUMN`` for any missing column. Idempotent and soft-fail.
+    """
+    try:
+        rows = conn.execute("PRAGMA table_info('composition_traces')").fetchall()
+    except Exception:
+        return
+    existing = {str(row[1]) for row in rows}
+    import contextlib
+
+    for col, col_type, default_clause in _COMPOSITION_TRACES_MIGRATIONS:
+        if col in existing:
+            continue
+        stmt = f"ALTER TABLE composition_traces ADD COLUMN {col} {col_type}"
+        if default_clause:
+            stmt = f"{stmt} {default_clause}"
+        with contextlib.suppress(Exception):
+            conn.execute(stmt)
+
+
 def open_or_create(path: str | Path) -> VectorStore:
     """Open (or create) the DuckDB vector store at ``path``.
 
     Creates parent directories if missing. Idempotent: applies schema DDL on
-    every open. Builds the BM25 FTS index on first open (or when missing).
-    Use as a context manager to guarantee connection close.
+    every open, then runs additive migrations so existing installs pick up
+    columns added in later phases. Builds the BM25 FTS index on first open
+    (or when missing). Use as a context manager to guarantee connection close.
     """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = duckdb.connect(str(p))
     conn.execute(_SCHEMA_DDL)
+    _apply_migrations(conn)
 
     try:
         conn.execute(_FTS_SETUP_SQL)
@@ -582,3 +652,12 @@ def open_or_create(path: str | Path) -> VectorStore:
         pass
 
     return VectorStore(conn)
+
+
+def append_trace(db_path: Path, trace: CompositionTrace) -> None:
+    """Convenience: open the store at db_path, insert trace, close. Soft-fail."""
+    try:
+        with open_or_create(db_path) as store:
+            store.record_composition_trace(trace)
+    except Exception:
+        pass

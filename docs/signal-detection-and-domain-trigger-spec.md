@@ -262,9 +262,9 @@ artifact or prompt text + returns one of three labels.
 
 | Predicate | Args | Meaning |
 |---|---|---|
-| `user_intent_matches` | `intent: <name>`, `recent_prompts: <int>` | User's recent prompts indicate a named intent (e.g. `"completion"`, `"approval"`, `"redirection"`) |
+| `user_intent_matches` | `intent: <name>` | User's recent prompt indicates a named intent (e.g. `"completion"`, `"approval"`, `"redirection"`) |
 | `agent_intent_matches` | `intent: <name>` | Last agent response indicates a named intent |
-| `artifact_completeness` | `path: <glob>`, `criteria: <prose>` | Artifact meets a prose-described completeness bar (e.g. "all acceptance criteria are testable and unambiguous") |
+| `artifact_completeness` | `path: <glob>`, `criteria: <prose>` | Advisory only. Emits a completeness eval request into the agent's next turn context. Does not block gate evaluation (returns UNKNOWN). Do not use as the sole exit criterion — it never returns MET. |
 | `prompt_topic_matches` | `topics: [...]` | Recent prompt is on-topic for any listed topic (fallback if no contract is present) |
 
 #### Composition operators
@@ -292,15 +292,16 @@ exit_gates:
     - any_of:
         - user_intent_matches:
             intent: "completion"
-            recent_prompts: 3
-        - artifact_completeness:
+        - artifact_completeness:  # advisory only — never returns MET; emits eval request into next turn
             path: "docs/spec/*.md"
             criteria: "Every acceptance criterion is independently testable and unambiguous."
 ```
 
 Reads as: spec phase exits when a non-trivial spec doc exists with the
-required sections, AND (the user signaled completion OR the doc itself
-looks complete by Qwen's judgment).
+required sections, AND the user signaled completion. The `artifact_completeness`
+arm never returns MET — it emits a soft eval advisory into Claude's next turn
+context but does not contribute to gate satisfaction. Do not use it as the
+sole exit criterion.
 
 ### Example: system skill applies_when
 
