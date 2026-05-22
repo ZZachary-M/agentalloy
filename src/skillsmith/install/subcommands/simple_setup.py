@@ -59,8 +59,8 @@ def _print(*args: Any, **kwargs: Any) -> None:  # type: ignore[no-untyped-def]
 class SetupConfig:
     """User-facing configuration gathered during the interactive wizard."""
 
-    runner: str = "ollama"
-    model: str = "qwen3-embedding:0.6b"
+    runner: str | None = None
+    model: str = ""
     port: int = 47950
     mode: str = "persistent"  # "persistent" or "manual"
     packs: str = ""  # comma-separated, empty = always-on only
@@ -77,8 +77,16 @@ class SetupConfig:
 
 _MODEL_DEFAULTS: dict[str, str] = {
     "ollama": "qwen3-embedding:0.6b",
-    "lm-studio": "qwen3-embedding:0.6b",
+    "lm-studio": "Qwen3-Embedding-0.6B-Q8_0.gguf",
     "llama-server": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+}
+
+# Human-readable labels for hardware targets
+_HW_LABELS: dict[str, str] = {
+    "cpu": "CPU (RAM-only)",
+    "nvidia": "NVIDIA GPU (CUDA)",
+    "radeon": "AMD GPU (Vulkan/ROCm)",
+    "apple-silicon": "Apple Silicon (Metal)",
 }
 
 
@@ -106,7 +114,7 @@ def _resolve_preset(cfg: SetupConfig) -> str:
     the auto-detected recommended_host. Falls back to "cpu" if the combination
     is unknown.
     """
-    runner = cfg.runner
+    runner = cfg.runner or "ollama"  # runner should be finalized before this is called
     hw = cfg.hardware_target or cfg.recommended_host or "cpu"
     key = (runner, hw)
     preset = _PRESET_MAP.get(key)
@@ -161,6 +169,107 @@ def _prompt_context(text: str, context: str, default: Any = None) -> str:
     """Interactive prompt with a context description and default. Returns default if non-TTY."""
     _print(f"  [dim]{context}[/dim]")
     return _prompt(text, default=default)
+
+
+# ---------------------------------------------------------------------------
+# Numbered-menu helpers (N1–N4)
+# ---------------------------------------------------------------------------
+
+
+def _prompt_numbered(
+    title: str,
+    options: list[tuple[str, str]],
+    default_index: int,
+) -> str:
+    """Render a numbered menu and return the chosen option's value.
+
+    options: list of (value, label) pairs in display order.
+    default_index: 1-based index of the default option.
+    Non-TTY: returns the default's value without prompting.
+    """
+    if not sys.stdin.isatty():
+        return options[default_index - 1][0]
+
+    _print(f"\n  [bold]{title}[/bold]")
+    for i, (_value, label) in enumerate(options, start=1):
+        _print(f"    {i}. {label}")
+    while True:
+        raw = input(f"  Enter number [{default_index}]: ").strip()
+        if not raw:
+            return options[default_index - 1][0]
+        if raw.isdigit():
+            idx = int(raw)
+            if 1 <= idx <= len(options):
+                return options[idx - 1][0]
+        _print(f"  [yellow]Please enter a number between 1 and {len(options)}.[/yellow]")
+
+
+def _prompt_runner() -> str:
+    return _prompt_numbered(
+        "Select inference runner:",
+        [
+            ("ollama", "Ollama"),
+            ("lm-studio", "LM Studio"),
+            ("llama-server", "llama-server (llama.cpp)"),
+        ],
+        default_index=1,
+    )
+
+
+def _prompt_mode() -> str:
+    return _prompt_numbered(
+        "Service mode:",
+        [
+            ("persistent", "systemd  — runs as a background service (recommended)"),
+            ("manual", "manual   — you manage the service lifecycle yourself"),
+        ],
+        default_index=1,
+    )
+
+
+def _prompt_hardware(default: str) -> str:
+    options = [
+        ("cpu", _HW_LABELS["cpu"]),
+        ("nvidia", _HW_LABELS["nvidia"]),
+        ("radeon", _HW_LABELS["radeon"]),
+        ("apple-silicon", _HW_LABELS["apple-silicon"]),
+    ]
+    # 1-based index of the detected default; fall back to CPU (option 1).
+    default_index = 1
+    for i, (value, _label) in enumerate(options, start=1):
+        if value == default:
+            default_index = i
+            break
+    return _prompt_numbered(
+        "Select hardware target:",
+        options,
+        default_index=default_index,
+    )
+
+
+_HARNESS_OPTIONS: list[tuple[str, str]] = [
+    ("claude-code", "Claude Code CLI (Anthropic)"),
+    ("gemini-cli", "Gemini CLI (Google)"),
+    ("cursor", "Cursor IDE"),
+    ("windsurf", "Windsurf IDE"),
+    ("github-copilot", "GitHub Copilot (VS Code)"),
+    ("hermes-agent", "Hermes Agent"),
+    ("continue-closed", "Continue.dev extension"),
+    ("opencode", "OpenCode (with local LLM)"),
+    ("aider", "Aider"),
+    ("cline", "Cline"),
+    ("manual", "manual — skip (configure later)"),
+]
+
+
+def _prompt_harness() -> str:
+    # Default is "manual" — the last entry.
+    default_index = len(_HARNESS_OPTIONS)
+    return _prompt_numbered(
+        "Select IDE harness:",
+        _HARNESS_OPTIONS,
+        default_index=default_index,
+    )
 
 
 def _discover_packs() -> dict[str, dict[str, Any]]:
@@ -417,22 +526,16 @@ def run_setup(cfg: SetupConfig) -> int:
     else:
         cfg.recommended_host = "cpu"
 
-    _print(f"  Host target: {cfg.recommended_host}")
-
     # -- Phase 1: Gather config --
 
     _print("\n[bold]skillsmith setup[/bold]\n")
 
     # 1. Runner
-    if cfg.runner == "ollama" and not cfg.non_interactive:
-        cfg.runner = _prompt_context(
-            "  Embedding runner",
-            "  How to run the embedding model for skills retrieval:\n"
-            "    ollama       - Ollama (recommended for most users)\n"
-            "    lm-studio    - LM Studio (GUI app with Vulkan/Metal/CUDA backends)\n"
-            "    llama-server - llama.cpp server (for GGUF models)",
-            default="ollama",
-        )
+    if cfg.runner is None and not cfg.non_interactive:
+        cfg.runner = _prompt_runner()
+    elif cfg.runner is None:
+        cfg.runner = "ollama"
+    cfg.runner = cfg.runner.strip().lower()
     if cfg.runner not in ("ollama", "lm-studio", "llama-server"):
         _print(
             f"  [red]Invalid runner: {cfg.runner}. Choose ollama, lm-studio, or llama-server.[/red]"
@@ -440,22 +543,39 @@ def run_setup(cfg: SetupConfig) -> int:
         return 1
     _print(f"  Runner: {cfg.runner}")
 
-    # 2. Model (default varies by runner)
+    # 2. Hardware target
+    detected = cfg.recommended_host or "cpu"
     if not cfg.non_interactive:
-        cfg.model = _prompt_context(
+        _print(f"\n  Detected: {_HW_LABELS.get(detected, detected)}")
+        cfg.hardware_target = _prompt_hardware(default=detected)
+    else:
+        if cfg.hardware_target:
+            cfg.hardware_target = cfg.hardware_target.strip().lower()
+            if cfg.hardware_target not in _HW_LABELS:
+                _print(f"  [red]Invalid hardware: {cfg.hardware_target}.[/red]")
+                return 1
+        else:
+            cfg.hardware_target = detected
+    _print(f"  Hardware: {_HW_LABELS.get(cfg.hardware_target, cfg.hardware_target)}")
+
+    # 3. Model (default varies by runner)
+    default_model = _MODEL_DEFAULTS.get(cfg.runner, "qwen3-embedding:0.6b")
+    if not cfg.non_interactive:
+        chosen = _prompt_context(
             "  Model",
             "  Which embedding model to use. We recommend the default for your hardware.",
-            default=_MODEL_DEFAULTS.get(cfg.runner, "qwen3-embedding:0.6b"),
+            default=default_model,
         )
+        cfg.model = chosen or default_model
     else:
-        cfg.model = _MODEL_DEFAULTS.get(cfg.runner, "qwen3-embedding:0.6b")
+        cfg.model = cfg.model or default_model
     _print(f"  Model: {cfg.model}")
 
-    # 3. Port
+    # 4. Port
     if not cfg.non_interactive:
         port_str = _prompt_context(
             "  Service port",
-            "  Confirms which port you want to host the FastAPI service on.",
+            "  Port the skillsmith FastAPI service will listen on (default: 47950)",
             default=47950,
         )
         try:
@@ -465,84 +585,39 @@ def run_setup(cfg: SetupConfig) -> int:
             return 1
     _print(f"  Port: {cfg.port}")
 
-    # 4. Service mode
+    # 5. Service mode
     if not cfg.non_interactive:
-        cfg.mode = _prompt_context(
-            "  Service mode",
-            "  'persistent' runs the service as a systemd daemon. 'manual' starts it on demand.",
-            default="persistent",
-        )
+        cfg.mode = _prompt_mode()
     if cfg.mode not in ("persistent", "manual"):
         _print(f"  [red]Invalid mode: {cfg.mode}. Use persistent or manual.[/red]")
         return 1
     _print(f"  Mode: {cfg.mode}")
 
-    # 5. Packs
+    # 6. Packs
     if not cfg.non_interactive:
         cfg.packs = _prompt_for_packs()
     _print(f"  Packs: {cfg.packs or '(always-on only)'}")
 
-    # 6. Harness
+    # 7. Harness
     if not cfg.non_interactive:
-        cfg.harness = _prompt_context(
-            "  IDE harness",
-            "  Wire SkillsSmith into your coding assistant:\n"
-            "    claude-code    - Claude Code CLI (Anthropic)\n"
-            "    gemini-cli     - Gemini CLI (Google)\n"
-            "    cursor         - Cursor IDE\n"
-            "    windsurf       - Windsurf IDE\n"
-            "    github-copilot - GitHub Copilot (VS Code)\n"
-            "    hermes-agent   - Hermes Agent\n"
-            "    continue       - Continue.dev extension\n"
-            "    opencode       - OpenCode (with local LLM)\n"
-            "    aider          - Aider\n"
-            "    cline          - Cline\n"
-            "    manual         - Skip (configure later)",
-            default="manual",
-        )
-    # Normalize "continue" display alias → actual harness names
-    h = cfg.harness.strip().lower()
-    if h == "continue":
-        cfg.harness = "continue-closed"
-    elif h not in VALID_HARNESSES:
+        cfg.harness = _prompt_harness()
+    else:
+        h = (cfg.harness or "manual").strip().lower()
+        if h == "continue":
+            h = "continue-closed"
+        cfg.harness = h
+
+    if cfg.harness not in VALID_HARNESSES:
         _print(
-            f"  [red]Invalid harness: {cfg.harness}. Choices: {', '.join(sorted(VALID_HARNESSES))}[/red]"
+            f"  [red]Invalid harness: {cfg.harness}. "
+            f"Choices: {', '.join(sorted(VALID_HARNESSES))}[/red]"
         )
         return 1
     _print(f"  Harness: {cfg.harness}")
 
-    # 7. Hardware / Hosting target
-    if not cfg.non_interactive:
-        detected = cfg.recommended_host or "cpu"
-        hardware_str = _prompt_context(
-            "  Hardware target",
-            f"  Your system has {detected.replace('-', ' ').title()} hardware detected.\n  "
-            "  This controls the embedding model build and optimization. "
-            "  dGPU (nvidia/radeon) uses CUDA/ROCm acceleration. CPU uses RAM-only inference.",
-            default=detected,
-        )
-        hardware_str = hardware_str.strip().lower()
-        if hardware_str not in ("nvidia", "radeon", "apple-silicon", "cpu"):
-            _print(
-                f"  [red]Invalid hardware: {hardware_str}. "
-                "Choose nvidia, radeon, apple-silicon, or cpu.[/red]"
-            )
-            return 1
-        cfg.hardware_target = hardware_str
-    else:
-        if cfg.hardware_target:
-            cfg.hardware_target = cfg.hardware_target.strip().lower()
-            if cfg.hardware_target not in ("nvidia", "radeon", "apple-silicon", "cpu"):
-                _print(f"  [red]Invalid hardware: {cfg.hardware_target}.[/red]")
-                return 1
-        else:
-            # Non-interactive: use detected or default to cpu
-            cfg.hardware_target = cfg.recommended_host or "cpu"
-    _print(f"  Hardware: {cfg.hardware_target}")
-
-    # 8. Resolve preset from explicit choices (after all user input)
+    # Resolve preset from explicit choices (after all user input)
     preset = _resolve_preset(cfg)
-    _print(f"  Preset: {preset}")
+    # Preset is an internal write-env detail; not shown to the user.
 
     # -- Phase 2: Summary confirmation --
 
@@ -554,9 +629,14 @@ def run_setup(cfg: SetupConfig) -> int:
     _print(f"  Mode:       {cfg.mode}")
     _print(f"  Packs:      {cfg.packs or '(always-on only)'}")
     _print(f"  Harness:    {cfg.harness}")
-    _print(f"  Hardware:   {cfg.hardware_target}")
-    _print(f"  Preset:     {preset}")
-    _print(f"  Detected:   {cfg.recommended_host or 'N/A'}")
+
+    hw_label = _HW_LABELS.get(cfg.hardware_target, cfg.hardware_target)
+    detected = cfg.recommended_host or "cpu"
+    if cfg.hardware_target == detected:
+        _print(f"  Hardware:   {hw_label}")
+    else:
+        detected_label = _HW_LABELS.get(detected, detected)
+        _print(f"  Hardware:   {hw_label}  (detected: {detected_label})")
 
     if not cfg.non_interactive:
         confirm = _prompt("  Confirm and continue? (y/n)", default="y")
@@ -728,7 +808,7 @@ def add_parser(
     )
     p.add_argument(
         "--runner",
-        choices=["ollama", "llama-server"],
+        choices=["ollama", "lm-studio", "llama-server"],
         default=None,
         help="Embedding runner (default: ollama).",
     )
@@ -771,7 +851,7 @@ def add_parser(
 def _run_from_args(args: argparse.Namespace) -> int:
     """Bridge from argparse.Namespace to SetupConfig -> run_setup()."""
     cfg = SetupConfig(
-        runner=args.runner or "ollama",
+        runner=args.runner,  # may be None; resolved inside run_setup
         model=args.model or "",
         port=args.port or 47950,
         mode=args.mode or "persistent",
@@ -780,7 +860,5 @@ def _run_from_args(args: argparse.Namespace) -> int:
         hardware_target=getattr(args, "hardware", None) or "",
         non_interactive=args.non_interactive,
     )
-    # Override model default based on runner if not explicitly set
-    if cfg.model == "":
-        cfg.model = _MODEL_DEFAULTS.get(cfg.runner, "qwen3-embedding:0.6b")
+    # Model default is resolved inside run_setup() after cfg.runner is finalized.
     return run_setup(cfg)

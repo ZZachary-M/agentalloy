@@ -338,20 +338,14 @@ class TestSimpleSetupExecution:
         self.mock.mocks["start_embed_server"].assert_not_called()
 
     def test_run_setup_rejects_invalid_hardware(self, tmp_state_dir: tuple[Path, Path]):
-        """Setup rejects invalid hardware target in interactive mode."""
+        """Setup rejects invalid hardware target in non-interactive mode."""
         setup_config, run_setup = self._import_run_setup()
-        cfg = setup_config(non_interactive=False, recommended_host="nvidia")
-        # Mock _prompt_context to return invalid hardware
-        with (
-            patch(
-                "skillsmith.install.subcommands.simple_setup._prompt_context",
-                return_value="invalid-gpu",
-            ),
-            patch(
-                "skillsmith.install.subcommands.simple_setup.sys.stdin.isatty", return_value=True
-            ),
-        ):
-            rc = run_setup(cfg)
+        cfg = setup_config(
+            non_interactive=True,
+            hardware_target="invalid-gpu",
+            recommended_host="nvidia",
+        )
+        rc = run_setup(cfg)
         assert rc == 1
 
 
@@ -806,3 +800,67 @@ class TestEmbedEndpoint:
 
         captured = capsys.readouterr()
         assert "fail" in captured.out.lower()
+
+
+# ---------------------------------------------------------------------------
+# Setup Wizard UX Overhaul regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_setup_argparse_accepts_lm_studio_runner():
+    """B1: --runner lm-studio passes argparse."""
+    from skillsmith.install.subcommands.simple_setup import add_parser
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="subcommand")
+    add_parser(sub)
+    args = parser.parse_args(["setup", "--runner", "lm-studio", "--non-interactive"])
+    assert args.runner == "lm-studio"
+
+
+def test_setup_explicit_runner_ollama_is_preserved():
+    """B3: Explicit --runner ollama is preserved through argparse -> _run_from_args bridging."""
+    import argparse
+
+    captured: list[Any] = []
+
+    import unittest.mock as mock
+
+    with mock.patch(
+        "skillsmith.install.subcommands.simple_setup.run_setup",
+        side_effect=lambda cfg: captured.append(cfg) or 0,  # type: ignore[misc]
+    ):
+        root = argparse.ArgumentParser()
+        sub = root.add_subparsers()
+        from skillsmith.install.subcommands.simple_setup import add_parser  # type: ignore[attr-defined]
+
+        add_parser(sub)
+        args = root.parse_args(["setup", "--runner", "ollama", "--non-interactive"])
+        args.func(args)
+
+    assert captured[0].runner == "ollama"
+
+
+def test_hw_labels_cover_all_valid_targets():
+    """B4: Hardware label map covers all valid targets."""
+    from skillsmith.install.subcommands.simple_setup import _HW_LABELS  # type: ignore[attr-defined]
+
+    assert set(_HW_LABELS) == {"cpu", "nvidia", "radeon", "apple-silicon"}
+    assert _HW_LABELS["cpu"] == "CPU (RAM-only)"
+    assert "Apple Silicon" in _HW_LABELS["apple-silicon"]
+
+
+def test_prompt_numbered_returns_default_on_non_tty(
+    monkeypatch: Any,
+) -> None:
+    """N1-N4: Numbered-menu helper returns default on non-TTY."""
+    import sys
+
+    from skillsmith.install.subcommands.simple_setup import _prompt_numbered  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    options = [("a", "Alpha"), ("b", "Beta"), ("c", "Gamma")]
+    # default_index is 1-based; default_index=2 -> "b"
+    assert _prompt_numbered("pick:", options, default_index=2) == "b"
