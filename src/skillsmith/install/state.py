@@ -305,6 +305,11 @@ def _empty_state() -> dict[str, Any]:
         "env_path": None,
         "port": 47950,
         "last_verify_passed_at": None,
+        # Pack selection from setup wizard, awaiting consumption by
+        # install-packs. Cleared once install-packs has applied it. When
+        # absent/None, install-packs falls back to interactive prompt
+        # (or always-on defaults in non-TTY mode).
+        "pending_pack_selection": None,
     }
 
 
@@ -424,6 +429,35 @@ def get_step_output(data: dict[str, Any], step: str) -> dict[str, Any] | None:
     return None
 
 
+def get_pending_pack_selection(data: dict[str, Any]) -> list[str] | None:
+    """Return the user's pending pack selection from setup, or None if absent.
+
+    Setup (``simple_setup``) writes this on first run after the user picks
+    packs interactively; ``install-packs`` reads and clears it. A return of
+    ``None`` means there is no pending selection — caller should fall back
+    to interactive prompt or non-interactive defaults.
+    """
+    raw = data.get("pending_pack_selection")
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        items: list[Any] = raw  # type: ignore[assignment] — runtime-validated above
+        return [str(p) for p in items if isinstance(p, str)]
+    return None
+
+
+def set_pending_pack_selection(data: dict[str, Any], packs: list[str]) -> dict[str, Any]:
+    """Record a pack selection to be consumed by the next install-packs run."""
+    data["pending_pack_selection"] = list(packs)
+    return data
+
+
+def clear_pending_pack_selection(data: dict[str, Any]) -> dict[str, Any]:
+    """Clear a previously-recorded pack selection after install-packs consumed it."""
+    data["pending_pack_selection"] = None
+    return data
+
+
 def save_output_file(
     content: dict[str, Any],
     filename: str,
@@ -459,5 +493,9 @@ def _migrate(data: dict[str, Any], from_version: int) -> dict[str, Any]:
             entry.setdefault("harness", legacy_harness)
             if legacy_repo_root:
                 entry.setdefault("repo_root", legacy_repo_root)
+    # Forward-compatibility: ensure newly added optional fields exist on
+    # older state files. Not a version bump because the field is purely
+    # additive and defaults to None.
+    data.setdefault("pending_pack_selection", None)
     data["schema_version"] = CURRENT_SCHEMA_VERSION
     return data

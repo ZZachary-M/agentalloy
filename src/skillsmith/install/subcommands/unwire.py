@@ -44,6 +44,13 @@ def _run(args: argparse.Namespace) -> int:
         remove_user_state=False,
         remove_env=False,
         all_repos=False,
+        # `unwire` is sentinel-only: keep services running, keep models,
+        # keep all user-scope state. The new explicit kwargs preserve
+        # this behavior independently of how the meta-uninstall defaults
+        # evolve.
+        stop_services=False,
+        remove_models=False,
+        remove_wiring=True,
     )
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")

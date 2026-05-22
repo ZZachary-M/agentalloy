@@ -53,6 +53,95 @@ _MANUAL_INSTRUCTIONS: dict[str, str] = {
 }
 
 
+# Ollama default daemon port for the main API. The embed endpoint lives on
+# a separate port (RUNTIME_EMBED_BASE_URL, typically 11436). For `ollama
+# pull` we only need the main API.
+_OLLAMA_HOST = "127.0.0.1"
+_OLLAMA_PORT = 11434
+
+
+def _ollama_daemon_running(timeout: float = 1.0) -> bool:
+    """Return True if the Ollama API is reachable on the default port.
+
+    Cheap probe — opens a TCP socket and closes it. Used before
+    ``ollama pull`` so we can auto-start the daemon when it's down
+    instead of letting the pull fail with the cryptic ``could not
+    connect to ollama server`` message.
+    """
+    import socket as _socket
+
+    try:
+        with _socket.create_connection((_OLLAMA_HOST, _OLLAMA_PORT), timeout=timeout):
+            return True
+    except (OSError, TimeoutError):
+        return False
+
+
+def _ensure_ollama_running() -> tuple[bool, str | None]:
+    """Probe the Ollama daemon; spawn ``ollama serve`` if down.
+
+    Returns ``(ok, error)``. ``ok`` is True when the daemon is reachable
+    after this call (already-running or just-spawned). ``error`` is a
+    human-readable message when ``ok`` is False — e.g. ``ollama`` binary
+    not on PATH, or the daemon didn't come up within the deadline.
+
+    Mirrors ``start_embed_server._start_ollama`` so behavior is
+    consistent across the install pipeline. The status line on spawn
+    is always printed (a single line per install run) — pull_models'
+    ``quiet`` mode applies to the structured JSON output, not transient
+    progress notes.
+    """
+    if _ollama_daemon_running():
+        return True, None
+
+    binary = shutil.which("ollama")
+    if not binary:
+        return False, (
+            "ollama binary not found in PATH. Install Ollama from "
+            "https://ollama.com/download and re-run setup."
+        )
+
+    print("  ollama daemon not running; starting it now ...", file=sys.stderr)
+
+    # Spawn `ollama serve` detached so it survives this process. ollama is
+    # already-running-tolerant — a second `serve` just exits.
+    log_path = install_state.user_data_dir() / "logs" / "ollama.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with log_path.open("ab") as log_fh:
+            proc = subprocess.Popen(  # noqa: S603 — binary path is from shutil.which
+                [binary, "serve"],
+                stdout=log_fh,
+                stderr=log_fh,
+                start_new_session=True,
+            )
+    except OSError as exc:
+        return False, f"failed to spawn `ollama serve`: {exc}"
+
+    # Record the spawned PID so `uninstall` can stop *this* ollama process
+    # (instead of `pkill -f` killing any ollama the user has running for
+    # other apps). Best-effort: a state-write failure must not block install.
+    try:
+        _st = install_state.load_state()
+        _st["spawned_ollama_pid"] = proc.pid
+        install_state.save_state(_st)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Wait for the daemon to come up. 15s is generous for a local
+    # spawn (ollama typically binds in under a second).
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        if _ollama_daemon_running():
+            return True, None
+        time.sleep(0.5)
+
+    return False, (
+        f"ollama daemon did not come up within 15s. "
+        f"Check {log_path} for startup errors, or run `ollama serve` manually."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Runner presence checks
 # ---------------------------------------------------------------------------
@@ -507,6 +596,20 @@ def _auto_pull(runner: str, model: str) -> dict[str, Any]:
             "hint": hint,
         }
 
+    # Ollama needs its daemon running for `pull`. If down, start it
+    # automatically — otherwise the pull dies with a cryptic
+    # "could not connect to ollama server" that masks a fixable state.
+    if runner == "ollama":
+        ok, err = _ensure_ollama_running()
+        if not ok:
+            return {
+                "runner": runner,
+                "model": model,
+                "success": False,
+                "error": err or "ollama daemon unavailable",
+                "hint": "Start `ollama serve` manually and re-run pull-models.",
+            }
+
     # `--` separator prevents argv option-injection if model name slipped
     # through the regex (defense in depth) or future regex relaxations
     # admit a leading-`-` form.
@@ -736,6 +839,16 @@ def _run(args: argparse.Namespace) -> int:
     # Non-zero exit if there were pull errors
     if result.get("errors"):
         return 1
+
+    # Distinguish "no work needed" from "did real work" so the caller
+    # (simple_setup) can render a "skipping" line instead of a
+    # generic "Done". This mirrors EXIT_NOOP semantics used elsewhere
+    # in the install pipeline (seed_corpus, etc.).
+    pulled: list[Any] = result.get("auto_pulled") or []
+    skipped: list[Any] = result.get("skipped_already_present") or []
+    manual: list[Any] = result.get("manual_steps_required") or []
+    if not pulled and not manual and skipped:
+        return 4
     return 0
 
 

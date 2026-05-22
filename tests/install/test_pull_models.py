@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownLambdaType=false
 """Unit tests for the ``pull-models`` subcommand.
 
 Maps to test-plan.md § Model pulling.
@@ -130,7 +131,13 @@ class TestOllamaPresence:
 
 class TestAutoPull:
     def test_successful_pull(self) -> None:
+        # Daemon-running probe must return True so _auto_pull skips
+        # the spawn path and goes straight to the pull subprocess.
         with (
+            patch(
+                "skillsmith.install.subcommands.pull_models._ollama_daemon_running",
+                return_value=True,
+            ),
             patch("shutil.which", return_value="/usr/bin/ollama"),
             patch("subprocess.run") as mock_run,
         ):
@@ -144,6 +151,10 @@ class TestAutoPull:
 
     def test_pull_failure(self) -> None:
         with (
+            patch(
+                "skillsmith.install.subcommands.pull_models._ollama_daemon_running",
+                return_value=True,
+            ),
             patch("shutil.which", return_value="/usr/bin/ollama"),
             patch("subprocess.run") as mock_run,
         ):
@@ -313,3 +324,156 @@ class TestPullModels:
 
         st = load_state(repo_root)
         assert "ollama:qwen3-embedding:0.6b" in st["models_pulled"]
+
+
+class TestOllamaDaemonAutoStart:
+    """``_auto_pull`` must start the ollama daemon if it's down before pulling."""
+
+    def test_no_binary_surfaces_clear_error(self, repo_root: Path) -> None:
+        """When the ``ollama`` binary isn't on PATH, _auto_pull short-circuits
+        with an actionable error — no daemon-start is attempted."""
+        with patch(
+            "skillsmith.install.subcommands.pull_models.shutil.which",
+            return_value=None,
+        ):
+            result = _auto_pull("ollama", "qwen3-embedding:0.6b")
+        assert result["success"] is False
+        assert "not found" in (result["error"] or "").lower()
+
+    def test_daemon_already_up_no_spawn(self, repo_root: Path) -> None:
+        from skillsmith.install.subcommands import pull_models as pm
+
+        with (
+            patch.object(pm, "_ollama_daemon_running", return_value=True),
+            patch(
+                "skillsmith.install.subcommands.pull_models.shutil.which",
+                return_value="/usr/bin/ollama",
+            ),
+            patch("skillsmith.install.subcommands.pull_models.subprocess.Popen") as mock_popen,
+            patch("skillsmith.install.subcommands.pull_models.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            result = _auto_pull("ollama", "qwen3-embedding:0.6b")
+        assert result["success"] is True
+        mock_popen.assert_not_called()
+
+    def test_daemon_down_triggers_spawn(self, repo_root: Path) -> None:
+        from skillsmith.install.subcommands import pull_models as pm
+
+        # First probe → False (down). After spawn, probes during the wait
+        # loop return True (came up).
+        check_results = iter([False, True])
+
+        with (
+            patch.object(
+                pm,
+                "_ollama_daemon_running",
+                side_effect=lambda *_a, **_k: next(check_results),
+            ),
+            patch(
+                "skillsmith.install.subcommands.pull_models.shutil.which",
+                return_value="/usr/bin/ollama",
+            ),
+            patch("skillsmith.install.subcommands.pull_models.subprocess.Popen") as mock_popen,
+            patch("skillsmith.install.subcommands.pull_models.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            result = _auto_pull("ollama", "qwen3-embedding:0.6b")
+        mock_popen.assert_called_once()
+        cmd = mock_popen.call_args[0][0]
+        assert cmd[0] == "/usr/bin/ollama"
+        assert cmd[1] == "serve"
+        assert result["success"] is True
+
+    def test_daemon_never_comes_up_fails_loudly(self, repo_root: Path) -> None:
+        """Spawn succeeded but daemon never bound the port → clear error."""
+        from skillsmith.install.subcommands import pull_models as pm
+
+        # All probes return False. The deadline loop bails after the
+        # time.monotonic() sequence indicates timeout.
+        with (
+            patch.object(pm, "_ollama_daemon_running", return_value=False),
+            patch(
+                "skillsmith.install.subcommands.pull_models.shutil.which",
+                return_value="/usr/bin/ollama",
+            ),
+            patch("skillsmith.install.subcommands.pull_models.subprocess.Popen"),
+            # Sequence: initial t0, then time.monotonic() > deadline on first
+            # check inside the while loop.
+            patch(
+                "skillsmith.install.subcommands.pull_models.time.monotonic",
+                side_effect=[0.0, 100.0, 100.0, 100.0],
+            ),
+            patch("skillsmith.install.subcommands.pull_models.time.sleep"),
+        ):
+            result = _auto_pull("ollama", "qwen3-embedding:0.6b")
+        assert result["success"] is False
+        assert "ollama" in (result["error"] or "").lower()
+
+
+class TestRunExitCodes:
+    """``_run`` exit codes: 0 = work done, 4 = no-op, 1 = error."""
+
+    def _models_file(self, repo_root: Path, runner: str = "ollama") -> Path:
+        import json as _json
+
+        p = repo_root / "models.json"
+        p.write_text(_json.dumps(_recommend_output(embed_runner=runner)))
+        return p
+
+    def test_exit_4_when_all_models_already_present(self, repo_root: Path) -> None:
+        """Re-running pull-models after install: every model is present.
+        No pulls happen, no manual steps required → EXIT_NOOP (4)."""
+        from argparse import Namespace
+
+        from skillsmith.install.subcommands.pull_models import _run
+
+        models_path = self._models_file(repo_root)
+
+        def always_present(m: str) -> bool:
+            return True
+
+        with patch.dict(_PRESENCE_CHECKS, {"ollama": always_present}):
+            rc = _run(Namespace(models=str(models_path), runner=None, quiet=True))
+        assert rc == 4
+
+    def test_exit_0_when_models_pulled(self, repo_root: Path) -> None:
+        from argparse import Namespace
+
+        from skillsmith.install.subcommands.pull_models import _run
+
+        models_path = self._models_file(repo_root)
+
+        def always_absent(m: str) -> bool:
+            return False
+
+        with (
+            patch.dict(_PRESENCE_CHECKS, {"ollama": always_absent}),
+            patch("skillsmith.install.subcommands.pull_models._auto_pull") as mock_pull,
+        ):
+            mock_pull.return_value = {"success": True, "duration_ms": 50}
+            rc = _run(Namespace(models=str(models_path), runner=None, quiet=True))
+        assert rc == 0
+
+    def test_exit_1_when_pull_fails(self, repo_root: Path) -> None:
+        from argparse import Namespace
+
+        from skillsmith.install.subcommands.pull_models import _run
+
+        models_path = self._models_file(repo_root)
+
+        def always_absent(m: str) -> bool:
+            return False
+
+        with (
+            patch.dict(_PRESENCE_CHECKS, {"ollama": always_absent}),
+            patch("skillsmith.install.subcommands.pull_models._auto_pull") as mock_pull,
+        ):
+            mock_pull.return_value = {
+                "runner": "ollama",
+                "model": "qwen3-embedding:0.6b",
+                "success": False,
+                "error": "ollama daemon unavailable",
+            }
+            rc = _run(Namespace(models=str(models_path), runner=None, quiet=True))
+        assert rc == 1

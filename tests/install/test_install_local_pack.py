@@ -383,7 +383,7 @@ class TestPackSelector:
             "nodejs": {"always_install": False, "depends_on": []},
             "vue": {"always_install": False, "depends_on": []},
         }
-        chosen, unknown = ips._select_packs(available, "nodejs", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown, _ = ips._select_packs(available, "nodejs", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert "core" in chosen
         assert "engineering" in chosen
         assert "nodejs" in chosen
@@ -396,7 +396,7 @@ class TestPackSelector:
             "vue": {"always_install": False, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen, unknown = ips._select_packs(available, "all", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown, _ = ips._select_packs(available, "all", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert set(chosen) >= {"core", "vue", "nodejs"}
         assert unknown == []
 
@@ -406,7 +406,7 @@ class TestPackSelector:
             "engineering": {"always_install": True, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen, unknown = ips._select_packs(available, None, interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown, _ = ips._select_packs(available, None, interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert set(chosen) == {"core", "engineering"}
         assert unknown == []
 
@@ -417,7 +417,7 @@ class TestPackSelector:
             "core": {"always_install": True, "depends_on": []},
             "nodejs": {"always_install": False, "depends_on": []},
         }
-        chosen, unknown = ips._select_packs(available, "nodejs,nonexistent", interactive=False)  # pyright: ignore[reportPrivateUsage]
+        chosen, unknown, _ = ips._select_packs(available, "nodejs,nonexistent", interactive=False)  # pyright: ignore[reportPrivateUsage]
         assert "nodejs" in chosen
         assert "nonexistent" not in chosen
         assert unknown == ["nonexistent"]

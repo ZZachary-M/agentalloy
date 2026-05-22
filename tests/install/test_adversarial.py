@@ -272,6 +272,12 @@ class TestPullModelsOptionInjection:
         from skillsmith.install.subcommands.pull_models import _auto_pull
 
         with (
+            # Skip the new daemon-start probe so we exercise only the
+            # pull-command path the test is asserting on.
+            patch(
+                "skillsmith.install.subcommands.pull_models._ollama_daemon_running",
+                return_value=True,
+            ),
             patch("shutil.which", return_value="/usr/bin/ollama"),
             patch("subprocess.run") as mock_run,
         ):

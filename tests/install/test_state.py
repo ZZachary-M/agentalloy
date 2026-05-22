@@ -13,11 +13,14 @@ import pytest
 
 from skillsmith.install.state import (
     CURRENT_SCHEMA_VERSION,
+    clear_pending_pack_selection,
+    get_pending_pack_selection,
     get_step_output,
     is_step_completed,
     load_state,
     record_step,
     save_state,
+    set_pending_pack_selection,
     state_path,
 )
 
@@ -153,3 +156,60 @@ class TestStateHelpers:
         out = get_step_output(data, "detect")
         assert out is not None
         assert out["output_digest"] == "sha256:test"
+
+
+class TestPendingPackSelection:
+    """Helpers for the setup → install-packs handoff (no double prompt)."""
+
+    def test_fresh_state_has_no_pending_selection(self, repo_root: Path) -> None:
+        data = load_state(repo_root)
+        assert get_pending_pack_selection(data) is None
+
+    def test_set_and_get_roundtrip(self, repo_root: Path) -> None:
+        data = load_state(repo_root)
+        set_pending_pack_selection(data, ["language", "tooling"])
+        assert get_pending_pack_selection(data) == ["language", "tooling"]
+
+    def test_empty_list_persists_as_explicit_choice(self, repo_root: Path) -> None:
+        # User explicitly chose "no extra packs" — distinct from None.
+        # install-packs should treat this as "honor the choice, don't prompt".
+        data = load_state(repo_root)
+        set_pending_pack_selection(data, [])
+        assert get_pending_pack_selection(data) == []
+        # Crucially: still distinguishable from None for the priority check.
+        assert data["pending_pack_selection"] == []
+
+    def test_clear_resets_to_none(self, repo_root: Path) -> None:
+        data = load_state(repo_root)
+        set_pending_pack_selection(data, ["language"])
+        clear_pending_pack_selection(data)
+        assert get_pending_pack_selection(data) is None
+
+    def test_selection_survives_save_reload(self, repo_root: Path) -> None:
+        data = load_state(repo_root)
+        set_pending_pack_selection(data, ["language", "framework"])
+        save_state(data, repo_root)
+        reloaded = load_state(repo_root)
+        assert get_pending_pack_selection(reloaded) == ["language", "framework"]
+
+    def test_malformed_value_returns_none(self, repo_root: Path) -> None:
+        # A tampered or older state file might have non-list garbage here.
+        data = load_state(repo_root)
+        data["pending_pack_selection"] = "not-a-list"  # type: ignore[assignment]
+        assert get_pending_pack_selection(data) is None
+
+    def test_migrate_adds_field_to_older_state(self, repo_root: Path) -> None:
+        # An install-state.json written before this field existed should
+        # come back from load_state with the field defaulted to None.
+        fp = state_path(repo_root)
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        legacy: dict[str, Any] = {
+            "schema_version": 1,
+            "install_started_at": "2026-01-01T00:00:00Z",
+            "completed_steps": [],
+            "harness_files_written": [],
+        }
+        fp.write_text(json.dumps(legacy))
+        data = load_state(repo_root)
+        assert "pending_pack_selection" in data
+        assert data["pending_pack_selection"] is None

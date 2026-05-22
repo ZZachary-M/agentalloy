@@ -634,6 +634,20 @@ def run_setup(cfg: SetupConfig) -> int:
         cfg.packs = _prompt_for_packs()
     _print(f"  Packs: {cfg.packs or '(always-on only)'}")
 
+    # Persist the user's choice so install-packs picks it up without
+    # re-prompting. A standalone re-run of install-packs later (no pending
+    # selection on disk) will fall back to its own interactive flow.
+    # Best-effort: a state-write failure must not block setup.
+    try:
+        _st = install_state.load_state()
+        pack_list: list[str] = []
+        if cfg.packs:
+            pack_list = [p.strip() for p in cfg.packs.split(",") if p.strip()]
+        install_state.set_pending_pack_selection(_st, pack_list)
+        install_state.save_state(_st)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        _print(f"  [yellow]  warning: could not persist pack selection ({exc}).[/yellow]")
+
     # 7. Harness
     if not cfg.non_interactive:
         cfg.harness = _prompt_harness()
@@ -778,8 +792,11 @@ def run_setup(cfg: SetupConfig) -> int:
     models_fp = install_state.outputs_dir() / "recommend-models.json"
     models_fp.write_text(json.dumps(models_json))
     rc = pull_models.run(_build_namespace(cfg, models=str(models_fp), runner=cfg.runner))
-    if rc not in (0, 4):
-        _print(f"  [yellow]  pull-models returned {rc} (model may already be present).[/yellow]")
+    if rc == 4:
+        _print("  [dim]  Model already present, skipping.[/dim]")
+    elif rc != 0:
+        _print(f"  [red]  pull-models failed (exit {rc}).[/red]")
+        return rc
     _print("  [green]  Done.[/green]")
 
     # Step e: Seed corpus

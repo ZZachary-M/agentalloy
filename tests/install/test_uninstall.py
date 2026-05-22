@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false
 """Unit tests for the ``uninstall`` subcommand."""
 
 from __future__ import annotations
@@ -506,3 +507,296 @@ class TestOutputSchema:
         assert "files_removed" in result
         assert "data_kept" in result
         assert "warnings" in result
+        # New keys for granular preset support
+        assert "models_removed" in result
+        assert "daemons_stopped" in result
+
+
+class TestGranularControls:
+    """Each new kwarg (remove_wiring, remove_models, stop_services) should
+    independently turn its slice of teardown on/off."""
+
+    def test_remove_wiring_false_skips_sentinel_removal(self, repo_root: Path) -> None:
+        """When the caller asks to keep wiring, CLAUDE.md sentinel block
+        must survive uninstall."""
+        from unittest.mock import patch
+
+        _setup_installed(repo_root)
+        with patch("skillsmith.install.subcommands.uninstall._remove_uv_tool", return_value={}):
+            uninstall(
+                root=repo_root,
+                remove_wiring=False,
+                remove_user_state=False,
+                remove_env=False,
+                all_repos=False,
+            )
+        claude_md = repo_root / "CLAUDE.md"
+        # Sentinel still present means the wiring loop was skipped.
+        assert claude_md.exists()
+        assert "BEGIN skillsmith install" in claude_md.read_text()
+
+    def test_remove_wiring_true_still_works_as_before(self, repo_root: Path) -> None:
+        """Default behavior (remove_wiring=True) is unchanged: sentinels gone."""
+        from unittest.mock import patch
+
+        _setup_installed(repo_root)
+        with patch("skillsmith.install.subcommands.uninstall._remove_uv_tool", return_value={}):
+            uninstall(
+                root=repo_root,
+                remove_user_state=False,
+                remove_env=False,
+                all_repos=False,
+            )
+        claude_md = repo_root / "CLAUDE.md"
+        if claude_md.exists():
+            assert "BEGIN skillsmith install" not in claude_md.read_text()
+
+    def test_remove_models_invokes_helper(self, repo_root: Path) -> None:
+        """When remove_models=True, _remove_pulled_models is called and its
+        actions show up in the result."""
+        from unittest.mock import patch
+
+        from skillsmith.install import state as install_state
+
+        _setup_installed(repo_root)
+        # Record a pulled model so the helper has work to do.
+        st = install_state.load_state(repo_root)
+        st["models_pulled"] = ["ollama:qwen3-embedding:0.6b"]
+        install_state.save_state(st, repo_root)
+
+        fake_actions = [
+            {"runner": "ollama", "model": "qwen3-embedding:0.6b", "action": "ollama_removed"}
+        ]
+        with (
+            patch(
+                "skillsmith.install.subcommands.uninstall._remove_pulled_models",
+                return_value=fake_actions,
+            ) as mock_helper,
+            patch(
+                "skillsmith.install.subcommands.uninstall._remove_uv_tool",
+                return_value={},
+            ),
+        ):
+            result = uninstall(root=repo_root, remove_models=True)
+        mock_helper.assert_called_once()
+        assert result["models_removed"] == fake_actions
+
+    def test_remove_models_false_skips_helper(self, repo_root: Path) -> None:
+        """Default remove_models=False means the helper is never invoked."""
+        from unittest.mock import patch
+
+        _setup_installed(repo_root)
+        with (
+            patch("skillsmith.install.subcommands.uninstall._remove_pulled_models") as mock_helper,
+            patch(
+                "skillsmith.install.subcommands.uninstall._remove_uv_tool",
+                return_value={},
+            ),
+        ):
+            uninstall(root=repo_root)
+        mock_helper.assert_not_called()
+
+    def test_stop_services_false_skips_daemon_stop(self, repo_root: Path) -> None:
+        """stop_services=False must skip _stop_ollama_daemon AND
+        _stop_native_service AND server_proc.stop()."""
+        from unittest.mock import patch
+
+        _setup_installed(repo_root)
+        with (
+            patch("skillsmith.install.subcommands.uninstall._stop_ollama_daemon") as mock_daemon,
+            patch("skillsmith.install.subcommands.uninstall._stop_native_service") as mock_native,
+            patch(
+                "skillsmith.install.subcommands.uninstall._remove_uv_tool",
+                return_value={},
+            ),
+        ):
+            uninstall(root=repo_root, stop_services=False, remove_user_state=False)
+        mock_daemon.assert_not_called()
+        mock_native.assert_not_called()
+
+
+class TestUnwireUnchanged:
+    """`unwire` is a per-repo verb that must NEVER touch services / models /
+    user state — even after the new explicit kwargs landed."""
+
+    def test_unwire_passes_stop_services_false(self) -> None:
+        """unwire.py should explicitly pass stop_services=False so the new
+        defaults don't silently flip its behavior."""
+        from unittest.mock import patch
+
+        from skillsmith.install.subcommands.unwire import _run
+
+        with patch("skillsmith.install.subcommands.unwire.uninstall") as mock_uninstall:
+            mock_uninstall.return_value = {
+                "schema_version": 1,
+                "files_modified": [],
+                "files_removed": [],
+                "data_kept": [],
+                "warnings": [],
+                "uv_tool": {},
+                "models_removed": [],
+                "daemons_stopped": [],
+            }
+            from argparse import Namespace
+
+            _run(Namespace(force=False))
+        kwargs = mock_uninstall.call_args.kwargs
+        assert kwargs["stop_services"] is False
+        assert kwargs["remove_models"] is False
+        assert kwargs["remove_user_state"] is False
+        assert kwargs["remove_env"] is False
+
+
+class TestPresetMapping:
+    """``_run`` translates --preset choices into the right uninstall() kwargs."""
+
+    def _run_with_preset(self, preset: str, **extra: object) -> dict[str, object]:
+        """Invoke _run with the given preset; return the kwargs handed to uninstall()."""
+        from argparse import Namespace
+        from unittest.mock import patch
+
+        from skillsmith.install.subcommands.uninstall import _run
+
+        captured: dict[str, object] = {}
+
+        def fake_uninstall(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return {
+                "schema_version": 1,
+                "files_modified": [],
+                "files_removed": [],
+                "data_kept": [],
+                "warnings": [],
+                "uv_tool": {},
+                "models_removed": [],
+                "daemons_stopped": [],
+            }
+
+        ns = Namespace(
+            remove_data=False,
+            keep_data=False,
+            force=False,
+            all_repos=True,
+            yes=False,
+            preset=preset,
+            **extra,
+        )
+        with patch(
+            "skillsmith.install.subcommands.uninstall.uninstall", side_effect=fake_uninstall
+        ):
+            _run(ns)
+        return captured
+
+    def test_keep_data_preset(self) -> None:
+        k = self._run_with_preset("keep-data")
+        assert k["remove_wiring"] is True
+        assert k["remove_env"] is True
+        assert k["remove_data"] is False
+        assert k["remove_models"] is False
+        assert k["stop_services"] is False
+        assert k["remove_user_state"] is False
+
+    def test_full_preset(self) -> None:
+        k = self._run_with_preset("full")
+        assert k["remove_wiring"] is True
+        assert k["remove_env"] is True
+        assert k["remove_data"] is True
+        assert k["remove_models"] is True
+        assert k["stop_services"] is True
+        assert k["remove_user_state"] is True
+
+    def test_yes_flag_bypasses_prompt_and_uses_legacy_defaults(self) -> None:
+        """--yes without --preset should preserve the original behavior
+        (full teardown but corpus kept unless --remove-data)."""
+        from argparse import Namespace
+        from unittest.mock import patch
+
+        from skillsmith.install.subcommands.uninstall import _run
+
+        captured: dict[str, object] = {}
+
+        def fake_uninstall(**kwargs: object) -> dict[str, object]:
+            captured.update(kwargs)
+            return {
+                "schema_version": 1,
+                "files_modified": [],
+                "files_removed": [],
+                "data_kept": [],
+                "warnings": [],
+                "uv_tool": {},
+                "models_removed": [],
+                "daemons_stopped": [],
+            }
+
+        ns = Namespace(
+            remove_data=True,
+            keep_data=False,
+            force=False,
+            all_repos=True,
+            yes=True,
+            preset=None,
+        )
+        with (
+            patch(
+                "skillsmith.install.subcommands.uninstall.uninstall",
+                side_effect=fake_uninstall,
+            ),
+            patch(
+                "skillsmith.install.subcommands.uninstall._prompt_uninstall_preset"
+            ) as mock_prompt,
+        ):
+            _run(ns)
+        mock_prompt.assert_not_called()
+        assert captured["remove_data"] is True
+        assert captured["remove_user_state"] is True
+        assert captured["remove_env"] is True
+        assert captured["remove_wiring"] is True
+
+
+class TestStopOllamaDaemon:
+    """``_stop_ollama_daemon`` must only kill the PID we spawned — never
+    a stray ollama the user runs for other apps."""
+
+    def test_no_spawned_pid_is_noop(self) -> None:
+        from skillsmith.install.subcommands.uninstall import _stop_ollama_daemon
+
+        # State without ``spawned_ollama_pid`` (typical: user installed
+        # ollama themselves and started it manually, we never spawned).
+        result = _stop_ollama_daemon({})
+        assert result["action"] == "skipped_no_spawned_pid"
+
+    def test_invalid_pid_is_noop(self) -> None:
+        from skillsmith.install.subcommands.uninstall import _stop_ollama_daemon
+
+        # Defensive: garbage type in state must not crash.
+        result = _stop_ollama_daemon({"spawned_ollama_pid": "not-an-int"})
+        assert result["action"] == "skipped_no_spawned_pid"
+
+    def test_dead_pid_reports_already_stopped(self) -> None:
+        from unittest.mock import mock_open, patch
+
+        from skillsmith.install.subcommands.uninstall import _stop_ollama_daemon
+
+        # /proc/<pid>/cmdline exists but doesn't mention ollama → PID was recycled.
+        with patch("builtins.open", mock_open(read_data=b"some-other-process\x00")):
+            result = _stop_ollama_daemon({"spawned_ollama_pid": 99999})
+        assert result["action"] == "skipped_pid_recycled"
+
+    def test_alive_ollama_pid_gets_sigterm(self) -> None:
+        from unittest.mock import mock_open, patch
+
+        from skillsmith.install.subcommands.uninstall import _stop_ollama_daemon
+
+        sent: dict[str, object] = {}
+
+        def fake_kill(pid: int, sig: int) -> None:
+            sent["pid"] = pid
+            sent["sig"] = sig
+
+        with (
+            patch("builtins.open", mock_open(read_data=b"/usr/bin/ollama\x00serve\x00")),
+            patch("os.kill", side_effect=fake_kill),
+        ):
+            result = _stop_ollama_daemon({"spawned_ollama_pid": 12345})
+        assert result["action"] == "ollama_daemon_stopped"
+        assert sent["pid"] == 12345

@@ -43,6 +43,240 @@ def _sha256(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
+# ---------------------------------------------------------------------------
+# Interactive prompt helpers (preset menu + per-item yes/no)
+# ---------------------------------------------------------------------------
+
+
+def _prompt_yes_no(question: str, default: bool = False) -> bool:
+    """Yes/no prompt that mirrors ``reset.py``'s confirmation pattern.
+
+    Default is shown in the prompt; bare Enter accepts it. EOF/Ctrl-C
+    returns the default (treat as "skip" for safety on dirty input).
+    """
+    suffix = "[Y/n]" if default else "[y/N]"
+    try:
+        raw = input(f"  {question} {suffix}: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return default
+    if not raw:
+        return default
+    return raw in ("y", "yes")
+
+
+def _prompt_uninstall_preset() -> str:
+    """Show the top-level uninstall menu. Returns 'keep-data', 'full', or 'custom'.
+
+    Falls back to ``keep-data`` on any input error so unattended sessions
+    don't silently wipe data.
+    """
+    print("", file=sys.stderr)
+    print("  What kind of uninstall?", file=sys.stderr)
+    print(
+        "    1) Keep data, just unwire   "
+        "— remove harness wiring + .env; keep models, datastore, services",
+        file=sys.stderr,
+    )
+    print(
+        "    2) Full uninstall            "
+        "— remove everything: services, models, datastore, wiring, state",
+        file=sys.stderr,
+    )
+    print("    3) Custom                    — ask per-item", file=sys.stderr)
+    try:
+        raw = input("  Choice [1-3] (default 1): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return "keep-data"
+    if raw == "2":
+        return "full"
+    if raw == "3":
+        return "custom"
+    return "keep-data"
+
+
+def _prompt_uninstall_custom() -> dict[str, bool]:
+    """Ask per-item yes/no questions for a custom uninstall.
+
+    Returns a dict with keys: ``stop_services``, ``remove_models``,
+    ``remove_datastore``, ``remove_wiring``, ``remove_env_state``.
+    All default to False so a confused user can answer "no" to everything
+    and end up with a no-op rather than a surprise teardown.
+    """
+    print("", file=sys.stderr)
+    return {
+        "stop_services": _prompt_yes_no(
+            "Stop running services (embed server, ollama daemon, llama-server)?"
+        ),
+        "remove_models": _prompt_yes_no(
+            "Remove pulled models (ollama models, llama-server GGUF cache)?"
+        ),
+        "remove_datastore": _prompt_yes_no("Remove skills datastore (corpus DB)?"),
+        "remove_wiring": _prompt_yes_no(
+            "Remove harness wiring (CLAUDE.md, .cursorrules, MCP entries, etc.)?"
+        ),
+        "remove_env_state": _prompt_yes_no("Remove .env and install-state directory?"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Model & daemon teardown helpers
+# ---------------------------------------------------------------------------
+
+
+def _remove_pulled_models(st: dict[str, Any]) -> list[dict[str, Any]]:
+    """Remove every model recorded in ``state["models_pulled"]``.
+
+    Entries are ``"<runner>:<model>"``. Ollama models are removed via
+    ``ollama rm``; llama-server models are GGUF files under
+    ``${XDG_DATA_HOME}/skillsmith/models/``. Missing binaries / files
+    are warnings, not errors — the goal is best-effort cleanup.
+    """
+    actions: list[dict[str, Any]] = []
+    pulled: list[Any] = st.get("models_pulled") or []
+    if not pulled:
+        return actions
+
+    ollama_bin = shutil.which("ollama")
+    models_dir = install_state.user_data_dir() / "models"
+
+    for entry in pulled:
+        if not isinstance(entry, str) or ":" not in entry:
+            actions.append({"entry": entry, "action": "skipped_malformed_entry"})
+            continue
+        runner, _, model = entry.partition(":")
+        runner = runner.strip()
+        model = model.strip()
+        if not runner or not model:
+            actions.append({"entry": entry, "action": "skipped_empty_fields"})
+            continue
+
+        if runner == "ollama":
+            if not ollama_bin:
+                actions.append(
+                    {
+                        "runner": runner,
+                        "model": model,
+                        "action": "skipped_no_ollama_binary",
+                    }
+                )
+                continue
+            try:
+                result = subprocess.run(  # noqa: S603 — ollama_bin from shutil.which
+                    [ollama_bin, "rm", "--", model],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode == 0:
+                    actions.append({"runner": runner, "model": model, "action": "ollama_removed"})
+                else:
+                    actions.append(
+                        {
+                            "runner": runner,
+                            "model": model,
+                            "action": "ollama_remove_failed",
+                            "error": result.stderr.strip(),
+                        }
+                    )
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                actions.append(
+                    {
+                        "runner": runner,
+                        "model": model,
+                        "action": "ollama_remove_error",
+                        "error": str(exc),
+                    }
+                )
+        elif runner == "llama-server":
+            gguf_path = models_dir / model
+            if gguf_path.exists():
+                try:
+                    gguf_path.unlink()
+                    actions.append(
+                        {
+                            "runner": runner,
+                            "model": model,
+                            "path": str(gguf_path),
+                            "action": "gguf_removed",
+                        }
+                    )
+                except OSError as exc:
+                    actions.append(
+                        {
+                            "runner": runner,
+                            "model": model,
+                            "path": str(gguf_path),
+                            "action": "gguf_remove_failed",
+                            "error": str(exc),
+                        }
+                    )
+            else:
+                actions.append(
+                    {
+                        "runner": runner,
+                        "model": model,
+                        "path": str(gguf_path),
+                        "action": "gguf_already_absent",
+                    }
+                )
+        else:
+            # Unknown runner (lm-studio, fastflowlm, etc.). We don't manage
+            # those caches — surface the intent so the user can decide.
+            actions.append(
+                {
+                    "runner": runner,
+                    "model": model,
+                    "action": "skipped_unmanaged_runner",
+                    "hint": (
+                        f"Skillsmith doesn't track the {runner} model cache. "
+                        "Remove it manually using the runner's own tooling."
+                    ),
+                }
+            )
+    return actions
+
+
+def _stop_ollama_daemon(st: dict[str, Any]) -> dict[str, Any]:
+    """Stop the specific ``ollama serve`` process that pull-models spawned.
+
+    Only acts on a PID recorded in ``state["spawned_ollama_pid"]``. Native
+    systemd ollama units are handled by ``_stop_native_service``. This
+    deliberately does **not** ``pkill -f "ollama serve"`` — that would
+    terminate any ollama the user runs for other apps, which is rude.
+    If we never recorded a PID (no auto-spawn happened on this install)
+    the call is a no-op.
+    """
+    import os as _os
+    import signal as _signal
+
+    pid_raw = st.get("spawned_ollama_pid")
+    if not isinstance(pid_raw, int) or pid_raw <= 0:
+        return {"action": "skipped_no_spawned_pid"}
+
+    # Verify the PID is still an ollama process before signalling. PIDs are
+    # recycled by the kernel; if /proc/<pid> now belongs to someone else,
+    # we MUST NOT kill it. /proc is Linux-only; on macOS we fall through
+    # to the kill attempt and trust the user's session ownership.
+    try:
+        with open(f"/proc/{pid_raw}/cmdline", "rb") as f:
+            cmdline = f.read()
+        if b"ollama" not in cmdline:
+            return {"action": "skipped_pid_recycled", "pid": pid_raw}
+    except FileNotFoundError:
+        return {"action": "already_stopped", "pid": pid_raw}
+    except OSError:
+        # /proc not available (e.g. macOS) — proceed to kill attempt.
+        pass
+
+    try:
+        _os.kill(pid_raw, _signal.SIGTERM)
+    except ProcessLookupError:
+        return {"action": "already_stopped", "pid": pid_raw}
+    except OSError as exc:
+        return {"action": "kill_failed", "pid": pid_raw, "error": str(exc)}
+    return {"action": "ollama_daemon_stopped", "pid": pid_raw}
+
+
 def _extract_sentinel_content(text: str, begin: str, end: str) -> str | None:
     """Extract the content between sentinel markers, or None if not found."""
     if begin not in text or end not in text:
@@ -163,6 +397,9 @@ def uninstall(
     remove_user_state: bool = True,
     remove_env: bool = True,
     all_repos: bool = True,
+    remove_models: bool = False,
+    remove_wiring: bool = True,
+    stop_services: bool | None = None,
 ) -> dict[str, Any]:
     """Remove harness wiring, .env, and state. Returns contract-shaped result.
 
@@ -183,9 +420,17 @@ def uninstall(
     root = root or _repo_root()
     st = install_state.load_state(root)
 
+    # Back-compat: when stop_services isn't explicitly provided, derive
+    # from remove_user_state so existing callers (full teardown sets
+    # remove_user_state=True; unwire sets it False) keep their behavior.
+    if stop_services is None:
+        stop_services = remove_user_state
+
     files_modified: list[dict[str, Any]] = []
     files_removed: list[dict[str, Any]] = []
     warnings: list[str] = []
+    model_actions: list[dict[str, Any]] = []
+    daemon_actions: list[dict[str, Any]] = []
 
     # 1. Remove harness wiring. State is user-scoped and may carry entries
     # from multiple repos, but the containment check MUST use a trusted
@@ -195,6 +440,10 @@ def uninstall(
     # is the cwd-derived `root` (or the known per-tool user config dirs).
     # An entry whose recorded `repo_root` doesn't match cwd is skipped at
     # this invocation; the user can `cd` into that repo to clean it up.
+    # When remove_wiring=False this loop (and the MCP/aider cleanup
+    # blocks below) is skipped entirely — sentinels and MCP entries
+    # stay in place. Used by Custom uninstall presets where the user
+    # answered "no" to "remove harness wiring".
     home = Path.home()
     allowed_user_prefixes = (
         home / ".claude",
@@ -218,7 +467,14 @@ def uninstall(
         "mcp_servers.json",  # ~/.claude/mcp_servers.json
     )
     root_resolved = root.resolve()
-    for entry in st.get("harness_files_written", []):
+    # Iterate over harness entries only when wiring removal is enabled.
+    # Typed binding preserves `entry: dict[str, Any]` for pyright across
+    # the loop body — using an inline conditional iterable degrades the
+    # inferred type to Unknown.
+    harness_entries: list[dict[str, Any]] = (
+        st.get("harness_files_written", []) if remove_wiring else []
+    )
+    for entry in harness_entries:
         raw_path = entry.get("path")
         if not isinstance(raw_path, str) or not raw_path:
             warnings.append(f"Skipping harness entry with non-string path: {entry!r}")
@@ -335,7 +591,7 @@ def uninstall(
 
     # 2. Handle Continue.dev marker cleanup (markdown injection variant)
     continuerc = root / ".continuerc.json"
-    if continuerc.exists():
+    if remove_wiring and continuerc.exists():
         try:
             config = json.loads(continuerc.read_text())
             modified = False
@@ -385,7 +641,7 @@ def uninstall(
 
     # 2b. Handle Cursor MCP config cleanup (.cursor/mcp.json)
     cursor_mcp = root / ".cursor" / "mcp.json"
-    if cursor_mcp.exists():
+    if remove_wiring and cursor_mcp.exists():
         try:
             cfg = json.loads(cursor_mcp.read_text())
             servers = cfg.get("mcpServers")
@@ -406,7 +662,7 @@ def uninstall(
 
     # 2c. Handle user-scoped Claude Code MCP config (~/.claude/mcp_servers.json)
     claude_mcp = Path.home() / ".claude" / "mcp_servers.json"
-    if claude_mcp.exists():
+    if remove_wiring and claude_mcp.exists():
         try:
             cfg = json.loads(claude_mcp.read_text())
             servers = cfg.get("mcpServers")
@@ -427,7 +683,7 @@ def uninstall(
 
     # 3. Handle aider config cleanup
     aider_conf = root / ".aider.conf.yml"
-    if aider_conf.exists():
+    if remove_wiring and aider_conf.exists():
         content = aider_conf.read_text()
         aider_begin = "# <!-- BEGIN skillsmith install -->"
         aider_end = "# <!-- END skillsmith install -->"
@@ -490,7 +746,7 @@ def uninstall(
     # 5b. Stop a manual-mode skillsmith server still listening on the port.
     # Native systemd/launchd modes are handled in step 6; this catches the
     # case where the user ran `skillsmith server-start` directly.
-    if remove_user_state:
+    if stop_services:
         from skillsmith.install import server_proc
 
         port = int(st.get("port", 47950) or 47950)
@@ -513,9 +769,21 @@ def uninstall(
 
     # 6. Stop and remove native service unit / plist (skipped by `unwire`)
     service_actions: list[dict[str, Any]] = []
-    if remove_user_state:
+    if stop_services:
         service_actions = _stop_native_service(st)
         files_removed.extend(service_actions)
+
+    # 6b. Stop manually-spawned ollama daemon (pull-models may auto-start
+    # one even when no native unit was installed). Native ollama units
+    # have already been handled inside _stop_native_service above.
+    if stop_services:
+        daemon_actions.append(_stop_ollama_daemon(st))
+
+    # 6c. Remove pulled models from runner caches. Independent of
+    # stop_services — you may want models gone but services left running
+    # for other tools.
+    if remove_models:
+        model_actions.extend(_remove_pulled_models(st))
 
     # 7. Remove user-scope state directory (skipped by `unwire`)
     if remove_user_state:
@@ -536,6 +804,8 @@ def uninstall(
         "data_kept": data_kept,
         "warnings": warnings,
         "uv_tool": uv_tool_result,
+        "models_removed": model_actions,
+        "daemons_stopped": daemon_actions,
     }
 
 
@@ -586,10 +856,102 @@ def add_parser(
         action="store_false",
         help="Limit cleanup to the current repo (legacy behavior).",
     )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        default=False,
+        help=(
+            "Skip the interactive preset/custom prompt and apply the "
+            "flag-based behavior directly (use with --remove-data etc. "
+            "for scripted / CI invocations)."
+        ),
+    )
+    p.add_argument(
+        "--preset",
+        choices=("keep-data", "full", "custom"),
+        default=None,
+        help=(
+            "Skip the menu and apply a preset directly. "
+            "'keep-data' removes wiring + .env only. "
+            "'full' removes everything (services, models, datastore, wiring, state). "
+            "'custom' enters the per-item drill-down."
+        ),
+    )
     p.set_defaults(func=_run)
 
 
 def _run(args: argparse.Namespace) -> int:
-    result = uninstall(remove_data=args.remove_data, force=args.force, all_repos=args.all_repos)
+    """Translate CLI args + (optionally) interactive prompts into uninstall kwargs.
+
+    Priority (most specific wins):
+      1. ``--preset X`` — apply that preset's mapping (skips menu and ignores
+         ``--yes``'s legacy mapping; explicit preset is the strongest intent).
+      2. ``--yes`` (no preset) — skip prompts, use legacy flag mapping for
+         back-compat with scripted/CI invocations.
+      3. Non-TTY (no stdin, no preset, no --yes) — same as ``--yes`` to
+         avoid wedging on missing input.
+      4. Interactive TTY — show preset menu, drill into custom if chosen.
+    """
+    is_tty = sys.stdin.isatty()
+    use_prompt = not (args.yes or args.preset or not is_tty)
+
+    # Defaults: derive from existing flags so --yes scripts behave exactly
+    # like they did before this change.
+    kwargs: dict[str, Any] = {
+        "remove_data": args.remove_data,
+        "force": args.force,
+        "all_repos": args.all_repos,
+        # Sensible legacy defaults — full teardown.
+        "remove_user_state": True,
+        "remove_env": True,
+        "remove_wiring": True,
+        "remove_models": False,
+        "stop_services": True,
+    }
+
+    preset: str | None = args.preset
+    if use_prompt:
+        preset = _prompt_uninstall_preset()
+
+    if preset == "keep-data":
+        kwargs.update(
+            {
+                "remove_data": False,
+                "remove_models": False,
+                "stop_services": False,
+                "remove_user_state": False,
+                "remove_env": True,
+                "remove_wiring": True,
+            }
+        )
+    elif preset == "full":
+        kwargs.update(
+            {
+                "remove_data": True,
+                "remove_models": True,
+                "stop_services": True,
+                "remove_user_state": True,
+                "remove_env": True,
+                "remove_wiring": True,
+            }
+        )
+    elif preset == "custom":
+        answers = _prompt_uninstall_custom()
+        # Wiring is independent. .env and state dir collapse into one
+        # user-facing question — the user typically wants them together,
+        # and the uv-tool removal piggybacks on the same answer because
+        # it represents "remove skillsmith itself from the system".
+        kwargs.update(
+            {
+                "remove_data": answers["remove_datastore"],
+                "remove_models": answers["remove_models"],
+                "stop_services": answers["stop_services"],
+                "remove_user_state": answers["remove_env_state"],
+                "remove_env": answers["remove_env_state"],
+                "remove_wiring": answers["remove_wiring"],
+            }
+        )
+
+    result = uninstall(**kwargs)
     print(json.dumps(result, indent=2))
     return 0
