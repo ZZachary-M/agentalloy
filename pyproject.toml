@@ -1,7 +1,7 @@
 [project]
 name = "agentalloy"
 version = "0.1.0"
-description = "Runtime skill composition service — assembles task-specific guidance for agents with governance included. Runtime only — see agentalloy-authoring for corpus authoring tooling."
+description = "AgentAlloy — just-in-time agent skill composer. Phase-aware, intent-aware retrieval and assembly from a curated 300+ skill corpus. No LLM in the runtime. Governance included. Runtime only; see agentalloy-authoring for corpus authoring."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
