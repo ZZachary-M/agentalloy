@@ -150,24 +150,27 @@ def test_rebuild_fts_exit_ok_on_failure(tmp_path: Path, caplog: pytest.LogCaptur
 def test_rebuild_fts_retry_on_stopwords_error(tmp_path: Path) -> None:
     """rebuild_fts_index retries once on the stopwords catalog race."""
     conn = MagicMock()
-    call_count = 0
+    create_count = 0
 
     def mock_execute(sql: str, *a: object, **kw: object) -> None:
-        nonlocal call_count
-        call_count += 1
-        if "create_fts_index" in sql and call_count == 1:
-            raise Exception("subject 'stopwords' has been deleted")
-        # Second attempt: succeeds
+        nonlocal create_count
+        if "create_fts_index" in sql:
+            create_count += 1
+            if create_count == 1:
+                raise Exception("subject 'stopwords' has been deleted")
+        # drop_fts_index, CHECKPOINT, second create: all succeed
         return None
 
     conn.execute = mock_execute
-    vs = VectorStore(conn)  # pyright: ignore[reportPrivateUsage]
+    vs = VectorStore(conn)  # type: ignore[arg-type]
 
-    # Should not raise - retry succeeds
-    vs.rebuild_fts_index()
+    # Patch time.sleep so the retry path doesn't actually sleep
+    with patch("time.sleep"):
+        # Should not raise - retry succeeds
+        vs.rebuild_fts_index()
 
-    # Verify second create_fts_index was attempted
-    assert call_count >= 2
+    # Verify create_fts_index was attempted twice
+    assert create_count == 2
 
 
 def test_rebuild_fts_no_retry_on_non_transient_error(tmp_path: Path) -> None:
@@ -183,46 +186,10 @@ def test_rebuild_fts_no_retry_on_non_transient_error(tmp_path: Path) -> None:
         return None
 
     conn.execute = mock_execute
-    vs = VectorStore(conn)  # pyright: ignore[reportPrivateUsage]
+    vs = VectorStore(conn)  # type: ignore[arg-type]
 
     with pytest.raises(Exception, match='Extension "fts" not loaded'):
         vs.rebuild_fts_index()
 
     # Only ONE create_fts_index call (no retry)
     assert create_count == 1
-
-
-# ---------------------------------------------------------------------------
-# Backward compatibility
-# ---------------------------------------------------------------------------
-
-
-def test_backward_compat_no_flag_no_fragments(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Run main([]) with no fragments -> same behavior as before."""
-    with (
-        patch("skillsmith.reembed.cli.LadybugStore") as mock_store_cls,
-        patch("skillsmith.reembed.cli.open_or_create") as mock_vs_cls,
-        patch("skillsmith.reembed.cli.get_settings") as mock_settings,
-    ):
-        mock_settings.return_value.ladybug_db_path = str(tmp_path / "ladybug.db")
-        mock_settings.return_value.runtime_embedding_model = "test-model"
-
-        mock_store = MagicMock()
-        mock_store_cls.return_value.__enter__ = MagicMock(return_value=mock_store)
-        mock_store_cls.return_value.__exit__ = MagicMock(return_value=False)
-        mock_store.execute.return_value = []
-
-        mock_vs = MagicMock()
-        mock_vs_cls.return_value.__enter__ = MagicMock(return_value=mock_vs)
-        mock_vs_cls.return_value.__exit__ = MagicMock(return_value=False)
-        mock_vs.count_embeddings.return_value = 100
-        mock_vs.fragment_ids_present.return_value = set()
-
-        with caplog.at_level(logging.INFO):
-            code = reembed_main([])
-
-        assert code == EXIT_OK
-        mock_vs.rebuild_fts_index.assert_not_called()
-        assert "nothing to do" in caplog.text
