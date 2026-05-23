@@ -4,8 +4,10 @@ Replaces the chat-model classifier (Phase 3) with embed-based similarity scoring
 using the same embed server already running for retrieval. No new server or model
 required.
 
-Phase 7 update: Qwen instruct prefix on queries (matches retrieval/domain.py:217),
-expanded reference phrase sets (12+ per intent), recalibrated similarity threshold.
+Phase 7 update: raw query text for embed inputs (no instruct prefix — prefix
+adds ~50 tokens of noise that dilutes cosine similarity for short text-to-text
+classification), expanded reference phrase sets (12+ per intent), recalibrated
+similarity threshold.
 
 Four semantic predicates:
   user_intent_matches      — prompt similarity against named intent references
@@ -43,7 +45,6 @@ _INTENT_REFERENCES: dict[str, list[str]] = {
         "I think that covers it",
         "nothing more to add",
         "moving on",
-        "spec looks good to me",
     ],
     "approval": [
         "looks good",
@@ -90,18 +91,9 @@ if set(_INTENT_TASK_DESCRIPTIONS.keys()) != set(_INTENT_REFERENCES.keys()):
         f"_INTENT_REFERENCES keys {set(_INTENT_REFERENCES)}"
     )
 
-# Recalibrated per Phase 7 calibration script. Updated from 0.75.
+# Recalibrated per Phase 7 calibration script.
 _SIMILARITY_THRESHOLD = 0.75
 _MAX_INPUT_CHARS = 2000
-
-
-def _format_query(text: str, task_description: str) -> str:
-    """Format a query for Qwen3-Embedding per the model's documented prefix.
-
-    Format is exact: 'Instruct: {task}\\nQuery:{text}'.
-    Mirrors src/skillsmith/retrieval/domain.py:217.
-    """
-    return f"Instruct: {task_description}\nQuery:{text}"
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -123,10 +115,6 @@ def _intent_similarity(
     refs = _INTENT_REFERENCES.get(intent)
     if not refs:
         _log.debug("unknown intent %r — returning UNKNOWN", intent)
-        return PredicateResult.UNKNOWN
-    task = _INTENT_TASK_DESCRIPTIONS.get(intent)
-    if task is None:
-        _log.debug("no task description for intent %r — returning UNKNOWN", intent)
         return PredicateResult.UNKNOWN
     query = text[:_MAX_INPUT_CHARS]
     try:

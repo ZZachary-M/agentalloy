@@ -288,7 +288,7 @@ raw_prose: |
 
      This is where most ideation fails. Don't skip it.
 
-  **Be hone
+  **Be honest about your assumptions.**
   
   ## Artifact completeness evaluation (soft advisory)
   
@@ -534,7 +534,7 @@ fragments:
     \ assumptions.** For each direction, explicitly name:\n   - What you're betting\
     \ is true (but haven't validated)\n   - What could kill this idea\n   - What you're\
     \ choosing to ignore (and why that's okay for now)\n\n   This is where most ideation\
-    \ fails. Don't skip it.\n\n**Be hone"
+    \ fails. Don't skip it.\n\n**Be honest about your assumptions.**"
 applies_to_phases:
 - spec
 exit_gates:

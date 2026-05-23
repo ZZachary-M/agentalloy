@@ -88,13 +88,12 @@ def compute_metrics(
 ) -> dict[str, Any]:
     """Compute precision, recall, F1, false_met_rate for a given threshold."""
     from skillsmith.signals.classifier import (  # noqa: PLC2701
-        _INTENT_TASK_DESCRIPTIONS,  # pyright: ignore[reportPrivateUsage]
         _MAX_INPUT_CHARS,  # pyright: ignore[reportPrivateUsage]
         _cosine,  # pyright: ignore[reportPrivateUsage]
-        _format_query,  # pyright: ignore[reportPrivateUsage]
     )
 
     # Pre-compute all similarity scores (one embed call per example)
+    # Mirror classifier._intent_similarity: truncate and embed raw text + refs
     all_scores: dict[int, dict[str, float]] = {}
     for idx, ex in enumerate(examples):
         text = ex["text"]
@@ -102,8 +101,7 @@ def compute_metrics(
         scores: dict[str, float] = {}
         for intent in ["completion", "approval", "redirection"]:
             refs = _INTENT_REFERENCES[intent]  # type: ignore[index]
-            task = _INTENT_TASK_DESCRIPTIONS[intent]  # type: ignore[index]
-            query = _format_query(text[:_MAX_INPUT_CHARS], task)
+            query = text[:_MAX_INPUT_CHARS]
             try:
                 vecs = lm_client.embed(model=model, texts=[query] + refs)
                 query_vec = vecs[0]
