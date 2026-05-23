@@ -31,7 +31,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from skillsmith.install import state as install_state
 from skillsmith.install.subcommands.wire_harness import SENTINEL_BEGIN, SENTINEL_END
@@ -809,6 +809,104 @@ def uninstall(
     }
 
 
+def _print_uninstall_summary(result: dict[str, Any]) -> None:
+    """Print a human-readable summary of the uninstall result to stderr.
+
+    Replaces the raw JSON output with a clean, user-friendly summary.
+    """
+    import sys as _sys
+
+    print("", file=_sys.stderr)
+    print("  Uninstall complete.", file=_sys.stderr)
+    print("", file=_sys.stderr)
+
+    # Files modified
+    modified = result.get("files_modified", [])
+    if modified:
+        print("  Files modified:", file=_sys.stderr)
+        for entry in modified:
+            path = entry.get("path", "?")
+            action = entry.get("action", "?")
+            print(f"    - {path} ({action})", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+    # Files/dirs removed
+    removed = result.get("files_removed", [])
+    if removed:
+        print("  Removed:", file=_sys.stderr)
+        for entry in removed:
+            path = entry.get("path", "?")
+            print(f"    - {path}", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+    # Models removed
+    models = result.get("models_removed", [])
+    removed_model_actions = {"ollama_removed", "gguf_removed"}
+    removed_models = [entry for entry in models if entry.get("action") in removed_model_actions]
+    other_model_actions = [
+        entry for entry in models if entry.get("action") not in removed_model_actions
+    ]
+    if removed_models:
+        print("  Models removed:", file=_sys.stderr)
+        for entry in removed_models:
+            runner = entry.get("runner", "?")
+            model = entry.get("model", "?")
+            print(f"    - {runner}: {model}", file=_sys.stderr)
+        print("", file=_sys.stderr)
+    if other_model_actions:
+        print("  Model cleanup:", file=_sys.stderr)
+        for entry in other_model_actions:
+            action = entry.get("action", "?")
+            runner = entry.get("runner")
+            model = entry.get("model")
+            target = f"{runner}: {model}" if runner and model else entry.get("entry")
+            detail = f"{action}"
+            if target:
+                detail += f" ({target})"
+            hint = entry.get("hint") or entry.get("error")
+            if hint:
+                detail += f" - {hint}"
+            print(f"    - {detail}", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+    # Data preserved
+    kept = result.get("data_kept", [])
+    if kept:
+        print("  Data preserved:", file=_sys.stderr)
+        for entry in kept:
+            if isinstance(entry, dict):
+                entry_dict = cast(dict[str, Any], entry)
+                raw_path = entry_dict.get("path")
+                path = raw_path if isinstance(raw_path, str) else "?"
+            else:
+                path = str(entry)
+            print(f"    - {path}", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+    # uv tool
+    uv = result.get("uv_tool", {})
+    if uv.get("action") == "uv_tool_uninstalled":
+        print("  uv tool: uninstalled", file=_sys.stderr)
+        print("", file=_sys.stderr)
+    elif uv.get("action") == "uv_tool_skipped":
+        reason = uv.get("reason", "")
+        print(f"  uv tool: skipped ({reason})", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+    # Warnings
+    warnings = result.get("warnings", [])
+    if warnings:
+        print("  Warnings:", file=_sys.stderr)
+        for w in warnings:
+            print(f"    ! {w}", file=_sys.stderr)
+        print("", file=_sys.stderr)
+
+
+def _print_uninstall_json(result: dict[str, Any]) -> None:
+    """Print the raw JSON result (for --json flag)."""
+    print(json.dumps(result, indent=2))
+
+
 # ---------------------------------------------------------------------------
 # Subcommand interface
 # ---------------------------------------------------------------------------
@@ -820,6 +918,12 @@ def add_parser(
     p: argparse.ArgumentParser = subparsers.add_parser(
         "uninstall",
         help="Remove harness wiring, .env, and state files.",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output raw JSON result (default: human-readable summary).",
     )
     p.add_argument(
         "--remove-data",
@@ -953,5 +1057,8 @@ def _run(args: argparse.Namespace) -> int:
         )
 
     result = uninstall(**kwargs)
-    print(json.dumps(result, indent=2))
+    if args.json:
+        _print_uninstall_json(result)
+    else:
+        _print_uninstall_summary(result)
     return 0
