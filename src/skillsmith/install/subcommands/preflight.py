@@ -24,6 +24,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,7 @@ SCHEMA_VERSION = 1
 
 _DEFAULT_PORT = 47950
 _PHASES = ("early", "runner")
+_OLLAMA_PORT = 11434
 
 
 def _check(
@@ -270,7 +272,7 @@ def _check_ollama_present() -> dict[str, Any]:
 
 def _check_ollama_reachable() -> dict[str, Any]:
     t0 = time.monotonic()
-    url = "http://localhost:11434/api/tags"
+    url = f"http://localhost:{_OLLAMA_PORT}/api/tags"
     try:
         req = Request(url, method="GET")
         with urlopen(req, timeout=2) as resp:
@@ -284,10 +286,45 @@ def _check_ollama_reachable() -> dict[str, Any]:
             remediation=(
                 "Start the Ollama daemon: `ollama serve` (Linux), or use the "
                 "menubar app (macOS/Windows). Re-run preflight once "
-                "`curl -s http://localhost:11434/api/tags` returns JSON."
+                f"`curl -s http://localhost:{_OLLAMA_PORT}/api/tags` returns JSON."
             ),
         )
     return _check("ollama_reachable", passed=True, started=t0, detail=f"GET {url} ok")
+
+
+def _try_start_ollama() -> bool:
+    """Attempt to start ollama serve in the background.
+
+    Spawns ``ollama serve &`` with output suppressed to a log file.
+    Polls until reachable or times out after 15 seconds.
+
+    Returns True if ollama became reachable.
+    """
+    if not shutil.which("ollama"):
+        return False
+
+    log_path = install_state.user_data_dir() / "logs" / "ollama.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with log_path.open("ab") as log_fh:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=log_fh,
+                stderr=log_fh,
+                start_new_session=True,
+            )
+    except OSError:
+        return False
+
+    # Poll until reachable
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", _OLLAMA_PORT), timeout=1):
+                return True
+        except OSError:
+            time.sleep(1)
+    return False
 
 
 def _check_llama_server_present() -> dict[str, Any]:
@@ -401,7 +438,14 @@ def run_preflight(
             )
         elif chosen == "ollama":
             checks.append(_check_ollama_present())
-            checks.append(_check_ollama_reachable())
+            reachable = _check_ollama_reachable()
+            if not reachable["passed"]:
+                # Offer to start ollama automatically
+                started = _try_start_ollama()
+                if started:
+                    # Re-check after starting
+                    reachable = _check_ollama_reachable()
+            checks.append(reachable)
         elif chosen == "llama-server":
             checks.append(_check_llama_server_present())
             # _check_llama_server_reachable omitted: llama-server is started by

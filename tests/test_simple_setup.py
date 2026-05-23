@@ -15,7 +15,6 @@ import pytest
 from skillsmith.install.subcommands.simple_setup import (
     _derive_host_target as _derive_host_target,  # type: ignore[attr-defined]
     _discover_packs as _discover_packs,  # type: ignore[attr-defined]
-    _ensure_runner_reachable as _ensure_runner_reachable,  # type: ignore[attr-defined]
     _prompt as _prompt,  # type: ignore[attr-defined]
     _prompt_context as _prompt_context,  # type: ignore[attr-defined]
     _prompt_for_packs as _prompt_for_packs,  # type: ignore[attr-defined]
@@ -752,7 +751,7 @@ class TestEmbedEndpoint:
         import json as _json
 
         env_content = (
-            "RUNTIME_EMBED_BASE_URL=http://localhost:11436\nRUNTIME_EMBEDDING_MODEL=test-model\n"
+            "RUNTIME_EMBED_BASE_URL=http://localhost:11434\nRUNTIME_EMBEDDING_MODEL=test-model\n"
         )
 
         class _MockResp:
@@ -787,7 +786,7 @@ class TestEmbedEndpoint:
         import urllib.error as _urllib_error
 
         env_content = (
-            "RUNTIME_EMBED_BASE_URL=http://localhost:11436\nRUNTIME_EMBEDDING_MODEL=test-model\n"
+            "RUNTIME_EMBED_BASE_URL=http://localhost:11434\nRUNTIME_EMBEDDING_MODEL=test-model\n"
         )
 
         cfg = SetupConfig()
@@ -870,131 +869,3 @@ def test_prompt_numbered_returns_default_on_non_tty(
 # ---------------------------------------------------------------------------
 # Runner reachability check
 # ---------------------------------------------------------------------------
-
-
-class TestEnsureRunnerReachable:
-    """Test _ensure_runner_reachable helper."""
-
-    def test_ollama_reachable_returns_true(self):
-        """Returns True when ollama is already reachable."""
-        from unittest.mock import MagicMock
-
-        mock_resp = MagicMock()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.read.return_value = b"{}"
-
-        with patch("skillsmith.install.subcommands.simple_setup.urlopen", return_value=mock_resp):
-            result = _ensure_runner_reachable("ollama", True)
-            assert result is True
-
-    def test_ollama_not_reachable_non_interactive_warns(self, capsys: Any):
-        """Warns and returns False when ollama is not reachable in non-interactive mode."""
-        from urllib.error import URLError
-
-        with patch(
-            "skillsmith.install.subcommands.simple_setup.urlopen",
-            side_effect=URLError("Connection refused"),
-        ):
-            result = _ensure_runner_reachable("ollama", True)
-            assert result is False
-            captured = capsys.readouterr()
-            assert "not running" in captured.out or "not running" in captured.err
-
-    def test_ollama_not_reachable_interactive_prompts(self):
-        """Prompts user in interactive mode when ollama is not reachable."""
-        from urllib.error import URLError
-        from unittest.mock import MagicMock
-
-        mock_resp = MagicMock()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.read.return_value = b"{}"
-
-        # First call: not reachable, second call: reachable
-        call_count = [0]
-
-        def mock_urlopen(*args: Any, **kwargs: Any):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise URLError("Connection refused")
-            return mock_resp
-
-        with (
-            patch.object(sys.stdin, "isatty", return_value=True),
-            patch("builtins.input", side_effect=["", ""]),  # Empty Enter twice
-            patch(
-                "skillsmith.install.subcommands.simple_setup.urlopen",
-                side_effect=mock_urlopen,
-            ),
-        ):
-            result = _ensure_runner_reachable("ollama", False)
-            assert result is True
-            # First attempt fails, second succeeds
-            assert call_count[0] == 2
-
-    def test_ollama_not_reachable_interactive_abort(self):
-        """User can abort the wait loop by typing 'abort'."""
-        from urllib.error import URLError
-
-        with (
-            patch.object(sys.stdin, "isatty", return_value=True),
-            patch("builtins.input", return_value="abort"),
-            patch(
-                "skillsmith.install.subcommands.simple_setup.urlopen",
-                side_effect=URLError("Connection refused"),
-            ),
-        ):
-            result = _ensure_runner_reachable("ollama", False)
-            assert result is False
-
-    def test_ollama_not_reachable_interactive_skip(self):
-        """User can skip the wait loop by typing 'skip'."""
-        from urllib.error import URLError
-
-        with (
-            patch.object(sys.stdin, "isatty", return_value=True),
-            patch("builtins.input", return_value="skip"),
-            patch(
-                "skillsmith.install.subcommands.simple_setup.urlopen",
-                side_effect=URLError("Connection refused"),
-            ),
-        ):
-            result = _ensure_runner_reachable("ollama", False)
-            assert result is False
-
-    def test_llama_server_skips_reachability_check(self):
-        """llama-server runner skips reachability check (started by pipeline)."""
-        result = _ensure_runner_reachable("llama-server", True)
-        assert result is True
-
-    def test_unknown_runner_skips_reachability_check(self):
-        """Unknown runner skips reachability check."""
-        result = _ensure_runner_reachable("unknown-runner", True)
-        assert result is True
-
-    def test_lm_studio_reachable(self):
-        """Returns True when lm-studio is reachable."""
-        from unittest.mock import MagicMock
-
-        mock_resp = MagicMock()
-        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_resp.read.return_value = b"{}"
-
-        with patch("skillsmith.install.subcommands.simple_setup.urlopen", return_value=mock_resp):
-            result = _ensure_runner_reachable("lm-studio", True)
-            assert result is True
-
-    def test_lm_studio_not_reachable_warns(self, capsys: Any):
-        """Warns when lm-studio is not reachable in non-interactive mode."""
-        from urllib.error import URLError
-
-        with patch(
-            "skillsmith.install.subcommands.simple_setup.urlopen",
-            side_effect=URLError("Connection refused"),
-        ):
-            result = _ensure_runner_reachable("lm-studio", True)
-            assert result is False
-            captured = capsys.readouterr()
-            assert "not running" in captured.out or "not running" in captured.err

@@ -30,7 +30,11 @@ from skillsmith.install import state as install_state
 
 SCHEMA_VERSION = 1
 STEP_NAME = "start-embed-server"
-EMBED_PORT = 11436
+# Default ports per runner — used by the presets for RUNTIME_EMBED_BASE_URL.
+# llama-server listens on the same port; ollama uses its default :11434.
+OLLAMA_EMBED_PORT = 11434
+LM_STUDIO_EMBED_PORT = 1234
+LLAMA_EMBED_PORT = 11434
 EMBED_HOST = "127.0.0.1"
 # llama-server batch size — keeps throughput high for pack ingest without
 # requiring a fat context window.
@@ -82,17 +86,25 @@ def _run(args: argparse.Namespace) -> int:
         print("ERROR: No embed_runner found in recommend-models output.", file=sys.stderr)
         return 1
 
+    # Port depends on runner — use runner-default port.
+    if runner == "ollama":
+        embed_port = OLLAMA_EMBED_PORT
+    elif runner == "lm-studio":
+        embed_port = LM_STUDIO_EMBED_PORT
+    else:
+        embed_port = LLAMA_EMBED_PORT
+
     # Idempotency: already listening?
-    if _port_open(EMBED_HOST, EMBED_PORT):
+    if _port_open(EMBED_HOST, embed_port):
         print(
-            f"start-embed-server: embed endpoint already reachable on port {EMBED_PORT} — skipping.",
+            f"start-embed-server: embed endpoint already reachable on port {embed_port} — skipping.",
             file=sys.stderr,
         )
         result = {
             "schema_version": SCHEMA_VERSION,
             "action": "already_running",
             "runner": runner,
-            "port": EMBED_PORT,
+            "port": embed_port,
         }
         _save(result)
         if not getattr(args, "quiet", False):
@@ -122,7 +134,7 @@ def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
         "llama-server",
         "--embeddings",
         "--port",
-        str(EMBED_PORT),
+        str(LLAMA_EMBED_PORT),
         "--ubatch-size",
         str(LLAMA_UBATCH_SIZE),
         "-m",
@@ -132,7 +144,7 @@ def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(
-        f"start-embed-server: launching llama-server on port {EMBED_PORT} "
+        f"start-embed-server: launching llama-server on port {LLAMA_EMBED_PORT} "
         f"(ubatch={LLAMA_UBATCH_SIZE}, log={log_path})",
         file=sys.stderr,
     )
@@ -159,7 +171,7 @@ def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
     )
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if _port_open(EMBED_HOST, EMBED_PORT):
+        if _port_open(EMBED_HOST, LLAMA_EMBED_PORT):
             break
         time.sleep(2)
     else:
@@ -179,14 +191,14 @@ def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
             pass
         return 1
 
-    print(f"start-embed-server: llama-server ready on port {EMBED_PORT}", file=sys.stderr)
+    print(f"start-embed-server: llama-server ready on port {LLAMA_EMBED_PORT}", file=sys.stderr)
     result = {
         "schema_version": SCHEMA_VERSION,
         "action": "started",
         "runner": "llama-server",
         "model": model,
         "model_path": str(model_path),
-        "port": EMBED_PORT,
+        "port": LLAMA_EMBED_PORT,
         "ubatch_size": LLAMA_UBATCH_SIZE,
         "log_path": str(log_path),
     }
@@ -216,19 +228,17 @@ def _start_ollama(model: str, quiet: bool = False) -> int:
             start_new_session=True,
         )
 
-    # Ollama defaults to :11434 for the main API; embedding goes through
-    # RUNTIME_EMBED_BASE_URL (11436). If the user configured a separate
-    # ollama instance on 11436 just poll it, otherwise accept immediately.
+    # Ollama defaults to :11434. Poll for it.
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        if _port_open(EMBED_HOST, EMBED_PORT):
+        if _port_open(EMBED_HOST, OLLAMA_EMBED_PORT):
             break
         time.sleep(2)
     else:
         print(
-            "WARN: Ollama embed endpoint not reachable on port "
-            f"{EMBED_PORT} after 30s. "
-            "Ensure RUNTIME_EMBED_BASE_URL points to a running ollama instance.",
+            "WARN: Ollama not reachable on port "
+            f"{OLLAMA_EMBED_PORT} after 30s. "
+            "Ensure ollama is running (e.g. `ollama serve`).",
             file=sys.stderr,
         )
 
@@ -237,7 +247,7 @@ def _start_ollama(model: str, quiet: bool = False) -> int:
         "action": "started",
         "runner": "ollama",
         "model": model,
-        "port": EMBED_PORT,
+        "port": OLLAMA_EMBED_PORT,
     }
     _save(result)
     if not quiet:
@@ -247,13 +257,14 @@ def _start_ollama(model: str, quiet: bool = False) -> int:
 
 
 def _manual_instruction(runner: str, model: str, quiet: bool = False) -> int:
+    port = LM_STUDIO_EMBED_PORT if runner == "lm-studio" else LLAMA_EMBED_PORT
     instructions = {
         "lm-studio": (
             f"Start LM Studio and load model '{model}', then enable the local server "
-            f"on port {EMBED_PORT} under Settings → Local Server."
+            f"on port {port} under Settings → Local Server."
         ),
     }
-    msg = instructions.get(runner, f"Start your '{runner}' embedding server on port {EMBED_PORT}.")
+    msg = instructions.get(runner, f"Start your '{runner}' embedding server on port {port}.")
     print(f"start-embed-server: manual step required for runner '{runner}':", file=sys.stderr)
     print(f"  {msg}", file=sys.stderr)
     result = {
@@ -261,7 +272,7 @@ def _manual_instruction(runner: str, model: str, quiet: bool = False) -> int:
         "action": "manual_required",
         "runner": runner,
         "model": model,
-        "port": EMBED_PORT,
+        "port": port,
         "instruction": msg,
     }
     _save(result)

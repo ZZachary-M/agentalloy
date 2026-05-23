@@ -3,9 +3,12 @@
 Validate + write ``.env`` from a preset template.
 
 Preset templates live in ``src/skillsmith/install/presets/<name>.yaml``.
-All presets bind the embedding runner to port 11436 regardless of runner
-(Ollama, LM Studio, or llama-server). Port 11434 is reserved for the
-reasoning model and 11435 for the coder model.
+Each preset binds the embedding runner to its default port:
+
+- Ollama: 11434
+- LM Studio: 1234
+- llama-server: 11434 (started by the pipeline)
+
 The ``--port`` flag records the skillsmith service port (default 47950)
 for use by ``wire-harness``.
 """

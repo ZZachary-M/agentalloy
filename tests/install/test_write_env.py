@@ -67,9 +67,9 @@ class TestPortRecording:
         assert result["port"] == 9090
 
     def test_preset_urls_are_fixed(self, repo_root: Path) -> None:
-        """Preset URLs use fixed runner ports (e.g. 11436), not {port}."""
+        """Preset URLs use fixed runner default ports (e.g. 11434 for ollama)."""
         result = write_env("cpu", root=repo_root)
-        assert result["values_written"]["RUNTIME_EMBED_BASE_URL"] == "http://localhost:11436"
+        assert result["values_written"]["RUNTIME_EMBED_BASE_URL"] == "http://localhost:11434"
         assert "LM_STUDIO_BASE_URL" not in result["values_written"]
         assert "AUTHORING_EMBED_BASE_URL" not in result["values_written"]
 

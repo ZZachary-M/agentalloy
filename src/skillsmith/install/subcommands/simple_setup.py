@@ -21,8 +21,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.error import URLError
-from urllib.request import Request, urlopen
 
 from skillsmith.install import state as install_state
 from skillsmith.install.subcommands import (
@@ -171,77 +169,6 @@ def _prompt_context(text: str, context: str, default: Any = None) -> str:
     """Interactive prompt with a context description and default. Returns default if non-TTY."""
     _print(f"  [dim]{context}[/dim]")
     return _prompt(text, default=default)
-
-
-# ---------------------------------------------------------------------------
-# Runner reachability check
-# ---------------------------------------------------------------------------
-
-# URL endpoints to probe for each runner daemon
-_RUNNER_REACHABILITY_URLS: dict[str, str] = {
-    "ollama": "http://localhost:11434/api/tags",
-    "lm-studio": "http://localhost:1234/v1",
-}
-
-_RUNNER_START_HINTS: dict[str, str] = {
-    "ollama": "Start the Ollama daemon: `ollama serve` (Linux), or open the app (macOS/Windows).",
-    "lm-studio": "Open the LM Studio app and start the local server.",
-}
-
-
-def _ensure_runner_reachable(runner: str, non_interactive: bool) -> bool:
-    """Check if the runner daemon is reachable.
-
-    In interactive mode, warns the user and polls until the daemon responds.
-    In non-interactive mode, warns once and returns False.
-
-    Returns True if reachable, False if not (caller should still proceed —
-    the runner preflight will catch hard failures).
-    """
-    url = _RUNNER_REACHABILITY_URLS.get(runner)
-    if url is None:
-        # llama-server, fastflowlm etc. — started by the pipeline, not pre-running
-        return True
-
-    # Quick check: is it already reachable?
-    try:
-        req = Request(url, method="GET")
-        with urlopen(req, timeout=2) as resp:
-            resp.read(1)
-        return True
-    except (URLError, OSError):
-        pass
-
-    # Not reachable — warn the user
-    hint = _RUNNER_START_HINTS.get(runner, f"Start {runner}.")
-    _print(f"\n  [yellow]Warning: {runner} is not running.[/yellow]")
-    _print(f"  {hint}")
-
-    if non_interactive:
-        _print("  [yellow]Continuing anyway — runner preflight will verify later.[/yellow]")
-        return False
-
-    # Interactive: poll until user starts it
-    _print(f"  Press Enter once {runner} is running.")
-    _print("  Type 'skip' to continue anyway, or 'abort' to cancel.")
-
-    while True:
-        raw = _prompt(f"  Waiting for {runner}...")
-        if raw.strip().lower() == "abort":
-            _print("[yellow]Setup cancelled.[/yellow]")
-            return False
-        if raw.strip().lower() == "skip":
-            _print("[yellow]Skipping runner check — setup may fail later.[/yellow]")
-            return False
-        # Empty Enter or anything else: try to reach the runner
-        try:
-            req = Request(url, method="GET")
-            with urlopen(req, timeout=2) as resp:
-                resp.read(1)
-            _print(f"  [green]{runner} is now reachable.[/green]")
-            return True
-        except (URLError, OSError):
-            _print(f"  [yellow]{runner} still not reachable. Start it, then try again.[/yellow]")
 
 
 # ---------------------------------------------------------------------------
@@ -651,9 +578,6 @@ def run_setup(cfg: SetupConfig) -> int:
         )
         return 1
     _print(f"  Runner: {cfg.runner}")
-
-    # Check runner reachability before proceeding with config gathering
-    _ensure_runner_reachable(cfg.runner, cfg.non_interactive)
 
     # 2. Hardware target
     detected = cfg.recommended_host or "cpu"
