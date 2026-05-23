@@ -11,8 +11,9 @@ DuckDB without touching ``fragment_embeddings`` (the corpus).
 from __future__ import annotations
 
 import argparse
-import json
 import sys
+
+from agentalloy.install.output import print_rich
 
 SCHEMA_VERSION = 1
 
@@ -79,16 +80,8 @@ def _run_clear(args: argparse.Namespace) -> int:
     finally:
         vs.close()
 
-    output = {
-        "schema_version": SCHEMA_VERSION,
-        "action": "cleared",
-        **result,
-    }
-    json.dump(output, sys.stdout, indent=2)
-    sys.stdout.write("\n")
-    print(
-        f"telemetry clear: deleted {result['traces_deleted']} trace(s) "
-        f"and {result['prompt_loads_deleted']} prompt-load record(s).",
-        file=sys.stderr,
-    )
+    print_rich(f"\n  [bold]Telemetry Clear[/bold]\n")
+    print_rich(f"  Traces deleted: {result['traces_deleted']}")
+    print_rich(f"  Prompt loads deleted: {result['prompt_loads_deleted']}")
+    print_rich()
     return 0

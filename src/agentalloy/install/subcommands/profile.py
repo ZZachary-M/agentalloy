@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agentalloy.install.output import print_rich
+
 
 def _list(args: argparse.Namespace) -> int:
     from agentalloy.profiles import list_profiles
@@ -31,7 +33,10 @@ def _list(args: argparse.Namespace) -> int:
                 print(f"    match_path: {p['match_path']}")
             print(f"    has_overrides: {p['has_overrides']}")
     else:
-        print(json.dumps(profiles, indent=2))
+        print_rich(f"\n  [bold]Profiles[/bold]\n")
+    for p in profiles:
+        print_rich(f"  {p.get('name', '?')}")
+    print_rich()
     return 0
 
 
@@ -87,7 +92,10 @@ def _init(args: argparse.Namespace) -> int:
     if getattr(args, "human", False):
         print(f"  Created profile '{profile.name}' at {profile.skills_dir}")
     else:
-        print(json.dumps(result, indent=2))
+        print_rich(f"\n  [bold]Profile Init[/bold]\n")
+    print_rich(f"  Profile: [bold]{name}[/bold]")
+    print_rich(f"  Created: {result.get('created', False)}")
+    print_rich()
     return 0
 
 
@@ -104,7 +112,9 @@ def _set_default(args: argparse.Namespace) -> int:
     if getattr(args, "human", False):
         print(f"  Default profile set to '{args.name}'")
     else:
-        print(json.dumps(result, indent=2))
+        print_rich(f"\n  [bold]Set Default Profile[/bold]\n")
+    print_rich(f"  Default: [bold]{name}[/bold]")
+    print_rich()
     return 0
 
 

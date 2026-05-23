@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from agentalloy.install.output import print_rich
+
 if TYPE_CHECKING:
     from agentalloy.signals.predicates import PredicateContext
 
@@ -435,7 +437,16 @@ def _check(args: argparse.Namespace) -> int:
         "signal_keywords": (skill or {}).get("signal_keywords", []),
         "exit_gates_keys": list((skill or {}).get("exit_gates", {}).keys()),
     }
-    print(json.dumps(report, indent=2))
+
+    if getattr(args, "json_out", False):
+        print(json.dumps(report, indent=2))
+    else:
+        print_rich(f"\n  [bold]Signal Report[/bold]\n")
+        print_rich(f"  Phase: {current_phase or 'none'}")
+        print_rich(f"  Workflow skill: {report['active_workflow_skill'] or 'none'}")
+        print_rich(f"  Signal keywords: {', '.join(report['signal_keywords']) or 'none'}")
+        print_rich(f"  Exit gates: {', '.join(report['exit_gates_keys']) or 'none'}")
+        print_rich()
     return 0
 
 

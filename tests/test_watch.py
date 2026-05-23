@@ -242,7 +242,7 @@ def test_watch_status_reports_not_running(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr("agentalloy.install.subcommands.watch._watch_dir", lambda: tmp_path)
 
     captured = io.StringIO()
-    args = argparse.Namespace(profile="default")
+    args = argparse.Namespace(profile="default", json=True)
     sys.stdout = captured
     try:
         rc = _status(args)

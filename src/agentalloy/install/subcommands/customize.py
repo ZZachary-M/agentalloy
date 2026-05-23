@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 
+from agentalloy.install.output import add_json_flag, print_rich
+
 if TYPE_CHECKING:
     from agentalloy.profiles import Profile
 
@@ -330,11 +332,13 @@ def _list_skills(args: argparse.Namespace) -> int:
             }
         )
 
-    if getattr(args, "human", False):
-        for r in rows:
-            print(f"  {r['name']} ({r['skill_class']}) — {r['layer']}")
-    else:
+    if getattr(args, "json", False):
         print(json.dumps(rows, indent=2))
+    else:
+        print_rich(f"\n  [bold]Customize List[/bold]\n")
+        for r in rows:
+            print_rich(f"  {r['name']} ({r['skill_class']}) — {r['layer']}")
+        print_rich()
     return 0
 
 
@@ -416,12 +420,16 @@ def _validate_skill(args: argparse.Namespace) -> int:
 
     errors = _validate_skill_data(data, name)
     if errors:
-        result = {"valid": False, "errors": errors}
-        print(json.dumps(result, indent=2))
+        print_rich(f"\n  [bold]Validation Failed[/bold]\n")
+        for err in errors:
+            print_rich(f"  [red]x[/red] {err}")
+        print_rich()
         return 1
 
-    result = {"valid": True, "skill_id": data.get("skill_id") or name, "layer": layer_name}
-    print(json.dumps(result, indent=2))
+    print_rich(f"\n  [bold]Validation Passed[/bold]\n")
+    print_rich(f"  Skill: {data.get('skill_id') or name}")
+    print_rich(f"  Layer: {layer_name}")
+    print_rich()
     return 0
 
 
@@ -474,15 +482,11 @@ def _update_skill(args: argparse.Namespace) -> int:
                 skill_id = data.get("skill_id") or name
                 if not use_project:
                     _delete_from_store(profile.name, skill_id)
-                print(
-                    json.dumps(
-                        {
-                            "status": "reverted_to_inherited",
-                            "skill_id": skill_id,
-                            "note": "Override was identical to default; deleted.",
-                        }
-                    )
-                )
+                print_rich(f"\n  [bold]Update Skill[/bold]\n")
+                print_rich(f"  Status: reverted_to_inherited")
+                print_rich(f"  Skill: {skill_id}")
+                print_rich(f"  Note: Override was identical to default; deleted.")
+                print_rich()
                 return 0
         except Exception:
             pass
@@ -497,13 +501,13 @@ def _update_skill(args: argparse.Namespace) -> int:
             return 1
 
     skill_id = data.get("skill_id") or name
-    result = {
-        "status": "ingested",
-        "skill_id": skill_id,
-        "profile": target_profile,
-        "layer": layer_name,
-    }
-    print(json.dumps(result, indent=2))
+    print_rich(f"\n  [bold]Update Skill[/bold]\n")
+    print_rich(f"  Status: ingested")
+    print_rich(f"  Skill: {skill_id}")
+    if target_profile:
+        print_rich(f"  Profile: {target_profile}")
+    print_rich(f"  Layer: {layer_name}")
+    print_rich()
     return 0
 
 
@@ -546,12 +550,15 @@ def _update_all(profile_name: str | None) -> int:
             except Exception as exc:
                 errors.append(f"{name}: ingest error — {exc}")
 
-    result = {
-        "profile": profile.name,
-        "ingested": ingested,
-        "errors": errors,
-    }
-    print(json.dumps(result, indent=2))
+    print_rich(f"\n  [bold]Update All Skills[/bold]\n")
+    print_rich(f"  Profile: {profile.name}")
+    if ingested:
+        print_rich(f"  Ingested: {len(ingested)}")
+    if errors:
+        print_rich(f"  Errors: {len(errors)}")
+        for err in errors:
+            print_rich(f"    [red]x[/red] {err}")
+    print_rich()
     return 0 if not errors else 1
 
 
@@ -624,8 +631,13 @@ def _reset_skill(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
-    result = {"reset": name, "profile": profile.name if not use_project else None}
-    print(json.dumps(result, indent=2))
+    print_rich(f"\n  [bold]Reset Skill[/bold]\n")
+    print_rich(f"  Skill: {name}")
+    if not use_project:
+        print_rich(f"  Profile: {profile.name}")
+    else:
+        print_rich(f"  Project-level")
+    print_rich()
     return 0
 
 
@@ -641,7 +653,8 @@ def add_parser(
         "customize",
         help="Manage system and workflow skill overrides.",
     )
-    p.add_argument("--human", action="store_true", help="Human-readable output.")
+    p.add_argument("--human", action="store_true", help="Human-readable output (default).")
+    add_json_flag(p)
     sub = p.add_subparsers(dest="customize_cmd")
 
     # list

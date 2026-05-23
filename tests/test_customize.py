@@ -219,7 +219,7 @@ def test_customize_list_has_layer_field(profiles_tmp: Path):
         _list_skills,  # pyright: ignore[reportPrivateUsage]
     )
 
-    args = argparse.Namespace(profile=None, human=False)
+    args = argparse.Namespace(profile=None, json=True)
     captured = io.StringIO()
     old_stdout = sys.stdout
     sys.stdout = captured

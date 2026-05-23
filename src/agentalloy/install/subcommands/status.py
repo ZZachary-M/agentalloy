@@ -14,13 +14,12 @@ Read-only. Never mutates state. Safe to run anywhere.
 from __future__ import annotations
 
 import argparse
-import json
 import socket
-import sys
 from collections import defaultdict
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, write_result
 
 SCHEMA_VERSION = 1
 
@@ -32,10 +31,67 @@ def add_parser(
         "status",
         help="Show user-scope install state, wired repos, and service reachability.",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
 
 
-def _run(args: argparse.Namespace) -> int:  # noqa: ARG001
+def _render_human(snapshot: dict[str, Any]) -> None:
+    """Render install status dashboard in human-readable format."""
+    from agentalloy.install.output import print_rich
+
+    print_rich("\n  [bold]Install Status[/bold]\n")
+
+    # Paths
+    print_rich(f"  Config dir: {snapshot.get('user_config_dir', 'N/A')}")
+    print_rich(f"  Data dir:   {snapshot.get('user_data_dir', 'N/A')}")
+
+    # Completed steps
+    steps = snapshot.get("completed_steps", [])
+    if steps:
+        print_rich(f"\n  Completed steps ({len(steps)}):")
+        for s in steps:
+            print_rich(f"    [green]✓[/green] {s}")
+    else:
+        print_rich("\n  Completed steps: none")
+
+    # Corpus
+    corpus = snapshot.get("corpus", {})
+    corpus_status = "[green]present[/green]" if corpus.get("present") else "[red]missing[/red]"
+    print_rich(f"\n  Corpus: {corpus_status}")
+    print_rich(f"    Path: {corpus.get('path', 'N/A')}")
+
+    # Service
+    service = snapshot.get("service", {})
+    port = service.get("port", "N/A")
+    reachable = service.get("reachable_on_loopback", False)
+    status_icon = "[green]✓ reachable[/green]" if reachable else "[red]✗ not reachable[/red]"
+    print_rich(f"\n  Service (port {port}): {status_icon}")
+
+    # Wired repos
+    repos = snapshot.get("wired_repos", [])
+    if repos:
+        print_rich(f"\n  Wired repos ({len(repos)}):")
+        for repo in repos:
+            repo_root = repo.get("repo_root", "<unknown>")
+            entries = repo.get("entries", [])
+            print_rich(f"    [bold]{repo_root}[/bold] ({len(entries)} file(s))")
+            for entry in entries:
+                harness = entry.get("harness", "unknown")
+                path = entry.get("path", "")
+                print_rich(f"      {harness}: {path}")
+    else:
+        print_rich("\n  Wired repos: none")
+
+    # Env file
+    env = snapshot.get("env_file", {})
+    env_status = "[green]exists[/green]" if env.get("exists") else "[red]missing[/red]"
+    print_rich(f"\n  .env file: {env_status}")
+    print_rich(f"    Path: {env.get('path', 'N/A')}")
+
+    print_rich()
+
+
+def _run(args: argparse.Namespace) -> int:
     st = install_state.load_state()
     completed_step_names = [s.get("step") for s in st.get("completed_steps", [])]
 
@@ -90,8 +146,7 @@ def _run(args: argparse.Namespace) -> int:  # noqa: ARG001
             "exists": install_state.env_path().exists(),
         },
     }
-    json.dump(snapshot, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    write_result(snapshot, args, human_fn=_render_human)
     return 0
 
 

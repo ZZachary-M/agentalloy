@@ -149,12 +149,11 @@ class TestRunEntrypoint:
     ) -> None:
         from agentalloy.install import state as install_state
 
-        rc = run(argparse.Namespace())
+        rc = run(argparse.Namespace(json=True))
         captured = capsys.readouterr()
         assert rc == 0, captured.err
         payload = json.loads(captured.out)
         assert payload["action"] == "initialized_empty"
-        # State should record the step so subsequent runs short-circuit.
         st = install_state.load_state()
         assert install_state.is_step_completed(st, "seed-corpus")
 

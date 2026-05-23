@@ -241,7 +241,7 @@ class TestServerStopAlreadyStopped:
             patch.object(server_proc, "find_listening_pid", return_value=None),
             patch.object(server_proc, "configured_port", return_value=47950),
         ):
-            args = argparse.Namespace(port=None, timeout=10.0)
+            args = argparse.Namespace(port=None, timeout=10.0, json=True)
             rc = server_stop._run(args)
         captured = capsys.readouterr()
         assert rc == 0
