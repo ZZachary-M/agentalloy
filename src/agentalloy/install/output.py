@@ -20,10 +20,12 @@ try:
     from rich.table import Table
 
     _console = Console(force_terminal=True, soft_wrap=True)
-    HAS_RICH = True
+    HAS_RICH: bool = True
 except ImportError:
+    Console = None  # type: ignore[misc,assignment]
+    Table = None  # type: ignore[misc,assignment]
     _console = None  # type: ignore[assignment]
-    HAS_RICH = False
+    HAS_RICH = False  # type: ignore[possibly-unused-assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -41,8 +43,8 @@ def print_rich(*args: Any, **kwargs: Any) -> None:
 
 def print_rich_stderr(*args: Any, **kwargs: Any) -> None:
     """Print to stderr with Rich if available, plain stderr otherwise."""
-    if _console is not None:
-        err_console = Console(force_terminal=True, soft_wrap=True, file=sys.stderr)
+    if HAS_RICH and _console is not None:
+        err_console = Console(force_terminal=True, soft_wrap=True, file=sys.stderr)  # type: ignore[union-attr]
         err_console.print(*args, **kwargs)
     else:
         print(*args, file=sys.stderr, **kwargs)
@@ -174,11 +176,11 @@ def render_key_value(
         if key in skip:
             continue
         if isinstance(value, dict):
-            for k, v in value.items():
+            for k, v in value.items():  # type: ignore[reportUnknownVariableType]
                 print_rich(f"  {k}: {v}")
         elif isinstance(value, list):
             if value and isinstance(value[0], dict):
-                for item in value:
+                for item in value:  # type: ignore[reportUnknownVariableType]
                     print_rich(f"  - {item}")
             else:
                 print_rich(f"  {key}: {value}")
@@ -229,13 +231,13 @@ def render_action_result(
 
     # Render key groups in order
     all_keys = key_groups or (SERVER_KEYS, CORPUS_KEYS, WIRE_KEYS, SERVICE_KEYS)
-    shown = set()
+    shown: set[str] = set()
     for key_tuple in all_keys:
         for key in key_tuple:
             if key in result and key not in shown:
                 shown.add(key)
                 val = result[key]
-                if isinstance(val, list) and len(val) == 0:
+                if isinstance(val, list) and len(val) == 0:  # type: ignore[arg-type]
                     continue
                 print_rich(f"  {key}: {val}")
 
@@ -243,10 +245,10 @@ def render_action_result(
     for key, val in result.items():
         if key in ("action",) or key in shown:
             continue
-        if isinstance(val, list) and len(val) == 0:
+        if isinstance(val, list) and len(val) == 0:  # type: ignore[arg-type]
             continue
         if isinstance(val, dict):
-            for k, v in val.items():
+            for k, v in val.items():  # type: ignore[reportUnknownVariableType]
                 print_rich(f"  {k}: {v}")
         else:
             print_rich(f"  {key}: {val}")
@@ -268,13 +270,13 @@ def render_table(
     if title:
         print_rich(f"\n  [bold]{title}[/bold]\n")
 
-    if _console is not None:
-        table = Table(show_header=True, header_style="bold", box=None)
+    if HAS_RICH:
+        table = Table(show_header=True, header_style="bold", box=None)  # type: ignore[union-attr]
         for h in headers:
             table.add_column(h)
         for row in rows:
             table.add_row(*row)
-        _console.print(table)
+        _console.print(table)  # type: ignore[union-attr]
     else:
         # Plain text alignment
         col_widths = [len(h) for h in headers]

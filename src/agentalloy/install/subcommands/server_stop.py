@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
 from agentalloy.install import server_proc
 from agentalloy.install.output import add_json_flag, write_result
@@ -38,7 +39,7 @@ def add_parser(
     p.set_defaults(func=_run)
 
 
-def _render_human(payload: dict) -> None:
+def _render_human(payload: dict[str, Any]) -> None:
     """Render server-stop result in human-readable format."""
     from agentalloy.install.output import render_action_result
 

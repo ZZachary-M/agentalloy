@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from agentalloy.install import state as install_state
 from agentalloy.install.output import add_json_flag, print_rich, write_result
@@ -45,7 +46,7 @@ def add_parser(
     p.set_defaults(func=_run)
 
 
-def _render_human(result: dict) -> None:
+def _render_human(result: dict[str, Any]) -> None:
     """Render wire harness result in human-readable format."""
     harness = result.get("harness", "unknown")
     files_written = result.get("files_written", [])

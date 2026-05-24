@@ -281,7 +281,7 @@ def add_parser(
     p.set_defaults(func=_run)
 
 
-def _render_human(result: dict) -> None:
+def _render_human(result: dict[str, Any]) -> None:
     """Render doctor check results in human-readable format."""
     from agentalloy.install.output import render_checklist
 

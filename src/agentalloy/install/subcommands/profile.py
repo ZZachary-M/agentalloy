@@ -18,7 +18,7 @@ from typing import Any
 from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 
-def _render_profile_list(profiles: list[dict]) -> None:
+def _render_profile_list(profiles: list[dict[str, Any]]) -> None:
     """Render profile list in human-readable format."""
     print_rich("\n  [bold]Profiles[/bold]\n")
     for p in profiles:
