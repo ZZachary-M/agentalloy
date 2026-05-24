@@ -1,6 +1,6 @@
 """Install state file management.
 
-Owns read/write of the user-scoped install state. As of schema v2, state
+Owns read/write of the user-scoped install state. As of schema v3, state
 lives at ``${XDG_CONFIG_HOME:-~/.config}/agentalloy/install-state.json``
 rather than per-repo so a single AgentAlloy install can serve multiple
 repos. The corpus and any output artifacts live under
@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 STATE_DIR_NAME = "agentalloy"  # under XDG_CONFIG_HOME
 STATE_FILE_NAME = "install-state.json"
@@ -310,6 +310,14 @@ def _empty_state() -> dict[str, Any]:
         # absent/None, install-packs falls back to interactive prompt
         # (or always-on defaults in non-TTY mode).
         "pending_pack_selection": None,
+        # Deployment type: "native" (direct host install) or "container"
+        # (podman/docker compose). None until setup has been run.
+        "deployment": None,
+        # Absolute path to the compose YAML file used for container deploys.
+        "compose_file": None,
+        # Compose binary label for display/state: "podman compose" or
+        # "docker compose". Used by uninstall to reconstruct the command.
+        "compose_binary": None,
     }
 
 
@@ -493,6 +501,11 @@ def _migrate(data: dict[str, Any], from_version: int) -> dict[str, Any]:
             entry.setdefault("harness", legacy_harness)
             if legacy_repo_root:
                 entry.setdefault("repo_root", legacy_repo_root)
+    if from_version < 3:
+        # v2 -> v3: add container deployment fields
+        data.setdefault("deployment", None)
+        data.setdefault("compose_file", None)
+        data.setdefault("compose_binary", None)
     # Forward-compatibility: ensure newly added optional fields exist on
     # older state files. Not a version bump because the field is purely
     # additive and defaults to None.

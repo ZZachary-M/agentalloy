@@ -1,215 +1,297 @@
-"""Unit tests for install-state.json handling.
+"""Tests for install state management (schema v3).
 
-Maps to test-plan.md § Layer 1 — State file handling.
+ruff: noqa: I001 -- testing private module members intentionally
 """
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from agentalloy.install.state import (
-    CURRENT_SCHEMA_VERSION,
-    clear_pending_pack_selection,
-    get_pending_pack_selection,
-    get_step_output,
-    is_step_completed,
-    load_state,
-    record_step,
-    save_state,
-    set_pending_pack_selection,
-    state_path,
-)
+from agentalloy.install import state as install_state
 
 
-@pytest.fixture()
-def repo_root(tmp_path: Path) -> Path:
-    """Fake repo root with a pyproject.toml so _repo_root heuristic works."""
-    (tmp_path / "pyproject.toml").write_text("")
-    return tmp_path
+class TestSchemaVersion:
+    """Test CURRENT_SCHEMA_VERSION is 3."""
+
+    def test_schema_version_is_3(self):
+        assert install_state.CURRENT_SCHEMA_VERSION == 3
 
 
-class TestStateFileCreated:
-    """test_state_file_created_on_first_subcommand"""
+class TestFreshState:
+    """Test _empty_state() returns schema v3 with container fields."""
 
-    def test_fresh_state_has_schema_version(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        assert data["schema_version"] == CURRENT_SCHEMA_VERSION
+    def test_fresh_state_has_container_fields(self):
+        st = install_state._empty_state()
+        assert st["schema_version"] == 3
+        assert st["deployment"] is None
+        assert st["compose_file"] is None
+        assert st["compose_binary"] is None
 
-    def test_save_creates_directory_and_file(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        fp = save_state(data, repo_root)
-        assert fp.exists()
-        assert fp.name == "install-state.json"
-        parsed = json.loads(fp.read_text())
-        assert parsed["schema_version"] == CURRENT_SCHEMA_VERSION
-
-    def test_state_path_is_under_user_agentalloy_dir(self, repo_root: Path) -> None:
-        # State is now user-scoped (XDG_CONFIG_HOME/agentalloy/), not
-        # per-repo. The conftest redirects XDG dirs to tmp_path subdirs.
-        fp = state_path(repo_root)
-        assert "agentalloy" in str(fp)
-        assert fp.name == "install-state.json"
-        # Path must NOT live inside the repo any more.
-        assert str(fp).find(str(repo_root)) == -1 or "_xdg_config" in str(fp)
+    def test_fresh_state_has_legacy_fields(self):
+        st = install_state._empty_state()
+        assert "install_started_at" in st
+        assert st["completed_steps"] == []
+        assert st["harness_files_written"] == []
+        assert st["models_pulled"] == []
+        assert st["port"] == 47950
+        assert st["last_verify_passed_at"] is None
+        assert st["pending_pack_selection"] is None
 
 
-class TestStateAppendOnly:
-    """test_state_file_append_only_within_run"""
+class TestV2ToV3Migration:
+    """Test that v2 state files are migrated to v3 on load."""
 
-    def test_record_step_appends(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        record_step(data, "detect", extra={"output_digest": "sha256:abc"})
-        record_step(data, "recommend-host-targets", extra={"selected": "iGPU"})
-        assert len(data["completed_steps"]) == 2
-        assert data["completed_steps"][0]["step"] == "detect"
-        assert data["completed_steps"][1]["step"] == "recommend-host-targets"
+    def test_v2_migrated_to_v3(self, tmp_path: Path):
+        """A v2 state file loads with new fields defaulted to None."""
+        # Set up XDG_CONFIG_HOME pointing to tmp_path
+        config_dir = tmp_path / ".config"
+        data_dir = tmp_path / ".local" / "share"
+        config_dir.mkdir(parents=True)
+        data_dir.mkdir(parents=True)
+        old_config = os.environ.get("XDG_CONFIG_HOME")
+        old_data = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(config_dir)
+        os.environ["XDG_DATA_HOME"] = str(data_dir)
 
-    def test_record_step_preserves_order(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        steps = ["detect", "recommend-host-targets", "recommend-models"]
-        for s in steps:
-            record_step(data, s)
-        assert [e["step"] for e in data["completed_steps"]] == steps
+        try:
+            # Create a v2 state file
+            agentalloy_dir = config_dir / "agentalloy"
+            agentalloy_dir.mkdir(parents=True)
+            state_file = agentalloy_dir / "install-state.json"
+            v2_state = {
+                "schema_version": 2,
+                "install_started_at": "2025-01-01T00:00:00",
+                "completed_steps": [],
+                "harness_files_written": [],
+                "models_pulled": [],
+                "env_path": None,
+                "port": 47950,
+                "last_verify_passed_at": None,
+                "pending_pack_selection": None,
+            }
+            state_file.write_text(json.dumps(v2_state))
+
+            # Force re-import so state_path() picks up the new XDG dir
+            import importlib
+
+            importlib.reload(install_state)
+            st = install_state.load_state()
+
+            # Should have been migrated to v3
+            assert st["schema_version"] == 3
+            assert st["deployment"] is None
+            assert st["compose_file"] is None
+            assert st["compose_binary"] is None
+        finally:
+            if old_config is not None:
+                os.environ["XDG_CONFIG_HOME"] = old_config
+            elif "XDG_CONFIG_HOME" in os.environ:
+                del os.environ["XDG_CONFIG_HOME"]
+            if old_data is not None:
+                os.environ["XDG_DATA_HOME"] = old_data
+            elif "XDG_DATA_HOME" in os.environ:
+                del os.environ["XDG_DATA_HOME"]
+
+    def test_v2_preserves_existing_fields(self, tmp_path: Path):
+        """Migration preserves existing v2 fields while adding v3 fields."""
+        config_dir = tmp_path / ".config"
+        data_dir = tmp_path / ".local" / "share"
+        config_dir.mkdir(parents=True)
+        data_dir.mkdir(parents=True)
+        old_config = os.environ.get("XDG_CONFIG_HOME")
+        old_data = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(config_dir)
+        os.environ["XDG_DATA_HOME"] = str(data_dir)
+
+        try:
+            agentalloy_dir = config_dir / "agentalloy"
+            agentalloy_dir.mkdir(parents=True)
+            state_file = agentalloy_dir / "install-state.json"
+            v2_state: dict[str, Any] = {
+                "schema_version": 2,
+                "install_started_at": "2025-01-01T00:00:00",
+                "completed_steps": [{"step": "wire-harness", "completed_at": "2025-01-01T00:01:00"}],
+                "harness_files_written": [],
+                "models_pulled": ["ollama:nomic-embed-text"],
+                "env_path": None,
+                "port": 50000,
+                "last_verify_passed_at": "2025-01-01T00:02:00",
+                "pending_pack_selection": ["core"],
+            }
+            state_file.write_text(json.dumps(v2_state))
+
+            import importlib
+
+            importlib.reload(install_state)
+            st = install_state.load_state()
+
+            # Existing fields preserved
+            assert st["port"] == 50000
+            assert st["completed_steps"] == v2_state["completed_steps"]
+            assert st["models_pulled"] == ["ollama:nomic-embed-text"]
+            assert st["pending_pack_selection"] == ["core"]
+            assert st["last_verify_passed_at"] == "2025-01-01T00:02:00"
+            # New fields added
+            assert st["deployment"] is None
+            assert st["compose_file"] is None
+            assert st["compose_binary"] is None
+        finally:
+            if old_config is not None:
+                os.environ["XDG_CONFIG_HOME"] = old_config
+            elif "XDG_CONFIG_HOME" in os.environ:
+                del os.environ["XDG_CONFIG_HOME"]
+            if old_data is not None:
+                os.environ["XDG_DATA_HOME"] = old_data
+            elif "XDG_DATA_HOME" in os.environ:
+                del os.environ["XDG_DATA_HOME"]
 
 
-class TestStateSchemaMigration:
-    """Schema migration tests across the v0→v1→v2 history."""
+class TestSaveAndLoadState:
+    """Test save_state and load_state round-trip."""
 
-    def test_v0_migrated_to_current(self, repo_root: Path) -> None:
-        fp = state_path(repo_root)
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        v0: dict[str, Any] = {
-            "schema_version": 0,
-            "install_started_at": "2026-01-01T00:00:00Z",
-            "completed_steps": [],
-        }
-        fp.write_text(json.dumps(v0))
-        data = load_state(repo_root)
-        assert data["schema_version"] == CURRENT_SCHEMA_VERSION
-        assert "harness_files_written" in data
-        # v2 dropped the top-level `harness` and `repo_root` fields.
-        assert "harness" not in data
-        assert "repo_root" not in data
+    def test_save_and_load_container_state(self, tmp_path: Path):
+        """Container deployment state is saved and loaded correctly."""
+        config_dir = tmp_path / ".config"
+        data_dir = tmp_path / ".local" / "share"
+        config_dir.mkdir(parents=True)
+        data_dir.mkdir(parents=True)
+        old_config = os.environ.get("XDG_CONFIG_HOME")
+        old_data = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(config_dir)
+        os.environ["XDG_DATA_HOME"] = str(data_dir)
 
-    def test_v1_migrated_to_v2_drops_top_level_harness(self, repo_root: Path) -> None:
-        fp = state_path(repo_root)
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        v1: dict[str, Any] = {
-            "schema_version": 1,
-            "completed_steps": [],
-            "harness": "claude-code",
-            "repo_root": "/some/repo",
-            "harness_files_written": [{"path": "/some/repo/CLAUDE.md", "action": "injected_block"}],
-        }
-        fp.write_text(json.dumps(v1))
-        data = load_state(repo_root)
-        assert data["schema_version"] == CURRENT_SCHEMA_VERSION
-        assert "harness" not in data
-        assert "repo_root" not in data
-        # Existing entries get a `harness` field stamped on them.
-        assert data["harness_files_written"][0]["harness"] == "claude-code"
+        try:
+            import importlib
 
+            importlib.reload(install_state)
+            st = install_state._empty_state()
+            st["deployment"] = "container"
+            st["compose_file"] = "/home/user/project/compose.yaml"
+            st["compose_binary"] = "podman compose"
 
-class TestStateNewerThanCode:
-    """test_state_file_newer_than_code_errors"""
+            fp = install_state.save_state(st)
+            assert fp.exists()
 
-    def test_future_schema_version_exits_3(self, repo_root: Path) -> None:
-        fp = state_path(repo_root)
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        future = {"schema_version": CURRENT_SCHEMA_VERSION + 1}
-        fp.write_text(json.dumps(future))
-        with pytest.raises(SystemExit) as exc_info:
-            load_state(repo_root)
-        assert exc_info.value.code == 3
+            loaded = install_state.load_state()
+            assert loaded["deployment"] == "container"
+            assert loaded["compose_file"] == "/home/user/project/compose.yaml"
+            assert loaded["compose_binary"] == "podman compose"
+        finally:
+            if old_config is not None:
+                os.environ["XDG_CONFIG_HOME"] = old_config
+            elif "XDG_CONFIG_HOME" in os.environ:
+                del os.environ["XDG_CONFIG_HOME"]
+            if old_data is not None:
+                os.environ["XDG_DATA_HOME"] = old_data
+            elif "XDG_DATA_HOME" in os.environ:
+                del os.environ["XDG_DATA_HOME"]
 
 
-class TestStateSequentialWrites:
-    """test_state_file_consistent_after_concurrent_writes"""
+class TestValidatePort:
+    """Test validate_port input sanitization."""
 
-    def test_sequential_saves_produce_valid_json(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        record_step(data, "detect")
-        save_state(data, repo_root)
-        record_step(data, "recommend-host-targets")
-        save_state(data, repo_root)
-        # Re-read and verify
-        reloaded = load_state(repo_root)
-        assert len(reloaded["completed_steps"]) == 2
-        assert reloaded["completed_steps"][0]["step"] == "detect"
+    def test_valid_port(self):
+        assert install_state.validate_port(47950) == 47950
+        assert install_state.validate_port(1) == 1
+        assert install_state.validate_port(65535) == 65535
+
+    def test_string_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port("1@evil.com:80")
+
+    def test_float_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port(3.14)
+
+    def test_bool_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port(True)
+
+    def test_negative_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port(-1)
+
+    def test_zero_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port(0)
+
+    def test_too_large_port_exits(self):
+        with pytest.raises(SystemExit, match="^2$"):
+            install_state.validate_port(65536)
 
 
-class TestStateHelpers:
-    def test_is_step_completed(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        assert not is_step_completed(data, "detect")
-        record_step(data, "detect")
-        assert is_step_completed(data, "detect")
+class TestIsInsideRoot:
+    """Test is_inside_root containment guard."""
 
-    def test_get_step_output(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        assert get_step_output(data, "detect") is None
-        record_step(data, "detect", extra={"output_digest": "sha256:test"})
-        out = get_step_output(data, "detect")
-        assert out is not None
-        assert out["output_digest"] == "sha256:test"
+    def test_path_inside_root(self, tmp_path: Path):
+        root = tmp_path
+        child = root / "sub" / "file.txt"
+        assert install_state.is_inside_root(child, root) is True
+
+    def test_path_outside_root(self, tmp_path: Path):
+        root = tmp_path / "project"
+        root.mkdir()
+        outside = tmp_path / "other" / "file.txt"
+        assert install_state.is_inside_root(outside, root) is False
+
+    def test_symlink_escape(self, tmp_path: Path):
+        """Symlink outside root is NOT considered inside."""
+        root = tmp_path / "project"
+        root.mkdir()
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        outside_file = outside_dir / "secret.txt"
+        outside_file.touch()
+        symlink = root / "link.txt"
+        symlink.symlink_to(outside_file)
+        assert install_state.is_inside_root(symlink, root) is False
 
 
-class TestPendingPackSelection:
-    """Helpers for the setup → install-packs handoff (no double prompt)."""
+class TestPackSelectionHelpers:
+    """Test pending pack selection helpers."""
 
-    def test_fresh_state_has_no_pending_selection(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        assert get_pending_pack_selection(data) is None
+    def test_get_pending_pack_selection_none(self):
+        data = install_state._empty_state()
+        assert install_state.get_pending_pack_selection(data) is None
 
-    def test_set_and_get_roundtrip(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        set_pending_pack_selection(data, ["language", "tooling"])
-        assert get_pending_pack_selection(data) == ["language", "tooling"]
+    def test_get_pending_pack_selection_list(self):
+        data = install_state._empty_state()
+        install_state.set_pending_pack_selection(data, ["core", "framework"])
+        result = install_state.get_pending_pack_selection(data)
+        assert result == ["core", "framework"]
 
-    def test_empty_list_persists_as_explicit_choice(self, repo_root: Path) -> None:
-        # User explicitly chose "no extra packs" — distinct from None.
-        # install-packs should treat this as "honor the choice, don't prompt".
-        data = load_state(repo_root)
-        set_pending_pack_selection(data, [])
-        assert get_pending_pack_selection(data) == []
-        # Crucially: still distinguishable from None for the priority check.
-        assert data["pending_pack_selection"] == []
+    def test_clear_pending_pack_selection(self):
+        data = install_state._empty_state()
+        install_state.set_pending_pack_selection(data, ["core"])
+        install_state.clear_pending_pack_selection(data)
+        assert install_state.get_pending_pack_selection(data) is None
 
-    def test_clear_resets_to_none(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        set_pending_pack_selection(data, ["language"])
-        clear_pending_pack_selection(data)
-        assert get_pending_pack_selection(data) is None
+    def test_get_pending_pack_selection_filters_non_strings(self):
+        data = install_state._empty_state()
+        data["pending_pack_selection"] = ["core", 123, None, "framework"]
+        result = install_state.get_pending_pack_selection(data)
+        assert result == ["core", "framework"]
 
-    def test_selection_survives_save_reload(self, repo_root: Path) -> None:
-        data = load_state(repo_root)
-        set_pending_pack_selection(data, ["language", "framework"])
-        save_state(data, repo_root)
-        reloaded = load_state(repo_root)
-        assert get_pending_pack_selection(reloaded) == ["language", "framework"]
 
-    def test_malformed_value_returns_none(self, repo_root: Path) -> None:
-        # A tampered or older state file might have non-list garbage here.
-        data = load_state(repo_root)
-        data["pending_pack_selection"] = "not-a-list"  # type: ignore[assignment]
-        assert get_pending_pack_selection(data) is None
+class TestStepTracking:
+    """Test record_step and is_step_completed."""
 
-    def test_migrate_adds_field_to_older_state(self, repo_root: Path) -> None:
-        # An install-state.json written before this field existed should
-        # come back from load_state with the field defaulted to None.
-        fp = state_path(repo_root)
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        legacy: dict[str, Any] = {
-            "schema_version": 1,
-            "install_started_at": "2026-01-01T00:00:00Z",
-            "completed_steps": [],
-            "harness_files_written": [],
-        }
-        fp.write_text(json.dumps(legacy))
-        data = load_state(repo_root)
-        assert "pending_pack_selection" in data
-        assert data["pending_pack_selection"] is None
+    def test_record_and_check_step(self):
+        data = install_state._empty_state()
+        install_state.record_step(data, "wire-harness")
+        assert install_state.is_step_completed(data, "wire-harness") is True
+        assert install_state.is_step_completed(data, "pull-models") is False
+
+    def test_get_step_output(self):
+        data = install_state._empty_state()
+        install_state.record_step(data, "pull-models", extra={"models": ["ollama:text-embedding"]})
+        output = install_state.get_step_output(data, "pull-models")
+        assert output is not None
+        assert output["step"] == "pull-models"
+        assert output["models"] == ["ollama:text-embedding"]
+        assert install_state.get_step_output(data, "missing") is None

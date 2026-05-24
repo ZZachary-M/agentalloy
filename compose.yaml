@@ -63,7 +63,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "47950:47950"
+      - "47950:47950"  # To change host port, edit this line.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:47950/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
       interval: 15s

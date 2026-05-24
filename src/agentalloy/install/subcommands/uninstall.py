@@ -236,6 +236,114 @@ def _remove_pulled_models(st: dict[str, Any]) -> list[dict[str, Any]]:
     return actions
 
 
+# ---------------------------------------------------------------------------
+# Container teardown
+# ---------------------------------------------------------------------------
+
+
+def _stop_container_stack(
+    st: dict[str, Any],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    """Stop and remove container stack via compose down -v.
+
+    Reads ``compose_binary`` (label e.g. ``"podman compose"``) and
+    ``compose_file`` (absolute path) from state. Splits the label to get
+    the binary name and runs ``[binary, "compose", "-f", file, "down", "-v"]``.
+
+    Returns a list of action dicts. On failure, adds warnings but continues.
+    """
+    actions: list[dict[str, Any]] = []
+
+    if st.get("deployment") != "container":
+        return actions
+
+    compose_binary_label = st.get("compose_binary")
+    compose_file = st.get("compose_file")
+
+    if not compose_binary_label:
+        warnings.append(
+            "Container deployment detected but compose_binary is missing in state — "
+            "skipping compose down."
+        )
+        return actions
+
+    if compose_file is None:
+        warnings.append(
+            "Container deployment detected but compose_file is None in state — "
+            "skipping compose down."
+        )
+        return actions
+
+    # Verify compose file still exists
+    cf_path = Path(compose_file)
+    if not cf_path.exists():
+        warnings.append(
+            f"Compose file missing: {compose_file} — skipping compose down. "
+            "Clean up containers manually."
+        )
+        return actions
+
+    # Split label "podman compose" -> ["podman", "compose"]
+    parts = compose_binary_label.split()
+    if len(parts) < 2:
+        warnings.append(
+            f"Invalid compose_binary label in state: {compose_binary_label!r} — "
+            "skipping compose down."
+        )
+        return actions
+
+    binary_name = parts[0]
+
+    try:
+        result = subprocess.run(
+            [binary_name, "compose", "-f", compose_file, "down", "-v"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            actions.append(
+                {
+                    "action": "compose_down",
+                    "compose_file": compose_file,
+                    "compose_binary": compose_binary_label,
+                }
+            )
+        else:
+            stderr = result.stderr.strip() if result.stderr else "unknown error"
+            warnings.append(f"compose down failed: {stderr}")
+            actions.append(
+                {
+                    "action": "compose_down_failed",
+                    "compose_file": compose_file,
+                    "compose_binary": compose_binary_label,
+                    "error": stderr,
+                }
+            )
+    except OSError as exc:
+        warnings.append(f"compose down: binary not found ({binary_name}): {exc}")
+        actions.append(
+            {
+                "action": "compose_down_skipped",
+                "compose_file": compose_file,
+                "compose_binary": compose_binary_label,
+                "error": str(exc),
+            }
+        )
+    except subprocess.TimeoutExpired:
+        warnings.append("compose down timed out after 60s")
+        actions.append(
+            {
+                "action": "compose_down_timeout",
+                "compose_file": compose_file,
+                "compose_binary": compose_binary_label,
+            }
+        )
+
+    return actions
+
+
 def _stop_ollama_daemon(st: dict[str, Any]) -> dict[str, Any]:
     """Stop the specific ``ollama serve`` process that pull-models spawned.
 
@@ -431,6 +539,12 @@ def uninstall(
     warnings: list[str] = []
     model_actions: list[dict[str, Any]] = []
     daemon_actions: list[dict[str, Any]] = []
+
+    # 0. Stop container stack (if deployment == "container" and stop_services)
+    container_actions: list[dict[str, Any]] = []
+    if stop_services:
+        container_actions = _stop_container_stack(st, warnings)
+        files_removed.extend(container_actions)
 
     # 1. Remove harness wiring. State is user-scoped and may carry entries
     # from multiple repos, but the containment check MUST use a trusted
@@ -806,6 +920,7 @@ def uninstall(
         "uv_tool": uv_tool_result,
         "models_removed": model_actions,
         "daemons_stopped": daemon_actions,
+        "container_actions": container_actions,
     }
 
 

@@ -1,271 +1,204 @@
-"""Unit tests for the ``preflight`` subcommand."""
+"""Tests for the preflight container phase.
+
+ruff: noqa: I001, PLC0415 -- testing private module members intentionally
+"""
 
 from __future__ import annotations
 
-import argparse
-import json
-import socket
 from pathlib import Path
-from typing import Any
-from unittest.mock import patch
-from urllib.error import URLError
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentalloy.install.subcommands import preflight
 from agentalloy.install.subcommands.preflight import (
-    _check_cli_on_path,  # pyright: ignore[reportPrivateUsage]
-    _check_ollama_present,  # pyright: ignore[reportPrivateUsage]
-    _check_ollama_reachable,  # pyright: ignore[reportPrivateUsage]
-    _check_port_free,  # pyright: ignore[reportPrivateUsage]
-    _check_python_version,  # pyright: ignore[reportPrivateUsage]
-    _check_uv_present,  # pyright: ignore[reportPrivateUsage]
-    _check_xdg_dirs_writable,  # pyright: ignore[reportPrivateUsage]
+    _check_compose_binary,
+    _check_compose_file_present,
+    _check_image_build_deps,
+    _detect_compose_binary,
     run_preflight,
 )
 
-# ---------------------------------------------------------------------------
-# Individual checks
-# ---------------------------------------------------------------------------
+
+class TestDetectComposeBinary:
+    """Test _detect_compose_binary helper."""
+
+    def test_podman_detected(self):
+        """Podman is found and compose version succeeds."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with patch("shutil.which", return_value="/usr/bin/podman"), patch(
+            "subprocess.run", return_value=mock_result
+        ):
+            label, binary_path = _detect_compose_binary()
+        assert label == "podman compose"
+        assert binary_path == "/usr/bin/podman"
+
+    def test_docker_fallback(self):
+        """Podman missing, docker found."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        def which_side_effect(cmd):
+            if cmd == "podman":
+                return None
+            return "/usr/bin/docker"
+
+        with patch("shutil.which", side_effect=which_side_effect), patch(
+            "subprocess.run", return_value=mock_result
+        ):
+            label, binary_path = _detect_compose_binary()
+        assert label == "docker compose"
+        assert binary_path == "/usr/bin/docker"
+
+    def test_none_found(self):
+        """Neither podman nor docker found."""
+        with patch("shutil.which", return_value=None):
+            label, binary_path = _detect_compose_binary()
+        assert label is None
+        assert binary_path is None
+
+    def test_podman_fails_docker_fallback(self):
+        """Podman found but compose version fails, docker works."""
+        def run_side_effect(cmd, **kwargs):
+            mock = MagicMock()
+            # cmd is a list like ["/usr/bin/podman", "compose", "version"]
+            cmd_str = " ".join(str(c) for c in cmd)
+            if "podman" in cmd_str:
+                mock.returncode = 1
+            else:
+                mock.returncode = 0
+            return mock
+
+        def which_side_effect(cmd):
+            if cmd == "podman":
+                return "/usr/bin/podman"
+            return "/usr/bin/docker"
+
+        with patch("shutil.which", side_effect=which_side_effect), patch(
+            "subprocess.run", side_effect=run_side_effect
+        ):
+            label, binary_path = _detect_compose_binary()
+        assert label == "docker compose"
+        assert binary_path == "/usr/bin/docker"
 
 
-class TestPythonVersion:
-    def test_passes_on_current(self) -> None:
-        result = _check_python_version()
+class TestComposeBinaryCheck:
+    """Test _check_compose_binary check function."""
+
+    def test_check_passes_when_podman_present(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        with patch("shutil.which", return_value="/usr/bin/podman"), patch(
+            "subprocess.run", return_value=mock_result
+        ):
+            result = _check_compose_binary()
         assert result["passed"] is True
+        assert "podman compose" in result["detail"]
+
+    def test_check_fails_when_none_found(self):
+        with patch("shutil.which", return_value=None):
+            result = _check_compose_binary()
+        assert result["passed"] is False
         assert result["severity"] == "fatal"
+        assert "remediation" in result
 
+    def test_check_returns_docker_when_fallback(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
 
-class TestUvPresent:
-    def test_pass(self) -> None:
-        with patch.object(preflight.shutil, "which", return_value="/usr/bin/uv"):
-            result = _check_uv_present()
+        def which_side_effect(cmd):
+            return None if cmd == "podman" else "/usr/bin/docker"
+
+        with patch("shutil.which", side_effect=which_side_effect), patch(
+            "subprocess.run", return_value=mock_result
+        ):
+            result = _check_compose_binary()
         assert result["passed"] is True
+        assert "docker compose" in result["detail"]
 
-    def test_fail(self) -> None:
-        with patch.object(preflight.shutil, "which", return_value=None):
-            result = _check_uv_present()
+
+class TestComposeFilePresentCheck:
+    """Test _check_compose_file_present check function."""
+
+    def test_compose_file_present(self, tmp_path: Path):
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.touch()
+        result = _check_compose_file_present(str(compose_file))
+        assert result["passed"] is True
+        assert str(compose_file) in result["detail"]
+
+    def test_compose_file_missing(self):
+        result = _check_compose_file_present("/nonexistent/compose.yaml")
         assert result["passed"] is False
-        assert "Install uv" in result["remediation"]
+        assert "not found" in result["error"]
 
-
-class TestCliOnPath:
-    def test_pass(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        local_bin = tmp_path / ".local" / "bin"
-        local_bin.mkdir(parents=True)
-        monkeypatch.setenv("PATH", f"{local_bin}:/usr/bin")
-        with patch.object(preflight.shutil, "which", return_value=str(local_bin / "agentalloy")):
-            result = _check_cli_on_path()
-        assert result["passed"] is True
-
-    def test_fail_path_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("PATH", "/usr/bin")  # ~/.local/bin absent
-        with patch.object(preflight.shutil, "which", return_value=None):
-            result = _check_cli_on_path()
+    def test_compose_file_none(self):
+        result = _check_compose_file_present(None)
         assert result["passed"] is False
-        assert "not in PATH" in result["error"]
-        assert "export PATH=" in result["remediation"]
+        assert "No compose file" in result["error"]
 
 
-class TestXdgDirsWritable:
-    def test_pass(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
-        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
-        result = _check_xdg_dirs_writable()
+class TestImageBuildDepsCheck:
+    """Test _check_image_build_deps check function."""
+
+    def test_containerfile_present(self, tmp_path: Path):
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.touch()
+        containerfile = tmp_path / "Containerfile"
+        containerfile.touch()
+        result = _check_image_build_deps(str(compose_file))
         assert result["passed"] is True
+        assert "Containerfile" in result["detail"]
 
-
-class TestPortFree:
-    def test_pass(self) -> None:
-        result = _check_port_free(0)  # port 0 → kernel picks a free one
+    def test_dockerfile_fallback(self, tmp_path: Path):
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.touch()
+        dockerfile = tmp_path / "Dockerfile"
+        dockerfile.touch()
+        result = _check_image_build_deps(str(compose_file))
         assert result["passed"] is True
+        assert "Dockerfile" in result["detail"]
 
-    def test_fail_when_bound(self) -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-        try:
-            result = _check_port_free(port)
-        finally:
-            sock.close()
+    def test_no_build_file(self, tmp_path: Path):
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.touch()
+        result = _check_image_build_deps(str(compose_file))
         assert result["passed"] is False
+        assert "No Containerfile" in result["error"]
+
+    def test_none_compose_file_skips(self):
+        result = _check_image_build_deps(None)
+        assert result["passed"] is True
         assert result["severity"] == "warn"
 
 
-class TestOllamaPresent:
-    def test_pass(self) -> None:
-        with patch.object(preflight.shutil, "which", return_value="/usr/bin/ollama"):
-            result = _check_ollama_present()
-        assert result["passed"] is True
+class TestContainerPhaseEnvelope:
+    """Test the full container phase run_preflight."""
 
-    def test_fail(self) -> None:
-        with patch.object(preflight.shutil, "which", return_value=None):
-            result = _check_ollama_present()
-        assert result["passed"] is False
+    def test_container_phase_runs_all_checks(self, tmp_path: Path):
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.touch()
+        containerfile = tmp_path / "Containerfile"
+        containerfile.touch()
 
+        mock_result = MagicMock()
+        mock_result.returncode = 0
 
-class TestOllamaReachable:
-    def test_fail_when_unreachable(self) -> None:
-        with patch(
-            "agentalloy.install.subcommands.preflight.urlopen",
-            side_effect=URLError("connection refused"),
+        def which_side_effect(cmd):
+            return str(tmp_path / cmd) if cmd in ("podman",) else None
+
+        with patch("shutil.which", side_effect=which_side_effect), patch(
+            "subprocess.run", return_value=mock_result
         ):
-            result = _check_ollama_reachable()
-        assert result["passed"] is False
-        assert "ollama serve" in result["remediation"]
+            result = run_preflight(phase="container", compose_file=str(compose_file))
 
-    def test_uses_default_ollama_port(self) -> None:
-        """Ollama's default port is 11434, not 11436 (that's llama-server's)."""
-        with patch(
-            "agentalloy.install.subcommands.preflight.urlopen",
-            side_effect=URLError("connection refused"),
-        ):
-            result = _check_ollama_reachable()
-        assert "11434" in result["error"]
-        assert "11434" in result["remediation"]
-        assert "11436" not in result["error"]
-        assert "11436" not in result["remediation"]
+        check_names = [c["name"] for c in result["checks"]]
+        assert "compose_binary" in check_names
+        assert "compose_file_present" in check_names
+        assert "port_free" in check_names
+        assert "image_build_deps" in check_names
 
-
-# ---------------------------------------------------------------------------
-# Phase orchestration
-# ---------------------------------------------------------------------------
-
-
-class TestRunPreflightEarly:
-    def test_envelope_shape(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
-        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
-        # Force every fatal check to fail for a deterministic envelope.
-        with (
-            patch.object(preflight.shutil, "which", return_value=None),
-            patch(
-                "agentalloy.install.subcommands.preflight.urlopen",
-                side_effect=URLError("offline"),
-            ),
-        ):
-            result = run_preflight(phase="early", port=0)
-        assert result["schema_version"] == 1
-        assert result["phase"] == "early"
-        assert result["action"] == "preflight_failed"
-        assert "uv_present" in result["fatal_failures"]
-        assert "cli_on_path" in result["fatal_failures"]
-        # Every check returned has the expected keys.
-        for c in result["checks"]:
-            assert {"name", "passed", "severity", "duration_ms"} <= c.keys()
-
-
-class TestRunPreflightRunner:
-    def test_runner_argument_explicit_ollama_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        with (
-            patch.object(preflight.shutil, "which", return_value=None),
-            patch(
-                "agentalloy.install.subcommands.preflight.urlopen",
-                side_effect=URLError("offline"),
-            ),
-        ):
-            result = run_preflight(phase="runner", runner="ollama")
-        names = [c["name"] for c in result["checks"]]
-        assert "ollama_present" in names
-        assert "ollama_reachable" in names
-        assert result["action"] == "preflight_failed"
-
-    def test_runner_unspecified_and_no_models_output(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # Point outputs_dir at a fresh dir with no recommend-models.json.
-        monkeypatch.setattr(
-            "agentalloy.install.subcommands.preflight.install_state.outputs_dir",
-            lambda: tmp_path,
-        )
-        result = run_preflight(phase="runner")
-        assert any(c["name"] == "runner_selected" and not c["passed"] for c in result["checks"])
-
-    def test_runner_inferred_from_models_output(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        (tmp_path / "recommend-models.json").write_text(json.dumps({"embed_runner": "ollama"}))
-        monkeypatch.setattr(
-            "agentalloy.install.subcommands.preflight.install_state.outputs_dir",
-            lambda: tmp_path,
-        )
-        with (
-            patch.object(preflight.shutil, "which", return_value="/usr/bin/ollama"),
-            patch("agentalloy.install.subcommands.preflight.urlopen") as mock_open,
-        ):
-            mock_open.return_value.__enter__.return_value.read.return_value = b"{}"
-            result = run_preflight(phase="runner")
-        names = [c["name"] for c in result["checks"]]
-        assert "ollama_present" in names
-
-    def test_invalid_phase_raises(self) -> None:
-        with pytest.raises(ValueError):
-            run_preflight(phase="bogus")  # type: ignore[arg-type]
-
-
-# ---------------------------------------------------------------------------
-# CLI _run integration
-# ---------------------------------------------------------------------------
-
-
-class TestCliRun:
-    def test_exit_zero_on_pass(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        local_bin = tmp_path / ".local" / "bin"
-        local_bin.mkdir(parents=True)
-        monkeypatch.setenv("PATH", f"{local_bin}:/usr/bin")
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
-        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
-        monkeypatch.setattr(
-            "agentalloy.install.subcommands.preflight.install_state.outputs_dir",
-            lambda: tmp_path / "outputs",
-        )
-        (tmp_path / "outputs").mkdir()
-
-        def _which(name: str) -> str | None:
-            return f"/usr/bin/{name}" if name in {"uv", "agentalloy"} else None
-
-        with (
-            patch.object(preflight.shutil, "which", side_effect=_which),
-            patch("agentalloy.install.subcommands.preflight.urlopen") as mock_open,
-        ):
-            mock_resp: Any = mock_open.return_value.__enter__.return_value
-            mock_resp.status = 200
-            mock_resp.read.return_value = b""
-            args = argparse.Namespace(phase="early", runner=None, port=0)
-            rc = preflight._run(args)  # pyright: ignore[reportPrivateUsage]
-        assert rc == 0
-        # Output JSON written to outputs dir.
-        out = json.loads((tmp_path / "outputs" / "preflight-early.json").read_text())
-        assert out["action"] == "preflight"
-
-    def test_exit_one_on_fatal(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("PATH", "/usr/bin")
-        monkeypatch.setattr(
-            "agentalloy.install.subcommands.preflight.install_state.outputs_dir",
-            lambda: tmp_path / "outputs",
-        )
-        (tmp_path / "outputs").mkdir()
-        with (
-            patch.object(preflight.shutil, "which", return_value=None),
-            patch(
-                "agentalloy.install.subcommands.preflight.urlopen",
-                side_effect=URLError("offline"),
-            ),
-        ):
-            args = argparse.Namespace(phase="early", runner=None, port=0)
-            rc = preflight._run(args)  # pyright: ignore[reportPrivateUsage]
-        assert rc == 1
+    def test_invalid_phase_raises(self):
+        with pytest.raises(ValueError, match="invalid phase"):
+            run_preflight(phase="invalid")

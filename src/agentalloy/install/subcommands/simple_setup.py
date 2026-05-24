@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
@@ -68,6 +71,11 @@ class SetupConfig:
     force: bool = False
     acknowledge_tier3: bool = False
     hardware_target: str = ""  # explicit user choice: "nvidia", "radeon", "apple-silicon", "cpu"
+
+    # Deployment type: "native" (default) or "container"
+    deployment: str = ""
+    compose_binary: str = ""  # "podman compose" | "docker compose"
+    compose_file: str = ""  # abs path to compose yaml used
 
     # Resolved during execution -- not user-facing.
     detected_runner: str | None = None  # from detect.json (e.g. "ollama", "llama-server")
@@ -269,6 +277,25 @@ def _prompt_harness() -> str:
         "Select IDE harness:",
         _HARNESS_OPTIONS,
         default_index=default_index,
+    )
+
+
+def _prompt_deployment() -> str:
+    """Prompt for deployment type: native or container.
+
+    Default is "container" (index 2) as it is the recommended option
+    for new installs.
+    """
+    return _prompt_numbered(
+        "Select deployment type:",
+        [
+            ("native", "Native  — runs directly on this host (systemd or manual)"),
+            (
+                "container",
+                "Container — managed by podman/docker compose (recommended for new installs)",
+            ),
+        ],
+        default_index=2,
     )
 
 
@@ -486,6 +513,189 @@ def _test_embed_endpoint(cfg: SetupConfig) -> None:
         )
 
 
+def _run_container_flow(cfg: SetupConfig, t0: float) -> int:
+    """Execute the container deployment flow.
+
+    Skips native prompts (runner, model, hardware, port, mode, packs).
+    Validates container prerequisites, runs compose up, and validates.
+    """
+    from agentalloy.install.subcommands.preflight import (  # noqa: PLC0415
+        _detect_compose_binary,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    # 1. Run early preflight
+    _print("  [dim]-> Preflight (early)[/dim]")
+    preflight_result = preflight.run_preflight(phase="early", port=47950)
+    fatal = [
+        c["name"]
+        for c in preflight_result.get("checks", [])
+        if not c["passed"] and c.get("severity") == "fatal"
+    ]
+    if fatal:
+        _print("  [red]Preflight failed:[/red]")
+        for name in fatal:
+            check = next(c for c in preflight_result["checks"] if c["name"] == name)
+            _print(f"    - {name}: {check.get('error', 'unknown')}")
+            if check.get("remediation"):
+                _print(f"      FIX: {check['remediation']}")
+        _print("  [red]Fix the issues above and re-run setup.[/red]")
+        return 1
+    _print("  [green]  Preflight (early) passed.[/green]")
+
+    # 2. Detect compose binary (standalone, before compose file selection)
+    label, binary_path = _detect_compose_binary()
+    if label is None:
+        _print("  [red]No compose binary found (podman or docker).[/red]")
+        _print(
+            "  Install Podman (recommended) or Docker and ensure `compose`\n"
+            "  is available:\n"
+            "    Linux:  sudo apt install podman\n"
+            "    macOS:  brew install podman"
+        )
+        return 1
+    cfg.compose_binary = label
+    assert binary_path is not None  # _detect_compose_binary returns both or neither
+    _print(f"  Compose binary: {label} at {binary_path}")
+
+    # 3. Select compose file
+    if cfg.recommended_host == "radeon":
+        default_compose = "compose.radeon.yaml"
+    else:
+        default_compose = "compose.yaml"
+
+    compose_path = Path.cwd() / default_compose
+    if not cfg.non_interactive:
+        _print(f"\n  Detected compose file: {default_compose} — correct? [Y/n]")
+        ans = input("  ").strip().lower()
+        if ans in ("n", "no"):
+            custom = input("  Enter compose file path: ").strip()
+            compose_path = Path(custom).resolve()
+    cfg.compose_file = str(compose_path.resolve())
+
+    # 4. Run container preflight
+    _print("  [dim]-> Preflight (container)[/dim]")
+    container_preflight = preflight.run_preflight(
+        phase="container", compose_file=cfg.compose_file
+    )
+    container_fatal = [
+        c["name"]
+        for c in container_preflight.get("checks", [])
+        if not c["passed"] and c.get("severity") == "fatal"
+    ]
+    if container_fatal:
+        _print("  [red]Container preflight failed:[/red]")
+        for name in container_fatal:
+            check = next(
+                c for c in container_preflight["checks"] if c["name"] == name
+            )
+            _print(f"    - {name}: {check.get('error', 'unknown')}")
+            if check.get("remediation"):
+                _print(f"      FIX: {check['remediation']}")
+        _print("  [red]Fix the issues above and re-run setup.[/red]")
+        return 1
+    _print("  [green]  Preflight (container) passed.[/green]")
+
+    # 5. Set fixed values
+    cfg.port = 47950
+    cfg.deployment = "container"
+
+    # 6. Show summary
+    _print("\n[dim]" + "─" * 40)
+    _print("\n[bold]Review your container setup:[/bold]")
+    _print(f"  Deployment:   container")
+    _print(f"  Compose file: {cfg.compose_file}")
+    _print(f"  Compose binary: {cfg.compose_binary}")
+    _print(f"  Port:         {cfg.port}")
+
+    if not cfg.non_interactive:
+        confirm = input("  Confirm and continue? [Y/n]: ").strip().lower()
+        if confirm not in ("", "y", "yes"):
+            _print("[yellow]Setup cancelled.[/yellow]")
+            return 1
+    _print()
+
+    # 7. Execute: compose up -d --build
+    _print("[bold]Running container setup...[/bold]")
+    _print("  [dim]-> Starting containers[/dim]")
+    cmd = [binary_path, "compose", "-f", cfg.compose_file, "up", "-d", "--build"]
+    _print(f"  $ {' '.join(cmd)}")
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            _print("  [red]  compose up failed.[/red]")
+            return result.returncode
+    except subprocess.TimeoutExpired:
+        _print("  [red]  compose up timed out (10 min).[/red]")
+        return 1
+    _print("  [green]  Done.[/green]")
+
+    # 8. Poll health endpoint
+    _print("  [dim]-> Waiting for service health...[/dim]")
+    healthy = False
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(  # noqa: S310
+                "http://localhost:47950/health", timeout=5
+            ) as resp:
+                if resp.status == 200:
+                    healthy = True
+                    break
+        except Exception:
+            pass
+        time.sleep(5)
+    if not healthy:
+        _print("  [yellow]  Service not healthy after 120s — check container logs.[/yellow]")
+    else:
+        _print("  [green]  Service healthy.[/green]")
+
+    # 9. Run verify
+    _print("  [dim]-> Verifying installation[/dim]")
+    rc = verify.run(_build_namespace(cfg))
+    if rc not in (0, 4):
+        _print("  [red]Validation failed.[/red]")
+        return rc
+    _print("  [green]  All checks passed.[/green]")
+
+    # 10. Record state
+    st = install_state.load_state()
+    st["deployment"] = "container"
+    st["compose_file"] = cfg.compose_file
+    st["compose_binary"] = cfg.compose_binary
+    install_state.save_state(st)
+
+    # 11. Wire harness
+    if not cfg.non_interactive:
+        cfg.harness = _prompt_harness()
+    else:
+        h = (cfg.harness or "manual").strip().lower()
+        if h == "continue":
+            h = "continue-closed"
+        cfg.harness = h
+
+    if cfg.harness and cfg.harness != "manual":
+        _print(f"  [dim]-> Wiring harness ({cfg.harness})[/dim]")
+        rc = wire_harness.run(_build_namespace(cfg, harness=cfg.harness, force=False))
+        if rc not in (0, 4):
+            _print(f"  [red]  wire-harness failed (exit {rc}).[/red]")
+            return rc
+        _print("  [green]  Done.[/green]")
+
+    # -- Done --
+    _print(f"\n[green]  Container setup complete in {int((time.monotonic() - t0) * 1000)}ms[/green]\n")
+    _print(f"  URL:      http://localhost:{cfg.port}")
+    _print(f"  Compose:  {cfg.compose_file}")
+    _print(f"  Logs:     {cfg.compose_binary.split()[0]} compose -f {cfg.compose_file} logs -f")
+
+    _print("\n  [bold]Stop:[/bold] " f"{cfg.compose_binary.split()[0]} compose -f {cfg.compose_file} down")
+    return 0
+
+
 def run_setup(cfg: SetupConfig) -> int:
     """Execute the simple interactive setup flow.
 
@@ -561,6 +771,18 @@ def run_setup(cfg: SetupConfig) -> int:
             _print(f"  Integrated: {igpus}")
     else:
         cfg.recommended_host = "cpu"
+
+    # -- Deployment type prompt --
+
+    if not cfg.non_interactive:
+        cfg.deployment = _prompt_deployment()
+    elif cfg.deployment:
+        pass  # from CLI flag
+    else:
+        cfg.deployment = "native"  # non-interactive default
+
+    if cfg.deployment == "container":
+        return _run_container_flow(cfg, t0)
 
     # -- Phase 1: Gather config --
 
@@ -864,6 +1086,11 @@ def run_setup(cfg: SetupConfig) -> int:
 
     # -- Done --
 
+    # Record native deployment in state
+    st = install_state.load_state()
+    st["deployment"] = "native"
+    install_state.save_state(st)
+
     _print(f"\n[green]  Setup complete in {int((time.monotonic() - t0) * 1000)}ms[/green]\n")
     _print(f"  Service: {cfg.mode}")
     _print(f"  URL:     http://localhost:{cfg.port}")
@@ -953,6 +1180,12 @@ def add_parser(
         dest="acknowledge_tier3",
         help="Acknowledge Tier 3 harness limitations (required for non-interactive Tier 3 setup).",
     )
+    p.add_argument(
+        "--deployment",
+        choices=["native", "container"],
+        default=None,
+        help="Deployment type (default: native for non-interactive, prompted interactively).",
+    )
     p.set_defaults(func=_run_from_args)
 
 
@@ -966,6 +1199,7 @@ def _run_from_args(args: argparse.Namespace) -> int:
         packs=args.packs or "",
         harness=args.harness or "manual",
         hardware_target=getattr(args, "hardware", None) or "",
+        deployment=getattr(args, "deployment", None) or "",
         non_interactive=args.non_interactive,
         force=getattr(args, "force", False),
         acknowledge_tier3=getattr(args, "acknowledge_tier3", False),

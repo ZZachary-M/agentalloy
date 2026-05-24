@@ -30,7 +30,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "47950:47950"
+      - "47950:47950"  # To change host port, edit this line.
     extra_hosts:
       - "host.containers.internal:host-gateway"
     healthcheck:

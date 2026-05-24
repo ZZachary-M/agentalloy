@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -869,3 +870,253 @@ def test_prompt_numbered_returns_default_on_non_tty(
 # ---------------------------------------------------------------------------
 # Runner reachability check
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Container deployment flow
+# ---------------------------------------------------------------------------
+
+
+class TestPromptDeployment:
+    """Test _prompt_deployment helper."""
+
+    def test_prompt_deployment_default_container(self, monkeypatch):
+        """_prompt_deployment returns 'container' by default (index 2)."""
+        import sys
+
+        from agentalloy.install.subcommands.simple_setup import _prompt_deployment  # type: ignore[attr-defined]
+
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        result = _prompt_deployment()
+        assert result == "container"
+
+    def test_prompt_deployment_native_choice(self, monkeypatch):
+        """User can choose 'native' by entering '1'."""
+        import sys
+
+        from agentalloy.install.subcommands.simple_setup import _prompt_deployment  # type: ignore[attr-defined]
+
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr("builtins.input", lambda _: "1")
+        result = _prompt_deployment()
+        assert result == "native"
+
+
+class TestContainerFlow:
+    """Test the container deployment branch in run_setup()."""
+
+    @pytest.fixture(autouse=True)
+    def _mocks(self, tmp_state_dir: tuple[Path, Path]):
+        self.mock = MockSetup()
+        self.mock.setup_all()
+        self.tmp_config, self.tmp_data = tmp_state_dir
+        outputs_patch = patch(
+            "agentalloy.install.state.outputs_dir",
+            return_value=self.tmp_data / "outputs",
+        )
+        self.mock.patchers.append(outputs_patch)
+        self.mock.mocks["_outputs_dir"] = outputs_patch.start()
+        (self.tmp_data / "outputs").mkdir(parents=True, exist_ok=True)
+        yield
+        self.mock.teardown()
+
+    def _import_run_setup(self):
+        import importlib
+
+        import agentalloy.install.subcommands.simple_setup as mod
+
+        importlib.reload(mod)
+        return mod.SetupConfig, mod.run_setup
+
+    def test_container_flow_skips_native_prompts(self, tmp_state_dir: tuple[Path, Path]):
+        """Container deployment skips runner/model/hardware prompts."""
+        import sys
+
+        SetupConfig, run_setup = self._import_run_setup()
+
+        # Mock compose binary detection
+        with patch(
+            "agentalloy.install.subcommands.preflight._detect_compose_binary",
+            return_value=("podman compose", "/usr/bin/podman"),
+        ), patch("subprocess.run") as mock_run, patch.object(sys.stdin, "isatty", lambda: True), patch(
+            "builtins.input", lambda _: "1"  # accept default compose file
+        ):
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_run.return_value = mock_result
+
+            rc = run_setup(SetupConfig(deployment="container", non_interactive=True))
+
+        # Should succeed
+        assert rc == 0
+        # pull_models should NOT be called (container handles its own model)
+        # The container flow has different steps than native
+
+    def test_container_flow_records_state(self, tmp_state_dir: tuple[Path, Path]):
+        """Container setup records deployment, compose_file, compose_binary in state."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        with patch(
+            "agentalloy.install.subcommands.preflight._detect_compose_binary",
+            return_value=("podman compose", "/usr/bin/podman"),
+        ), patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_run.return_value = mock_result
+
+            rc = run_setup(SetupConfig(deployment="container", non_interactive=True))
+
+        assert rc == 0
+
+        # Check state was recorded
+        import importlib
+
+        import agentalloy.install.state as state_mod
+
+        importlib.reload(state_mod)
+        st = state_mod.load_state()
+        assert st["deployment"] == "container"
+        assert st["compose_binary"] == "podman compose"
+        assert st["compose_file"] is not None
+
+    def test_radeon_variant_detection(self, tmp_state_dir: tuple[Path, Path], tmp_path: Path):
+        """recommended_host='radeon' selects compose.radeon.yaml."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        # Create compose.radeon.yaml in cwd
+        compose_radeon = tmp_path / "compose.radeon.yaml"
+        compose_radeon.write_text("version: '3'\nservices: {}\n")
+
+        # Create detect.json with AMD GPU data so hardware detection sets radeon
+        (self.tmp_data / "outputs").mkdir(parents=True, exist_ok=True)
+        detect_json = self.tmp_data / "outputs" / "detect.json"
+        detect_json.write_text(json.dumps({
+            "gpu": {
+                "discrete": [{"vendor": "amd", "model": "RX 7900 XTX", "vram_gb": 24}],
+                "integrated": [],
+            },
+            "runner": "ollama",
+        }))
+
+        with patch(
+            "agentalloy.install.subcommands.preflight._detect_compose_binary",
+            return_value=("podman compose", "/usr/bin/podman"),
+        ), patch("subprocess.run") as mock_run, patch("pathlib.Path.cwd", return_value=tmp_path):
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_run.return_value = mock_result
+
+            rc = run_setup(SetupConfig(deployment="container", non_interactive=True))
+
+        assert rc == 0
+
+        import importlib
+
+        import agentalloy.install.state as state_mod
+
+        importlib.reload(state_mod)
+        st = state_mod.load_state()
+        assert "compose.radeon.yaml" in st["compose_file"]
+
+    def test_compose_binary_missing_exits_1(self, tmp_state_dir: tuple[Path, Path], capsys):
+        """No podman/docker detected, setup exits with code 1."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        with patch(
+            "agentalloy.install.subcommands.preflight._detect_compose_binary",
+            return_value=(None, None),
+        ):
+            rc = run_setup(SetupConfig(deployment="container", non_interactive=True))
+
+        assert rc == 1
+        captured = capsys.readouterr()
+        # Output goes to stdout via Rich console, not stderr
+        combined = (captured.out + captured.err).lower()
+        assert "podman" in combined or "docker" in combined or "compose" in combined
+
+    def test_compose_file_path_absolute(self, tmp_state_dir: tuple[Path, Path], tmp_path: Path):
+        """cfg.compose_file stored as absolute path, not relative."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        # Create compose.yaml in tmp_path
+        compose_file = tmp_path / "compose.yaml"
+        compose_file.write_text("version: '3'\nservices: {}\n")
+
+        with patch(
+            "agentalloy.install.subcommands.preflight._detect_compose_binary",
+            return_value=("podman compose", "/usr/bin/podman"),
+        ), patch("subprocess.run") as mock_run, patch("pathlib.Path.cwd", return_value=tmp_path):
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_run.return_value = mock_result
+
+            rc = run_setup(SetupConfig(deployment="container", non_interactive=True))
+
+        assert rc == 0
+
+        import importlib
+
+        import agentalloy.install.state as state_mod
+
+        importlib.reload(state_mod)
+        st = state_mod.load_state()
+        # Should be absolute path
+        assert st["compose_file"].startswith("/")
+
+    def test_native_deployment_records_state(self, tmp_state_dir: tuple[Path, Path]):
+        """Native deployment records deployment='native' in state on success."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        rc = run_setup(SetupConfig(deployment="native", non_interactive=True))
+        assert rc == 0
+
+        import importlib
+
+        import agentalloy.install.state as state_mod
+
+        importlib.reload(state_mod)
+        st = state_mod.load_state()
+        assert st["deployment"] == "native"
+
+    def test_non_interactive_default_native(self, tmp_state_dir: tuple[Path, Path]):
+        """Non-interactive without --deployment defaults to 'native'."""
+        SetupConfig, run_setup = self._import_run_setup()
+
+        rc = run_setup(SetupConfig(non_interactive=True))
+        assert rc == 0
+
+        import importlib
+
+        import agentalloy.install.state as state_mod
+
+        importlib.reload(state_mod)
+        st = state_mod.load_state()
+        assert st["deployment"] == "native"
+
+
+class TestDeploymentCliFlag:
+    """Test --deployment CLI flag parsing."""
+
+    def test_parser_accepts_deployment_native(self):
+        import argparse
+
+        from agentalloy.install.subcommands.simple_setup import add_parser
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="subcommand")
+        add_parser(subparsers)
+
+        args = parser.parse_args(["setup", "--deployment", "native", "--non-interactive"])
+        assert args.deployment == "native"
+
+    def test_parser_accepts_deployment_container(self):
+        import argparse
+
+        from agentalloy.install.subcommands.simple_setup import add_parser
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="subcommand")
+        add_parser(subparsers)
+
+        args = parser.parse_args(["setup", "--deployment", "container", "--non-interactive"])
+        assert args.deployment == "container"
