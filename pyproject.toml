@@ -86,6 +86,22 @@ reportUnusedFunction = false
 venvPath = "."
 venv = ".venv"
 
+# Per-environment overrides: strict for src, relaxed for tests
+[[tool.pyright.executionEnvironments]]
+root = "src"
+typeCheckingMode = "strict"
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+typeCheckingMode = "strict"
+reportPrivateUsage = "warning"
+reportUnknownParameterType = "warning"
+reportMissingParameterType = "warning"
+reportUnknownLambdaType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownMemberType = "warning"
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra --strict-markers --strict-config"
