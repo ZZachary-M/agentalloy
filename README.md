@@ -50,6 +50,7 @@ Things your agent gets composed-and-injected without you pasting them into the p
 - [What makes the composition different](#what-makes-the-composition-different)
 - [How it works: phases, contracts, signal layer](#how-it-works-phases-contracts-signal-layer)
 - [How to use it](#how-to-use-it)
+- [Profiles](#profiles)
 - [Harness support](#harness-support)
 - [Standalone CLI](#standalone-cli)
 - [REST API](#rest-api)
@@ -109,14 +110,7 @@ git clone https://github.com/nrmeyers/agentalloy.git && cd agentalloy
 
 Works in any of the [supported harnesses](#harness-support).
 
-**Container alternative** (no Python required):
-
-```bash
-podman compose up -d        # or: docker compose up -d
-curl http://localhost:47950/health
-```
-
-Brings up `agentalloy` on port 47950 (pre-seeded corpus baked in) plus `ollama` on port 11436 with `qwen3-embedding:0.6b` auto-pulled. Bind-mounts `./data` for persistence.
+**Container alternative.** Build and run via your container tooling — see [INSTALL.md](INSTALL.md) for container setup details.
 
 ---
 
@@ -256,6 +250,20 @@ The capability matrix and a fuller picture live in [Harness support](#harness-su
 
 ---
 
+## Profiles: user-scoped skill contexts
+
+Profiles let you maintain separate skill contexts for different kinds of work — e.g., a `work` profile with stricter CI gates and team governance rules, a `personal` profile with relaxed constraints and hobby-project domain skills. Profiles auto-resolve per-repo based on git remote URL, filesystem path, or an explicit project marker, so you never need to switch them manually.
+
+This is the key difference from `AGENTS.md` / `SKILL.md` approaches:
+
+- **AgentAlloy install is one-time and user-scoped.** A single install serves all your projects. State lives under `~/.config/agentalloy/` and data under `~/.local/share/agentalloy/`.
+- **Profiles determine skill overrides per-repo.** Configure once, and the active profile resolves automatically when you `cd` between projects.
+- **Wiring is still per-repo.** Each project needs `agentalloy wire` to inject sentinels into its harness config files (`.cursor/rules/`, `.clinerules`, etc.), but the skills those sentinels reference come from the user-scoped profile.
+
+See [profiles-and-overrides.md](docs/profiles-and-overrides.md) for full details.
+
+---
+
 ## Harness support
 
 Tier classification depends entirely on whether the harness exposes a hook mechanism that fires on every turn.
@@ -263,13 +271,13 @@ Tier classification depends entirely on whether the harness exposes a hook mecha
 | Capability | Tier 1 (per-turn hooks) | Tier 3 (no hooks; sidecar) |
 |---|---|---|
 | Initial workflow skill context | ✅ | ✅ |
-| Phase transition detection (automatic) | ✅ Per-turn hook | ⚠️ Manual via `agentalloy phase set <name>` |
+| Phase transition detection (automatic) | ✅ Per-turn hook | ✅ Sidecar auto-detects via file watcher (when running); manual fallback via `agentalloy phase set <name>` |
 | System skill enforcement (gates) | ✅ PreToolUse hook blocks tool call | ⚠️ Advisory text only — no enforcement |
 | Mid-session context updates | ✅ Injected into next turn | ⚠️ Requires file reload (harness-dependent) |
 | Contract → skill injection | ✅ PostToolUse hook | ✅ Sidecar (`agentalloy watch start`) |
 | Semantic gate evaluation | ✅ Runs per-turn | ⚠️ Falls back to `UNKNOWN` without hook |
 
-**Tier 3 is a real reduction in capability.** Without a per-turn hook, system skills become suggestions rather than gates, and phase transitions require a manual command. If you need enforcement, use a Tier 1 harness. See [`docs/tier3-experience.md`](docs/tier3-experience.md) for sidecar setup details.
+**Tier 3 is a real reduction in capability.** Without a per-turn hook, system skills become suggestions rather than gates, and phase transitions are automatic when the sidecar watcher is running; otherwise manual via `agentalloy phase set <name>`. If you need enforcement, use a Tier 1 harness. See [`docs/tier3-experience.md`](docs/tier3-experience.md) for sidecar setup details.
 
 Examples of each tier today (lists evolve as harness vendors add or remove hook APIs — check `agentalloy wire --harness <name>` for current support):
 
@@ -319,7 +327,7 @@ The `agentalloy.install` module exposes a single CLI with subcommands. All write
 
 | Command | Description |
 |---|---|
-| `phase {get,set,clear}` | Read / write `.agentalloy/phase`. `set` advances or resets the SDD phase manually (Tier 3 fallback when no per-turn hook is available). |
+| `phase {get,set,clear}` | Read / write `.agentalloy/phase`. `set` is a manual override / Tier 3 fallback when the sidecar watcher is not running. |
 | `contract {write,validate,list}` | Create or validate task contracts under `.agentalloy/contracts/<phase>/`. |
 | `signal evaluate-phase` | Fire the pre-filter + gate evaluator; emits the next workflow skill's prose if a transition occurs. Wired by Tier 1 harnesses as a hook. |
 | `signal evaluate-system --tool <name>` | Find system skills whose `applies_when` matches a tool that's about to fire. |
@@ -331,8 +339,8 @@ The `agentalloy.install` module exposes a single CLI with subcommands. All write
 
 | Command | Description |
 |---|---|
-| `profile {list,active,create,use}` | Per-profile datastores (e.g., `work` vs `personal`). Auto-detected from cwd via git remote or path. |
-| `customize {list,edit,validate,update,diff,reset}` | Three-layer skill overrides (project → profile → shipped default). Edit a skill's prose, gates, or applicability for your project or profile without forking. |
+| `profile {list,active,create,use}` | Per-profile datastores and skill overrides (e.g., `work` vs `personal`). Auto-detected from cwd via git remote, path prefix, or explicit project marker. See docs/profiles-and-overrides.md. |
+| `customize {list,edit,validate,update,diff,reset}` | Three-layer skill overrides (project → profile → shipped default). Edit a skill's prose, gates, or applicability for your project or profile without forking. See docs/profiles-and-overrides.md § Three-layer overrides. |
 | `reset` | Wipe profile overrides and re-ingest shipped defaults. |
 
 **Tier 3 sidecar**
@@ -393,7 +401,7 @@ The runtime needs only an embedding service. The install agent picks one for you
 | `nvidia` | NVIDIA + CUDA | Ollama (CUDA) | 4 GB VRAM |
 | `radeon` | AMD Radeon dGPU/iGPU | LM Studio (Vulkan) | 4 GB VRAM |
 
-All presets use **`qwen3-embedding:0.6b`** at 1024 dimensions and bind `localhost:11436`. The on-disk index is portable across backends — switching is an env-var flip.
+All presets use **`qwen3-embedding:0.6b`** at 1024 dimensions. Default ports per runner: Ollama `localhost:11434`, LM Studio `localhost:1234`, llama-server `localhost:11434`. The on-disk index is portable across backends — switching is an env-var flip.
 
 ```bash
 # Ollama presets
@@ -504,22 +512,22 @@ Use it to inspect which skills got composed for a task, profile retrieval latenc
 
 ## Configuration
 
-Runtime environment variables (written automatically by `agentalloy write-env`):
+Runtime environment variables (written automatically by `agentalloy write-env` to `~/.config/agentalloy/.env`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11436` | Embedding endpoint |
+| `RUNTIME_EMBED_BASE_URL` | `http://localhost:11434` | Embedding endpoint (Ollama default; 1234 for LM Studio) |
 | `RUNTIME_EMBEDDING_MODEL` | `qwen3-embedding:0.6b` | Embedding model — used for both retrieval and semantic gate scoring |
-| `LADYBUG_DB_PATH` | `~/.local/share/agentalloy/corpus/ladybug` | LadybugDB directory |
-| `DUCKDB_PATH` | `~/.local/share/agentalloy/corpus/skills.duck` | DuckDB vector + telemetry store |
-| `PROFILE_ROOT` | `~/.agentalloy` | Profile root (per-profile datastores live here) |
+| `LADYBUG_DB_PATH` | `~/.local/share/agentalloy/corpus/ladybug` | Legacy LadybugDB (fallback if profile datastore doesn't exist) |
+| `DUCKDB_PATH` | `~/.local/share/agentalloy/corpus/skills.duck` | Legacy DuckDB (fallback; profiles use `profiles/<name>/skills.duck`) |
+| `PROFILE_ROOT` | `~/.local/share/agentalloy/profiles` | Profile root (per-profile datastores live here) |
 | `FORCED_PROFILE` | _(unset)_ | Override profile auto-detection (useful for tests) |
 | `DEDUP_HARD_THRESHOLD` | `0.92` | Dedup hard cosine threshold |
 | `DEDUP_SOFT_THRESHOLD` | `0.80` | Dedup soft cosine threshold |
 | `BOUNCE_BUDGET` | `3` | Compose retry budget |
 | `LOG_LEVEL` | `INFO` | Log verbosity |
 
-Copy [`.env.example`](.env.example) and adjust paths for your machine. The example file documents every variable inline.
+The `.env` file is user-scoped (written to `~/.config/agentalloy/.env`), not per-repo. Re-run `agentalloy setup` or `agentalloy write-env` to regenerate it with the current config.
 
 ---
 
