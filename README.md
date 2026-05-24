@@ -71,14 +71,14 @@ Install the CLI.
 
 Step 1. Choose the path that fits you:
 
-- A) **Production** — standalone install, no repo needed:
+A) **Production** — standalone install, no repo needed (most common):
 
 ```bash
 pipx install git+https://github.com/nrmeyers/agentalloy.git
 ```
-Or 
+...Or
 
-- B) **Local development** — editable install, reflects source changes instantly:
+B) **Local development / contribution to AgentAlloy codebase** — editable install, reflects source changes instantly:
 
 ```bash
 git clone https://github.com/nrmeyers/agentalloy.git && cd agentalloy
@@ -86,7 +86,7 @@ uv sync
 uv tool install --editable .
 ```
 
-Step 2. Then run the setup wizard and you're ready to use it:
+Step 2. Run the setup wizard and you're ready to use it:
 
 ```bash
 agentalloy setup                                # one-time interactive install wizard
