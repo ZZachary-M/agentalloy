@@ -881,7 +881,7 @@ def test_prompt_numbered_returns_default_on_non_tty(
 class TestPromptDeployment:
     """Test _prompt_deployment helper."""
 
-    def test_prompt_deployment_default_container(self, monkeypatch):
+    def test_prompt_deployment_default_container(self, monkeypatch: pytest.MonkeyPatch):
         """_prompt_deployment returns 'container' by default (index 2)."""
         import sys
 
@@ -891,14 +891,14 @@ class TestPromptDeployment:
         result = _prompt_deployment()
         assert result == "container"
 
-    def test_prompt_deployment_native_choice(self, monkeypatch):
+    def test_prompt_deployment_native_choice(self, monkeypatch: pytest.MonkeyPatch):
         """User can choose 'native' by entering '1'."""
         import sys
 
         from agentalloy.install.subcommands.simple_setup import _prompt_deployment  # type: ignore[attr-defined]
 
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _: "1")
+        monkeypatch.setattr("builtins.input", lambda _: "1")  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
         result = _prompt_deployment()
         assert result == "native"
 
@@ -945,7 +945,7 @@ class TestContainerFlow:
             patch.object(sys.stdin, "isatty", lambda: True),
             patch(
                 "builtins.input",
-                lambda _: "1",  # accept default compose file
+                lambda _: "1",  # accept default compose file  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
             ),
         ):
             mock_result = MagicMock()
@@ -1036,7 +1036,7 @@ class TestContainerFlow:
         st = state_mod.load_state()
         assert "compose.radeon.yaml" in st["compose_file"]
 
-    def test_compose_binary_missing_exits_1(self, tmp_state_dir: tuple[Path, Path], capsys):
+    def test_compose_binary_missing_exits_1(self, tmp_state_dir: tuple[Path, Path], capsys: pytest.CaptureFixture[str]):
         """No podman/docker detected, setup exits with code 1."""
         SetupConfig, run_setup = self._import_run_setup()
 

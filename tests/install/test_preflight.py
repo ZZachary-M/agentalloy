@@ -4,15 +4,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agentalloy.install.subcommands.preflight import (
-    _check_compose_binary,
-    _check_compose_file_present,
-    _check_image_build_deps,
-    _detect_compose_binary,
+    _check_compose_binary,  # pyright: ignore[reportPrivateUsage]
+    _check_compose_file_present,  # pyright: ignore[reportPrivateUsage]
+    _check_image_build_deps,  # pyright: ignore[reportPrivateUsage]
+    _detect_compose_binary,  # pyright: ignore[reportPrivateUsage]
     run_preflight,
 )
 
@@ -38,7 +39,7 @@ class TestDetectComposeBinary:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        def which_side_effect(cmd):
+        def which_side_effect(cmd: str) -> str | None:
             if cmd == "podman":
                 return None
             return "/usr/bin/docker"
@@ -61,7 +62,7 @@ class TestDetectComposeBinary:
     def test_podman_fails_docker_fallback(self):
         """Podman found but compose version fails, docker works."""
 
-        def run_side_effect(cmd, **kwargs):
+        def run_side_effect(cmd: Any, **kwargs: Any) -> Any:
             mock = MagicMock()
             # cmd is a list like ["/usr/bin/podman", "compose", "version"]
             cmd_str = " ".join(str(c) for c in cmd)
@@ -71,7 +72,7 @@ class TestDetectComposeBinary:
                 mock.returncode = 0
             return mock
 
-        def which_side_effect(cmd):
+        def which_side_effect(cmd: str) -> str | None:
             if cmd == "podman":
                 return "/usr/bin/podman"
             return "/usr/bin/docker"
@@ -110,7 +111,7 @@ class TestComposeBinaryCheck:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        def which_side_effect(cmd):
+        def which_side_effect(cmd: str) -> str | None:
             return None if cmd == "podman" else "/usr/bin/docker"
 
         with (
@@ -189,7 +190,7 @@ class TestContainerPhaseEnvelope:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        def which_side_effect(cmd):
+        def which_side_effect(cmd: str) -> str | None:
             return str(tmp_path / cmd) if cmd in ("podman",) else None
 
         with (

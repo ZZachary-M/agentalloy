@@ -12,6 +12,9 @@ import pytest
 
 from agentalloy.install import state as install_state
 
+# Local aliases for private helpers used across multiple tests
+_empty_state = install_state._empty_state  # pyright: ignore[reportPrivateUsage]
+
 
 class TestSchemaVersion:
     """Test CURRENT_SCHEMA_VERSION is 3."""
@@ -24,14 +27,14 @@ class TestFreshState:
     """Test _empty_state() returns schema v3 with container fields."""
 
     def test_fresh_state_has_container_fields(self):
-        st = install_state._empty_state()
+        st = _empty_state()
         assert st["schema_version"] == 3
         assert st["deployment"] is None
         assert st["compose_file"] is None
         assert st["compose_binary"] is None
 
     def test_fresh_state_has_legacy_fields(self):
-        st = install_state._empty_state()
+        st = _empty_state()
         assert "install_started_at" in st
         assert st["completed_steps"] == []
         assert st["harness_files_written"] == []
@@ -61,7 +64,7 @@ class TestV2ToV3Migration:
             agentalloy_dir = config_dir / "agentalloy"
             agentalloy_dir.mkdir(parents=True)
             state_file = agentalloy_dir / "install-state.json"
-            v2_state = {
+            v2_state: dict[str, Any] = {
                 "schema_version": 2,
                 "install_started_at": "2025-01-01T00:00:00",
                 "completed_steps": [],
@@ -169,7 +172,7 @@ class TestSaveAndLoadState:
             import importlib
 
             importlib.reload(install_state)
-            st = install_state._empty_state()
+            st = _empty_state()
             st["deployment"] = "container"
             st["compose_file"] = "/home/user/project/compose.yaml"
             st["compose_binary"] = "podman compose"
@@ -256,23 +259,23 @@ class TestPackSelectionHelpers:
     """Test pending pack selection helpers."""
 
     def test_get_pending_pack_selection_none(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         assert install_state.get_pending_pack_selection(data) is None
 
     def test_get_pending_pack_selection_list(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         install_state.set_pending_pack_selection(data, ["core", "framework"])
         result = install_state.get_pending_pack_selection(data)
         assert result == ["core", "framework"]
 
     def test_clear_pending_pack_selection(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         install_state.set_pending_pack_selection(data, ["core"])
         install_state.clear_pending_pack_selection(data)
         assert install_state.get_pending_pack_selection(data) is None
 
     def test_get_pending_pack_selection_filters_non_strings(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         data["pending_pack_selection"] = ["core", 123, None, "framework"]
         result = install_state.get_pending_pack_selection(data)
         assert result == ["core", "framework"]
@@ -282,13 +285,13 @@ class TestStepTracking:
     """Test record_step and is_step_completed."""
 
     def test_record_and_check_step(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         install_state.record_step(data, "wire-harness")
         assert install_state.is_step_completed(data, "wire-harness") is True
         assert install_state.is_step_completed(data, "pull-models") is False
 
     def test_get_step_output(self):
-        data = install_state._empty_state()
+        data = _empty_state()
         install_state.record_step(data, "pull-models", extra={"models": ["ollama:text-embedding"]})
         output = install_state.get_step_output(data, "pull-models")
         assert output is not None
