@@ -67,15 +67,18 @@ Things your agent gets composed-and-injected without you pasting them into the p
 
 ## Quickstart
 
-Install the CLI. Choose the path that fits you:
+Install the CLI. 
 
-**Production** — standalone install, no repo needed:
+Step 1. Choose the path that fits you:
+
+- A) **Production** — standalone install, no repo needed:
 
 ```bash
 pipx install git+https://github.com/nrmeyers/agentalloy.git
 ```
+Or 
 
-**Local development** — editable install, reflects source changes instantly:
+- B) **Local development** — editable install, reflects source changes instantly:
 
 ```bash
 git clone https://github.com/nrmeyers/agentalloy.git && cd agentalloy
@@ -83,7 +86,7 @@ uv sync
 uv tool install --editable .
 ```
 
-Then run the setup wizard and you're ready to use it:
+Step 2. Then run the setup wizard and you're ready to use it:
 
 ```bash
 agentalloy setup                                # one-time interactive install wizard
