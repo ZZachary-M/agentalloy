@@ -235,7 +235,7 @@ class TestPullModels:
         assert result["auto_pulled"][0]["model"] == "qwen3-embedding:0.6b"
 
     def test_idempotent_skip(self, repo_root: Path) -> None:
-        """Second run exits 4 (noop) when step already completed."""
+        """Second run returns cached result when step already completed."""
         models = _recommend_output()
 
         def always_true(m: str) -> bool:
@@ -243,9 +243,10 @@ class TestPullModels:
 
         with patch.dict(_PRESENCE_CHECKS, {"ollama": always_true}):
             pull_models(models, root=repo_root)
-        # Second call should raise SystemExit(4)
-        with pytest.raises(SystemExit, match="4"):
-            pull_models(models, root=repo_root)
+        # Second call should return cached result (no longer raises SystemExit)
+        cached = pull_models(models, root=repo_root)
+        assert cached is not None
+        assert "auto_pulled" in cached
 
     def test_records_state(self, repo_root: Path) -> None:
         models = _recommend_output()

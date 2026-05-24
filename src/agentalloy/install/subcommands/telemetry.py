@@ -11,8 +11,10 @@ DuckDB without touching ``fragment_embeddings`` (the corpus).
 from __future__ import annotations
 
 import argparse
-import json
 import sys
+from typing import Any
+
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 
@@ -24,6 +26,7 @@ def add_parser(
         "telemetry",
         help="Telemetry table management (clear, etc.).",
     )
+    add_json_flag(p)
     sub = p.add_subparsers(dest="telemetry_verb", metavar="verb")
     sub.required = True
 
@@ -79,16 +82,13 @@ def _run_clear(args: argparse.Namespace) -> int:
     finally:
         vs.close()
 
-    output = {
-        "schema_version": SCHEMA_VERSION,
-        "action": "cleared",
-        **result,
-    }
-    json.dump(output, sys.stdout, indent=2)
-    sys.stdout.write("\n")
-    print(
-        f"telemetry clear: deleted {result['traces_deleted']} trace(s) "
-        f"and {result['prompt_loads_deleted']} prompt-load record(s).",
-        file=sys.stderr,
-    )
+    write_result(result, args, human_fn=_render_clear)
     return 0
+
+
+def _render_clear(result: dict[str, Any]) -> None:
+    """Render telemetry clear result in human-readable format."""
+    print_rich("\n  [bold]Telemetry Clear[/bold]\n")
+    print_rich(f"  Traces deleted: {result['traces_deleted']}")
+    print_rich(f"  Prompt loads deleted: {result['prompt_loads_deleted']}")
+    print_rich()

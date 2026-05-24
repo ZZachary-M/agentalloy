@@ -11,28 +11,43 @@ Commands:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
+
+from agentalloy.install.output import add_json_flag, print_rich, write_result
+
+
+def _render_profile_list(profiles: list[dict[str, Any]]) -> None:
+    """Render profile list in human-readable format."""
+    print_rich("\n  [bold]Profiles[/bold]\n")
+    for p in profiles:
+        active = " *" if p["active_for_cwd"] else ""
+        print_rich(f"  {p['name']}{active}")
+        if p.get("match_remote"):
+            print_rich(f"    match_remote: {p['match_remote']}")
+        if p.get("match_path"):
+            print_rich(f"    match_path: {p['match_path']}")
+        print_rich(f"    has_overrides: {p['has_overrides']}")
+    print_rich()
 
 
 def _list(args: argparse.Namespace) -> int:
     from agentalloy.profiles import list_profiles
 
     profiles = list_profiles(cwd=Path.cwd())
-    if getattr(args, "human", False):
-        for p in profiles:
-            active = " *" if p["active_for_cwd"] else ""
-            print(f"  {p['name']}{active}")
-            if p["match_remote"]:
-                print(f"    match_remote: {p['match_remote']}")
-            if p["match_path"]:
-                print(f"    match_path: {p['match_path']}")
-            print(f"    has_overrides: {p['has_overrides']}")
-    else:
-        print(json.dumps(profiles, indent=2))
+    write_result(profiles, args, human_fn=lambda r: _render_profile_list(r))  # type: ignore[arg-type]
     return 0
+
+
+def _render_current(result: dict[str, Any]) -> None:
+    """Render current profile in human-readable format."""
+    print_rich("\n  [bold]Current Profile[/bold]\n")
+    print_rich(f"  Profile: [bold]{result['name']}[/bold]")
+    print_rich(f"  Datastore: {result['datastore_path']}")
+    print_rich(f"  Skills: {result['skills_dir']}")
+    print_rich(f"  Default: {result['is_default']}")
+    print_rich()
 
 
 def _current(args: argparse.Namespace) -> int:
@@ -45,12 +60,20 @@ def _current(args: argparse.Namespace) -> int:
         "skills_dir": str(profile.skills_dir),
         "is_default": profile.is_default,
     }
-    if getattr(args, "human", False):
-        print(f"  Profile:   {result['name']}")
-        print(f"  Datastore: {result['datastore_path']}")
-    else:
-        print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_current)
     return 0
+
+
+def _render_init(result: dict[str, Any]) -> None:
+    """Render profile init result in human-readable format."""
+    print_rich("\n  [bold]Profile Init[/bold]\n")
+    print_rich(f"  Profile: [bold]{result['name']}[/bold]")
+    print_rich(f"  Skills: {result['skills_dir']}")
+    if result.get("match_remote"):
+        print_rich(f"  Match remote: {result['match_remote']}")
+    if result.get("match_path"):
+        print_rich(f"  Match path: {result['match_path']}")
+    print_rich()
 
 
 def _init(args: argparse.Namespace) -> int:
@@ -84,11 +107,15 @@ def _init(args: argparse.Namespace) -> int:
         "match_remote": match_remote or [],
         "match_path": match_path or [],
     }
-    if getattr(args, "human", False):
-        print(f"  Created profile '{profile.name}' at {profile.skills_dir}")
-    else:
-        print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_init)
     return 0
+
+
+def _render_set_default(result: dict[str, Any]) -> None:
+    """Render set default profile result in human-readable format."""
+    print_rich("\n  [bold]Set Default Profile[/bold]\n")
+    print_rich(f"  Default: [bold]{result['default_profile']}[/bold]")
+    print_rich()
 
 
 def _set_default(args: argparse.Namespace) -> int:
@@ -101,11 +128,16 @@ def _set_default(args: argparse.Namespace) -> int:
         return 1
 
     result = {"default_profile": args.name}
-    if getattr(args, "human", False):
-        print(f"  Default profile set to '{args.name}'")
-    else:
-        print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_set_default)
     return 0
+
+
+def _render_delete(result: dict[str, Any]) -> None:
+    """Render profile delete result in human-readable format."""
+    print_rich("\n  [bold]Delete Profile[/bold]\n")
+    print_rich(f"  Profile: {result['deleted']}")
+    print_rich("  [green]Deleted[/green]")
+    print_rich()
 
 
 def _delete(args: argparse.Namespace) -> int:
@@ -127,10 +159,7 @@ def _delete(args: argparse.Namespace) -> int:
         return 1
 
     result = {"deleted": name}
-    if getattr(args, "human", False):
-        print(f"  Profile '{name}' deleted.")
-    else:
-        print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_delete)
     return 0
 
 
@@ -147,7 +176,7 @@ def add_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],  # pyright: ignore[reportPrivateUsage]
 ) -> None:
     p = subparsers.add_parser("profile", help="Manage agentalloy profiles.")
-    p.add_argument("--human", action="store_true", help="Human-readable output instead of JSON.")
+    add_json_flag(p)
     p.add_argument("--non-interactive", action="store_true", dest="non_interactive", default=False)
     sub = p.add_subparsers(dest="profile_cmd")
 

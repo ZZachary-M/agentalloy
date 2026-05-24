@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 STEP_NAME = "pull-models"
@@ -676,10 +677,16 @@ def pull_models(
     st = install_state.load_state(root)
     if install_state.is_step_completed(st, STEP_NAME):
         prev = install_state.get_step_output(st, STEP_NAME)
+        prev_data: dict[str, Any] = prev.get("output", {}) if prev else {}
         if not quiet:
-            json.dump(prev.get("output", {}) if prev else {}, sys.stdout, indent=2)
-            sys.stdout.write("\n")
-        raise SystemExit(4)
+            auto_pulled: list[dict[str, Any]] = prev_data.get("auto_pulled", [])
+            skipped: list[dict[str, Any]] = prev_data.get("skipped_already_present", [])
+            if auto_pulled and not skipped:
+                print(f"  Models already pulled: {len(auto_pulled)}", file=sys.stderr)
+            if skipped:
+                print(f"  Already present: {len(skipped)}", file=sys.stderr)
+        # Return cached result so main() can route through write_result
+        return prev_data
 
     # Extract the option to use: explicit runner override > default flag > first.
     options = models_json.get("options", [])
@@ -815,7 +822,41 @@ def add_parser(
             "the user's choice after recommend-models ran non-interactively."
         ),
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render pull models result in human-readable format."""
+    auto_pulled = result.get("auto_pulled", [])
+    manual_steps = result.get("manual_steps_required", [])
+    skipped = result.get("skipped_already_present", [])
+    errors = result.get("errors", [])
+
+    print_rich("\n  [bold]Pull Models[/bold]\n")
+
+    if auto_pulled:
+        print_rich("  [green]Pulled:[/green]")
+        for p in auto_pulled:
+            print_rich(f"    {p.get('runner', '?')}:{p.get('model', '?')}")
+
+    if skipped:
+        print_rich("  [dim]Already present:[/dim]")
+        for s in skipped:
+            print_rich(f"    {s.get('runner', '?')}:{s.get('model', '?')}")
+
+    if manual_steps:
+        print_rich("  [yellow]Manual steps required:[/yellow]")
+        for m in manual_steps:
+            print_rich(f"    {m.get('runner', '?')}:{m.get('model', '?')}")
+            print_rich(f"      {m.get('instruction', '')}")
+
+    if errors:
+        print_rich("  [red]Errors:[/red]")
+        for e in errors:
+            print_rich(f"    {e.get('runner', '?')}:{e.get('model', '?')} — {e.get('error', '')}")
+
+    print_rich()
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -832,9 +873,7 @@ def _run(args: argparse.Namespace) -> int:
         runner_override=getattr(args, "runner", None),
         quiet=getattr(args, "quiet", False),
     )
-    if not getattr(args, "quiet", False):
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_human)
 
     # Non-zero exit if there were pull errors
     if result.get("errors"):

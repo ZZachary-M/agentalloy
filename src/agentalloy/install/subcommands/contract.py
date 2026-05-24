@@ -9,11 +9,27 @@ Commands:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from agentalloy.install.output import add_json_flag, print_rich, write_result
+
+
+def _render_validate(result: dict[str, Any]) -> None:
+    """Render contract validation in human-readable format."""
+    print_rich("\n  [bold]Contract Validation[/bold]\n")
+    print_rich(f"  Path: {result['path']}")
+    print_rich(f"  Phase: {result['phase']}")
+    print_rich(f"  Slug: {result['task_slug']}")
+    if result["valid"]:
+        print_rich("  [green]Valid[/green]")
+    else:
+        print_rich(f"  [red]Issues: {len(result['issues'])}[/red]")
+        for issue in result["issues"]:
+            print_rich(f"  [red]x[/red] {issue}")
+    print_rich()
 
 
 def _validate(args: argparse.Namespace) -> int:
@@ -24,7 +40,8 @@ def _validate(args: argparse.Namespace) -> int:
     try:
         contract = parse_contract(path)
     except ContractMalformed as exc:
-        print(json.dumps({"valid": False, "error": str(exc), "issues": [str(exc)]}))
+        result = {"valid": False, "error": str(exc), "issues": [str(exc)]}
+        write_result(result, args, human_fn=_render_validate)
         return 1
 
     project_root = _repo_root()
@@ -38,8 +55,26 @@ def _validate(args: argparse.Namespace) -> int:
         "domain_tags": contract.domain_tags,
         "issues": issues,
     }
-    print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_validate)
     return 0 if not issues else 1
+
+
+def _render_show(result: dict[str, Any]) -> None:
+    """Render contract display in human-readable format."""
+    print_rich("\n  [bold]Contract[/bold]\n")
+    print_rich(f"  Phase: {result['phase']}")
+    print_rich(f"  Slug: {result['task_slug']}")
+    print_rich(f"  Tags: {', '.join(result['domain_tags'])}")
+    print_rich("\n  [bold]Scope[/bold]")
+    print_rich(f"  Touches: {', '.join(result['scope']['touches'])}")
+    print_rich(f"  Avoids: {', '.join(result['scope']['avoids'])}")
+    if result.get("success_criteria"):
+        print_rich("\n  [bold]Success Criteria[/bold]")
+        for criterion in result["success_criteria"]:
+            print_rich(f"  - {criterion}")
+    if result.get("body"):
+        print_rich(f"\n  [bold]Body[/bold]\n{result['body']}")
+    print_rich()
 
 
 def _show(args: argparse.Namespace) -> int:
@@ -67,14 +102,18 @@ def _show(args: argparse.Namespace) -> int:
         "body": contract.body,
     }
 
-    if getattr(args, "human", False):
-        print(f"  Phase:    {contract.phase}")
-        print(f"  Slug:     {contract.task_slug}")
-        print(f"  Tags:     {', '.join(contract.domain_tags)}")
-        print(f"\n  Body:\n{contract.body}")
-    else:
-        print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_show)
     return 0
+
+
+def _render_init(result: dict[str, Any]) -> None:
+    """Render contract init in human-readable format."""
+    print_rich("\n  [bold]Contract Init[/bold]\n")
+    print_rich(f"  Path: {result['path']}")
+    print_rich(f"  Phase: {result['phase']}")
+    print_rich(f"  Slug: {result['task_slug']}")
+    print_rich("  [green]Created[/green]")
+    print_rich()
 
 
 def _init(args: argparse.Namespace) -> int:
@@ -130,7 +169,7 @@ def _init(args: argparse.Namespace) -> int:
 
     target.write_text(content, encoding="utf-8")
     result = {"path": str(target), "phase": phase, "task_slug": slug}
-    print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_init)
     return 0
 
 
@@ -211,7 +250,7 @@ def add_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],  # pyright: ignore[reportPrivateUsage]
 ) -> None:
     p = subparsers.add_parser("contract", help="Manage task contracts.")
-    p.add_argument("--human", action="store_true", help="Human-readable output.")
+    add_json_flag(p)
     sub = p.add_subparsers(dest="contract_cmd")
 
     # validate

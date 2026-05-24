@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 import yaml as _yaml
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 STEP_NAME = "install-pack"
@@ -629,16 +630,32 @@ def add_parser(
             "Default: https://github.com/navistone/skill-pack-{name}/releases/latest/download/manifest.json"
         ),
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render install pack result in human-readable format."""
+    action = result.get("action", "unknown")
+    pack_name = result.get("pack", "unknown")
+    skills_ingested = result.get("skills_ingested", 0)
+    failures = result.get("ingest_failures", 0)
+
+    print_rich("\n  [bold]Install Pack[/bold]\n")
+    print_rich(f"  Pack: {pack_name}")
+    print_rich(f"  Status: {action}")
+    print_rich(f"  Skills ingested: {skills_ingested}")
+    if failures:
+        print_rich(f"  Failures: {failures}")
+
+    print_rich()
 
 
 def _run(args: argparse.Namespace) -> int:
     result = install_pack(args.pack, manifest_url=args.manifest_url)
-    print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_human)
     if result.get("ingest_failures", 0) > 0:
         return 2
-    # `ingested` (fresh skills loaded) and `already_installed` (every skill
-    # was already in the corpus — benign no-op) are both successes.
     if result.get("action") not in ("ingested", "already_installed"):
         return 1
     return 0

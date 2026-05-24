@@ -15,6 +15,8 @@ import signal
 import sys
 from pathlib import Path
 
+from agentalloy.install.output import print_rich
+
 
 def _watch_dir() -> Path:
     return Path.home() / ".agentalloy" / "watch"
@@ -147,7 +149,19 @@ def _status(args: argparse.Namespace) -> int:
         "pid": pid if running else None,
         "last_log": last_line,
     }
-    print(json.dumps(report, indent=2))
+
+    if getattr(args, "json", False):
+        print(json.dumps(report, indent=2))
+    else:
+        status_color = "green" if running else "red"
+        print_rich("\n  [bold]Watch Status[/bold]\n")
+        print_rich(f"  Profile: {profile}")
+        print_rich(f"  Running: [{status_color}]{running}[/{status_color}]")
+        if running and pid:
+            print_rich(f"  PID: {pid}")
+        if last_line:
+            print_rich(f"  Last log: {last_line}")
+        print_rich()
     return 0
 
 
@@ -169,6 +183,7 @@ def add_parser(
 
     status: argparse.ArgumentParser = sub.add_parser("status", help="Report watcher state")
     status.add_argument("--profile", default=None)
+    status.add_argument("--json", action="store_true", default=False, help="Output raw JSON")
 
     p.set_defaults(func=_dispatch)
 

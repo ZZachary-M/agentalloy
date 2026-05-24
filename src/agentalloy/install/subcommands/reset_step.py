@@ -7,11 +7,11 @@ run will re-execute it.  Also clears dependent steps.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 
@@ -119,10 +119,29 @@ def add_parser(
         choices=sorted(VALID_STEPS),
         help="The step to clear.",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render reset step result in human-readable format."""
+    step = result.get("step_cleared", "unknown")
+    dependents = result.get("dependent_steps_also_cleared", [])
+    keys = result.get("state_keys_cleared", [])
+
+    print_rich("\n  [bold]Reset Step[/bold]\n")
+    print_rich(f"  Cleared: [bold]{step}[/bold]")
+
+    if dependents:
+        print_rich(f"  Also cleared: {', '.join(dependents)}")
+
+    if keys:
+        print_rich(f"  State keys cleared: {', '.join(keys)}")
+
+    print_rich()
 
 
 def _run(args: argparse.Namespace) -> int:
     result = reset_step(args.step)
-    print(json.dumps(result, indent=2))
+    write_result(result, args, human_fn=_render_human)
     return 0

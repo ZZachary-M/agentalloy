@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import json
 import socket
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -26,6 +25,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, write_result
 from agentalloy.storage.vector_store import EMBEDDING_DIM
 
 SCHEMA_VERSION = 1
@@ -600,7 +600,15 @@ def add_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) 
         "verify",
         help="Install-time smoke test (embed → retrieve → 1024-dim, harness config, etc.).",
     )
+    add_json_flag(p)
     p.set_defaults(func=run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render verify check results in human-readable format."""
+    from agentalloy.install.output import render_checklist
+
+    render_checklist(result, title="Verification")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -626,19 +634,5 @@ def run(args: argparse.Namespace) -> int:
         st["last_verify_passed_at"] = datetime.now(UTC).isoformat()
         install_state.save_state(st)
 
-    if not getattr(args, "quiet", False):
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
-
-    if not result["all_checks_passed"]:
-        failed = [c for c in result["checks"] if not c["passed"]]
-        print(f"\n{len(failed)} check(s) failed:", file=sys.stderr)
-        for c in failed:
-            # ASCII marker — Windows legacy code pages reject ✗ and crash
-            # the failure-reporting path before the user sees the summary.
-            print(f"  FAIL {c['name']}: {c.get('error', 'unknown')}", file=sys.stderr)
-            if c.get("remediation"):
-                print(f"    FIX: {c['remediation']}", file=sys.stderr)
-        return 1
-
-    return 0
+    write_result(result, args, human_fn=_render_human)
+    return 0 if result["all_checks_passed"] else 1

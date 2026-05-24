@@ -153,6 +153,7 @@ def _build_namespace(cfg: SetupConfig, **overrides: Any) -> argparse.Namespace: 
         "scope": "user",  # wire_harness scope
         "mcp_fallback": False,  # wire_harness mcp_fallback
         "quiet": True,  # suppress JSON stdout when called from wizard
+        "json": False,  # human-readable output (not raw JSON)
     }
     attrs.update(overrides)  # type: ignore[arg-type]
     return argparse.Namespace(**attrs)

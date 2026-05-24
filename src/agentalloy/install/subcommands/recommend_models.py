@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 
@@ -347,6 +348,7 @@ def add_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "If omitted and stdin is a TTY, the user is prompted."
         ),
     )
+    add_json_flag(p)
     p.set_defaults(func=run)
 
 
@@ -360,20 +362,31 @@ def _load_hardware(path_str: str) -> dict[str, Any]:
     return json.loads(p.read_text())
 
 
-def run(args: argparse.Namespace) -> int:
-    """Execute the recommend-models subcommand.
+def _render_human(result: dict[str, Any]) -> None:
+    """Render model recommendations in human-readable format."""
+    preset = result.get("preset", "unknown")
+    options = result.get("options", [])
 
-    Always re-evaluates from the supplied --hardware and --host inputs. Caching
-    the previous result would silently mask either a corrected hardware file or
-    a different host-target choice.
-    """
+    print_rich("\n  [bold]Model Recommendations[/bold]\n")
+    print_rich(f"  Preset: [bold]{preset}[/bold]\n")
+
+    for opt in options:
+        default_marker = " [green](default)[/green]" if opt.get("default") else ""
+        runner = opt.get("embed_runner", "?")
+        model = opt.get("embed_model", "?")
+        print_rich(f"  {runner}: {model}{default_marker}")
+
+    print_rich()
+
+
+def run(args: argparse.Namespace) -> int:
+    """Execute the recommend-models subcommand."""
     st = install_state.load_state()
     hw = _load_hardware(args.hardware)
     result = recommend_models(hw, args.host, runner=getattr(args, "runner", None))
 
     fp, digest = install_state.save_output_file(result, "recommend-models.json")
 
-    # Find the default option to record the selection
     selected = {}
     for opt in result["options"]:
         if opt.get("default"):
@@ -395,6 +408,5 @@ def run(args: argparse.Namespace) -> int:
     )
     install_state.save_state(st)
 
-    json.dump(result, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_human)
     return 0

@@ -14,7 +14,6 @@ import argparse
 import json
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -22,6 +21,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, write_result
 from agentalloy.install.subcommands.preflight import run_preflight
 from agentalloy.install.subcommands.verify import run_checks as verify_checks
 
@@ -277,23 +277,19 @@ def add_parser(
         "doctor",
         help="Runtime health check across all components.",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render doctor check results in human-readable format."""
+    from agentalloy.install.output import render_checklist
+
+    render_checklist(result, title="Health Check")
 
 
 def _run(args: argparse.Namespace) -> int:
     result = run_doctor()
     install_state.save_output_file(result, "doctor.json")
-    json.dump(result, sys.stdout, indent=2)
-    sys.stdout.write("\n")
-
-    if not result["all_checks_passed"]:
-        failed = [c for c in result["checks"] if not c["passed"]]
-        print(f"\n{len(failed)} check(s) failed:", file=sys.stderr)
-        for c in failed:
-            # ASCII marker — Windows legacy code pages reject ✗ and crash
-            # the failure-reporting path before the user sees the summary.
-            print(f"  FAIL {c['name']}: {c.get('error', 'unknown')}", file=sys.stderr)
-            if c.get("remediation"):
-                print(f"    FIX: {c['remediation']}", file=sys.stderr)
-        return 1
-    return 0
+    write_result(result, args, human_fn=_render_human)
+    return 0 if result["all_checks_passed"] else 1

@@ -34,7 +34,7 @@ class TestStatus:
     ) -> None:
         from agentalloy.install.subcommands import status
 
-        args = argparse.Namespace()
+        args = argparse.Namespace(json=True)
         rc = status._run(args)
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
@@ -71,7 +71,7 @@ class TestStatus:
             },
         ]
         install_state.save_state(st, repo_root)
-        rc = status._run(argparse.Namespace())
+        rc = status._run(argparse.Namespace(json=True))
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
         repos = {r["repo_root"]: r["entries"] for r in out["wired_repos"]}
@@ -88,7 +88,7 @@ class TestStatus:
         st = install_state.load_state(repo_root)
         st["port"] = "1@evil.com:80"  # type: ignore[assignment]
         install_state.save_state(st, repo_root)
-        rc = status._run(argparse.Namespace())
+        rc = status._run(argparse.Namespace(json=True))
         assert rc == 0
         out = json.loads(capsys.readouterr().out)
         assert out["service"]["port"] is None

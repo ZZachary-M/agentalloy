@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 STEP_NAME = "start-embed-server"
@@ -61,6 +62,7 @@ def add_parser(
         default=float(LLAMA_START_TIMEOUT),
         help=f"Seconds to wait for llama-server /health (default: {LLAMA_START_TIMEOUT}).",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
 
 
@@ -107,20 +109,50 @@ def _run(args: argparse.Namespace) -> int:
             "port": embed_port,
         }
         _save(result)
-        if not getattr(args, "quiet", False):
-            json.dump(result, sys.stdout, indent=2)
-            sys.stdout.write("\n")
+        write_result(result, args, human_fn=_render_embed_server)
         return 0
 
     if runner == "llama-server":
-        return _start_llama_server(model, args.timeout, getattr(args, "quiet", False))
+        return _start_llama_server(model, args.timeout, args)
     if runner == "ollama":
-        return _start_ollama(model, getattr(args, "quiet", False))
+        return _start_ollama(model, args)
     # lm-studio and other GUI-based runners — can't automate
-    return _manual_instruction(runner, model, getattr(args, "quiet", False))
+    return _manual_instruction(runner, model, args)
 
 
-def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
+def _render_embed_server(result: dict[str, Any]) -> None:
+    """Render embed server result in human-readable format."""
+    action = result.get("action", "unknown")
+    runner = result.get("runner", "unknown")
+    port = result.get("port", 0)
+    model = result.get("model", "")
+
+    action_colors = {
+        "already_running": "green",
+        "started": "green",
+        "manual_required": "yellow",
+    }
+    color = action_colors.get(action, "dim")
+
+    print_rich("\n  [bold]Embed Server[/bold]\n")
+    print_rich(f"  Status: [{color}]{action}[/{color}]")
+    print_rich(f"  Runner: {runner}")
+    print_rich(f"  Port: {port}")
+    if model:
+        print_rich(f"  Model: {model}")
+
+    log_path = result.get("log_path")
+    if log_path:
+        print_rich(f"  Log: {log_path}")
+
+    instruction = result.get("instruction")
+    if instruction:
+        print_rich(f"  Instruction: {instruction}")
+
+    print_rich()
+
+
+def _start_llama_server(model: str, timeout: float, args: argparse.Namespace) -> int:
     model_path = install_state.user_data_dir() / "models" / model
     if not model_path.exists():
         print(
@@ -203,13 +235,11 @@ def _start_llama_server(model: str, timeout: float, quiet: bool = False) -> int:
         "log_path": str(log_path),
     }
     _save(result)
-    if not quiet:
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_embed_server)
     return 0
 
 
-def _start_ollama(model: str, quiet: bool = False) -> int:
+def _start_ollama(model: str, args: argparse.Namespace) -> int:
     """Ensure ollama serve is running. ollama is idempotent — safe to call twice."""
     import shutil
 
@@ -250,13 +280,11 @@ def _start_ollama(model: str, quiet: bool = False) -> int:
         "port": OLLAMA_EMBED_PORT,
     }
     _save(result)
-    if not quiet:
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_embed_server)
     return 0
 
 
-def _manual_instruction(runner: str, model: str, quiet: bool = False) -> int:
+def _manual_instruction(runner: str, model: str, args: argparse.Namespace) -> int:
     port = LM_STUDIO_EMBED_PORT if runner == "lm-studio" else LLAMA_EMBED_PORT
     instructions = {
         "lm-studio": (
@@ -276,9 +304,7 @@ def _manual_instruction(runner: str, model: str, quiet: bool = False) -> int:
         "instruction": msg,
     }
     _save(result)
-    if not quiet:
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_embed_server)
     # Exit 0 — setup can continue; if the server isn't up, install-packs will
     # fail with a clear connection-refused error.
     return 0

@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 
@@ -493,7 +494,26 @@ def add_parser(
         default=None,
         help="Service port override (default: read from user state, fallback 47950).",
     )
+    add_json_flag(p)
     p.set_defaults(func=run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render enable service result in human-readable format."""
+    mode = result.get("mode", "unknown")
+    runtime = result.get("runtime", "")
+    unit_path = result.get("unit_path", "")
+    action = result.get("action", "enabled")
+
+    print_rich("\n  [bold]Enable Service[/bold]\n")
+    print_rich(f"  Mode: [bold]{mode}[/bold]")
+    if runtime:
+        print_rich(f"  Runtime: {runtime}")
+    print_rich(f"  Status: {action}")
+    if unit_path:
+        print_rich(f"  Unit: {unit_path}")
+
+    print_rich()
 
 
 def run(args: argparse.Namespace) -> int:
@@ -536,9 +556,7 @@ def run(args: argparse.Namespace) -> int:
     st["service_unit_path"] = result["unit_path"]
     install_state.save_state(st)
 
-    if not getattr(args, "quiet", False):
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_human)
     return 0
 
 

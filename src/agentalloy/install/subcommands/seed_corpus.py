@@ -9,13 +9,13 @@ and the skill count meets the minimum threshold. No network calls.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 
 SCHEMA_VERSION = 1
 
@@ -258,7 +258,39 @@ def add_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) 
         "seed-corpus",
         help="Verify the in-repo seed corpus is present and valid.",
     )
+    add_json_flag(p)
     p.set_defaults(func=run)
+
+
+def _render_seed_corpus(result: dict[str, Any]) -> None:
+    """Render seed corpus result in human-readable format."""
+    action = result.get("action", "unknown")
+    skill_count = result.get("skill_count", 0)
+    fragment_count = result.get("fragment_count", 0)
+
+    action_colors = {
+        "verified_present": "green",
+        "seeded": "green",
+        "initialized_empty": "yellow",
+        "missing_files": "red",
+        "schema_mismatch": "red",
+    }
+    color = action_colors.get(action, "dim")
+
+    print_rich("\n  [bold]Seed Corpus[/bold]\n")
+    print_rich(f"  Status: [{color}]{action}[/{color}]")
+    print_rich(f"  Skills: {skill_count}")
+    print_rich(f"  Fragments: {fragment_count}")
+
+    error = result.get("error")
+    if error:
+        print_rich(f"  Error: {error}")
+
+    remediation = result.get("remediation")
+    if remediation:
+        print_rich(f"  Remediation: {remediation}")
+
+    print_rich()
 
 
 def run(args: argparse.Namespace) -> int:
@@ -266,19 +298,17 @@ def run(args: argparse.Namespace) -> int:
     st = install_state.load_state()
     if install_state.is_step_completed(st, "seed-corpus"):
         prev = install_state.get_step_output(st, "seed-corpus")
-        # Idempotency cache hit must still verify the user-scoped corpus
-        # files are actually on disk — otherwise a user who deleted them
-        # between runs gets a stale success JSON instead of an actionable
-        # error.
         user_corpus = install_state.corpus_dir()
         duck_present = (user_corpus / "skills.duck").exists()
         ladybug_present = (user_corpus / "ladybug").exists()
         if prev and prev.get("output_path") and duck_present and ladybug_present:
             p = Path(prev["output_path"])
             if p.exists():
-                sys.stdout.write(p.read_text())
+                import json as _json
+
+                cached: dict[str, Any] = _json.loads(p.read_text())
+                write_result(cached, args, human_fn=_render_seed_corpus)
                 return 4  # EXIT_NOOP
-        # Cache hit but corpus files missing — fall through and re-check.
 
     result = check_corpus()
     action = result["action"]
@@ -297,15 +327,10 @@ def run(args: argparse.Namespace) -> int:
             },
         )
         install_state.save_state(st)
-        if not getattr(args, "quiet", False):
-            json.dump(result, sys.stdout, indent=2)
-            sys.stdout.write("\n")
+        write_result(result, args, human_fn=_render_seed_corpus)
         return 0
 
-    # Failure cases — emit but don't record as completed
-    if not getattr(args, "quiet", False):
-        json.dump(result, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_seed_corpus)
 
     remediation = result.get("remediation", "")
     error = result.get("error", "")

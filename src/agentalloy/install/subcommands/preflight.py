@@ -33,6 +33,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, write_result
 
 SCHEMA_VERSION = 1
 
@@ -517,39 +518,33 @@ def add_parser(
         default=_DEFAULT_PORT,
         help=f"Port to test for availability (default: {_DEFAULT_PORT}).",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render preflight check results in human-readable format."""
+    from agentalloy.install.output import render_checklist
+
+    phase = result.get("phase", "early")
+    render_checklist(result, title=f"Preflight ({phase})")
+
+    # Print a warning if there were non-fatal issues
+    warns = [c for c in result["checks"] if not c["passed"] and c.get("severity") == "warn"]
+    if warns:
+        from agentalloy.install.output import print_rich
+
+        print_rich()
+        print_rich(f"  [yellow]{len(warns)} warning(s) — non-fatal, install can proceed.[/yellow]")
 
 
 def _run(args: argparse.Namespace) -> int:
     result = run_preflight(phase=args.phase, runner=args.runner, port=args.port)
     install_state.save_output_file(result, f"preflight-{args.phase}.json")
-    json.dump(result, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_human)
 
-    fatal = [c for c in result["checks"] if not c["passed"] and c.get("severity") == "fatal"]
-    warns = [c for c in result["checks"] if not c["passed"] and c.get("severity") == "warn"]
-
-    if fatal:
-        print(f"\npreflight ({args.phase}): {len(fatal)} fatal check(s) failed:", file=sys.stderr)
-        for c in fatal:
-            print(f"  FAIL {c['name']}: {c.get('error', 'unknown')}", file=sys.stderr)
-            if c.get("remediation"):
-                for line in c["remediation"].splitlines():
-                    print(f"    FIX: {line}" if line.strip() else "", file=sys.stderr)
-        print(
-            "\nDO NOT continue with `agentalloy setup` or any install step "
-            "until every fatal check above is resolved.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if warns:
-        print(
-            f"\npreflight ({args.phase}): {len(warns)} warning(s) — "
-            "non-fatal, install can proceed:",
-            file=sys.stderr,
-        )
-        for c in warns:
-            print(f"  WARN {c['name']}: {c.get('error', '')}", file=sys.stderr)
-
-    return 0
+    # Return non-zero if any fatal checks failed
+    fatal = [
+        c for c in result["checks"] if not c["passed"] and c.get("severity", "fatal") == "fatal"
+    ]
+    return 1 if fatal else 0

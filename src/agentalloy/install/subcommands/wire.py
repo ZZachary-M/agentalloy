@@ -9,11 +9,12 @@ from user-scope state.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from agentalloy.install import state as install_state
+from agentalloy.install.output import add_json_flag, print_rich, write_result
 from agentalloy.install.subcommands.wire_harness import VALID_HARNESSES, wire_harness
 
 
@@ -41,7 +42,30 @@ def add_parser(
         action="store_true",
         help="Overwrite an edited sentinel block (otherwise refuses).",
     )
+    add_json_flag(p)
     p.set_defaults(func=_run)
+
+
+def _render_human(result: dict[str, Any]) -> None:
+    """Render wire harness result in human-readable format."""
+    harness = result.get("harness", "unknown")
+    files_written = result.get("files_written", [])
+    files_modified = result.get("files_modified", [])
+    total = len(files_written) + len(files_modified)
+
+    print_rich("\n  [bold]Wire Harness[/bold]\n")
+    print_rich(f"  Harness: [bold]{harness}[/bold]")
+    print_rich(f"  Files: {total}")
+
+    for f in files_written:
+        print_rich(f"    [green]+[/green] {f}")
+    for f in files_modified:
+        print_rich(f"    [yellow]~[/yellow] {f}")
+
+    if not files_written and not files_modified:
+        print_rich("  [dim]No files to wire.[/dim]")
+
+    print_rich()
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -65,8 +89,7 @@ def _run(args: argparse.Namespace) -> int:
         port = install_state.validate_port(st.get("port", 47950))
 
     result = wire_harness(harness, port=port, root=cwd, force=args.force)
-    json.dump(result, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    write_result(result, args, human_fn=_render_human)
     return 0
 
 
