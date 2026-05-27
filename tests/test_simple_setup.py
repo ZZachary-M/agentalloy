@@ -31,10 +31,6 @@ from agentalloy.install.subcommands.simple_setup import (
 )
 # ruff: noqa: I001
 
-# This module is slow (several minutes). Excluded from the fast PR job;
-# run via the dedicated slow-tests CI job on merges to main / on demand.
-pytestmark = pytest.mark.slow
-
 
 # Helper to avoid pyright lambda param type issues (ruff reformatting moves ignore comments)
 def _mock_input_accept(prompt: str) -> str:
@@ -995,6 +991,18 @@ class TestContainerFlow:
         self.mock.patchers.append(outputs_patch)
         self.mock.mocks["_outputs_dir"] = outputs_patch.start()
         (self.tmp_data / "outputs").mkdir(parents=True, exist_ok=True)
+
+        # The container flow polls http://localhost:{port}/health for up to
+        # 120s with 5s backoff. Without a real service listening on that port
+        # this burns 120s per test on CI, so short-circuit it with a 200.
+        health_resp = MagicMock()
+        health_resp.__enter__ = lambda s: s
+        health_resp.__exit__ = MagicMock(return_value=False)
+        health_resp.status = 200
+        urlopen_patch = patch("urllib.request.urlopen", return_value=health_resp)
+        self.mock.patchers.append(urlopen_patch)
+        self.mock.mocks["_urlopen"] = urlopen_patch.start()
+
         yield
         self.mock.teardown()
 
