@@ -28,8 +28,11 @@ Total install time: usually 3–5 minutes on a warm machine.
 Most users want exactly this:
 
 ```bash
-# One-time: install the CLI into PATH so it works from any directory.
-uv tool install --editable .
+# One-time: install uv if needed (Linux / macOS)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install the CLI into PATH so it works from any directory.
+uv tool install git+https://github.com/nrmeyers/agentalloy.git
 
 # Once per machine — installs everything user-scoped.
 # Will prompt: "Do you want agentalloy to run persistently as a background service?"
@@ -102,10 +105,19 @@ If `uv sync` fails:
 
 > RUN
 > ```bash
-> uv tool install --editable .
+> uv tool install git+https://github.com/nrmeyers/agentalloy.git
 > ```
 
 This installs the `agentalloy` command into the user's PATH (at `~/.local/bin/agentalloy` or equivalent) so it works from any directory — not just from inside this repo. Required so `agentalloy wire`, `agentalloy serve`, and `agentalloy status` work after you `cd` into a project repo.
+
+**Contributor note:** If you're developing agentalloy itself, install editable instead:
+
+```bash
+git clone https://github.com/nrmeyers/agentalloy.git
+cd agentalloy
+uv sync
+uv tool install --editable .
+```
 
 Verify it landed by re-running preflight (which is the authoritative PATH check):
 
@@ -458,7 +470,7 @@ Operator commands the user can run later (these are NOT part of this runbook —
 
 ### Uninstall — what it removes
 
-`agentalloy uninstall` is the one-shot teardown. By default:
+`agentalloy uninstall` is the one-shot teardown. The default preset is **full uninstall** — it removes everything:
 
 - **Sentinel-bounded harness blocks** in *every* repo recorded in install-state.json (CLAUDE.md, GEMINI.md, .clinerules, .cursorrules, .cursor/rules/agentalloy.mdc, .opencode/system-prompt.md, .aider.conf.yml, etc.). The cross-repo walk happens before the CLI is removed; pass `--no-all-repos` to limit to cwd. Tampered blocks (sha256 mismatch — the user edited inside the sentinels) are skipped without `--force`.
 - **MCP entries** for `agentalloy` from `~/.claude/mcp_servers.json`, the cwd repo's `.cursor/mcp.json`, and `.continuerc.json`. The files are deleted if `agentalloy` was their only entry.
@@ -466,7 +478,7 @@ Operator commands the user can run later (these are NOT part of this runbook —
 - **Manual-mode agentalloy server** if it's still listening on the configured port (SIGTERM, escalating to SIGKILL after 10s).
 - **User-scope state**: `${XDG_CONFIG_HOME}/agentalloy/.env`, `install-state.json`, the entire state directory.
 - **Derivable artifacts**: `${XDG_DATA_HOME}/agentalloy/outputs/` (per-step JSON dumps including preflight) and `server.log`.
-- **`uv tool uninstall agentalloy`** — removes the `agentalloy` CLI from `~/.local/bin`.
+- **CLI uninstall**: removes the `agentalloy` CLI from `~/.local/bin` (via `uv tool uninstall` or `pipx uninstall` depending on how it was installed).
 
 **Preserved by default**: the corpus DB at `${XDG_DATA_HOME}/agentalloy/corpus/`, pulled Ollama / FastFlowLM models (shared with other projects), the user's own non-agentalloy config.
 
@@ -474,6 +486,7 @@ Operator commands the user can run later (these are NOT part of this runbook —
 - `--remove-data` — also wipes the entire `${XDG_DATA_HOME}/agentalloy/` (corpus included). The post-test "get rid of everything" command.
 - `--force` — remove sentinel blocks even when the inner content has been edited.
 - `--no-all-repos` — only clean sentinels in cwd (legacy behavior; useful for partial cleanup).
+- `--preset keep-data` — keep corpus, models, and services; only remove wiring and `.env`.
 
 **Full wipe one-liner** (for testers ready to reinstall from scratch):
 ```bash

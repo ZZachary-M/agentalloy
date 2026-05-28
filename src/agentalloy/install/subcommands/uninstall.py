@@ -68,31 +68,31 @@ def _prompt_yes_no(question: str, default: bool = False) -> bool:
 def _prompt_uninstall_preset() -> str:
     """Show the top-level uninstall menu. Returns 'keep-data', 'full', or 'custom'.
 
-    Falls back to ``keep-data`` on any input error so unattended sessions
-    don't silently wipe data.
+    Falls back to ``full`` on any input error — the user said "uninstall",
+    so the default should actually uninstall everything.
     """
     print("", file=sys.stderr)
     print("  What kind of uninstall?", file=sys.stderr)
     print(
-        "    1) Keep data, just unwire   "
-        "— remove harness wiring + .env; keep models, datastore, services",
+        "    1) Full uninstall            "
+        "— remove everything (default)",
         file=sys.stderr,
     )
     print(
-        "    2) Full uninstall            "
-        "— remove everything: services, models, datastore, wiring, state",
+        "    2) Keep data, just unwire    "
+        "— remove harness wiring + .env; keep models, datastore, services",
         file=sys.stderr,
     )
     print("    3) Custom                    — ask per-item", file=sys.stderr)
     try:
         raw = input("  Choice [1-3] (default 1): ").strip()
     except (EOFError, KeyboardInterrupt):
-        return "keep-data"
-    if raw == "2":
         return "full"
+    if raw == "2":
+        return "keep-data"
     if raw == "3":
         return "custom"
-    return "keep-data"
+    return "full"
 
 
 def _prompt_uninstall_custom() -> dict[str, bool]:
@@ -488,11 +488,130 @@ def _stop_native_service(st: dict[str, Any]) -> list[dict[str, Any]]:
     return actions
 
 
-def _remove_uv_tool() -> dict[str, Any]:
-    """Remove the uv tool installation. Returns an action dict."""
+def _detect_install_mode() -> dict[str, Any]:
+    """Detect how the agentalloy CLI was installed.
+
+    Returns a dict with keys:
+        mode: "uv_tool" | "pipx" | "editable" | "unknown"
+        binary_path: absolute path to the agentalloy shim, or None
+        venv_path: absolute path to the owning venv, or None
+        details: human-readable description
+
+    Detection order (first match wins):
+        1. uv tool list — if agentalloy appears, mode is "uv_tool"
+        2. pipx list — if agentalloy appears, mode is "pipx"
+        3. which agentalloy resolves under a .venv + pyproject.toml present
+           → mode is "editable"
+        4. otherwise "unknown"
+    """
+    binary_path = shutil.which("agentalloy")
+
+    # 1. Check uv tool list
+    uv = shutil.which("uv")
+    if uv:
+        try:
+            result = subprocess.run(
+                [uv, "tool", "list"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    # uv tool list outputs lines like "agentalloy <version> <path>"
+                    if line.strip().startswith("agentalloy"):
+                        return {
+                            "mode": "uv_tool",
+                            "binary_path": binary_path,
+                            "venv_path": None,
+                            "details": "Installed via uv tool install",
+                        }
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # fall through to next check
+
+    # 2. Check pipx list
+    pipx = shutil.which("pipx")
+    if pipx:
+        try:
+            result = subprocess.run(
+                [pipx, "list", "--short"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    # pipx list --short outputs "agentalloy <version>"
+                    if line.strip().startswith("agentalloy"):
+                        return {
+                            "mode": "pipx",
+                            "binary_path": binary_path,
+                            "venv_path": None,
+                            "details": "Installed via pipx (legacy)",
+                        }
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # fall through to next check
+
+    # 3. Check editable: binary under .venv + pyproject.toml with name=agentalloy
+    if binary_path:
+        binary_parent = Path(binary_path).resolve()
+        # Walk up looking for a .venv directory
+        for ancestor in binary_parent.parents:
+            if ancestor.name == ".venv":
+                # Walk up from .venv to find the repo root
+                repo_root = ancestor.parent
+                pyproject = repo_root / "pyproject.toml"
+                if pyproject.exists():
+                    try:
+                        content = pyproject.read_text()
+                        if 'name = "agentalloy"' in content or "name = 'agentalloy'" in content:
+                            return {
+                                "mode": "editable",
+                                "binary_path": binary_path,
+                                "venv_path": str(ancestor),
+                                "details": f"Editable install at {ancestor}",
+                            }
+                    except OSError:
+                        pass
+                break
+
+    # 4. Unknown
+    return {
+        "mode": "unknown",
+        "binary_path": binary_path,
+        "venv_path": None,
+        "details": "Install mode could not be determined",
+    }
+
+
+def _remove_cli_install(mode_info: dict[str, Any]) -> dict[str, Any]:
+    """Remove the CLI installation based on detected mode.
+
+    Dispatches on mode_info["mode"]:
+        - "uv_tool": runs uv tool uninstall agentalloy
+        - "pipx": runs pipx uninstall agentalloy
+        - "editable": prints manual instructions, does NOT delete the venv
+        - "unknown": returns skipped
+
+    Returns an action dict with a "mode" field and the action taken.
+    """
+    mode = mode_info.get("mode", "unknown")
+
+    if mode == "uv_tool":
+        return _remove_uv_tool_internal()
+    elif mode == "pipx":
+        return _remove_pipx_install()
+    elif mode == "editable":
+        return _handle_editable_install(mode_info)
+    else:
+        return _handle_unknown_install(mode_info)
+
+
+def _remove_uv_tool_internal() -> dict[str, Any]:
+    """Internal: remove the uv tool installation. Returns an action dict."""
     uv = shutil.which("uv")
     if not uv:
-        return {"action": "uv_tool_skipped", "reason": "uv not found in PATH"}
+        return {"action": "uv_tool_skipped", "mode": "uv_tool", "reason": "uv not found in PATH"}
     try:
         result = subprocess.run(
             [uv, "tool", "uninstall", "agentalloy"],
@@ -501,11 +620,75 @@ def _remove_uv_tool() -> dict[str, Any]:
             timeout=30,
         )
         if result.returncode == 0:
-            return {"action": "uv_tool_uninstalled"}
-        # uv exits non-zero if the tool wasn't installed — treat as already gone
-        return {"action": "uv_tool_skipped", "reason": result.stderr.strip() or "not installed"}
+            return {"action": "uv_tool_uninstalled", "mode": "uv_tool"}
+        return {
+            "action": "uv_tool_skipped",
+            "mode": "uv_tool",
+            "reason": result.stderr.strip() or "not installed",
+        }
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return {"action": "uv_tool_skipped", "reason": str(exc)}
+        return {"action": "uv_tool_skipped", "mode": "uv_tool", "reason": str(exc)}
+
+
+def _remove_pipx_install() -> dict[str, Any]:
+    """Remove pipx installation. Returns an action dict."""
+    pipx = shutil.which("pipx")
+    if not pipx:
+        return {
+            "action": "pipx_skipped",
+            "mode": "pipx",
+            "reason": "pipx not found in PATH",
+        }
+    try:
+        result = subprocess.run(
+            [pipx, "uninstall", "agentalloy"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return {"action": "pipx_uninstalled", "mode": "pipx"}
+        return {
+            "action": "pipx_skipped",
+            "mode": "pipx",
+            "reason": result.stderr.strip() or "not installed",
+        }
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"action": "pipx_skipped", "mode": "pipx", "reason": str(exc)}
+
+
+def _handle_editable_install(mode_info: dict[str, Any]) -> dict[str, Any]:
+    """Editable install: cannot auto-remove; print instructions instead."""
+    venv_path = mode_info.get("venv_path")
+    return {
+        "action": "editable_install_left_in_place",
+        "mode": "editable",
+        "venv_path": venv_path,
+        "details": (
+            f"Editable install at {venv_path}. "
+            "The agentalloy command will remain available until you remove "
+            "the venv manually (rm -rf <venv>) or run 'uv tool uninstall "
+            "agentalloy' if you also have a tool install."
+        ),
+    }
+
+
+def _handle_unknown_install(mode_info: dict[str, Any]) -> dict[str, Any]:
+    """Unknown install: return skipped with helpful message."""
+    binary_path = mode_info.get("binary_path")
+    reason = f"agentalloy binary found at {binary_path} but install mode unknown"
+    if not binary_path:
+        reason = "agentalloy binary not found in PATH"
+    return {
+        "action": "cli_install_skipped",
+        "mode": "unknown",
+        "reason": reason,
+    }
+
+
+def _remove_uv_tool() -> dict[str, Any]:
+    """Legacy wrapper around _remove_uv_tool_internal for backward compatibility."""
+    return _remove_uv_tool_internal()
 
 
 def uninstall(
@@ -941,16 +1124,52 @@ def uninstall(
             warnings.append(f"Could not check port {port}: {exc}")
             pid = None
         if pid:
+            # Check if the process holding the port is actually agentalloy.
+            # If not, warn the user instead of trying to kill it.
+            is_agentalloy = False
+            cmdline_str = ""
             try:
-                signal_used = server_proc.stop(pid)
-                files_removed.append(
-                    {
-                        "path": f"pid://{pid}",
-                        "action": f"stopped_manual_server ({signal_used})",
-                    }
+                cmdline_path = Path(f"/proc/{pid}/cmdline")
+                if cmdline_path.exists():
+                    cmdline = cmdline_path.read_bytes()
+                    # Replace null bytes with spaces for readability
+                    cmdline_str = cmdline.decode("utf-8", errors="replace").replace("\x00", " ")
+                    is_agentalloy = "agentalloy.app:app" in cmdline_str
+                else:
+                    # macOS fallback: use ps
+                    ps_result = subprocess.run(
+                        ["ps", "-o", "command=", "-p", str(pid)],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    if ps_result.returncode == 0:
+                        cmdline_str = ps_result.stdout.strip()
+                        is_agentalloy = "agentalloy.app:app" in cmdline_str
+            except (OSError, subprocess.TimeoutExpired):
+                # Can't determine; assume it might be agentalloy
+                is_agentalloy = True
+
+            if not is_agentalloy:
+                # Port is held by a foreign process — warn, don't kill
+                short_cmd_parts = cmdline_str.split()[:3] if cmdline_str else ["<unknown>"]
+                cmd_display = " ".join(short_cmd_parts)
+                warnings.append(
+                    f"Port {port} is held by pid {pid} running '{cmd_display}' — "
+                    f"this is not an agentalloy server. Stop it manually "
+                    f"(e.g. 'pipx uninstall <other-pkg>' or 'kill {pid}')."
                 )
-            except Exception as exc:  # noqa: BLE001
-                warnings.append(f"Could not stop server pid {pid} on port {port}: {exc}")
+            else:
+                try:
+                    signal_used = server_proc.stop(pid)
+                    files_removed.append(
+                        {
+                            "path": f"pid://{pid}",
+                            "action": f"stopped_manual_server ({signal_used})",
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"Could not stop server pid {pid} on port {port}: {exc}")
 
     # 6. Stop and remove native service unit / plist (skipped by `unwire`)
     service_actions: list[dict[str, Any]] = []
@@ -977,22 +1196,36 @@ def uninstall(
             shutil.rmtree(state_d)
             files_removed.append({"path": str(state_d), "action": "deleted_state_directory"})
 
-    # 8. Remove uv tool installation (skipped by `unwire`)
-    uv_tool_result: dict[str, Any] = {}
+    # 8. Remove CLI installation (skipped by `unwire`). Detect install mode
+    # and dispatch to the appropriate removal strategy.
+    cli_install_result: dict[str, Any] = {}
+    mode_info: dict[str, Any] | None = None
     if remove_user_state:
-        uv_tool_result = _remove_uv_tool()
+        mode_info = _detect_install_mode()
+        cli_install_result = _remove_cli_install(mode_info)
+        # If editable mode, surface the manual-step message as a warning
+        if cli_install_result.get("action") == "editable_install_left_in_place":
+            details = cli_install_result.get("details", "")
+            if details:
+                warnings.append(details)
 
-    return {
+    # Build result: use new key name, keep deprecated alias for one release.
+    # 9. Return result dict
+    result: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "files_modified": files_modified,
         "files_removed": files_removed,
         "data_kept": data_kept,
         "warnings": warnings,
-        "uv_tool": uv_tool_result,
+        "cli_install": cli_install_result,
         "models_removed": model_actions,
         "daemons_stopped": daemon_actions,
         "container_actions": container_actions,
+        "install_mode": mode_info,
     }
+    # Deprecated alias — remove one release later.
+    result["uv_tool"] = cli_install_result
+    return result
 
 
 def _print_uninstall_summary(result: dict[str, Any]) -> None:
@@ -1067,14 +1300,21 @@ def _print_uninstall_summary(result: dict[str, Any]) -> None:
             print(f"    - {path}", file=sys.stderr)
         print("", file=sys.stderr)
 
-    # uv tool
-    uv = result.get("uv_tool", {})
-    if uv.get("action") == "uv_tool_uninstalled":
-        print("  uv tool: uninstalled", file=sys.stderr)
+    # CLI install
+    cli = result.get("cli_install", {}) or result.get("uv_tool", {})
+    action = cli.get("action", "")
+    if action == "uv_tool_uninstalled":
+        print("  CLI install: uninstalled (uv tool)", file=sys.stderr)
         print("", file=sys.stderr)
-    elif uv.get("action") == "uv_tool_skipped":
-        reason = uv.get("reason", "")
-        print(f"  uv tool: skipped ({reason})", file=sys.stderr)
+    elif action == "pipx_uninstalled":
+        print("  CLI install: uninstalled (pipx)", file=sys.stderr)
+        print("", file=sys.stderr)
+    elif action == "editable_install_left_in_place":
+        print("  CLI install: editable install left in place (see warnings)", file=sys.stderr)
+        print("", file=sys.stderr)
+    elif action in ("uv_tool_skipped", "pipx_skipped", "cli_install_skipped"):
+        reason = cli.get("reason", cli.get("details", ""))
+        print(f"  CLI install: skipped ({reason})", file=sys.stderr)
         print("", file=sys.stderr)
 
     # Container actions

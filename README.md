@@ -61,6 +61,7 @@ Things your agent gets composed-and-injected without you pasting them into the p
 - [Telemetry](#telemetry)
 - [Configuration](#configuration)
 - [Development](#development)
+- [Contributing](#contributing)
 - [Benchmarks](#benchmarks)
 - [License](#license)
 
@@ -68,30 +69,17 @@ Things your agent gets composed-and-injected without you pasting them into the p
 
 ## Quickstart
 
-Install the CLI. 
-
-Step 1. Choose the path that fits you:
-
-A) **Production** — standalone install, no repo needed (most common):
+**Note:** Windows is not currently supported.
 
 ```bash
-pipx install git+https://github.com/nrmeyers/agentalloy.git
-```
-...Or
+# Step 1: install uv (Linux / macOS)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-B) **Local development / contribution to AgentAlloy codebase** — editable install, reflects source changes instantly:
+# Step 2: install agentalloy
+uv tool install git+https://github.com/nrmeyers/agentalloy.git
 
-```bash
-git clone https://github.com/nrmeyers/agentalloy.git && cd agentalloy
-uv sync
-uv tool install --editable .
-```
-
-Step 2. Run the setup wizard and you're ready to use it:
-
-```bash
-agentalloy setup                                # one-time interactive install wizard
-cd ~/your-project && agentalloy wire            # wire harness in this repo
+# Step 3: configure and wire
+agentalloy setup
 ```
 
 The setup wizard walks you through everything: hardware detection, runner selection (`ollama`, `lm-studio`, or `llama-server`), model and port, service mode, **skill pack selection** (with tier-grouped listing), IDE harness wiring, and hardware target. It then executes all install steps and validates the result. **3–5 minutes** on a warm machine.
@@ -419,6 +407,30 @@ uv run pytest -m integration     # integration — requires Ollama with qwen3-em
 ```
 
 Tests live under `tests/` and cover the install pipeline (`tests/install/`), retrieval, composition, applicability filtering, telemetry, and the harness-wiring catalog.
+
+---
+
+## Contributing
+
+To contribute to the AgentAlloy codebase, use an editable install so your changes are reflected immediately:
+
+```bash
+git clone https://github.com/nrmeyers/agentalloy.git
+cd agentalloy
+uv sync
+uv tool install --editable .
+```
+
+### Migrating from pipx
+
+If you previously installed AgentAlloy via `pipx`, migrate to `uv`:
+
+```bash
+pipx uninstall agentalloy        # remove the legacy install
+uv tool install git+https://github.com/nrmeyers/agentalloy.git
+```
+
+User-scope state (`~/.config/agentalloy/`, corpus DB) is preserved across the swap — pipx and uv installs share the same state location.
 
 ---
 
