@@ -254,6 +254,144 @@ class TestInstallLocalPack:
         assert result["ingest_failures"] == 1
         assert result["action"] == "ingested_with_errors"
 
+    def test_is_deprecated_false_for_normal_yaml(self, tmp_path: Path) -> None:
+        """`_is_deprecated` returns False for a YAML without the deprecated flag."""
+        _write_skill_yaml(tmp_path, "normal-skill", fragments=2)
+        is_dep, sid, sup = ip._is_deprecated(tmp_path / "normal-skill.yaml")
+        assert is_dep is False
+        assert sid == "normal-skill"
+        assert sup == ""
+
+    def test_is_deprecated_false_for_invalid_yaml(self, tmp_path: Path) -> None:
+        """`_is_deprecated` returns False for a file that isn't valid YAML."""
+        bad_path = tmp_path / "bad.yaml"
+        bad_path.write_text("{{invalid yaml", encoding="utf-8")
+        is_dep, sid, sup = ip._is_deprecated(bad_path)
+        assert is_dep is False
+        assert sid == ""
+        assert sup == ""
+
+    def test_deprecated_skill_skipped_with_warning(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Deprecated skills in the pack are skipped with a warning and counted."""
+        # Two skills: one normal, one deprecated
+        fake_results = [
+            {
+                "yaml": "active.yaml",
+                "exit_code": 0,
+                "outcome": "ingested",
+                "stdout_tail": "ok: loaded active",
+                "stderr_tail": "",
+            },
+            {
+                "yaml": "old.yaml",
+                "exit_code": 0,
+                "outcome": "deprecated",
+                "stdout_tail": "skipped deprecated skill 'old'",
+                "stderr_tail": "superseded by 'new-skill'",
+            },
+        ]
+        _write_skill_yaml(tmp_path, "active", fragments=2)
+        _write_skill_yaml(tmp_path, "old", fragments=2)
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "active", "file": "active.yaml", "fragment_count": 2},
+                {"skill_id": "old", "file": "old.yaml", "fragment_count": 2},
+            ],
+        )
+        with (
+            patch.object(ip, "_check_embedding_dim", return_value=None),
+            patch.object(ip, "_ingest_yaml", side_effect=fake_results),
+            patch.object(ip.install_state, "load_state", return_value={}),
+            patch.object(ip.install_state, "save_state"),
+            patch.object(ip.install_state, "record_step"),
+        ):
+            result = ip.install_local_pack(tmp_path, root=tmp_path)
+        assert result["skills_ingested"] == 1
+        assert result["skills_deprecated"] == 1
+        assert result["ingest_failures"] == 0
+        assert result["action"] == "ingested"
+
+    def test_deprecated_skill_emits_warning_via_is_deprecated(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """`_is_deprecated` returns True for YAML with deprecated flag, and `_ingest_yaml` emits warning."""
+        # Write a YAML with deprecated=true
+        dep_doc = {
+            "skill_type": "domain",
+            "skill_id": "deprecated-skill",
+            "canonical_name": "Deprecated Skill",
+            "category": "engineering",
+            "skill_class": "domain",
+            "domain_tags": ["test"],
+            "always_apply": False,
+            "phase_scope": None,
+            "category_scope": None,
+            "author": "test",
+            "change_summary": "deprecated",
+            "raw_prose": "# Deprecated Skill\n\nold stuff",
+            "deprecated": True,
+            "superseded_by": "new-replacement",
+            "fragments": [{"sequence": 1, "fragment_type": "execution", "content": "old"}],
+        }
+        dep_path = tmp_path / "deprecated-skill.yaml"
+        dep_path.write_text(yaml.safe_dump(dep_doc, sort_keys=False), encoding="utf-8")
+
+        # Verify _is_deprecated detects it
+        is_dep, sid, sup = ip._is_deprecated(dep_path)
+        assert is_dep is True
+        assert sid == "deprecated-skill"
+        assert sup == "new-replacement"
+
+        # Verify _ingest_yaml returns deprecated outcome and warns
+        outcome = ip._ingest_yaml(dep_path, tmp_path)
+        assert outcome["outcome"] == "deprecated"
+        assert outcome["yaml"] == "deprecated-skill.yaml"
+        err = capsys.readouterr().err
+        assert "deprecated" in err.lower()
+        assert "deprecated-skill" in err
+        assert "new-replacement" in err
+
+    def test_all_deprecated_skills_action(self, tmp_path: Path) -> None:
+        """If all skills in the pack are deprecated, action reflects that (not already_installed)."""
+        fake_results = [
+            {
+                "yaml": "old1.yaml",
+                "exit_code": 0,
+                "outcome": "deprecated",
+                "stdout_tail": "skipped deprecated skill 'old1'",
+                "stderr_tail": "superseded by 'new1'",
+            },
+            {
+                "yaml": "old2.yaml",
+                "exit_code": 0,
+                "outcome": "deprecated",
+                "stdout_tail": "skipped deprecated skill 'old2'",
+                "stderr_tail": "superseded by 'new2'",
+            },
+        ]
+        _write_skill_yaml(tmp_path, "old1", fragments=2)
+        _write_skill_yaml(tmp_path, "old2", fragments=2)
+        _write_pack_manifest(
+            tmp_path,
+            "x",
+            [
+                {"skill_id": "old1", "file": "old1.yaml", "fragment_count": 2},
+                {"skill_id": "old2", "file": "old2.yaml", "fragment_count": 2},
+            ],
+        )
+        with (
+            patch.object(ip, "_check_embedding_dim", return_value=None),
+            patch.object(ip, "_ingest_yaml", side_effect=fake_results),
+            patch.object(ip.install_state, "load_state", return_value={}),
+            patch.object(ip.install_state, "save_state"),
+            patch.object(ip.install_state, "record_step"),
+        ):
+            result = ip.install_local_pack(tmp_path, root=tmp_path)
+        assert result["skills_deprecated"] == 2
+        assert result["skills_ingested"] == 0
+        # Not "already_installed" because deprecated is a distinct outcome
+        assert result["action"] == "ingested"
+
     def test_embed_model_mismatch_soft_warns(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -333,8 +471,49 @@ class TestInstallPackAutoRoute:
 
 
 # ---------------------------------------------------------------------------
-# install_packs picker — _ordered_with_deps warns on missing deps
+# _render_human — displays deprecated skill count
 # ---------------------------------------------------------------------------
+
+
+class TestRenderHuman:
+    def test_shows_deprecated_count(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """`_render_human` shows 'Skills skipped (deprecated)' when count > 0."""
+        result = {
+            "action": "ingested",
+            "pack": "test-pack",
+            "skills_ingested": 2,
+            "skills_deprecated": 1,
+            "ingest_failures": 0,
+        }
+        ip._render_human(result)
+        out = capsys.readouterr().out
+        assert "Skills skipped (deprecated): 1" in out
+
+    def test_hides_deprecated_when_zero(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """`_render_human` omits deprecated line when count is 0."""
+        result = {
+            "action": "ingested",
+            "pack": "test-pack",
+            "skills_ingested": 3,
+            "skills_deprecated": 0,
+            "ingest_failures": 0,
+        }
+        ip._render_human(result)
+        out = capsys.readouterr().out
+        assert "deprecated" not in out.lower()
+
+    def test_shows_failures(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """`_render_human` shows failures when count > 0."""
+        result = {
+            "action": "ingested_with_errors",
+            "pack": "test-pack",
+            "skills_ingested": 1,
+            "skills_deprecated": 0,
+            "ingest_failures": 2,
+        }
+        ip._render_human(result)
+        out = capsys.readouterr().out
+        assert "Failures: 2" in out
 
 
 class TestPickerDepWarning:
