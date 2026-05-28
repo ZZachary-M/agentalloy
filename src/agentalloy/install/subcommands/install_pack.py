@@ -126,15 +126,61 @@ def _resolve_manifest_url(pack_name: str, override: str | None) -> str:
     return _DEFAULT_MANIFEST_URL_PATTERN.format(name=pack_name)
 
 
+def _is_deprecated(yaml_path: Path) -> tuple[bool, str, str]:
+    """Check if a skill YAML is deprecated. Returns (is_deprecated, skill_id, superseded_by).
+
+    Reads the YAML without full validation — just checks the deprecated flag.
+    Uses the same boolean parsing semantics as ``ingest._load_yaml()`` so that
+    quoted ``"false"``/``"no"``/``"0"`` values are treated as false, not true.
+    """
+    try:
+        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    except _yaml.YAMLError:
+        return False, "", ""
+
+    if not isinstance(data, dict):
+        return False, "", ""
+
+    skill_id = str(data.get("skill_id", ""))
+
+    def _parse_bool(key: str, default: bool = False) -> bool:
+        v: Any = data.get(key, default)
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1")
+        return bool(v)
+
+    deprecated = _parse_bool("deprecated", False)
+    superseded_by = str(data.get("superseded_by", ""))
+    return deprecated, skill_id, superseded_by
+
+
 def _ingest_yaml(yaml_path: Path, repo_root: Path) -> dict[str, Any]:
     """Run the existing ingest pipeline on one YAML. Returns parsed result.
 
-    Distinguishes three outcomes:
+    Distinguishes four outcomes:
       - exit_code 0           → ingested fresh
       - exit_code 4 (DUPLICATE) → skill_id or canonical_name already in corpus;
                                  treated as a benign skip, not a failure.
+      - outcome "deprecated"  → skill is marked deprecated; skipped with warning.
       - other non-zero        → real failure (parse, validation, DB error).
     """
+    # --- check for deprecated before calling ingest ---
+    is_dep, skill_id, superseded_by = _is_deprecated(yaml_path)
+    if is_dep:
+        print(
+            f"WARNING: skipping deprecated skill '{skill_id}', superseded by '{superseded_by}'",
+            file=sys.stderr,
+        )
+        return {
+            "yaml": yaml_path.name,
+            "exit_code": 0,
+            "outcome": "deprecated",
+            "stdout_tail": f"skipped deprecated skill '{skill_id}'",
+            "stderr_tail": f"superseded by '{superseded_by}'",
+        }
+
     result = subprocess.run(  # noqa: S603 — fixed args, no shell
         [
             sys.executable,
@@ -335,6 +381,7 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
 
     new_count = sum(1 for r in ingest_results if r["outcome"] == "ingested")
     duplicate_count = sum(1 for r in ingest_results if r["outcome"] == "duplicate")
+    deprecated_count = sum(1 for r in ingest_results if r["outcome"] == "deprecated")
     failed = [r for r in ingest_results if r["outcome"] == "failed"]
 
     state = install_state.load_state(root)
@@ -350,6 +397,7 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
             "skill_count": len(skills_entries),
             "skills_ingested": new_count,
             "skills_already_present": duplicate_count,
+            "skills_deprecated": deprecated_count,
             "ingest_failures": len(failed),
             "installed_at": int(time.time()),
         }
@@ -360,7 +408,7 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
 
     if failed:
         action = "ingested_with_errors"
-    elif new_count == 0 and duplicate_count > 0:
+    elif new_count == 0 and duplicate_count > 0 and deprecated_count == 0:
         action = "already_installed"
     else:
         action = "ingested"
@@ -374,6 +422,7 @@ def install_local_pack(pack_dir: Path, *, root: Path) -> dict[str, Any]:
         "skill_count": len(skills_entries),
         "skills_ingested": new_count,
         "skills_already_present": duplicate_count,
+        "skills_deprecated": deprecated_count,
         "ingest_results": ingest_results,
         "ingest_failures": len(failed),
         "remediation": (
@@ -551,9 +600,10 @@ def install_pack(
             ingest_results.append(_ingest_yaml(target, root))
 
     # Same outcome classification as the local-pack flow: only `failed`
-    # counts as a real failure; `duplicate` is a benign skip.
+    # counts as a real failure; `duplicate` and `deprecated` are benign skips.
     new_count = sum(1 for r in ingest_results if r["outcome"] == "ingested")
     duplicate_count = sum(1 for r in ingest_results if r["outcome"] == "duplicate")
+    deprecated_count = sum(1 for r in ingest_results if r["outcome"] == "deprecated")
     failed = [r for r in ingest_results if r["outcome"] == "failed"]
 
     # 5. Record in install state
@@ -567,6 +617,7 @@ def install_pack(
             "yaml_files": copied,
             "skills_ingested": new_count,
             "skills_already_present": duplicate_count,
+            "skills_deprecated": deprecated_count,
             "ingest_failures": len(failed),
             "installed_at": int(time.time()),
         }
@@ -577,7 +628,7 @@ def install_pack(
 
     if failed:
         action = "ingested_with_errors"
-    elif new_count == 0 and duplicate_count > 0:
+    elif new_count == 0 and duplicate_count > 0 and deprecated_count == 0:
         action = "already_installed"
     else:
         action = "ingested"
@@ -592,6 +643,7 @@ def install_pack(
         "yaml_files": copied,
         "skills_ingested": new_count,
         "skills_already_present": duplicate_count,
+        "skills_deprecated": deprecated_count,
         "ingest_results": ingest_results,
         "ingest_failures": len(failed),
         "remediation": (
@@ -639,12 +691,15 @@ def _render_human(result: dict[str, Any]) -> None:
     action = result.get("action", "unknown")
     pack_name = result.get("pack", "unknown")
     skills_ingested = result.get("skills_ingested", 0)
+    skills_deprecated = result.get("skills_deprecated", 0)
     failures = result.get("ingest_failures", 0)
 
     print_rich("\n  [bold]Install Pack[/bold]\n")
     print_rich(f"  Pack: {pack_name}")
     print_rich(f"  Status: {action}")
     print_rich(f"  Skills ingested: {skills_ingested}")
+    if skills_deprecated:
+        print_rich(f"  Skills skipped (deprecated): {skills_deprecated}")
     if failures:
         print_rich(f"  Failures: {failures}")
 

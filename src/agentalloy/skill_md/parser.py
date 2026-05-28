@@ -44,6 +44,8 @@ class ParsedSystemSkill:
     author: str
     change_summary: str
     raw_prose: str
+    deprecated: bool = False
+    superseded_by: str = ""
     # Carry raw fields for error reporting / future extension
     extra_fields: dict[str, str] = field(default_factory=lambda: {})
 
@@ -123,6 +125,8 @@ def parse_text(text: str, *, source: str = "<string>") -> ParsedSystemSkill:
     category_scope = _parse_list(_optional("category_scope"))
     author = _optional("author", "bootstrap")
     change_summary = _optional("change_summary", "bootstrap load")
+    deprecated = _parse_bool("deprecated", _optional("deprecated", "false"))
+    superseded_by = _optional("superseded_by", "")
 
     # remaining fields treated as extra (not an error — forward-compatible)
     extra = dict(raw_fields)
@@ -137,5 +141,7 @@ def parse_text(text: str, *, source: str = "<string>") -> ParsedSystemSkill:
         author=author,
         change_summary=change_summary,
         raw_prose=raw_prose,
+        deprecated=deprecated,
+        superseded_by=superseded_by,
         extra_fields=extra,
     )

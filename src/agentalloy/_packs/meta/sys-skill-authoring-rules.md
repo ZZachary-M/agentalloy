@@ -59,6 +59,22 @@ A short rationale fragment without the keywords a real query would use is under-
 5. Single revision pass — line-level fixes only, resist redesigns.
 6. Hand off to `sys-skill-transform-contract` for source → review YAML.
 
+## R9 — Deprecation workflow
+
+Skills can be marked as deprecated when a newer skill supersedes them. Two new optional fields:
+
+  - **deprecated:** true/false (boolean, defaults to false)
+  - **superseded_by:** 'replacement-skill-id' (kebab-case, lowercase ASCII, must reference an existing skill_id)
+
+Rules:
+
+- `deprecated: true` **requires** `superseded_by` to be present and reference a valid skill_id. A skill cannot be deprecated without a replacement.
+- `superseded_by` must be kebab-case, lowercase ASCII — matching the format of an existing skill_id.
+- Once a skill is marked `deprecated: true`, it must **not** be modified further. The only allowed operation is for the keeper (the `superseded_by` target) to absorb unique content from it.
+- If a skill is not deprecated, omit both fields entirely (or set `deprecated: false` explicitly).
+
+This is operationalized by the bootstrap validator (rejects `deprecated: true` without `superseded_by`, rejects `superseded_by` pointing to a non-existent skill) and by the install pipeline (skips deprecated skills with a warning).
+
 ## Anti-patterns observed (do not repeat)
 
 Running ledger; append after each batch's review.

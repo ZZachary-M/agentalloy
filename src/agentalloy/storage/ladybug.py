@@ -9,6 +9,7 @@ incompatible with restartable FastAPI service lifecycle.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,7 +18,7 @@ from typing import Any, cast
 
 import kuzu
 
-from agentalloy.storage.schema_cypher import NODE_TABLES, REL_TABLES
+from agentalloy.storage.schema_cypher import ALTER_TABLES, NODE_TABLES, REL_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class LadybugStore:
         yield from self.execute(cypher, params)
 
     def migrate(self) -> None:
-        """Create node tables and rel tables. Idempotent.
+        """Create node tables, rel tables, and apply ALTER TABLE migrations. Idempotent.
 
         No vector index — embeddings live in DuckDB's ``fragment_embeddings``
         table. See ``agentalloy.storage.vector_store``.
@@ -93,6 +94,12 @@ class LadybugStore:
         for ddl in REL_TABLES:
             self._conn.execute(ddl)
             created_tables.append(_first_identifier_after(ddl, "TABLE"))
+        # Apply ALTER TABLE migrations for columns added after initial schema.
+        # Fresh DBs already have these columns from CREATE TABLE, so we catch
+        # the "column already exists" error silently.
+        for ddl in ALTER_TABLES:
+            with contextlib.suppress(Exception):  # noqa: BLE001 — column already exists on fresh DB
+                self._conn.execute(ddl)
         logger.info("ladybug_migrate ok tables=%s", created_tables)
 
 

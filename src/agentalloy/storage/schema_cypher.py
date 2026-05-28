@@ -19,6 +19,7 @@ NODE_TABLES: tuple[str, ...] = (
         skill_class STRING,
         domain_tags STRING[],
         deprecated BOOLEAN DEFAULT false,
+        superseded_by STRING,
         always_apply BOOLEAN DEFAULT false,
         phase_scope STRING[],
         category_scope STRING[],
@@ -55,4 +56,13 @@ REL_TABLES: tuple[str, ...] = (
     "CREATE REL TABLE IF NOT EXISTS DECOMPOSES_TO(FROM SkillVersion TO Fragment)",
     "CREATE REL TABLE IF NOT EXISTS REQUIRES_COMPOSITIONAL(FROM Skill TO Skill)",
     "CREATE REL TABLE IF NOT EXISTS REFERENCES_CONCEPTUAL(FROM Skill TO Skill)",
+)
+
+# Alter-table migrations for columns added after initial schema.
+# These run after NODE_TABLES and REL_TABLES so existing databases gain
+# new columns idempotently. Kuzu ALTER TABLE does not error if the column
+# already exists, so this is safe to call on fresh and existing DBs alike.
+ALTER_TABLES: tuple[str, ...] = (
+    "ALTER NODE TABLE Skill ADD COLUMN deprecated BOOLEAN DEFAULT false",
+    "ALTER NODE TABLE Skill ADD COLUMN superseded_by STRING",
 )

@@ -15,6 +15,7 @@ Exit codes
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -132,6 +133,20 @@ def main(argv: list[str] | None = None) -> int:
                 print("Aborted.", file=sys.stderr)
                 return EXIT_USAGE
 
+        # --- check superseded_by reference (needs DB access) ---
+        if skill.superseded_by:
+            ref_exists = store.scalar(
+                "MATCH (s:Skill {skill_id: $id}) RETURN s.skill_id",
+                {"id": skill.superseded_by},
+            )
+            if ref_exists is None:
+                print(
+                    f"validation error: superseded_by '{skill.superseded_by}' "
+                    f"references a non-existent skill_id",
+                    file=sys.stderr,
+                )
+                return EXIT_VALIDATION
+
         # --- insert ---
         try:
             _insert(store, skill, force=args.force)
@@ -177,6 +192,16 @@ def _validate(skill: ParsedSystemSkill) -> list[str]:
     if skill.always_apply and (skill.phase_scope or skill.category_scope):
         errors.append("always_apply=true is mutually exclusive with phase_scope / category_scope")
 
+    # --- deprecation validation ---
+    if skill.deprecated and not skill.superseded_by:
+        errors.append(
+            "deprecated: true requires 'superseded_by' to be set — "
+            "a skill cannot be deprecated without a replacement"
+        )
+
+    if skill.superseded_by and not re.match(r"^[a-z0-9-]+$", skill.superseded_by):
+        errors.append(f"superseded_by '{skill.superseded_by}' must be kebab-case, lowercase ASCII")
+
     return errors
 
 
@@ -187,6 +212,8 @@ def _print_summary(skill: ParsedSystemSkill, *, existing: bool) -> None:
     print(f"  skill_id:       {skill.skill_id}")
     print(f"  canonical_name: {skill.canonical_name}")
     print(f"  category:       {skill.category}")
+    print(f"  deprecated:     {skill.deprecated}")
+    print(f"  superseded_by:  {skill.superseded_by or '(none)'}")
     print(f"  always_apply:   {skill.always_apply}")
     print(f"  phase_scope:    {skill.phase_scope or '(none)'}")
     print(f"  category_scope: {skill.category_scope or '(none)'}")
@@ -220,7 +247,8 @@ def _insert(store: LadybugStore, skill: ParsedSystemSkill, *, force: bool) -> No
             category: $category,
             skill_class: 'system',
             domain_tags: [],
-            deprecated: false,
+            deprecated: $deprecated,
+            superseded_by: $superseded_by,
             always_apply: $always_apply,
             phase_scope: $phase_scope,
             category_scope: $category_scope
@@ -230,6 +258,8 @@ def _insert(store: LadybugStore, skill: ParsedSystemSkill, *, force: bool) -> No
             "skill_id": skill.skill_id,
             "canonical_name": skill.canonical_name,
             "category": skill.category,
+            "deprecated": skill.deprecated,
+            "superseded_by": skill.superseded_by or "",
             "always_apply": skill.always_apply,
             "phase_scope": skill.phase_scope,
             "category_scope": skill.category_scope,

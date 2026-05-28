@@ -1,10 +1,13 @@
 """Telemetry writer protocol, no-op stub, and DuckDB-backed writer.
 
 Per v5.3, composition telemetry lives in DuckDB ``composition_traces``
-(same ``skills.duck`` file as fragment_embeddings). Writes are
-synchronous on the request path. Trace-write failures are caught and
-logged but never propagate to the caller of /compose — the response
-always succeeds regardless of telemetry state.
+(same ``skills.duck`` file as fragment_embeddings). Writes are inline
+before the response — no queue, no background thread. Trace-write
+failures are logged but never propagate to the caller of /compose.
+
+Sprint 1 additions:
+- error_payload now accepts structured error codes from EmbeddingErrorCode
+  and TelemetryError for proper categorization in traces.
 """
 
 from __future__ import annotations
@@ -23,6 +26,19 @@ from agentalloy.storage.vector_store import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TelemetryError(Exception):
+    """Error during telemetry write operations.
+
+    Used to distinguish telemetry failures from embedding/retrieval failures.
+    Telemetry errors are logged but never propagate to the caller.
+    """
+
+    def __init__(self, message: str, code: str = "telemetry_error") -> None:
+        self.code = code
+        self.message = message
+        super().__init__(f"[{code}] {message}")
 
 
 @dataclass(frozen=True)
@@ -70,13 +86,12 @@ class NullTelemetryWriter:
 
 
 class DuckDBTelemetryWriter:
-    """Best-effort DuckDB telemetry writer.
+    """Inline-before-response DuckDB writer.
 
-    Writes happen synchronously on the request path. Telemetry is
-    best-effort — failures are caught, logged, and never propagate to
-    the caller. The response always succeeds regardless of telemetry
-    state. The broad ``except Exception`` on :meth:`write` is intentional
-    by design.
+    Writes happen synchronously on the request path. Per v5.3 directive
+    §2.6, composition telemetry must be durable before the response
+    returns. Trace-write failures are logged but never propagate — the
+    response always succeeds regardless of telemetry state.
 
     ``TelemetryRecord`` (legacy v1.0 shape) maps to
     ``CompositionTrace`` (v5.3 schema) via :meth:`_to_duck_trace`.
@@ -88,7 +103,7 @@ class DuckDBTelemetryWriter:
     def write(self, record: TelemetryRecord) -> None:
         try:
             self._vs.record_composition_trace(self._to_duck_trace(record))
-        except Exception as exc:
+        except Exception as exc:  # pyright: ignore[reportBroadExceptionCaught]
             logger.error("telemetry write failed: %s", exc)
 
     def close(self) -> None:  # noqa: B027 — empty by design; the vector_store owns the connection

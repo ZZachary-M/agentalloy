@@ -19,6 +19,7 @@ Exit codes
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -122,6 +123,8 @@ class ReviewRecord:
     raw_prose: str
     fragments: list[FragmentRecord] = field(default_factory=lambda: cast(list[FragmentRecord], []))
     tier: str | None = None
+    deprecated: bool = False
+    superseded_by: str = ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -235,6 +238,20 @@ def _single(yaml_path: Path, *, force: bool, yes: bool, strict: bool = False) ->
             if answer not in ("y", "yes"):
                 print("Aborted.", file=sys.stderr)
                 return EXIT_USAGE
+
+        # --- check superseded_by reference (needs DB access) ---
+        if record.superseded_by:
+            ref_exists = store.scalar(
+                "MATCH (s:Skill {skill_id: $id}) RETURN s.skill_id",
+                {"id": record.superseded_by},
+            )
+            if ref_exists is None:
+                print(
+                    f"validation error: superseded_by '{record.superseded_by}' "
+                    f"references a non-existent skill_id",
+                    file=sys.stderr,
+                )
+                return EXIT_VALIDATION
 
         try:
             _insert(store, record, force=force)
@@ -468,6 +485,8 @@ def _load_yaml(path: Path) -> ReviewRecord:
         change_summary=_str("change_summary", "initial authoring"),
         raw_prose=_str("raw_prose"),
         fragments=fragments,
+        deprecated=_bool("deprecated"),
+        superseded_by=_str("superseded_by"),
     )
 
 
@@ -482,6 +501,16 @@ def _validate(record: ReviewRecord) -> list[str]:
 
     if not record.raw_prose:
         errors.append("raw_prose is required")
+
+    # --- deprecation validation ---
+    if record.deprecated and not record.superseded_by:
+        errors.append(
+            "deprecated: true requires 'superseded_by' to be set — "
+            "a skill cannot be deprecated without a replacement"
+        )
+
+    if record.superseded_by and not re.match(r"^[a-z0-9-]+$", record.superseded_by):
+        errors.append(f"superseded_by '{record.superseded_by}' must be kebab-case, lowercase ASCII")
 
     if record.skill_type == "system":
         if not record.skill_id.startswith("sys-"):
@@ -700,6 +729,8 @@ def _print_summary(record: ReviewRecord, *, existing: bool) -> None:
     print(f"  skill_id:       {record.skill_id}")
     print(f"  canonical_name: {record.canonical_name}")
     print(f"  category:       {record.category}")
+    print(f"  deprecated:     {record.deprecated}")
+    print(f"  superseded_by:  {record.superseded_by or '(none)'}")
     print(f"  always_apply:   {record.always_apply}")
     print(f"  phase_scope:    {record.phase_scope or '(none)'}")
     print(f"  category_scope: {record.category_scope or '(none)'}")
@@ -734,7 +765,8 @@ def _insert(store: LadybugStore, record: ReviewRecord, *, force: bool) -> None:
             category: $category,
             skill_class: $skill_class,
             domain_tags: $domain_tags,
-            deprecated: false,
+            deprecated: $deprecated,
+            superseded_by: $superseded_by,
             always_apply: $always_apply,
             phase_scope: $phase_scope,
             category_scope: $category_scope,
@@ -747,6 +779,8 @@ def _insert(store: LadybugStore, record: ReviewRecord, *, force: bool) -> None:
             "category": record.category,
             "skill_class": record.skill_class,
             "domain_tags": record.domain_tags,
+            "deprecated": record.deprecated,
+            "superseded_by": record.superseded_by or "",
             "always_apply": record.always_apply,
             "phase_scope": record.phase_scope,
             "category_scope": record.category_scope,
