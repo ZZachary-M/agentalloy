@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Nate Meyers" }]
 dependencies = [
     "fastapi>=0.115",
+    "starlette>=1.0.1",  # CVE-2026-48710: pin above vulnerable 1.0.0 (transitive via fastapi)
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
