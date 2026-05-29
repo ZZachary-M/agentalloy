@@ -4,15 +4,22 @@
 # For AMD Radeon dGPU or iGPU (LM Studio Vulkan backend), use compose.radeon.yaml instead.
 #
 # What this gives you:
-#   - agentalloy service on http://localhost:47950 with the pre-seeded corpus
-#   - Ollama running qwen3-embedding:0.6b on http://localhost:11434
+#   - agentalloy service on http://localhost:47950
+#   - Ollama running qwen3-embedding:0.6b reachable at http://localhost:11434 from the host
 #   - The model is auto-pulled on first start by the `ollama-pull` init service
-#   - Persistent volumes for the corpus (./data on host) and Ollama models
+#   - Database schemas are initialized on first start by the `agentalloy-init` service
+#   - Persistent named volumes for corpus data and Ollama models (safe on macOS / Windows)
 #
 # Usage:
 #   podman compose up -d
 #   podman compose logs -f agentalloy
 #   curl http://localhost:47950/health
+#
+# After first start, install skill packs:
+#   podman exec agentalloy uv run agentalloy install-packs
+#
+# To inspect / back up corpus data:
+#   podman volume inspect agentalloy-data
 #
 # To run on Docker:  docker compose up -d  (drop-in compatible)
 
@@ -45,6 +52,22 @@ services:
     entrypoint: ["sh", "-c", "ollama pull qwen3-embedding:0.6b"]
     restart: "no"
 
+  agentalloy-init:
+    # One-shot init service: runs DB schema migrations then exits.
+    # Idempotent — safe to re-run; no-ops if schemas already exist.
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: agentalloy:local
+    container_name: agentalloy-init
+    environment:
+      LADYBUG_DB_PATH: "/app/data/ladybug"
+      DUCKDB_PATH: "/app/data/skills.duck"
+    volumes:
+      - agentalloy-data:/app/data
+    entrypoint: ["uv", "run", "python", "-m", "agentalloy.migrate"]
+    restart: "no"
+
   agentalloy:
     build:
       context: .
@@ -52,7 +75,11 @@ services:
     image: agentalloy:local
     container_name: agentalloy
     depends_on:
+      ollama:
+        condition: service_healthy
       ollama-pull:
+        condition: service_completed_successfully
+      agentalloy-init:
         condition: service_completed_successfully
     environment:
       RUNTIME_EMBED_BASE_URL: "http://ollama:11434"
@@ -61,17 +88,19 @@ services:
       DUCKDB_PATH: "/app/data/skills.duck"
       LOG_LEVEL: "INFO"
     volumes:
-      - ./data:/app/data
+      - agentalloy-data:/app/data
     ports:
       - "47950:47950"  # To change host port, edit this line.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:47950/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
       interval: 15s
       timeout: 5s
-      start_period: 10s
-      retries: 3
+      start_period: 30s
+      retries: 5
     restart: unless-stopped
 
 volumes:
   ollama-models:
     name: agentalloy-ollama-models
+  agentalloy-data:
+    name: agentalloy-data
