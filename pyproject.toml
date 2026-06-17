@@ -31,6 +31,13 @@ dev = [
     "httpx>=0.27",  # TestClient transport
     "types-pyyaml>=6.0",
 ]
+# S3 corpus snapshot cache (corpus-bootstrap). Optional so base/local installs
+# stay lean; the service image installs it via `uv sync --extra s3`. boto3 is
+# lazy-imported in agentalloy.corpus_snapshot and every S3 path is fail-open,
+# so the feature simply no-ops when boto3 / a bucket is absent.
+s3 = [
+    "boto3>=1.34",
+]
 
 [project.scripts]
 agentalloy = "agentalloy.install.__main__:main"

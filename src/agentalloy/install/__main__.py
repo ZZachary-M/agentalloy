@@ -21,6 +21,7 @@ import sys
 from agentalloy.install.subcommands import (
     compose,
     contract,
+    corpus_bootstrap,
     customize,
     detect,
     doctor,
@@ -105,6 +106,7 @@ _SUBCOMMANDS = [
     update,
     install_pack,
     install_packs,
+    corpus_bootstrap,
     reembed,
     telemetry,
 ]

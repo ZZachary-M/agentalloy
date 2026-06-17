@@ -20,20 +20,25 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Install third-party deps without trying to build the project itself
-# (needs README.md, src/, etc. — added in the next layer).
-RUN uv sync --frozen --no-dev --no-install-project
+# (needs README.md, src/, etc. — added in the next layer). The `s3` extra
+# pulls in boto3 for the corpus-bootstrap S3 snapshot cache.
+RUN uv sync --frozen --no-dev --no-install-project --extra s3
 
-# Copy the project source, README (used by hatchling for metadata), and the
-# seeded corpus that ships in-repo. Then install the project itself.
+# Copy the project source + README (used by hatchling for metadata), then
+# install the project itself. The shipped skill corpus lives INSIDE the package
+# at src/agentalloy/_packs/ (hatchling bundles it), so no separate corpus COPY
+# is needed here.
 COPY README.md ./
 COPY src/ ./src/
-COPY data/ ./data/
 
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra s3
 
-# The data directory is bind-mounted at runtime (see compose.yaml) so user
-# ingestions persist on the host. The COPY above provides a sane default
-# for users running the image directly without compose.
+# The /app/data directory is the default location for the runtime DBs (see the
+# ENV below); it is bind-mounted at runtime (compose.yaml) or overridden by
+# LADYBUG_DB_PATH / DUCKDB_PATH in prod (-> /corpus). Create it empty rather
+# than COPY-ing a host `data/` dir — that dir is gitignored and absent from a
+# clean checkout, so a `COPY data/` broke every clean-context (CI) build.
+RUN mkdir -p ./data
 
 ENV LADYBUG_DB_PATH=/app/data/ladybug \
     DUCKDB_PATH=/app/data/skills.duck \
