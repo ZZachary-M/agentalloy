@@ -519,6 +519,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         with LadybugStore(settings.ladybug_db_path) as store, open_or_create(duck_path) as vs:
+            # Apply schema migrations before discovery — the discovery cypher
+            # references columns (e.g. Stage 0's ``s.description``) that an
+            # older corpus won't have until the ALTERs run. Idempotent.
+            store.migrate()
             # --force: clear scope first so the primary-key constraint doesn't trip.
             if args.force:
                 if args.skill_id:
