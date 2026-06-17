@@ -133,6 +133,32 @@ def test_only_domain_fragments_returned(
         assert f.skill_class == "domain"
 
 
+def test_scores_are_fused_rank_not_dense_only_159(
+    populated: LadybugStore, populated_vectors: VectorStore
+) -> None:
+    """#159: scores derive from fused (RRF) rank, so no hit collapses to 0.0.
+
+    Previously scores_by_id was built from the dense leg alone, so any
+    BM25-only fragment scored 0.0 and lost its rank in the downstream per-skill
+    sort. The fix scores every fused fragment 1.0 - i/n, so the top hit is 1.0
+    and nothing is 0.0.
+    """
+    result = retrieve_domain_candidates(
+        populated,
+        StubLMClient(),
+        populated_vectors,
+        task="fastapi routing",
+        phase="design",
+        domain_tags=None,
+        k=10,
+        embedding_model="stub-embed",
+    )
+    scores = result.scores_by_id
+    assert scores, "expected per-fragment scores"
+    assert all(s > 0.0 for s in scores.values()), "no fused hit should score 0.0"
+    assert max(scores.values()) == pytest.approx(1.0), "top fused rank scores 1.0"
+
+
 def test_category_filter_narrows_to_phase(
     populated: LadybugStore, populated_vectors: VectorStore
 ) -> None:
