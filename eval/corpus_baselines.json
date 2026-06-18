@@ -1,0 +1,16 @@
+{
+  "_comment": "Corpus-regression baselines for OUR qwen3 live corpus (72 skills resident in the running /compose store; 59 audit-eligible domain skills across 11 packs). Captured 2026-06-17 against http://localhost:47950 with EMBEDDER=qwen3-embedding:0.6b. Numbers come from `uv run python -m eval.retrieval_audit --k 4 --live-only` and `uv run python -m eval.gold_hit --k 4`. The --live-only flag intersects the disk _packs probe set (322 domain skills) with the skills actually resident in the live store, so these rates measure retrieval quality over the installed corpus rather than the disk-vs-live install gap. See check_corpus_regression.py for the comparator that consumes this file.",
+  "corpus": "qwen3-live-72",
+  "audited_skills": 59,
+  "k": 4,
+  "tolerance": 0.02,
+  "name_probe_hit_rate": 0.7579,
+  "topic_probe_hit_rate": 0.7579,
+  "stranded_count": 23,
+  "gold_hit": 0,
+  "gold_hit_total": 18,
+  "phase_hit_rate_floors": {
+    "build": 0.6102,
+    "ops": 1.0
+  }
+}
