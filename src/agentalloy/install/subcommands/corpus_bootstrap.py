@@ -80,19 +80,26 @@ def verify_corpus(ladybug_path: Path, duckdb_path: Path) -> bool:
     """Lightweight check that a corpus is materially present.
 
     Confirms the DuckDB store is a non-empty file and the Kùzu ``ladybug``
-    directory exists with content. Snapshots are only ever *saved* after a
+    store is present with content. Snapshots are only ever *saved* after a
     verified build, so presence is a sufficient gate on restore.
+
+    Kùzu >=0.4 (we run 0.11) persists the database as a single FILE; older
+    versions used a directory. Accept EITHER — requiring a directory rejected
+    every modern single-file build, so a healthy corpus failed verify, the
+    snapshot was never saved, and every pod start re-ran the full ~3h embed.
     """
     duck = Path(duckdb_path)
     lady = Path(ladybug_path)
     if not (duck.is_file() and duck.stat().st_size > 0):
         return False
-    if not lady.is_dir():
-        return False
-    try:
-        return any(lady.iterdir())
-    except OSError:
-        return False
+    if lady.is_file():
+        return lady.stat().st_size > 0
+    if lady.is_dir():
+        try:
+            return any(lady.iterdir())
+        except OSError:
+            return False
+    return False
 
 
 def _run_step(args: list[str], label: str) -> int:
