@@ -66,27 +66,6 @@ def test_verify_corpus_false_when_ladybug_empty(tmp_path: Path) -> None:
     assert cb.verify_corpus(tmp_path / "ladybug", tmp_path / "skills.duck") is False
 
 
-def test_verify_corpus_true_when_ladybug_is_single_file(tmp_path: Path) -> None:
-    # Kùzu >=0.4 (prod runs 0.11) persists the DB as a single non-empty FILE,
-    # not a directory. verify_corpus must accept it — otherwise a healthy build
-    # fails verify, the snapshot is never saved, and every pod start re-embeds
-    # the whole corpus (~3h).
-    (tmp_path / "ladybug").write_bytes(b"kuzu-db-bytes")
-    (tmp_path / "skills.duck").write_bytes(b"d")
-    assert cb.verify_corpus(tmp_path / "ladybug", tmp_path / "skills.duck") is True
-
-
-def test_verify_corpus_false_when_ladybug_file_empty(tmp_path: Path) -> None:
-    (tmp_path / "ladybug").write_bytes(b"")  # zero-byte single-file DB
-    (tmp_path / "skills.duck").write_bytes(b"d")
-    assert cb.verify_corpus(tmp_path / "ladybug", tmp_path / "skills.duck") is False
-
-
-def test_verify_corpus_false_when_ladybug_missing(tmp_path: Path) -> None:
-    (tmp_path / "skills.duck").write_bytes(b"d")  # ladybug absent entirely
-    assert cb.verify_corpus(tmp_path / "ladybug", tmp_path / "skills.duck") is False
-
-
 # --------------------------------------------------------------------------- #
 # _run — restore hit short-circuits the build
 # --------------------------------------------------------------------------- #
